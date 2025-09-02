@@ -1,0 +1,1036 @@
+:root {
+    --mm-to-px: .5;
+}
+
+/* ===== DIMENSION LINES STYLES ===== */
+.canvas-wrap {
+    position: relative;
+    /* Ajout d'une marge pour faire de la place aux cotes */
+    margin-right: 60px;
+    margin-bottom: 40px;
+}
+
+.dimension-line {
+    position: absolute;
+    font-family: monospace;
+    font-size: 14px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.dimension-line .dimension-text {
+    background: #f8f9fa; /* Couleur de fond similaire au reste de la page */
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Ligne de cote horizontale (largeur) */
+.dimension-line.horizontal {
+    bottom: -30px;
+    left: 0;
+    height: 20px; /* pour centrer le texte verticalement */
+    border-bottom: 1px solid #333;
+}
+
+/* Petites barres verticales aux extrémités */
+.dimension-line.horizontal::before,
+.dimension-line.horizontal::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    width: 1px;
+    height: 8px;
+    background: #333;
+}
+
+.dimension-line.horizontal::before { 
+    left: 0; 
+}
+
+.dimension-line.horizontal::after { 
+    right: 0; 
+}
+
+/* Ligne de cote verticale (hauteur) */
+.dimension-line.vertical {
+    right: -45px;
+    top: 0;
+    width: 30px; /* pour centrer le texte horizontalement */
+    border-right: 1px solid #333;
+}
+
+/* Petites barres horizontales aux extrémités */
+.dimension-line.vertical::before,
+.dimension-line.vertical::after {
+    content: '';
+    position: absolute;
+    right: -4px;
+    width: 8px;
+    height: 1px;
+    background: #333;
+}
+
+.dimension-line.vertical::before { 
+    top: 0; 
+}
+
+.dimension-line.vertical::after { 
+    bottom: 0; 
+}
+
+.dimension-line.vertical .dimension-text {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+/* ===== ACCESSIBILITY STYLES ===== */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus styles pour une meilleure navigation au clavier */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Amélioration du contraste pour les éléments interactifs */
+button:hover {
+    filter: brightness(1.1);
+}
+
+button:active {
+    filter: brightness(0.9);
+}
+
+/* Styles pour les éléments désactivés */
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+button:disabled:hover {
+    filter: none;
+}
+
+/* ===== APPLY DIMENSIONS CONTAINER ===== */
+.apply-dimensions-container {
+    margin-top: 8px;
+    display: flex;
+    justify-content: center;
+}
+
+.apply-btn {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.apply-btn .icon {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2.5;
+}
+
+.apply-btn:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.apply-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.apply-btn.hidden {
+    display: none;
+}
+
+/* Animation d'opacité douce - pas de débordement possible */
+.apply-btn.blink {
+    animation: blinkOpacitySmooth linear 1s infinite alternate;
+}
+
+@keyframes blinkOpacitySmooth {   
+    0% { opacity: 1; } 
+    100% { opacity: 0.3; }  
+}
+
+/* Le bouton clignote automatiquement quand il est visible (pas caché) */
+.apply-btn:not(.hidden):not(.success) {
+    animation: blinkOpacitySmooth linear 1s infinite alternate;
+}
+
+/* Arrêter le clignotement au hover pour permettre l'interaction normale */
+.apply-btn:hover {
+    animation: none !important;
+    opacity: 1 !important; /* Force l'opacité complète au hover */
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Animation d'apparition depuis le bas */
+.apply-btn.show {
+    display: flex;
+    animation: slideInUp 0.3s ease-out;
+    justify-content: center;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Animation de disparition vers le bas */
+.apply-btn.hide {
+    animation: slideOutDown 0.2s ease-in forwards;
+    justify-content: center;
+}
+
+@keyframes slideOutDown {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+}
+
+/* Animation de succès après clic */
+.apply-btn.success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    opacity: 1 !important; /* Force l'opacité complète */
+    animation: successPulse 1s ease-out;
+}
+
+@keyframes successPulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1e293b 100%);
+    color: #e8edf2;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+.wrap {
+    display: flex;
+    gap: 24px;
+    padding: 24px;
+    box-sizing: border-box;
+    height: 100vh;
+}
+
+.panel {
+    width: var(--panel-width, 40%);
+    min-width: 320px;
+    max-width: 50%;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.3s ease;
+    direction: rtl; /* Place la barre de défilement à gauche */
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    position: relative;
+    /* Style de base pour Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #475569 #121821;
+}
+
+.panel::after {
+    content: '';
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px; /* Hauteur du dégradé pour un effet doux */
+    background: linear-gradient(to top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0));
+    pointer-events: none; /* Permet de cliquer à travers le dégradé */
+    direction: ltr; /* Assure que le dégradé s'applique correctement malgré le rtl */
+    transition: opacity 0.3s ease;
+    opacity: 1;
+    z-index: 10;
+    margin-top: -80px; /* Compense sa propre hauteur */
+}
+
+/* Remet le contenu du panneau dans le bon sens */
+.panel > *:not(.panel-resize-handle) {
+    direction: ltr;
+}
+
+/* État caché du fade bottom */
+.panel.scrolled-to-bottom::after {
+    opacity: 0;
+}
+
+/* Style de la barre de défilement pour Webkit (Chrome, Safari) */
+.panel::-webkit-scrollbar {
+    width: 14px;
+}
+.panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+.panel::-webkit-scrollbar-thumb {
+    background-color: #475569;
+    border-radius: 10px;
+    border: 4px solid #121821; /* Crée un effet de "padding" */
+}
+.panel::-webkit-scrollbar-thumb:hover {
+    background-color: #60a5fa;
+}
+
+.main-view {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+}
+
+.zoom-control-vertical {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0 24px;
+    gap: 8px;
+}
+
+.zoom-control-vertical label {
+    font-size: 12px;
+    color: #9fb0c3;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+.zoom-value {
+    font-size: 12px;
+    color: #9fb0c3;
+    font-weight: 700;
+}
+
+#zoomSlider.range {
+    -webkit-appearance: slider-vertical;
+    appearance: slider-vertical;
+    writing-mode: bt-lr;
+    height: 100%;
+    max-height: 300px;
+    width: 16px; /* Rendre plus épais */
+}
+
+.canvas-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.canvas-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+canvas {
+    background: radial-gradient(ellipse at center, #0f172a 0%, #020617 100%);
+    border: 2px solid #475569;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 1px #334155, 0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+canvas.no-frame {
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.row input[type=number], .row select {
+    flex: 1;
+    min-width: 120px;
+    max-width: none;
+}
+
+input[type=number] {
+    background-color: #0f1621;
+    border: 1px solid #233144;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #e8edf2;
+    transition: border-color .2s;
+    box-sizing: border-box;
+}
+input[type=number]:hover {
+    border-color: #475569;
+}
+input[type=number]:focus {
+    outline: 2px solid #60a5fa;
+    outline-offset: 1px;
+    border-color: #60a5fa;
+}
+
+/* Style pour les menus déroulants */
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: #0f1621;
+    border: 1px solid #233144;
+    border-radius: 8px;
+    padding: 10px 36px 10px 12px;
+    font-size: 14px;
+    color: #e8edf2;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239fb0c3' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.7rem center;
+    background-repeat: no-repeat;
+    background-size: 1.2em;
+    cursor: pointer;
+    transition: border-color .2s;
+}
+
+select:hover {
+    border-color: #475569;
+}
+
+select:focus {
+    outline: 2px solid #60a5fa;
+    outline-offset: 1px;
+    border-color: #60a5fa;
+}
+
+select option {
+    background: #121821;
+    color: #e8edf2;
+}
+
+.btn {
+    width: 100%;
+    background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+    color: #e5f0ff;
+    border: 1px solid #475569;
+    padding: 12px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn:hover {
+    background: linear-gradient(135deg, #475569 0%, #334155 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: btn_glow 1s infinite alternate;
+}
+
+.btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #334155;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    cursor: pointer;
+    user-select: none;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.tab.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    font-weight: 700;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+    border-color: #3b82f6;
+}
+
+.tools {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.btn .icon {
+    vertical-align: middle;
+    margin-right: 8px;
+    height: 16px;
+    width: 16px;
+}
+
+.btn .icon rect, .btn .icon path {
+    shape-rendering: geometricPrecision;
+}
+
+.muted {
+    color: #9fb0c3;
+    font-size: 12px;
+}
+
+.kpi {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: inset 0 0 0 1px #0b0f14;
+    margin-right: 8px;
+}
+
+.hidden {
+    display: none;
+}
+
+.toast {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #182230;
+    border: 1px solid #223044;
+    color: #e8edf2;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+}
+
+.toast.show {
+    opacity: 1;
+}
+
+.range {
+    width: 100%;
+}
+
+.small {
+    font-size: 12px;
+    color: #9fb0c3;
+}
+
+.pill {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #1e293b;
+    border: 1px solid #233144;
+    font-size: 12px;
+}
+
+.info-list {
+    font-size: 13px;
+    line-height: 1.35;
+    display: grid;
+    gap: 6px;
+}
+
+.two-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 600px) {
+    .two-cols {
+        grid-template-columns: 1fr;
+    }
+}
+
+.panel-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -6px;
+    width: 12px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    border-radius: 0 6px 6px 0;
+    transition: background-color 0.2s ease;
+    z-index: 10;
+}
+
+.panel-resize-handle:hover {
+    background: rgba(96, 165, 250, 0.2);
+}
+
+.panel-resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px;
+    height: 30px;
+    background: #475569;
+    border-radius: 2px;
+    transition: background-color 0.2s ease;
+}
+
+.panel-resize-handle:hover::after {
+    background: #60a5fa;
+}
+
+.panel {
+    position: relative;
+}
+
+.btn-active {
+    outline: 2px solid #60a5fa;
+}
+
+/* Inventaires (listes custom) */
+.listwrap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.search {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #233144;
+    background: #0f1621;
+    color: #e8edf2;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.list {
+    max-height: 200px;
+    overflow: auto;
+    border: 1px solid #233144;
+    border-radius: 8px;
+    background: #0f1621;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #1b2430;
+    cursor: pointer;
+}
+
+.item:last-child {
+    border-bottom: 0;
+}
+
+.item:hover {
+    background: #1a2232;
+}
+
+.item .label {
+    flex: 1;
+}
+
+.item .qty {
+    font-weight: 700;
+    opacity: .9;
+}
+
+.headerline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 4px;
+}
+
+.badge {
+    font-size: 11px;
+    border: 1px solid #233144;
+    background: #1e293b;
+    padding: 2px 6px;
+    border-radius: 999px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #1b2430;
+}
+
+.brand .logo {
+    height: 100px;
+    width: auto;
+    display: inline-block;
+}
+
+.panel h1 {
+    margin: 0;
+}
+
+.panel-controls {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.panel-middle {
+    flex: 1 1 auto;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.panel-stats {
+    flex: 0 0 auto;
+    margin-top: auto;
+}
+
+/* Styles pour les contrôles sous le canvas */
+.canvas-controls {
+    display: flex;
+    flex-direction: column; /* Permet d'empiler les lignes */
+    gap: 16px; /* Espacement entre les lignes */
+    padding: 16px 24px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid #334155;
+    border-radius: 12px;
+    margin-top: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.canvas-controls-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+}
+
+.canvas-controls-row:last-child {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+}
+
+.canvas-controls-left {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-start; /* Aligne les boutons à gauche */
+}
+
+.canvas-controls-right {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end; /* Aligne le bouton à droite */
+}
+
+.canvas-controls-row + .canvas-controls-row {
+    justify-content: flex-start; /* Aligne la ligne contenant .small à gauche */
+}
+
+.canvas-controls-left .btn,
+.canvas-controls-right .btn {
+    width: auto;
+    min-width: 120px;
+}
+
+/* Style pour le bouton appliquer dimensions */
+.apply-dimensions-btn {
+    margin-top: 12px;
+}
+
+.apply-dimensions-btn .btn {
+    width: 100%;
+}
+
+/* Popup d'édition */
+.edit-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+}
+
+.edit-popup-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(3px);
+    z-index: 2001;
+}
+
+.edit-popup-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1e293b;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 24px;
+    min-width: 300px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    z-index: 2002;
+    filter: none !important;
+}
+
+.edit-popup-content h3 {
+    margin: 0 0 16px 0;
+    color: #e8edf2;
+    font-size: 18px;
+}
+
+.edit-field {
+    margin-bottom: 16px;
+}
+
+.edit-field label {
+    display: block;
+    margin-bottom: 4px;
+    color: #e8edf2;
+    font-size: 14px;
+}
+
+.edit-field input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    background: #0f172a;
+    color: #e8edf2;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.edit-field input[type="text"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.edit-field input[type="color"] {
+    width: 60px;
+    height: 32px;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    background: #0f172a;
+    cursor: pointer;
+    margin-right: 8px;
+}
+
+.edit-field button {
+    padding: 6px 12px;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    background: #374151;
+    color: #e8edf2;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.edit-field button:hover {
+    background: #4b5563;
+}
+
+.edit-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 24px;
+}
+
+.edit-buttons button {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+#saveEdit {
+    background: #22c55e;
+    color: white;
+}
+
+
+#saveEdit:hover {
+    background: #16a34a;
+}
+
+#cancelEdit {
+    background: #6b7280;
+    color: white;
+}
+
+#cancelEdit:hover {
+    background: #374151;
+}
+
+/* Animation arc-en-ciel pour le bouton PWA */
+@keyframes rainbow {
+    0% { 
+        background-position: 0% 50%;
+    }
+    50% { 
+        background-position: 100% 50%;
+    }
+    100% { 
+        background-position: 0% 50%;
+    }
+}
+
+.rainbow-button {
+    background: linear-gradient(-45deg, #ff0000, #ff7300, #fffb00, #48ff00, #00ffd5, #002bff, #7a00ff, #ff00c8, #ff0000);
+    background-size: 400%;
+    animation: rainbow 20s ease infinite;
+    border: none;
+    border-radius: 8px;
+    padding: 2px;
+    position: relative;
+    overflow: hidden;
+}
+
+.rainbow-button-inner {
+    background: #475569;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    width: 100%;
+    height: 100%;
+    font-size: 16px;
+    font-weight: 100;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
+}
+
+/* Animation de glow pulsant pour les boutons */
+@keyframes btn_glow {
+    from {
+        box-shadow: 0 0 5px #6078ea, 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    to {
+        box-shadow: 0 0 15px hsl(230, 77%, 25%), 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+}
+
+/* Cartes d'actions souris */
+.mouse-actions-cards {
+    display: flex;
+    gap: 8px;
+    margin-right: 16px;
+}
+
+.mouse-card {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #9fb0c3;
+    pointer-events: none;
+    user-select: none;
+}
+
+.mouse-card .icon {
+    height: 14px;
+    width: 14px;
+}

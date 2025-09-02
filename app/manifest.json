@@ -1,0 +1,55 @@
+{
+  "name": "TontonKAD - Organisateur de Fourreaux & Câbles",
+  "short_name": "TontonKAD",
+  "description": "Application web pour organiser et visualiser des fourreaux et câbles électriques dans différents types de boîtiers.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#475569",
+  "orientation": "landscape-primary",
+  "scope": "/",
+  "lang": "fr",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "TONTONKAD.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "TONTONKAD.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "TONTONKAD.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "TONTONKAD.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouveau projet",
+      "short_name": "Nouveau",
+      "description": "Démarrer un nouveau projet",
+      "url": "/?action=new",
+      "icons": [{ "src": "TONTONKAD.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Export DXF",
+      "short_name": "Export",
+      "description": "Exporter en DXF",
+      "url": "/?action=export",
+      "icons": [{ "src": "TONTONKAD.svg", "sizes": "96x96" }]
+    }
+  ]
+}
