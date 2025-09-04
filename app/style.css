@@ -959,6 +959,44 @@ select option {
     background: #374151;
 }
 
+/* Styles pour les conducteurs unifilaires */
+.phase-checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.checkbox-row input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #3b82f6;
+}
+
+.checkbox-row label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #e8edf2;
+    margin: 0;
+}
+
+.phase-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #374151;
+    display: inline-block;
+}
+
 /* Animation arc-en-ciel pour le bouton PWA */
 @keyframes rainbow {
     0% { 

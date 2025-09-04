@@ -362,6 +362,16 @@ const CHEMINS_CABLE_FALLBACK = [
     if (!COL_FOURREAU.has(k)) COL_FOURREAU.set(k, `hsl(${(hashHue(k) + 160) % 360} 68% 56%)`);
     return COL_FOURREAU.get(k);
   };
+  
+  // Couleurs des conducteurs unifilaires
+  const PHASE_COLORS = {
+    ph1: '#8B4513', // Marron
+    ph2: '#808080', // Gris
+    ph3: '#000000', // Noir
+    n: '#0000FF',   // Bleu
+    pe: '#00FF00'   // Vert fluo
+  };
+  
   const withAlpha = (hsl, a) => hsl.includes("/") ? hsl : hsl.replace(")", ` / ${a})`);
   
   // Convertir HSL en format hex pour les inputs color
@@ -527,6 +537,157 @@ const CHEMINS_CABLE_FALLBACK = [
     updateInventory();
     redraw();
     return obj;
+  }
+
+  function arrangeConduitGrid() {
+    console.log('arrangeConduitGrid appelée, fourreaux.length:', fourreaux.length);
+    if (fourreaux.length === 0) {
+      showToast('Aucun fourreau à disposer en grille');
+      return;
+    }
+
+    const EXTERNAL_GAP = 35; // 3.5 cm = 35 mm d'écart extérieur souhaité
+    const MARGIN = 20; // Marge depuis les bords en pixels
+
+    // Obtenir les dimensions de la boîte
+    const shape = shapeSel.value;
+    let boxWidth, boxHeight, boxDiameter;
+    
+    if (shape === 'rect') {
+      boxWidth = parseFloat(boxWInput.value) * MM_TO_PX;
+      boxHeight = parseFloat(boxHInput.value) * MM_TO_PX;
+    } else if (shape === 'circ') {
+      boxDiameter = parseFloat(boxDInput.value);
+      boxWidth = boxHeight = boxDiameter * MM_TO_PX;
+    } else {
+      showToast('Grille non supportée pour les chemins de câbles');
+      return;
+    }
+
+    // Étape 1 : Créer une disposition optimale en rangeant par taille
+    const sortedFourreaux = [...fourreaux].sort((a, b) => b.od - a.od); // Plus gros d'abord
+    
+    // Étape 2 : Calculer une grille initiale approximative (privilégier la largeur)
+    const avgDiameter = fourreaux.reduce((sum, f) => sum + f.od, 0) / fourreaux.length;
+    const approxSpacing = (avgDiameter + EXTERNAL_GAP) * MM_TO_PX;
+    const availableWidth = boxWidth - (2 * MARGIN);
+    const availableHeight = boxHeight - (2 * MARGIN);
+    
+    // Privilégier la largeur : essayer de maximiser le nombre de colonnes
+    // Commencer avec plus de colonnes que nécessaire puis ajuster
+    let approxCols = Math.min(fourreaux.length, Math.max(1, Math.floor(availableWidth / approxSpacing)));
+    let approxRows = Math.ceil(fourreaux.length / approxCols);
+    
+    // Si trop de lignes, réduire progressivement les colonnes
+    while (approxRows * approxSpacing > availableHeight && approxCols > 1) {
+      approxCols--;
+      approxRows = Math.ceil(fourreaux.length / approxCols);
+    }
+    
+    console.log(`Grille approximative: ${approxCols} cols × ${approxRows} rows`);
+
+    // Étape 3 : Organiser les fourreaux dans la grille
+    const grid = [];
+    for (let row = 0; row < approxRows; row++) {
+      grid[row] = [];
+      for (let col = 0; col < approxCols; col++) {
+        const index = row * approxCols + col;
+        if (index < fourreaux.length) {
+          grid[row][col] = fourreaux[index];
+        }
+      }
+    }
+
+    // Étape 4 : Calculer les dimensions adaptatives de chaque ligne et colonne
+    const rowHeights = [];
+    const colWidths = [];
+    
+    // Hauteur de chaque ligne = diamètre du plus gros fourreau de la ligne + gap
+    for (let row = 0; row < grid.length; row++) {
+      let maxDiameter = 0;
+      for (let col = 0; col < grid[row].length; col++) {
+        if (grid[row][col]) {
+          maxDiameter = Math.max(maxDiameter, grid[row][col].od);
+        }
+      }
+      rowHeights[row] = maxDiameter > 0 ? (maxDiameter + EXTERNAL_GAP) * MM_TO_PX : 0;
+    }
+    
+    // Largeur de chaque colonne = diamètre du plus gros fourreau de la colonne + gap
+    for (let col = 0; col < approxCols; col++) {
+      let maxDiameter = 0;
+      for (let row = 0; row < grid.length; row++) {
+        if (grid[row] && grid[row][col]) {
+          maxDiameter = Math.max(maxDiameter, grid[row][col].od);
+        }
+      }
+      colWidths[col] = maxDiameter > 0 ? (maxDiameter + EXTERNAL_GAP) * MM_TO_PX : 0;
+    }
+
+    // Vérifier si la grille rentre dans la boîte
+    const totalWidth = colWidths.reduce((sum, w) => sum + w, 0);
+    const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+    
+    if (totalWidth > availableWidth || totalHeight > availableHeight) {
+      showToast(`Grille trop grande: ${Math.round(totalWidth/MM_TO_PX)}×${Math.round(totalHeight/MM_TO_PX)}mm pour boîte ${Math.round(availableWidth/MM_TO_PX)}×${Math.round(availableHeight/MM_TO_PX)}mm`);
+      return;
+    }
+
+    // Étape 5 : Calculer les positions de départ (centrage)
+    const center = getCanvasCenter();
+    const startX = center.x - totalWidth / 2;
+    const startY = center.y - totalHeight / 2;
+
+    // Arrêter la physique temporairement
+    fourreaux.forEach(f => {
+      f.frozen = true;
+      f.dragging = false;
+      f.vx = 0;
+      f.vy = 0;
+    });
+
+    // Étape 6 : Positionner les fourreaux selon la grille adaptative
+    let currentY = startY;
+    for (let row = 0; row < grid.length; row++) {
+      let currentX = startX;
+      const rowHeight = rowHeights[row];
+      
+      for (let col = 0; col < grid[row].length; col++) {
+        const fourreau = grid[row][col];
+        const colWidth = colWidths[col];
+        
+        if (fourreau) {
+          // Centrer le fourreau dans sa cellule
+          const cellCenterX = currentX + colWidth / 2;
+          const cellCenterY = currentY + rowHeight / 2;
+          
+          // Vérifier si la position est dans les limites pour les boîtes circulaires
+          if (shape === 'circ') {
+            const centerX = center.x;
+            const centerY = center.y;
+            const distanceFromCenter = Math.sqrt((cellCenterX - centerX) ** 2 + (cellCenterY - centerY) ** 2);
+            const maxRadius = (boxDiameter * MM_TO_PX) / 2 - MARGIN - (fourreau.od * MM_TO_PX) / 2;
+            
+            if (distanceFromCenter > maxRadius) {
+              console.log(`Fourreau ${fourreau.id} trop éloigné du centre, ignoré`);
+              currentX += colWidth;
+              continue;
+            }
+          }
+
+          fourreau.x = cellCenterX;
+          fourreau.y = cellCenterY;
+          fourreau._px = cellCenterX;
+          fourreau._py = cellCenterY;
+        }
+        
+        currentX += colWidth;
+      }
+      currentY += rowHeight;
+    }
+
+    redraw();
+    showToast(`${fourreaux.length} fourreaux disposés en grille adaptative ${approxCols}×${approxRows} avec espacement 3.5cm`);
   }
 
   function deleteSelected() {
@@ -1615,6 +1776,7 @@ const CHEMINS_CABLE_FALLBACK = [
     toolDelete.addEventListener('click', () => { setMode('delete'); if (selected) deleteSelected(); });
     document.getElementById('toolEdit').addEventListener('click', openEditPopup);
     document.getElementById('toolInfo').addEventListener('click', toggleShowInfo);
+    document.getElementById('gridArrange').addEventListener('click', arrangeConduitGrid);
     if (freezeBtn) freezeBtn.addEventListener('click', toggleFreezeSelected);
     canvas.addEventListener('contextmenu', e => { e.preventDefault(); });
     canvas.addEventListener('mousedown', e => {
@@ -1695,16 +1857,46 @@ const CHEMINS_CABLE_FALLBACK = [
       const popup = document.getElementById('editPopup');
       const labelInput = document.getElementById('editLabel');
       const colorInput = document.getElementById('editColor');
+      const phaseSection = document.getElementById('cablePhaseSection');
       
       // Remplir les champs avec les valeurs actuelles
       labelInput.value = obj.label || '';
-      // S'assurer d'avoir la couleur correcte
-      const defaultColor = selected.type === 'fourreau' 
-        ? colorForFourreau(obj.type, obj.code)
-        : colorForCable(obj.fam, obj.code);
-      const currentColor = obj.customColor || obj.color || defaultColor;
+      
+      // Déterminer la couleur à afficher selon la priorité
+      let displayColor;
+      if (selected.type === 'fourreau') {
+        const defaultColor = colorForFourreau(obj.type, obj.code);
+        displayColor = obj.customColor || obj.color || defaultColor;
+      } else {
+        // Pour les câbles : priorité à customColor, puis couleur du conducteur, puis défaut
+        const defaultColor = colorForCable(obj.fam, obj.code);
+        if (obj.customColor) {
+          displayColor = obj.customColor;
+        } else if (obj.selectedPhase && obj.selectedPhase !== 'none') {
+          displayColor = PHASE_COLORS[obj.selectedPhase];
+        } else {
+          displayColor = obj.color || defaultColor;
+        }
+      }
+      
       // Convertir en hex pour l'input color
-      colorInput.value = hslToHex(currentColor);
+      colorInput.value = hslToHex(displayColor);
+      
+      // Afficher ou cacher la section des conducteurs selon le type d'objet
+      if (selected.type === 'cable') {
+        phaseSection.style.display = 'block';
+        // Initialiser le bouton radio avec le conducteur actuel
+        const currentPhase = obj.selectedPhase || 'none';
+        const radioButton = document.getElementById(`phase-${currentPhase}`);
+        if (radioButton) {
+          radioButton.checked = true;
+        } else {
+          // Si pas de phase définie, sélectionner "none" par défaut
+          document.getElementById('phase-none').checked = true;
+        }
+      } else {
+        phaseSection.style.display = 'none';
+      }
       
       popup.style.display = 'block';
       setTimeout(() => labelInput.focus(), 100);
@@ -1734,7 +1926,35 @@ const CHEMINS_CABLE_FALLBACK = [
       
       // Sauvegarder les modifications
       obj.label = labelInput.value;
-      obj.customColor = colorInput.value !== obj.color ? colorInput.value : null;
+      
+      // Si c'est un câble, gérer le conducteur sélectionné
+      if (selected.type === 'cable') {
+        // Trouver quel bouton radio est sélectionné
+        const selectedRadio = document.querySelector('input[name="cablePhase"]:checked');
+        const selectedPhase = selectedRadio ? selectedRadio.dataset.phase : 'none';
+        
+        obj.selectedPhase = selectedPhase;
+        
+        // Vérifier si une couleur personnalisée a été définie
+        const defaultColor = colorForCable(obj.fam, obj.code);
+        const currentColor = colorInput.value;
+        
+        // Priorité : couleur personnalisée > couleur du conducteur > couleur par défaut
+        if (currentColor !== hslToHex(defaultColor) && 
+            (!selectedPhase || selectedPhase === 'none' || currentColor !== PHASE_COLORS[selectedPhase])) {
+          // L'utilisateur a choisi une couleur personnalisée différente
+          obj.customColor = currentColor;
+        } else if (selectedPhase && selectedPhase !== 'none') {
+          // Utiliser la couleur du conducteur sélectionné
+          obj.customColor = PHASE_COLORS[selectedPhase];
+        } else {
+          // Revenir à la couleur par défaut
+          obj.customColor = null;
+        }
+      } else {
+        // Pour les fourreaux, garder la logique actuelle
+        obj.customColor = colorInput.value !== obj.color ? colorInput.value : null;
+      }
       
       closeEditPopup();
       redraw();
@@ -1763,6 +1983,36 @@ const CHEMINS_CABLE_FALLBACK = [
       }
     });
 
+    // Gestionnaires pour les boutons radio des phases
+    ['none', 'ph1', 'ph2', 'ph3', 'n', 'pe'].forEach(phase => {
+      const radioButton = document.getElementById(`phase-${phase}`);
+      if (radioButton) {
+        radioButton.addEventListener('change', () => {
+          if (!selected || selected.type !== 'cable') return;
+          
+          const colorInput = document.getElementById('editColor');
+          const obj = cables.find(c => c.id === selected.id);
+          if (!obj) return;
+          
+          // Proposer la couleur du conducteur mais permettre de la modifier
+          if (phase === 'none') {
+            // Si aucune couleur personnalisée n'existe, proposer la couleur par défaut
+            if (!obj.customColor) {
+              const defaultColor = colorForCable(obj.fam, obj.code);
+              colorInput.value = hslToHex(defaultColor);
+            }
+            // Sinon, garder la couleur personnalisée actuelle
+          } else {
+            // Si aucune couleur personnalisée n'existe, proposer la couleur du conducteur
+            if (!obj.customColor || obj.customColor === PHASE_COLORS[obj.selectedPhase]) {
+              colorInput.value = PHASE_COLORS[phase];
+            }
+            // Sinon, garder la couleur personnalisée actuelle
+          }
+        });
+      }
+    });
+
     addEventListener('keydown', e => {
       const t = e.target; const tag = t && t.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
@@ -1770,6 +2020,7 @@ const CHEMINS_CABLE_FALLBACK = [
       if (k === 'a') { setMode('place'); return; }
       if (k === 's') { setMode('select'); return; }
       if (e.key === 'Delete') { deleteSelected(); return; }
+      if (k === 'g' && e.ctrlKey) { e.preventDefault(); arrangeConduitGrid(); return; }
       if (k === 'g') { toggleFreezeSelected(); return; }
       if (k === 'e') { openEditPopup(); return; }
       if (k === 'i') { toggleShowInfo(); return; }

@@ -251,6 +251,16 @@
               </svg>
               Infos (I)
             </button>
+            <button id="gridArrange" class="btn" aria-label="Disposer les fourreaux en grille 3.5cm - Raccourci: Ctrl+G">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Icône grille</title>
+                <rect x="3" y="3" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+                <rect x="15" y="3" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+                <rect x="3" y="15" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+                <rect x="15" y="15" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+              </svg>
+              Grille (Ctrl+G)
+            </button>
             <button id="freezeBtn" class="btn" disabled aria-label="Figer l'objet sélectionné - Raccourci: G">Figer (G)</button>
             <button id="toolDelete" class="btn" aria-label="Supprimer l'objet sélectionné - Raccourci: Suppr">Supprimer (Suppr)</button>
           </div>
@@ -431,6 +441,53 @@
         <input type="color" id="editColor" aria-describedby="editColorHelp">
         <button id="resetColor" type="button" aria-label="Rétablir la couleur par défaut">Couleur par défaut</button>
         <small id="editColorHelp" class="sr-only">Choisissez une couleur personnalisée pour cet objet</small>
+      </div>
+      <div id="cablePhaseSection" class="edit-field" style="display: none;">
+        <label>Conducteur unifilaire :</label>
+        <div class="phase-checkboxes">
+          <div class="checkbox-row">
+            <input type="radio" id="phase-none" name="cablePhase" data-phase="none" checked>
+            <label for="phase-none">
+              <span class="phase-color" style="background-color: #666666;"></span>
+              Aucun (couleur par défaut)
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <input type="radio" id="phase-ph1" name="cablePhase" data-phase="ph1">
+            <label for="phase-ph1">
+              <span class="phase-color" style="background-color: #8B4513;"></span>
+              Ph1 (Marron)
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <input type="radio" id="phase-ph2" name="cablePhase" data-phase="ph2">
+            <label for="phase-ph2">
+              <span class="phase-color" style="background-color: #808080;"></span>
+              Ph2 (Gris)
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <input type="radio" id="phase-ph3" name="cablePhase" data-phase="ph3">
+            <label for="phase-ph3">
+              <span class="phase-color" style="background-color: #000000;"></span>
+              Ph3 (Noir)
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <input type="radio" id="phase-n" name="cablePhase" data-phase="n">
+            <label for="phase-n">
+              <span class="phase-color" style="background-color: #0000FF;"></span>
+              N (Bleu)
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <input type="radio" id="phase-pe" name="cablePhase" data-phase="pe">
+            <label for="phase-pe">
+              <span class="phase-color" style="background-color: #00FF00;"></span>
+              PE (Vert fluo)
+            </label>
+          </div>
+        </div>
       </div>
       <div class="edit-buttons">
         <button id="saveEdit" type="button" aria-label="Sauvegarder les modifications">Sauvegarder</button>
