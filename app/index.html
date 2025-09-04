@@ -263,7 +263,7 @@
               </svg>
               Infos (I)
             </button>
-            <button id="gridArrange" class="btn" aria-label="Disposer les fourreaux en grille 3.5cm - Raccourci: Ctrl+G">
+            <button id="gridArrange" class="btn" aria-label="Disposer les fourreaux en grille 3cm - Raccourci: Ctrl+G">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                 <title>Icône grille</title>
                 <rect x="3" y="3" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
@@ -450,16 +450,33 @@
       </div>
       <div class="edit-field">
         <label for="editColor">Couleur personnalisée :</label>
-        <input type="color" id="editColor" aria-describedby="editColorHelp">
-        <button id="resetColor" type="button" aria-label="Rétablir la couleur par défaut">Couleur par défaut</button>
-        <small id="editColorHelp" class="sr-only">Choisissez une couleur personnalisée pour cet objet</small>
-      </div>
-      <div class="edit-field">
-        <label>Palette AutoCAD :</label>
-        <div id="colorGrid" class="color-grid" aria-describedby="colorGridHelp">
-          <!-- Grille générée dynamiquement -->
+        <div class="color-controls">
+          <input type="color" id="editColor" aria-describedby="editColorHelp">
+          <div class="color-dropdown">
+            <button id="autocadColorBtn" type="button" class="autocad-color-btn" aria-label="Choisir une couleur AutoCAD">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="2" y="2" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+                <rect x="6" y="6" width="3" height="3" fill="#ff0000"/>
+                <rect x="10.5" y="6" width="3" height="3" fill="#00ff00"/>
+                <rect x="15" y="6" width="3" height="3" fill="#0000ff"/>
+                <rect x="6" y="10.5" width="3" height="3" fill="#ffff00"/>
+                <rect x="10.5" y="10.5" width="3" height="3" fill="#ff00ff"/>
+                <rect x="15" y="10.5" width="3" height="3" fill="#00ffff"/>
+                <rect x="6" y="15" width="3" height="3" fill="#ffffff" stroke="#666"/>
+                <rect x="10.5" y="15" width="3" height="3" fill="#808080"/>
+                <rect x="15" y="15" width="3" height="3" fill="#000000"/>
+              </svg>
+              Couleurs AutoCAD
+            </button>
+            <div id="colorDropdown" class="color-dropdown-content">
+              <div id="colorGrid" class="color-grid">
+                <!-- Grille générée dynamiquement -->
+              </div>
+            </div>
+          </div>
+          <button id="resetColor" type="button" aria-label="Rétablir la couleur par défaut">Couleur par défaut</button>
         </div>
-        <small id="colorGridHelp" class="sr-only">Cliquez sur une couleur pour l'appliquer. Les couleurs correspondent exactement aux valeurs AutoCAD ACI.</small>
+        <small id="editColorHelp" class="sr-only">Choisissez une couleur personnalisée avec la pipette ou la palette AutoCAD</small>
       </div>
       <div id="cablePhaseSection" class="edit-field" style="display: none;">
         <label>Conducteur unifilaire :</label>

@@ -655,7 +655,7 @@ const CHEMINS_CABLE_FALLBACK = [
     // Empêcher la suppression des fourreaux durant l'arrangement
     arrangeInProgress = true;
 
-    const EXTERNAL_GAP = 35; // 3.5 cm = 35 mm d'écart extérieur souhaité
+    const EXTERNAL_GAP = 30; // 3 cm = 30 mm d'écart extérieur souhaité
     const MARGIN = 20; // Marge depuis les bords en pixels
 
     // Obtenir les dimensions de la boîte
@@ -910,7 +910,7 @@ const CHEMINS_CABLE_FALLBACK = [
     arrangeInProgress = false;
 
     redraw();
-    showToast(`${fourreaux.length} fourreaux disposés en grille adaptative ${approxCols}×${approxRows} avec espacement 3.5cm`);
+    showToast(`${fourreaux.length} fourreaux disposés en grille adaptative ${approxCols}×${approxRows} avec espacement 3cm`);
     
     // Vérifier si on peut proposer une réduction
     checkForPossibleReduction();
@@ -920,7 +920,7 @@ const CHEMINS_CABLE_FALLBACK = [
   function calculateMinimumDimensions() {
     if (fourreaux.length === 0) return null;
 
-    const EXTERNAL_GAP = 35; // 3.5 cm = 35 mm
+    const EXTERNAL_GAP = 30; // 3 cm = 30 mm
     const MARGIN = 20; // Marge en pixels
     
     // Trier les fourreaux par taille (gros d'abord)
@@ -2725,6 +2725,9 @@ const CHEMINS_CABLE_FALLBACK = [
           
           // Déclencher l'événement de changement de couleur
           colorInput.dispatchEvent(new Event('change'));
+          
+          // Fermer le dropdown après sélection
+          closeColorDropdown();
         });
         
         colorGrid.appendChild(swatch);
@@ -2741,6 +2744,34 @@ const CHEMINS_CABLE_FALLBACK = [
           matchingSwatch.classList.add('selected');
         }
       }
+    }
+
+    // Gestion du dropdown des couleurs AutoCAD
+    function toggleColorDropdown() {
+      const dropdown = document.getElementById('colorDropdown');
+      const btn = document.getElementById('autocadColorBtn');
+      
+      if (dropdown.classList.contains('show')) {
+        closeColorDropdown();
+      } else {
+        openColorDropdown();
+      }
+    }
+
+    function openColorDropdown() {
+      const dropdown = document.getElementById('colorDropdown');
+      const btn = document.getElementById('autocadColorBtn');
+      
+      dropdown.classList.add('show');
+      btn.classList.add('active');
+    }
+
+    function closeColorDropdown() {
+      const dropdown = document.getElementById('colorDropdown');
+      const btn = document.getElementById('autocadColorBtn');
+      
+      dropdown.classList.remove('show');
+      btn.classList.remove('active');
     }
 
     // Fonctions popup d'édition
@@ -2826,15 +2857,13 @@ const CHEMINS_CABLE_FALLBACK = [
         phaseSection.style.display = 'none';
       }
       
-      // Créer et initialiser la grille de couleurs AutoCAD
-      createColorGrid();
-      updateColorGridSelection(hslToHex(displayColor));
-      
       popup.style.display = 'block';
       setTimeout(() => labelInput.focus(), 100);
     }
     
     function closeEditPopup() {
+      // Fermer le dropdown des couleurs s'il est ouvert
+      closeColorDropdown();
       document.getElementById('editPopup').style.display = 'none';
     }
     
@@ -2930,6 +2959,33 @@ const CHEMINS_CABLE_FALLBACK = [
     document.getElementById('editColor').addEventListener('input', (e) => {
       // Mettre à jour la sélection dans la grille AutoCAD
       updateColorGridSelection(e.target.value);
+    });
+
+    // Événement pour le bouton des couleurs AutoCAD
+    document.getElementById('autocadColorBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      
+      // Créer la grille si elle n'existe pas encore
+      const colorGrid = document.getElementById('colorGrid');
+      if (!colorGrid.children.length) {
+        createColorGrid();
+        // Mettre à jour la sélection avec la couleur actuelle
+        const currentColor = document.getElementById('editColor').value;
+        updateColorGridSelection(currentColor);
+      }
+      
+      toggleColorDropdown();
+    });
+
+    // Fermer le dropdown quand on clique ailleurs
+    document.addEventListener('click', (e) => {
+      const dropdown = document.getElementById('colorDropdown');
+      const btn = document.getElementById('autocadColorBtn');
+      
+      if (dropdown && dropdown.classList.contains('show') && 
+          !dropdown.contains(e.target) && !btn.contains(e.target)) {
+        closeColorDropdown();
+      }
     });
 
     // Gestionnaires pour les boutons radio des phases
