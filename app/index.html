@@ -206,18 +206,29 @@
     </aside>
     <div class="canvas-section">
       <div class="main-view">
-        <main class="canvas-wrap">
-          <canvas id="world"></canvas>
-          <!-- Cotes pour la largeur -->
-          <div id="dimensionWidth" class="dimension-line horizontal" style="display: none;">
-            <span class="dimension-text"></span>
-          </div>
-          <!-- Cotes pour la hauteur -->
-          <div id="dimensionHeight" class="dimension-line vertical" style="display: none;">
-            <span class="dimension-text"></span>
-          </div>
-        </main>
-        <div class="zoom-control-vertical">
+        <div class="main-view-content">
+          <main class="canvas-wrap">
+            <canvas id="world"></canvas>
+            <!-- Cotes pour la largeur -->
+            <div id="dimensionWidth" class="dimension-line horizontal" style="display: none;">
+              <span class="dimension-text"></span>
+            </div>
+            <!-- Cotes pour la hauteur -->
+            <div id="dimensionHeight" class="dimension-line vertical" style="display: none;">
+              <span class="dimension-text"></span>
+            </div>
+            
+            <!-- Bouton de réduction automatique -->
+            <div id="reduceButtonContainer" class="reduce-button-container" style="display: none;">
+              <button id="reduceToMinimum" class="btn reduce-btn">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Réduire au minimum
+              </button>
+            </div>
+          </main>
+          <div class="zoom-control-vertical">
           <label for="zoomSlider">Zoom</label>
           <input
             id="zoomSlider"
@@ -229,6 +240,7 @@
             value="100"
           />
           <div class="zoom-value"><span id="zoomLabel">100</span>%</div>
+          </div>
         </div>
       </div>
       <div class="canvas-controls">
@@ -442,6 +454,13 @@
         <button id="resetColor" type="button" aria-label="Rétablir la couleur par défaut">Couleur par défaut</button>
         <small id="editColorHelp" class="sr-only">Choisissez une couleur personnalisée pour cet objet</small>
       </div>
+      <div class="edit-field">
+        <label>Palette AutoCAD :</label>
+        <div id="colorGrid" class="color-grid" aria-describedby="colorGridHelp">
+          <!-- Grille générée dynamiquement -->
+        </div>
+        <small id="colorGridHelp" class="sr-only">Cliquez sur une couleur pour l'appliquer. Les couleurs correspondent exactement aux valeurs AutoCAD ACI.</small>
+      </div>
       <div id="cablePhaseSection" class="edit-field" style="display: none;">
         <label>Conducteur unifilaire :</label>
         <div class="phase-checkboxes">
@@ -456,21 +475,21 @@
             <input type="radio" id="phase-ph1" name="cablePhase" data-phase="ph1">
             <label for="phase-ph1">
               <span class="phase-color" style="background-color: #8B4513;"></span>
-              Ph1 (Marron)
+              L1 (Marron)
             </label>
           </div>
           <div class="checkbox-row">
             <input type="radio" id="phase-ph2" name="cablePhase" data-phase="ph2">
             <label for="phase-ph2">
               <span class="phase-color" style="background-color: #808080;"></span>
-              Ph2 (Gris)
+              L2 (Gris)
             </label>
           </div>
           <div class="checkbox-row">
             <input type="radio" id="phase-ph3" name="cablePhase" data-phase="ph3">
             <label for="phase-ph3">
               <span class="phase-color" style="background-color: #000000;"></span>
-              Ph3 (Noir)
+              L3 (Noir)
             </label>
           </div>
           <div class="checkbox-row">
@@ -492,6 +511,21 @@
       <div class="edit-buttons">
         <button id="saveEdit" type="button" aria-label="Sauvegarder les modifications">Sauvegarder</button>
         <button id="cancelEdit" type="button" aria-label="Annuler les modifications">Annuler</button>
+      </div>
+    </div>
+    <div class="edit-popup-overlay" aria-hidden="true"></div>
+  </div>
+
+  <!-- Popup de proposition de redimensionnement -->
+  <div id="resizePopup" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="resizePopupTitle" aria-modal="true">
+    <div class="edit-popup-content">
+      <h3 id="resizePopupTitle">Ajustement nécessaire</h3>
+      <div class="edit-field">
+        <p id="resizeMessage"></p>
+      </div>
+      <div class="edit-buttons">
+        <button id="applyResize" type="button">Appliquer</button>
+        <button id="cancelResize" type="button">Annuler</button>
       </div>
     </div>
     <div class="edit-popup-overlay" aria-hidden="true"></div>
