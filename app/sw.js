@@ -16,11 +16,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('✅ Cache TontonKAD ouvert');
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('📦 Toutes les ressources TontonKAD sont en cache');
         return self.skipWaiting(); // Active immédiatement le nouveau SW
       })
       .catch((error) => {
@@ -36,13 +34,11 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('🗑️ Suppression de l\'ancien cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('🚀 Service Worker TontonKAD activé');
       return self.clients.claim(); // Prend le contrôle immédiatement
     })
   );

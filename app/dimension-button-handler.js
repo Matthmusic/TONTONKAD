@@ -28,6 +28,14 @@
         circ: null
     };
     
+    // Fonction de nettoyage
+    function cleanup() {
+        Object.values(blinkTimers).forEach(timer => {
+            if (timer) clearTimeout(timer);
+        });
+        blinkTimers = { rect: null, circ: null };
+    }
+    
     /**
      * Initialise les références aux éléments DOM
      */
@@ -39,22 +47,11 @@
         elements.applyCirc = document.getElementById('applyCirc');
         elements.shape = document.getElementById('shape');
         
-        // Debug : vérifier que les éléments sont trouvés
-        console.log('🔍 Éléments trouvés:', {
-            boxW: !!elements.boxW,
-            boxH: !!elements.boxH,
-            boxD: !!elements.boxD,
-            applyRect: !!elements.applyRect,
-            applyCirc: !!elements.applyCirc,
-            shape: !!elements.shape
-        });
         
         // Stocker les valeurs initiales
         if (elements.boxW) initialValues.boxW = parseFloat(elements.boxW.value) || 1000;
         if (elements.boxH) initialValues.boxH = parseFloat(elements.boxH.value) || 1000;
         if (elements.boxD) initialValues.boxD = parseFloat(elements.boxD.value) || 1000;
-        
-        console.log('📊 Valeurs initiales:', initialValues);
     }
     
     /**
@@ -124,13 +121,10 @@
      */
     function updateRectButton() {
         const hasChanged = hasRectValuesChanged();
-        console.log('🔄 updateRectButton - hasChanged:', hasChanged);
         
         if (hasChanged) {
-            console.log('✅ Affichage bouton rect');
             showButton(elements.applyRect, 'rect');
         } else {
-            console.log('❌ Masquage bouton rect');
             hideButton(elements.applyRect, 'rect');
         }
     }
@@ -140,13 +134,10 @@
      */
     function updateCircButton() {
         const hasChanged = hasCircValueChanged();
-        console.log('🔄 updateCircButton - hasChanged:', hasChanged);
         
         if (hasChanged) {
-            console.log('✅ Affichage bouton circ');
             showButton(elements.applyCirc, 'circ');
         } else {
-            console.log('❌ Masquage bouton circ');
             hideButton(elements.applyCirc, 'circ');
         }
     }
@@ -259,7 +250,6 @@
         // Événement sur le changement de forme
         if (elements.shape) {
             elements.shape.addEventListener('change', (e) => {
-                console.log('🔄 Changement de forme:', e.target.value);
                 
                 // Cacher tous les boutons lors du changement de forme
                 hideButton(elements.applyRect, 'rect');
@@ -267,15 +257,12 @@
                 
                 // Mettre à jour les valeurs initiales et vérifier les boutons
                 setTimeout(() => {
-                    console.log('⏰ Timeout après changement de forme');
                     updateInitialValues();
                     // Vérifier immédiatement si les boutons doivent être affichés
                     updateRectButton();
                     updateCircButton();
                 }, 150); // Augmenté à 150ms pour laisser le temps au DOM de se mettre à jour
             });
-        } else {
-            console.log('⚠️ Élément shape non trouvé !');
         }
     }
     
@@ -302,10 +289,10 @@
         initElements();
         initEvents();
         
-        // Exposer la fonction de reset globalement si nécessaire
+        // Exposer les fonctions utiles globalement
         window.resetDimensionButtons = resetInitialValues;
+        window.cleanupDimensionButtons = cleanup;
         
-        console.log('✅ Gestionnaire des boutons de dimensions initialisé');
     }
     
     // Démarrer l'initialisation

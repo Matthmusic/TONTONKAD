@@ -54,11 +54,25 @@
         <div id="rectInputs">
           <div class="row">
             <label for="boxW">Largeur (mm)</label>
-            <input id="boxW" type="number" step="0.1" value="1000" />
+            <div class="input-lock-group">
+              <input id="boxW" type="number" step="0.1" value="1000" />
+              <label class="lock-checkbox">
+                <input type="checkbox" id="lockWidth" />
+                <span class="lock-icon">🔒</span>
+                <span class="lock-text">Verrouiller</span>
+              </label>
+            </div>
           </div>
           <div class="row">
             <label for="boxH">Hauteur (mm)</label>
-            <input id="boxH" type="number" step="0.1" value="1000" />
+            <div class="input-lock-group">
+              <input id="boxH" type="number" step="0.1" value="1000" />
+              <label class="lock-checkbox">
+                <input type="checkbox" id="lockHeight" />
+                <span class="lock-icon">🔒</span>
+                <span class="lock-text">Verrouiller</span>
+              </label>
+            </div>
           </div>
           <div class="apply-dimensions-container">
             <button id="apply" class="btn apply-btn hidden" aria-label="Appliquer les nouvelles dimensions - Raccourci: Entrée">
@@ -328,7 +342,6 @@
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
           .then((registration) => {
-            console.log('✅ Service Worker TontonKAD enregistré:', registration.scope);
             
             // Gérer les mises à jour du service worker
             registration.addEventListener('updatefound', () => {
@@ -355,7 +368,6 @@
 
       // Gérer les mises à jour automatiques
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('🔄 Service Worker mis à jour, rechargement...');
         window.location.reload();
       });
     })();
@@ -408,7 +420,6 @@
           
           deferredPrompt.userChoice
             .then((result) => {
-              console.log('Choix installation PWA:', result.outcome);
               deferredPrompt = null;
             })
             .catch((error) => {
@@ -429,7 +440,6 @@
 
       // Cacher le bouton après installation
       window.addEventListener('appinstalled', () => {
-        console.log('🎉 TontonKAD installé avec succès !');
         const installButton = document.querySelector('.rainbow-button');
         if (installButton) {
           installButton.remove();

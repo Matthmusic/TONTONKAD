@@ -21,14 +21,17 @@
   const CANVAS_MARGIN = 40; // Marge pour les cotations
   const TOTAL_CANVAS_MARGIN = CANVAS_MARGIN * 2; // 80px total
   const DEFAULT_STROKE_WIDTH = -3; // Épaisseur de trait par défaut
-  const HIGH_DPI_MULTIPLIER = 4; // Force haute résolution pour rendu ultra-net
+  
+  // Constantes de grille
+  const EXTERNAL_GAP = 30; // Écart extérieur souhaité (3 cm = 30 mm)
+  const GRID_MARGIN = 20; // Marge depuis les bords en pixels
 
   // Éléments du DOM
   const canvas = document.getElementById("world");
   const ctx = canvas.getContext("2d");
   
   // Variables pour la haute résolution - Optimisation adaptative
-  let pixelRatio = Math.max(window.devicePixelRatio || 1, HIGH_DPI_MULTIPLIER);
+  let pixelRatio = window.devicePixelRatio || 1;
   let displayScale = 1;
 
   // Fonctions utilitaires pour les calculs canvas
@@ -282,22 +285,44 @@ const CHEMINS_CABLE_FALLBACK = [
     const cableFams = [...new Set(CABLES.map(c => c.fam))];
     const fourreauTypes = [...new Set(FOURREAUX.map(f => f.type))];
 
-    fourreauSelect.innerHTML = fourreauTypes.map(type => {
-      const options = FOURREAUX.filter(f => f.type === type)
-        .map(f => `<option value="${f.type}|${f.code}">${f.type} ${f.code} — Øint ≥ ${f.id} mm</option>`).join("");
-      return `<optgroup label="${type}">${options}</optgroup>`;
-    }).join("");
+    fourreauSelect.innerHTML = '';
+    fourreauTypes.forEach(type => {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = type;
+      
+      FOURREAUX.filter(f => f.type === type).forEach(f => {
+        const option = document.createElement('option');
+        option.value = `${f.type}|${f.code}`;
+        option.textContent = `${f.type} ${f.code} — Øint ≥ ${f.id} mm`;
+        optgroup.appendChild(option);
+      });
+      
+      fourreauSelect.appendChild(optgroup);
+    });
 
-    cableSelect.innerHTML = cableFams.map(fam => {
-      const options = CABLES.filter(c => c.fam === fam)
-        .map(c => `<option value="${c.fam}|${c.code}">${fam} – ${c.code} (Ø ${c.od} mm)</option>`).join("");
-      return `<optgroup label="${fam}">${options}</optgroup>`;
-    }).join("");
+    cableSelect.innerHTML = '';
+    cableFams.forEach(fam => {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = fam;
+      
+      CABLES.filter(c => c.fam === fam).forEach(c => {
+        const option = document.createElement('option');
+        option.value = `${c.fam}|${c.code}`;
+        option.textContent = `${fam} – ${c.code} (Ø ${c.od} mm)`;
+        optgroup.appendChild(option);
+      });
+      
+      cableSelect.appendChild(optgroup);
+    });
 
     if (CHEMINS_CABLE && CHEMINS_CABLE.length > 0 && cheminCableSelect) {
-      cheminCableSelect.innerHTML = CHEMINS_CABLE.map(cdc =>
-        `<option value="${cdc.largeur}|${cdc.hauteur}">${cdc.nom} (${cdc.largeur}x${cdc.hauteur} mm)</option>`
-      ).join("");
+      cheminCableSelect.innerHTML = '';
+      CHEMINS_CABLE.forEach(cdc => {
+        const option = document.createElement('option');
+        option.value = `${cdc.largeur}|${cdc.hauteur}`;
+        option.textContent = `${cdc.nom} (${cdc.largeur}x${cdc.hauteur} mm)`;
+        cheminCableSelect.appendChild(option);
+      });
     }
   }
 
@@ -623,7 +648,6 @@ const CHEMINS_CABLE_FALLBACK = [
     fourreaux.push(obj);
     updateStats();
     updateInventory();
-    checkForPossibleReduction(); // Vérifier si une réduction est possible
     redraw();
     return obj;
   }
@@ -645,8 +669,28 @@ const CHEMINS_CABLE_FALLBACK = [
     return obj;
   }
 
+  // Fonctions utilitaires pour arrangeConduitGrid
+  function calculateGridDimensions(conduitCount, containerSize) {
+    const aspectRatio = containerSize.width / containerSize.height;
+    const approxCols = Math.ceil(Math.sqrt(conduitCount * aspectRatio));
+    const approxRows = Math.ceil(conduitCount / approxCols);
+    return { cols: approxCols, rows: approxRows };
+  }
+
+  function positionConduitsInGrid(conduits, gridConfig, containerSize, margin) {
+    const { cols, rows, cellWidth, cellHeight } = gridConfig;
+    const startX = margin + cellWidth / 2;
+    const startY = margin + cellHeight / 2;
+    
+    conduits.forEach((conduit, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      conduit.x = startX + col * cellWidth;
+      conduit.y = startY + row * cellHeight;
+    });
+  }
+
   function arrangeConduitGrid() {
-    console.log('arrangeConduitGrid appelée, fourreaux.length:', fourreaux.length);
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à disposer en grille');
       return;
@@ -654,9 +698,6 @@ const CHEMINS_CABLE_FALLBACK = [
 
     // Empêcher la suppression des fourreaux durant l'arrangement
     arrangeInProgress = true;
-
-    const EXTERNAL_GAP = 30; // 3 cm = 30 mm d'écart extérieur souhaité
-    const MARGIN = 20; // Marge depuis les bords en pixels
 
     // Obtenir les dimensions de la boîte
     const shape = shapeSel.value;
@@ -678,8 +719,8 @@ const CHEMINS_CABLE_FALLBACK = [
     const sortedFourreaux = [...fourreaux].sort((a, b) => b.od - a.od); // Plus gros d'abord
     
     // Étape 2 : Calculer les dimensions optimales de grille (privilégier la largeur)
-    const availableWidth = boxWidth - (2 * MARGIN);
-    const availableHeight = boxHeight - (2 * MARGIN);
+    const availableWidth = boxWidth - (2 * GRID_MARGIN);
+    const availableHeight = boxHeight - (2 * GRID_MARGIN);
     
     // Fonction pour calculer les dimensions qui rentrent strictement dans la boîte
     function calculateConstrainedGrid(numItems, maxWidth, maxHeight) {
@@ -784,8 +825,8 @@ const CHEMINS_CABLE_FALLBACK = [
       }
       
       // Calculer les dimensions totales et arrondir à la dizaine supérieure
-      const totalWidthMM = tempColWidths.reduce((sum, w) => sum + w, 0) + (2 * MARGIN / MM_TO_PX);
-      const totalHeightMM = tempRowHeights.reduce((sum, h) => sum + h, 0) + (2 * MARGIN / MM_TO_PX);
+      const totalWidthMM = tempColWidths.reduce((sum, w) => sum + w, 0) + (2 * GRID_MARGIN / MM_TO_PX);
+      const totalHeightMM = tempRowHeights.reduce((sum, h) => sum + h, 0) + (2 * GRID_MARGIN / MM_TO_PX);
       
       const suggestedWidth = Math.ceil(totalWidthMM / 10) * 10; // Arrondi à la dizaine supérieure
       const suggestedHeight = Math.ceil(totalHeightMM / 10) * 10; // Arrondi à la dizaine supérieure
@@ -799,7 +840,6 @@ const CHEMINS_CABLE_FALLBACK = [
     }
     
     const { cols: approxCols, rows: approxRows } = gridResult;
-    console.log(`Grille contrainte: ${approxCols} cols × ${approxRows} rows (ratio: ${(approxCols/approxRows).toFixed(2)})`);
 
     // Étape 4 : Organiser les fourreaux dans la grille (gros en bas)
     const grid = [];
@@ -886,10 +926,9 @@ const CHEMINS_CABLE_FALLBACK = [
             const centerX = center.x;
             const centerY = center.y;
             const distanceFromCenter = Math.sqrt((cellCenterX - centerX) ** 2 + (cellCenterY - centerY) ** 2);
-            const maxRadius = (boxDiameter * MM_TO_PX) / 2 - MARGIN - (fourreau.od * MM_TO_PX) / 2;
+            const maxRadius = (boxDiameter * MM_TO_PX) / 2 - GRID_MARGIN - (fourreau.od * MM_TO_PX) / 2;
             
             if (distanceFromCenter > maxRadius) {
-              console.log(`Fourreau ${fourreau.id} trop éloigné du centre, ignoré`);
               currentX += colWidth;
               continue;
             }
@@ -912,8 +951,6 @@ const CHEMINS_CABLE_FALLBACK = [
     redraw();
     showToast(`${fourreaux.length} fourreaux disposés en grille adaptative ${approxCols}×${approxRows} avec espacement 3cm`);
     
-    // Vérifier si on peut proposer une réduction
-    checkForPossibleReduction();
   }
 
   // Fonction pour calculer les dimensions minimales nécessaires
@@ -921,20 +958,45 @@ const CHEMINS_CABLE_FALLBACK = [
     if (fourreaux.length === 0) return null;
 
     const EXTERNAL_GAP = 30; // 3 cm = 30 mm
-    const MARGIN = 20; // Marge en pixels
+    
+    // Vérifier les verrous
+    const lockWidth = document.getElementById('lockWidth')?.checked;
+    const lockHeight = document.getElementById('lockHeight')?.checked;
+    const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
+    const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
     
     // Trier les fourreaux par taille (gros d'abord)
     const sortedFourreaux = [...fourreaux].sort((a, b) => b.od - a.od);
     
-    // Calculer la grille optimale
-    let optimalCols = Math.ceil(Math.sqrt(fourreaux.length * 1.5));
-    let optimalRows = Math.ceil(fourreaux.length / optimalCols);
+    // Calculer la grille optimale en tenant compte des contraintes
+    let optimalCols, optimalRows;
     
-    while (optimalCols * optimalRows < fourreaux.length) {
-      if (optimalCols <= optimalRows) {
-        optimalCols++;
-      } else {
-        optimalRows++;
+    if (lockWidth && lockHeight) {
+      // Les deux dimensions verrouillées = pas de redimensionnement possible
+      return null;
+    } else if (lockHeight) {
+      // Hauteur verrouillée : calculer combien de lignes on peut avoir
+      const avgDiameter = fourreaux.reduce((sum, f) => sum + f.od, 0) / fourreaux.length;
+      const maxRows = Math.floor((currentHeight - 2 * GRID_MARGIN) / (avgDiameter + EXTERNAL_GAP));
+      optimalRows = Math.min(maxRows, fourreaux.length);
+      optimalCols = Math.ceil(fourreaux.length / optimalRows);
+    } else if (lockWidth) {
+      // Largeur verrouillée : calculer combien de colonnes on peut avoir
+      const avgDiameter = fourreaux.reduce((sum, f) => sum + f.od, 0) / fourreaux.length;
+      const maxCols = Math.floor((currentWidth - 2 * GRID_MARGIN) / (avgDiameter + EXTERNAL_GAP));
+      optimalCols = Math.min(maxCols, fourreaux.length);
+      optimalRows = Math.ceil(fourreaux.length / optimalCols);
+    } else {
+      // Aucune contrainte : grille optimale libre
+      optimalCols = Math.ceil(Math.sqrt(fourreaux.length * 1.5));
+      optimalRows = Math.ceil(fourreaux.length / optimalCols);
+      
+      while (optimalCols * optimalRows < fourreaux.length) {
+        if (optimalCols <= optimalRows) {
+          optimalCols++;
+        } else {
+          optimalRows++;
+        }
       }
     }
     
@@ -977,16 +1039,20 @@ const CHEMINS_CABLE_FALLBACK = [
     }
     
     // Calculer dimensions totales en mm et arrondir à la dizaine supérieure
-    const totalWidthMM = colWidths.reduce((sum, w) => sum + w, 0) + (2 * MARGIN / MM_TO_PX);
-    const totalHeightMM = rowHeights.reduce((sum, h) => sum + h, 0) + (2 * MARGIN / MM_TO_PX);
+    const totalWidthMM = colWidths.reduce((sum, w) => sum + w, 0) + (2 * GRID_MARGIN / MM_TO_PX);
+    const totalHeightMM = rowHeights.reduce((sum, h) => sum + h, 0) + (2 * GRID_MARGIN / MM_TO_PX);
+    
+    // Respecter les verrous dans les dimensions finales
+    const finalWidth = lockWidth ? currentWidth : Math.ceil(totalWidthMM / 10) * 10;
+    const finalHeight = lockHeight ? currentHeight : Math.ceil(totalHeightMM / 10) * 10;
     
     return {
-      width: Math.ceil(totalWidthMM / 10) * 10,
-      height: Math.ceil(totalHeightMM / 10) * 10
+      width: finalWidth,
+      height: finalHeight
     };
   }
 
-  // Vérifier s'il est possible de réduire la boîte
+  // Vérifier s'il est possible de redimensionner la boîte
   function checkForPossibleReduction() {
     if (fourreaux.length === 0) {
       hideReduceButton();
@@ -1002,11 +1068,32 @@ const CHEMINS_CABLE_FALLBACK = [
     const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
     const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
     
-    // Vérifier s'il y a un gain significatif (plus de 5% dans au moins une dimension)
-    const widthReduction = (currentWidth - minDims.width) / currentWidth;
-    const heightReduction = (currentHeight - minDims.height) / currentHeight;
+    // Vérifier les verrous
+    const lockWidth = document.getElementById('lockWidth')?.checked;
+    const lockHeight = document.getElementById('lockHeight')?.checked;
     
-    if (widthReduction > 0.05 || heightReduction > 0.05) {
+    // Si tout est verrouillé, pas de redimensionnement possible
+    if (lockWidth && lockHeight) {
+      hideReduceButton();
+      return;
+    }
+    
+    // Calculer la différence seulement pour les dimensions non verrouillées
+    let hasSignificantChange = false;
+    
+    if (!lockWidth) {
+      const widthDiff = Math.abs(currentWidth - minDims.width);
+      const widthChange = widthDiff / currentWidth;
+      if (widthChange > 0.05) hasSignificantChange = true;
+    }
+    
+    if (!lockHeight) {
+      const heightDiff = Math.abs(currentHeight - minDims.height);
+      const heightChange = heightDiff / currentHeight;
+      if (heightChange > 0.05) hasSignificantChange = true;
+    }
+    
+    if (hasSignificantChange) {
       showReduceButton(minDims);
     } else {
       hideReduceButton();
@@ -1018,8 +1105,43 @@ const CHEMINS_CABLE_FALLBACK = [
     const button = document.getElementById('reduceToMinimum');
     
     if (container && button) {
-      button.setAttribute('data-width', minDims.width);
-      button.setAttribute('data-height', minDims.height);
+      const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
+      const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
+      
+      // Vérifier les verrous
+      const lockWidth = document.getElementById('lockWidth')?.checked;
+      const lockHeight = document.getElementById('lockHeight')?.checked;
+      
+      // Ajuster les dimensions proposées selon les verrous
+      const proposedWidth = lockWidth ? currentWidth : minDims.width;
+      const proposedHeight = lockHeight ? currentHeight : minDims.height;
+      
+      const needsEnlarge = proposedWidth > currentWidth || proposedHeight > currentHeight;
+      const needsReduce = proposedWidth < currentWidth || proposedHeight < currentHeight;
+      
+      // Créer le texte du bouton en tenant compte des verrous
+      let buttonText = '';
+      if (lockWidth && lockHeight) {
+        buttonText = 'Dimensions verrouillées';
+        container.style.display = 'none';
+        return;
+      } else if (lockWidth) {
+        buttonText = `${needsEnlarge ? 'Agrandir hauteur' : needsReduce ? 'Réduire hauteur' : 'Ajuster hauteur'} (${proposedHeight}mm)`;
+      } else if (lockHeight) {
+        buttonText = `${needsEnlarge ? 'Agrandir largeur' : needsReduce ? 'Réduire largeur' : 'Ajuster largeur'} (${proposedWidth}mm)`;
+      } else {
+        if (needsEnlarge && !needsReduce) {
+          buttonText = `Agrandir (${proposedWidth}×${proposedHeight}mm)`;
+        } else if (needsReduce && !needsEnlarge) {
+          buttonText = `Réduire (${proposedWidth}×${proposedHeight}mm)`;
+        } else {
+          buttonText = `Redimensionner (${proposedWidth}×${proposedHeight}mm)`;
+        }
+      }
+      
+      button.textContent = buttonText;
+      button.setAttribute('data-width', proposedWidth);
+      button.setAttribute('data-height', proposedHeight);
       container.style.display = 'block';
     }
   }
@@ -1039,10 +1161,17 @@ const CHEMINS_CABLE_FALLBACK = [
     const height = parseFloat(button.getAttribute('data-height'));
     
     if (SHAPE === 'rect') {
-      boxWInput.value = width;
-      boxHInput.value = height;
-      WORLD_W_MM = width;
-      WORLD_H_MM = height;
+      const lockWidth = document.getElementById('lockWidth')?.checked;
+      const lockHeight = document.getElementById('lockHeight')?.checked;
+      
+      if (!lockWidth) {
+        boxWInput.value = width;
+        WORLD_W_MM = width;
+      }
+      if (!lockHeight) {
+        boxHInput.value = height;
+        WORLD_H_MM = height;
+      }
     } else if (SHAPE === 'circ') {
       const diameter = Math.max(width, height);
       boxDInput.value = diameter;
@@ -1147,7 +1276,6 @@ const CHEMINS_CABLE_FALLBACK = [
       redraw();
       updateStats();
       updateInventory();
-      checkForPossibleReduction();
     } else if (clipboard.type === 'cable') {
       // Coller un câble simple
       const newCable = addCableAt(x, y, clipboard.fam, clipboard.code);
@@ -1165,7 +1293,6 @@ const CHEMINS_CABLE_FALLBACK = [
       redraw();
       updateStats();
       updateInventory();
-      checkForPossibleReduction();
     }
   }
 
@@ -1231,7 +1358,6 @@ const CHEMINS_CABLE_FALLBACK = [
     updateStats();
     updateInventory();
     updateSelectedInfo();
-    checkForPossibleReduction(); // Vérifier si une réduction est possible
     redraw();
   }
 
@@ -1675,14 +1801,36 @@ const CHEMINS_CABLE_FALLBACK = [
       dxf += `2\n${blockName}\n70\n0\n`;
       dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
       dxf += `3\n${blockName}\n`;
+      let dxfColor;
+      if (fourreau && fourreau.customColor) {
+        dxfColor = convertHexToDXFColor(fourreau.customColor);
+      } else {
+        dxfColor = fourreauColorMap.get(type);
+      }
       
-      // Cercle extérieur
+      // Cercle extérieur avec couleur
       dxf += `0\nCIRCLE\n8\n_CEAI_FOURREAU_${type}\n`;
+      dxf += `62\n${dxfColor}\n`; // Couleur au niveau de l'élément
       dxf += `10\n0.0\n20\n0.0\n40\n${outerRadius}\n`;
       
-      // Cercle intérieur
+      // Cercle intérieur avec couleur
       dxf += `0\nCIRCLE\n8\n_CEAI_FOURREAU_${type}\n`;
+      dxf += `62\n${dxfColor}\n`; // Couleur au niveau de l'élément
       dxf += `10\n0.0\n20\n0.0\n40\n${innerRadius}\n`;
+      
+      // Ajouter le label du fourreau si disponible
+      if (fourreau && (fourreau.label || fourreau.code)) {
+        const labelText = fourreau.label || `${fourreau.type} ${fourreau.code}`;
+        dxf += `0\nTEXT\n8\n_CEAI_FOURREAU_${type}\n`;
+        dxf += `62\n${dxfColor}\n`; // Couleur du texte
+        dxf += '7\nArial\n'; // Police Arial
+        dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
+        dxf += '40\n0.003\n'; // Hauteur du texte (3mm)
+        dxf += `1\n${labelText}\n`;
+        dxf += '50\n0.0\n'; // Angle de rotation
+        dxf += '72\n1\n'; // Justification horizontale centrée
+        dxf += '73\n2\n'; // Justification verticale centrée
+      }
       
       dxf += '0\nENDBLK\n8\n0\n';
     });
@@ -1698,22 +1846,39 @@ const CHEMINS_CABLE_FALLBACK = [
       dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
       dxf += `3\n${blockName}\n`;
       
-      // Cercle simple pour le câble
+      // Déterminer la couleur du câble
+      let cableDxfColor;
+      if (cable.customColor) {
+        cableDxfColor = convertHexToDXFColor(cable.customColor);
+      } else {
+        cableDxfColor = layerColorMap.get(layerName);
+      }
+      
+      // Cercle simple pour le câble avec couleur
       dxf += `0\nCIRCLE\n8\n${layerName}\n`;
+      dxf += `62\n${cableDxfColor}\n`; // Couleur au niveau de l'élément
       dxf += `10\n0.0\n20\n0.0\n40\n${radius}\n`;
       
-      // Ajouter le texte de phase au centre si couleur custom
-      if (cable.customColor) {
-        const phaseText = getPhaseFromColor(cable.customColor);
-        if (phaseText) {
-          dxf += `0\nTEXT\n8\n${layerName}\n`;
-          dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
-          dxf += '40\n0.002\n'; // Hauteur du texte (2mm)
-          dxf += `1\n${phaseText}\n`;
-          dxf += '50\n0.0\n'; // Angle de rotation
-          dxf += '72\n1\n'; // Justification horizontale centrée
-          dxf += '73\n2\n'; // Justification verticale centrée
-        }
+      // Ajouter le texte au centre (phase ou label)
+      let textToShow = '';
+      if (cable.label) {
+        textToShow = cable.label;
+      } else if (cable.customColor) {
+        textToShow = getPhaseFromColor(cable.customColor) || `${cable.fam} ${cable.code}`;
+      } else {
+        textToShow = `${cable.fam} ${cable.code}`;
+      }
+      
+      if (textToShow) {
+        dxf += `0\nTEXT\n8\n${layerName}\n`;
+        dxf += `62\n${cableDxfColor}\n`; // Couleur du texte
+        dxf += '7\nArial\n'; // Police Arial
+        dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
+        dxf += '40\n0.004\n'; // Hauteur du texte augmentée (4mm au lieu de 2mm)
+        dxf += `1\n${textToShow}\n`;
+        dxf += '50\n0.0\n'; // Angle de rotation
+        dxf += '72\n1\n'; // Justification horizontale centrée
+        dxf += '73\n2\n'; // Justification verticale centrée
       }
       
       dxf += '0\nENDBLK\n8\n0\n';
@@ -2066,10 +2231,15 @@ const CHEMINS_CABLE_FALLBACK = [
     return ((occupiedArea + occupiedAreaCable) / totalArea) * 100;
   }
 
+  let checkReductionTimeout;
   function updateStats() {
     statFourreau.textContent = fourreaux.length;
     statCable.textContent = cables.length;
     statOccupation.textContent = `${calculateBoxOccupancy().toFixed(1)} %`;
+    
+    // Déclencher checkForPossibleReduction avec un léger délai pour éviter trop d'appels
+    clearTimeout(checkReductionTimeout);
+    checkReductionTimeout = setTimeout(checkForPossibleReduction, 100);
   }
 
   /* ====== Interaction Utilisateur ====== */
@@ -2309,8 +2479,20 @@ const CHEMINS_CABLE_FALLBACK = [
   function applyDimensions() {
     SHAPE = shapeSel.value;
     if (SHAPE === 'rect') {
-      WORLD_W_MM = parseFloat(boxWInput.value);
-      WORLD_H_MM = parseFloat(boxHInput.value);
+      const lockWidth = document.getElementById('lockWidth')?.checked;
+      const lockHeight = document.getElementById('lockHeight')?.checked;
+      
+      if (!lockWidth) {
+        WORLD_W_MM = parseFloat(boxWInput.value);
+      }
+      if (!lockHeight) {
+        WORLD_H_MM = parseFloat(boxHInput.value);
+      }
+      
+      // Mettre à jour les inputs avec les valeurs actuelles (au cas où verrouillées)
+      boxWInput.value = WORLD_W_MM;
+      boxHInput.value = WORLD_H_MM;
+      
     } else if (SHAPE === 'chemin_de_cable') {
       const [w, h] = cheminCableSelect.value.split('|').map(parseFloat);
       WORLD_W_MM = w || 0;
@@ -2323,7 +2505,6 @@ const CHEMINS_CABLE_FALLBACK = [
     updateStats();
     updateInventory();
     updateSelectedInfo();
-    checkForPossibleReduction(); // Vérifier si une réduction est possible
   }
 
   function pruneOutside() {
@@ -2596,7 +2777,6 @@ const CHEMINS_CABLE_FALLBACK = [
     canvas.addEventListener('contextmenu', e => { e.preventDefault(); });
     canvas.addEventListener('mousedown', e => {
       const p = canvasCoords(e);
-      console.log(`Clic détecté: bouton=${e.button}, mode=${mode}, activeTab=${activeTab}`);
       if (e.button === 0) { // Clic gauche : sélection + glisser-déposer
         // Gérer le mode collage en priorité
         if (pasteMode) {
@@ -3046,7 +3226,43 @@ const CHEMINS_CABLE_FALLBACK = [
     initPanelScrollEffect();
     // Initialiser le bouton Infos comme actif
     document.getElementById('toolInfo').classList.add('btn-active');
+    
+    // Initialiser les verrous de dimensions
+    setupDimensionLocks();
+    
     requestAnimationFrame(tick);
+  }
+  
+  /* ====== Gestion des verrous de dimensions ====== */
+  function setupDimensionLocks() {
+    const lockWidth = document.getElementById('lockWidth');
+    const lockHeight = document.getElementById('lockHeight');
+    const boxW = document.getElementById('boxW');
+    const boxH = document.getElementById('boxH');
+    
+    if (lockWidth && boxW) {
+      lockWidth.addEventListener('change', function() {
+        boxW.disabled = this.checked;
+        if (this.checked) {
+          // Sauvegarder la valeur actuelle si on verrouille
+          WORLD_W_MM = parseFloat(boxW.value);
+        }
+        // Recalculer les possibilités de redimensionnement
+        checkForPossibleReduction();
+      });
+    }
+    
+    if (lockHeight && boxH) {
+      lockHeight.addEventListener('change', function() {
+        boxH.disabled = this.checked;
+        if (this.checked) {
+          // Sauvegarder la valeur actuelle si on verrouille
+          WORLD_H_MM = parseFloat(boxH.value);
+        }
+        // Recalculer les possibilités de redimensionnement
+        checkForPossibleReduction();
+      });
+    }
   }
 
   init();

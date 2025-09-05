@@ -127,9 +127,102 @@ button:disabled:hover {
     filter: none;
 }
 
+/* ===== INPUT AVEC VERROUILLAGE ===== */
+.input-lock-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.input-lock-group input[type="number"] {
+    flex: 1;
+}
+
+.lock-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+    color: #666;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s ease;
+}
+
+.lock-checkbox:hover {
+    color: #333;
+}
+
+.lock-checkbox input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.lock-checkbox input[type="checkbox"]:checked + .lock-icon {
+    filter: hue-rotate(120deg);
+}
+
+.lock-checkbox input[type="checkbox"]:checked ~ .lock-text {
+    color: #059669;
+    font-weight: 500;
+}
+
+.input-lock-group input[type="number"]:disabled {
+    background-color: #f3f4f6;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
+.lock-icon {
+    font-size: 0.9rem;
+    transition: filter 0.2s ease;
+}
+
+.lock-text {
+    font-size: 0.8rem;
+    transition: color 0.2s ease;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .input-lock-group {
+        gap: 0.5rem;
+    }
+    
+    .lock-text {
+        display: none;
+    }
+    
+    .lock-icon {
+        font-size: 1rem;
+    }
+}
+
 /* ===== APPLY DIMENSIONS CONTAINER ===== */
 .apply-dimensions-container {
     margin-top: 8px;
+}
+.apply-dimensions-container,
+.fab,
+.status-line,
+.status-panel .header {
+    display: flex;
+    justify-content: center;
+}
+
+/* ===== UTILITAIRES DE CENTRAGE ===== */
+.flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.flex-center-v {
+    display: flex;
+    align-items: center;
+}
+
+.flex-center-h {
     display: flex;
     justify-content: center;
 }
