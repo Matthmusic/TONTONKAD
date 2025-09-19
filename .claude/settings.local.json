@@ -147,7 +147,9 @@
       "Read(/C:\\DEV\\TONTONKAD_REPO\\TONTONKAD_DEV\\app/**)",
       "mcp__ide__getDiagnostics",
       "Read(/C:\\DEV\\TONTONKAD_REPO\\TONTONKAD_DEV\\app/**)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "WebSearch",
+      "Bash(cmd.exe /c start.bat)"
     ],
     "deny": [],
     "ask": []
