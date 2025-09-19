@@ -24,42 +24,14 @@ TontonKAD est un outil de simulation permettant d'optimiser l'arrangement de fou
 - **Espacement configurable** : 30mm par défaut entre fourreaux
 - **Fallback robuste** : Méthode classique en cas d'erreur
 
-## 🚀 Installation et lancement
+## 🚀 Lancement
 
-### 🎯 Option 1 - Auto-Installation (Windows) **[RECOMMANDÉ]**
-```bash
-TontonKAD-InstallAdmin.bat
+**Double-clic sur :**
 ```
-- **Installation automatique de Python** si non présent
-- **Élévation automatique** des privilèges administrateur
-- **Lancement direct** de TontonKAD après installation
-- **Aucune configuration manuelle** requise
-
-### 🔧 Option 2 - Lancement Simple (Python installé)
-```bash
-TontonKAD-Simple.bat
+TONTONKAD.bat
 ```
-- Pour utilisateurs ayant déjà Python
-- Vérification rapide et lancement direct
-- Interface colorée et informative
 
-### 💻 Option 3 - Ligne de commande
-```bash
-python server.py
-```
-- URL : http://localhost:8000
-- Headers anti-cache intégrés
-- CORS configuré
-
-### 🌐 Option 4 - Live Server (VS Code)
-- Ouvrir `app/index.html`
-- Clic droit → "Open with Live Server"
-
-### 📋 Fichiers de lancement disponibles
-- `TontonKAD-InstallAdmin.bat` - Installation auto + admin
-- `TontonKAD-AutoInstall.bat` - Installation automatique
-- `TontonKAD-Simple.bat` - Lancement simple
-- `start.bat` - Lancement classique avec vérifications
+C'est tout ! 🎯
 
 ## 📁 Structure du projet
 

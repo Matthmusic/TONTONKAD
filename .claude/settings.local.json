@@ -149,7 +149,10 @@
       "Read(/C:\\DEV\\TONTONKAD_REPO\\TONTONKAD_DEV\\app/**)",
       "Bash(git restore:*)",
       "WebSearch",
-      "Bash(cmd.exe /c start.bat)"
+      "Bash(cmd.exe /c start.bat)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
