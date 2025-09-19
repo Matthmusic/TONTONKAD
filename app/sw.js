@@ -1,14 +1,15 @@
-const CACHE_NAME = 'tontonkad-v1.0.0';
+const CACHE_NAME = 'tontonkad-v1.0.1';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/script.js',
-  '/style.css',
-  '/TONTONKAD.svg',
-  '/manifest.json',
-  '/cables.csv',
-  '/fourreaux.csv',
-  '/chemins_de_cable.csv'
+  './',
+  './index.html',
+  './script.js',
+  './style.css',
+  './TONTONKAD.svg',
+  './manifest.json',
+  './dimension-button-handler.js',
+  './data/cables.csv',
+  './data/fourreaux.csv',
+  './data/chemins_de_cable.csv'
 ];
 
 // Installation du service worker - mise en cache des ressources

@@ -3215,6 +3215,372 @@ const CHEMINS_CABLE_FALLBACK = [
       if (k === 'escape') { deactivatePasteMode(); return; }
     });
 
+    /* ====== Système de Sauvegarde de Projets ====== */
+    class ProjectManager {
+      constructor() {
+        this.storageKey = 'tontonkad_projects';
+        this.autoSaveKey = 'tontonkad_autosave';
+        this.autoSaveInterval = 30000; // 30 secondes
+        this.autoSaveTimer = null;
+        this.setupAutoSave();
+      }
+
+      // Capture l'état actuel de l'application
+      captureCurrentState() {
+        return {
+          version: "1.0.0",
+          timestamp: new Date().toISOString(),
+          container: {
+            shape: SHAPE,
+            width: WORLD_W_MM,
+            height: WORLD_H_MM,
+            diameter: WORLD_D_MM
+          },
+          fourreaux: fourreaux.map(f => ({
+            ...f,
+            // Assurer la sérialisation complète
+            type: f.type,
+            code: f.code,
+            x: f.x,
+            y: f.y,
+            id: f.id,
+            customColor: f.customColor,
+            customLabel: f.customLabel,
+            frozen: f.frozen,
+            phase: f.phase
+          })),
+          cables: cables.map(c => ({
+            ...c,
+            // Assurer la sérialisation complète
+            fam: c.fam,
+            code: c.code,
+            x: c.x,
+            y: c.y,
+            id: c.id,
+            customColor: c.customColor,
+            customLabel: c.customLabel,
+            frozen: c.frozen,
+            phase: c.phase
+          })),
+          metadata: {
+            totalFourreaux: fourreaux.length,
+            totalCables: cables.length,
+            occupationRate: this.calculateOccupationRate()
+          }
+        };
+      }
+
+      // Calcule le taux d'occupation pour les métadonnées
+      calculateOccupationRate() {
+        try {
+          let totalArea;
+          if (SHAPE === 'rect' || SHAPE === 'chemin_de_cable') {
+            totalArea = WORLD_W_MM * WORLD_H_MM;
+          } else {
+            totalArea = Math.PI * (WORLD_D_MM / 2) * (WORLD_D_MM / 2);
+          }
+
+          if (totalArea <= 0) return 0;
+
+          let occupiedArea = 0;
+          fourreaux.forEach(f => {
+            const spec = FOURREAUX.find(fs => fs.type === f.type && fs.code === f.code);
+            if (spec) occupiedArea += Math.PI * (spec.od / 2) * (spec.od / 2);
+          });
+
+          cables.filter(c => !c.inFourreau).forEach(c => {
+            const spec = CABLES.find(cs => cs.fam === c.fam && cs.code === c.code);
+            if (spec) occupiedArea += Math.PI * (spec.od / 2) * (spec.od / 2);
+          });
+
+          return (occupiedArea / totalArea) * 100;
+        } catch (e) {
+          return 0;
+        }
+      }
+
+      // Restaure l'état de l'application
+      restoreState(projectData) {
+        try {
+          // Validation des données
+          if (!projectData || !projectData.container) {
+            throw new Error('Données de projet invalides');
+          }
+
+          // Nettoyer l'état actuel
+          fourreaux.length = 0;
+          cables.length = 0;
+
+          // Restaurer le conteneur
+          SHAPE = projectData.container.shape || 'rect';
+          WORLD_W_MM = projectData.container.width || 1000;
+          WORLD_H_MM = projectData.container.height || 1000;
+          WORLD_D_MM = projectData.container.diameter || 1000;
+
+          // Mettre à jour l'interface
+          shapeSel.value = SHAPE;
+          boxWInput.value = WORLD_W_MM;
+          boxHInput.value = WORLD_H_MM;
+          boxDInput.value = WORLD_D_MM;
+
+          // Restaurer les objets
+          if (projectData.fourreaux) {
+            projectData.fourreaux.forEach(f => {
+              fourreaux.push({
+                ...f,
+                vx: 0, vy: 0, // Réinitialiser la physique
+                dragging: false,
+                mass: (f.od || 40) * MASS_K
+              });
+            });
+          }
+
+          if (projectData.cables) {
+            projectData.cables.forEach(c => {
+              cables.push({
+                ...c,
+                vx: 0, vy: 0, // Réinitialiser la physique
+                dragging: false,
+                mass: (c.od || 6) * MASS_K
+              });
+            });
+          }
+
+          // Mettre à jour l'affichage
+          toggleInputGroups();
+          setCanvasSize();
+          updateStats();
+          updateInventory();
+          updateSelectedInfo();
+          render();
+
+          return true;
+        } catch (error) {
+          console.error('Erreur lors de la restauration:', error);
+          showToast('Erreur lors du chargement du projet');
+          return false;
+        }
+      }
+
+      // Sauvegarde automatique
+      setupAutoSave() {
+        // Nettoyer le timer existant
+        if (this.autoSaveTimer) {
+          clearInterval(this.autoSaveTimer);
+        }
+
+        // Auto-save toutes les 30 secondes
+        this.autoSaveTimer = setInterval(() => {
+          this.autoSave();
+        }, this.autoSaveInterval);
+
+        // Auto-save avant fermeture
+        window.addEventListener('beforeunload', () => {
+          this.autoSave();
+        });
+      }
+
+      autoSave() {
+        try {
+          const state = this.captureCurrentState();
+          localStorage.setItem(this.autoSaveKey, JSON.stringify(state));
+          console.log('🔄 Auto-sauvegarde effectuée');
+        } catch (error) {
+          console.warn('Erreur auto-sauvegarde:', error);
+        }
+      }
+
+      // Récupérer l'auto-sauvegarde
+      loadAutoSave() {
+        try {
+          const saved = localStorage.getItem(this.autoSaveKey);
+          if (saved) {
+            const data = JSON.parse(saved);
+            return data;
+          }
+        } catch (error) {
+          console.warn('Erreur chargement auto-sauvegarde:', error);
+        }
+        return null;
+      }
+
+      // Sauvegarder un projet nommé
+      saveProject(projectName) {
+        if (!projectName || projectName.trim() === '') {
+          throw new Error('Nom de projet requis');
+        }
+
+        try {
+          const projects = this.getAllProjects();
+          const projectData = this.captureCurrentState();
+
+          projects[projectName.trim()] = {
+            ...projectData,
+            name: projectName.trim(),
+            created: projects[projectName.trim()]?.created || new Date().toISOString(),
+            lastModified: new Date().toISOString()
+          };
+
+          localStorage.setItem(this.storageKey, JSON.stringify(projects));
+          showToast(`💾 Projet "${projectName}" sauvegardé`);
+          return true;
+        } catch (error) {
+          console.error('Erreur sauvegarde projet:', error);
+          showToast('Erreur lors de la sauvegarde');
+          return false;
+        }
+      }
+
+      // Charger un projet
+      loadProject(projectName) {
+        try {
+          const projects = this.getAllProjects();
+          const project = projects[projectName];
+
+          if (!project) {
+            throw new Error(`Projet "${projectName}" introuvable`);
+          }
+
+          if (this.restoreState(project)) {
+            showToast(`📂 Projet "${projectName}" chargé`);
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error('Erreur chargement projet:', error);
+          showToast(`Erreur lors du chargement de "${projectName}"`);
+          return false;
+        }
+      }
+
+      // Supprimer un projet
+      deleteProject(projectName) {
+        try {
+          const projects = this.getAllProjects();
+          if (projects[projectName]) {
+            delete projects[projectName];
+            localStorage.setItem(this.storageKey, JSON.stringify(projects));
+            showToast(`🗑️ Projet "${projectName}" supprimé`);
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error('Erreur suppression projet:', error);
+          showToast('Erreur lors de la suppression');
+          return false;
+        }
+      }
+
+      // Obtenir tous les projets
+      getAllProjects() {
+        try {
+          const saved = localStorage.getItem(this.storageKey);
+          return saved ? JSON.parse(saved) : {};
+        } catch (error) {
+          console.warn('Erreur lecture projets:', error);
+          return {};
+        }
+      }
+
+      // Exporter un projet vers fichier
+      exportProject(projectName = null) {
+        try {
+          let data;
+          let filename;
+
+          if (projectName) {
+            const projects = this.getAllProjects();
+            data = projects[projectName];
+            filename = `${projectName.replace(/[^a-z0-9]/gi, '_')}.tontonkad`;
+          } else {
+            data = this.captureCurrentState();
+            filename = `projet_${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.tontonkad`;
+          }
+
+          const blob = new Blob([JSON.stringify(data, null, 2)], {
+            type: 'application/json'
+          });
+
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          showToast(`📤 Projet exporté: ${filename}`);
+          return true;
+        } catch (error) {
+          console.error('Erreur export:', error);
+          showToast('Erreur lors de l\'export');
+          return false;
+        }
+      }
+
+      // Importer un projet depuis fichier
+      importProject(file) {
+        return new Promise((resolve, reject) => {
+          if (!file) {
+            reject(new Error('Aucun fichier sélectionné'));
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const data = JSON.parse(e.target.result);
+
+              // Validation basique
+              if (!data.container && !data.fourreaux && !data.cables) {
+                throw new Error('Format de fichier invalide');
+              }
+
+              if (this.restoreState(data)) {
+                showToast(`📥 Projet importé avec succès`);
+                resolve(true);
+              } else {
+                reject(new Error('Erreur lors de l\'import'));
+              }
+            } catch (error) {
+              console.error('Erreur import:', error);
+              showToast('Fichier invalide ou corrompu');
+              reject(error);
+            }
+          };
+
+          reader.onerror = () => {
+            reject(new Error('Erreur lecture fichier'));
+          };
+
+          reader.readAsText(file);
+        });
+      }
+
+      // Obtenir des statistiques de stockage
+      getStorageStats() {
+        try {
+          const projects = this.getAllProjects();
+          const autoSave = this.loadAutoSave();
+
+          return {
+            projectCount: Object.keys(projects).length,
+            hasAutoSave: !!autoSave,
+            totalSize: JSON.stringify(projects).length + (autoSave ? JSON.stringify(autoSave).length : 0),
+            projects: Object.keys(projects).map(name => ({
+              name,
+              lastModified: projects[name].lastModified,
+              objectCount: (projects[name].fourreaux?.length || 0) + (projects[name].cables?.length || 0)
+            }))
+          };
+        } catch (error) {
+          console.error('Erreur stats stockage:', error);
+          return { projectCount: 0, hasAutoSave: false, totalSize: 0, projects: [] };
+        }
+      }
+    }
+
     // 4. Démarrage de l'application
     toggleInputGroups();
     setCanvasSize();
@@ -3229,8 +3595,12 @@ const CHEMINS_CABLE_FALLBACK = [
     
     // Initialiser les verrous de dimensions
     setupDimensionLocks();
-    
+
     requestAnimationFrame(tick);
+
+    // Initialiser le système de sauvegarde après que tout soit prêt
+    window.projectManager = new ProjectManager();
+    window.projectUI = new ProjectUI();
   }
   
   /* ====== Gestion des verrous de dimensions ====== */
@@ -3262,6 +3632,278 @@ const CHEMINS_CABLE_FALLBACK = [
         // Recalculer les possibilités de redimensionnement
         checkForPossibleReduction();
       });
+    }
+  }
+
+  /* ====== Interface de Gestion des Projets ====== */
+  class ProjectUI {
+    constructor() {
+      this.modal = document.getElementById('projectModal');
+      this.projectsList = document.getElementById('projectsList');
+      this.newProjectName = document.getElementById('newProjectName');
+      this.autoSaveInfo = document.getElementById('autoSaveInfo');
+      this.setupEventListeners();
+      this.refreshUI();
+    }
+
+    setupEventListeners() {
+      // Bouton d'ouverture de la modal
+      document.getElementById('projectSave').addEventListener('click', () => {
+        this.openModal();
+      });
+
+      // Fermeture de la modal
+      document.getElementById('closeProjectModal').addEventListener('click', () => {
+        this.closeModal();
+      });
+
+      // Fermeture par clic sur l'overlay
+      this.modal.querySelector('.edit-popup-overlay').addEventListener('click', () => {
+        this.closeModal();
+      });
+
+      // Sauvegarder nouveau projet
+      document.getElementById('saveNewProject').addEventListener('click', () => {
+        this.saveNewProject();
+      });
+
+      // Entrée pour sauvegarder
+      this.newProjectName.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          this.saveNewProject();
+        }
+      });
+
+      // Export projet actuel
+      document.getElementById('exportCurrentProject').addEventListener('click', () => {
+        window.projectManager.exportProject();
+      });
+
+      // Import projet
+      document.getElementById('importProject').addEventListener('click', () => {
+        document.getElementById('importProjectFile').click();
+      });
+
+      document.getElementById('importProjectFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          try {
+            await window.projectManager.importProject(file);
+            this.refreshUI();
+          } catch (error) {
+            console.error('Erreur import:', error);
+          }
+          e.target.value = ''; // Reset input
+        }
+      });
+
+      // Raccourci clavier Ctrl+S pour sauvegarder
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 's') {
+          e.preventDefault();
+          this.openModal();
+        }
+      });
+
+      // Échappement pour fermer
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.modal.style.display !== 'none') {
+          this.closeModal();
+        }
+      });
+    }
+
+    openModal() {
+      this.modal.style.display = 'block';
+      this.refreshUI();
+      // Focus sur le champ de nom
+      setTimeout(() => {
+        this.newProjectName.focus();
+      }, 100);
+    }
+
+    closeModal() {
+      this.modal.style.display = 'none';
+      this.newProjectName.value = '';
+    }
+
+    saveNewProject() {
+      const name = this.newProjectName.value.trim();
+      if (!name) {
+        showToast('⚠️ Veuillez entrer un nom de projet');
+        this.newProjectName.focus();
+        return;
+      }
+
+      if (window.projectManager.saveProject(name)) {
+        this.newProjectName.value = '';
+        this.refreshUI();
+      }
+    }
+
+    refreshUI() {
+      this.renderProjectsList();
+      this.renderAutoSaveInfo();
+    }
+
+    renderProjectsList() {
+      const projects = window.projectManager.getAllProjects();
+      const projectNames = Object.keys(projects);
+
+      if (projectNames.length === 0) {
+        this.projectsList.innerHTML = `
+          <div class="projects-empty">
+            🗂️ Aucun projet sauvegardé<br>
+            <small>Créez votre premier projet en entrant un nom ci-dessus</small>
+          </div>
+        `;
+        return;
+      }
+
+      // Trier par date de modification
+      projectNames.sort((a, b) => {
+        const dateA = new Date(projects[a].lastModified || projects[a].created);
+        const dateB = new Date(projects[b].lastModified || projects[b].created);
+        return dateB - dateA;
+      });
+
+      this.projectsList.innerHTML = projectNames.map(name => {
+        const project = projects[name];
+        const lastModified = new Date(project.lastModified || project.created);
+        const totalObjects = (project.fourreaux?.length || 0) + (project.cables?.length || 0);
+
+        return `
+          <div class="project-item">
+            <div class="project-info">
+              <div class="project-name" title="${name}">${name}</div>
+              <div class="project-meta">
+                <span>📅 ${this.formatDate(lastModified)}</span>
+                <span>📦 ${totalObjects} objets</span>
+                <span>📏 ${project.container?.shape === 'rect' ?
+                  `${project.container.width}×${project.container.height}mm` :
+                  `⌀${project.container?.diameter || '?'}mm`}</span>
+              </div>
+            </div>
+            <div class="project-actions">
+              <button class="btn-load" onclick="projectUI.loadProject('${name.replace(/'/g, "\\'")}')">
+                📂 Charger
+              </button>
+              <button class="btn-export" onclick="projectUI.exportProject('${name.replace(/'/g, "\\'")}')">
+                📤 Export
+              </button>
+              <button class="btn-delete" onclick="projectUI.deleteProject('${name.replace(/'/g, "\\'")}')">
+                🗑️ Suppr
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    renderAutoSaveInfo() {
+      const autoSave = window.projectManager.loadAutoSave();
+      const stats = window.projectManager.getStorageStats();
+
+      let autoSaveContent = '';
+      if (autoSave) {
+        const lastSave = new Date(autoSave.timestamp);
+        const totalObjects = (autoSave.fourreaux?.length || 0) + (autoSave.cables?.length || 0);
+
+        autoSaveContent = `
+          <div class="auto-save-status">
+            <div class="auto-save-indicator"></div>
+            <span>Auto-sauvegarde active</span>
+          </div>
+          <div>Dernière sauvegarde: ${this.formatDate(lastSave)}</div>
+          <div>Objets: ${totalObjects} • Taille: ${this.formatBytes(JSON.stringify(autoSave).length)}</div>
+          <div style="margin-top: 8px;">
+            <button class="btn-secondary" onclick="projectUI.loadAutoSave()" style="font-size: 12px; padding: 4px 8px;">
+              🔄 Restaurer auto-save
+            </button>
+          </div>
+        `;
+      } else {
+        autoSaveContent = `
+          <div class="auto-save-status">
+            <div class="auto-save-indicator inactive"></div>
+            <span>Aucune auto-sauvegarde</span>
+          </div>
+          <div>L'auto-sauvegarde se déclenche après 30 secondes d'activité</div>
+        `;
+      }
+
+      // Ajouter les stats globales
+      autoSaveContent += `
+        <div class="project-stats">
+          <span>📊 ${stats.projectCount} projets</span>
+          <span>💾 ${this.formatBytes(stats.totalSize)} utilisés</span>
+        </div>
+      `;
+
+      this.autoSaveInfo.innerHTML = autoSaveContent;
+    }
+
+    loadProject(projectName) {
+      if (confirm(`Charger le projet "${projectName}" ?\n\nLe projet actuel sera remplacé.`)) {
+        if (window.projectManager.loadProject(projectName)) {
+          this.closeModal();
+        }
+      }
+    }
+
+    exportProject(projectName) {
+      window.projectManager.exportProject(projectName);
+    }
+
+    deleteProject(projectName) {
+      if (confirm(`Supprimer définitivement le projet "${projectName}" ?\n\nCette action est irréversible.`)) {
+        if (window.projectManager.deleteProject(projectName)) {
+          this.refreshUI();
+        }
+      }
+    }
+
+    loadAutoSave() {
+      const autoSave = window.projectManager.loadAutoSave();
+      if (autoSave) {
+        if (confirm('Restaurer la dernière auto-sauvegarde ?\n\nLe projet actuel sera remplacé.')) {
+          if (window.projectManager.restoreState(autoSave)) {
+            showToast('🔄 Auto-sauvegarde restaurée');
+            this.closeModal();
+          }
+        }
+      } else {
+        showToast('❌ Aucune auto-sauvegarde disponible');
+      }
+    }
+
+    formatDate(date) {
+      const now = new Date();
+      const diff = now - date;
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+
+      if (minutes < 1) return 'À l\'instant';
+      if (minutes < 60) return `Il y a ${minutes}min`;
+      if (hours < 24) return `Il y a ${hours}h`;
+      if (days < 7) return `Il y a ${days}j`;
+
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
   }
 

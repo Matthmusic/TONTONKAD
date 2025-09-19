@@ -457,13 +457,43 @@ html, body {
     font-weight: 700;
 }
 
-#zoomSlider.range {
-    -webkit-appearance: slider-vertical;
-    appearance: slider-vertical;
-    writing-mode: bt-lr;
-    height: 100%;
-    max-height: 300px;
-    width: 16px; /* Rendre plus épais */
+/* Zoom slider vertical - solution moderne */
+#zoomSlider,
+input[type="range"]#zoomSlider {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    writing-mode: vertical-lr !important;
+    direction: rtl !important;
+    height: 100% !important;
+    max-height: 300px !important;
+    width: 16px !important;
+    background: linear-gradient(to bottom, #3b82f6 0%, #1e40af 100%);
+    border-radius: 8px;
+    outline: none;
+    border: none;
+}
+
+/* Style du thumb pour le slider vertical */
+#zoomSlider::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #f8fafc;
+    border: 2px solid #3b82f6;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+#zoomSlider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #f8fafc;
+    border: 2px solid #3b82f6;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .canvas-section {
@@ -1365,4 +1395,243 @@ select option {
 
 .color-swatch[style*="#FFFFFF"], .color-swatch[style*="#FFF"] {
     border-color: #475569;
+}
+
+/* ===== STYLES MODAL DE PROJETS ===== */
+.project-modal-content {
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.project-section {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #334155;
+}
+
+.project-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: 16px;
+}
+
+.project-section h4 {
+    margin: 0 0 12px 0;
+    color: #cbd5e1;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.project-field {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.project-field input {
+    flex: 1;
+    padding: 8px 12px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e8edf2;
+    font-size: 14px;
+}
+
+.project-field input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.projects-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    background: #0f172a;
+}
+
+.project-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-bottom: 1px solid #1e293b;
+    transition: background-color 0.2s ease;
+}
+
+.project-item:last-child {
+    border-bottom: none;
+}
+
+.project-item:hover {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.project-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.project-name {
+    font-weight: 600;
+    color: #e8edf2;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.project-meta {
+    font-size: 12px;
+    color: #94a3b8;
+    display: flex;
+    gap: 12px;
+}
+
+.project-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: 12px;
+}
+
+.project-actions button {
+    padding: 4px 8px;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-load {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-load:hover {
+    background: #2563eb;
+}
+
+.btn-export {
+    background: #059669;
+    color: white;
+}
+
+.btn-export:hover {
+    background: #047857;
+}
+
+.btn-delete {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-delete:hover {
+    background: #b91c1c;
+}
+
+.import-export-controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.btn-secondary {
+    background: #64748b;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background-color 0.2s ease;
+}
+
+.btn-secondary:hover {
+    background: #475569;
+}
+
+.btn-secondary .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.auto-save-info {
+    padding: 12px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.auto-save-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.auto-save-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+}
+
+.auto-save-indicator.inactive {
+    background: #94a3b8;
+}
+
+.projects-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: #64748b;
+    font-style: italic;
+}
+
+.project-stats {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #334155;
+    border-radius: 50%;
+    border-top-color: #3b82f6;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

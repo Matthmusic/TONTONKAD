@@ -24,15 +24,13 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#475569">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="TontonKAD">
     <link rel="apple-touch-icon" href="TONTONKAD.svg">
     
     <!-- Préchargement des ressources critiques -->
     <link rel="preload" href="script.js" as="script">
-    <link rel="preload" href="data/cables.csv" as="fetch" crossorigin>
-    <link rel="preload" href="data/fourreaux.csv" as="fetch" crossorigin>
-    <link rel="preload" href="data/chemins_de_cable.csv" as="fetch" crossorigin>
 </head>
 <body>
   <div class="wrap">
@@ -246,7 +244,6 @@
           <label for="zoomSlider">Zoom</label>
           <input
             id="zoomSlider"
-            class="range"
             type="range"
             min="25"
             max="300"
@@ -291,6 +288,15 @@
             <button id="toolDelete" class="btn" aria-label="Supprimer l'objet sélectionné - Raccourci: Suppr">Supprimer (Suppr)</button>
           </div>
           <div class="canvas-controls-right">
+            <button id="projectSave" class="btn" aria-label="Sauvegarder le projet - Raccourci: Ctrl+S">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Sauvegarder</title>
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" stroke-width="2" fill="none"/>
+                <polyline points="17,21 17,13 7,13 7,21" stroke="currentColor" stroke-width="2" fill="none"/>
+                <polyline points="7,3 7,8 15,8" stroke="currentColor" stroke-width="2" fill="none"/>
+              </svg>
+              Projets
+            </button>
             <button id="exportDXF" class="btn" aria-label="Exporter le schéma au format DXF">Export DXF</button>
             <button id="clear" class="btn" aria-label="Vider complètement le canvas">Tout vider</button>
           </div>
@@ -340,7 +346,7 @@
       }
 
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('./sw.js')
           .then((registration) => {
             
             // Gérer les mises à jour du service worker
@@ -553,6 +559,68 @@
       <div class="edit-buttons">
         <button id="applyResize" type="button">Appliquer</button>
         <button id="cancelResize" type="button">Annuler</button>
+      </div>
+    </div>
+    <div class="edit-popup-overlay" aria-hidden="true"></div>
+  </div>
+
+  <!-- Popup de gestion des projets -->
+  <div id="projectModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="projectModalTitle" aria-modal="true">
+    <div class="edit-popup-content project-modal-content">
+      <h3 id="projectModalTitle">🗂️ Gestion des Projets</h3>
+
+      <!-- Section Nouveau Projet -->
+      <div class="project-section">
+        <h4>💾 Sauvegarder le projet actuel</h4>
+        <div class="project-field">
+          <input type="text" id="newProjectName" placeholder="Nom du projet..." maxlength="50">
+          <button id="saveNewProject" type="button" class="btn-primary">Sauvegarder</button>
+        </div>
+      </div>
+
+      <!-- Section Projets Existants -->
+      <div class="project-section">
+        <h4>📂 Projets sauvegardés</h4>
+        <div id="projectsList" class="projects-list">
+          <!-- Sera rempli dynamiquement -->
+        </div>
+      </div>
+
+      <!-- Section Import/Export -->
+      <div class="project-section">
+        <h4>📤 Import / Export</h4>
+        <div class="import-export-controls">
+          <button id="exportCurrentProject" type="button" class="btn-secondary">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" fill="none"/>
+              <polyline points="7,10 12,15 17,10" stroke="currentColor" stroke-width="2" fill="none"/>
+              <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            Exporter projet actuel
+          </button>
+          <input type="file" id="importProjectFile" accept=".tontonkad,.json" style="display: none;">
+          <button id="importProject" type="button" class="btn-secondary">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" fill="none"/>
+              <polyline points="17,8 12,3 7,8" stroke="currentColor" stroke-width="2" fill="none"/>
+              <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            Importer projet
+          </button>
+        </div>
+      </div>
+
+      <!-- Section Auto-save -->
+      <div class="project-section">
+        <h4>🔄 Auto-sauvegarde</h4>
+        <div id="autoSaveInfo" class="auto-save-info">
+          <!-- Sera rempli dynamiquement -->
+        </div>
+      </div>
+
+      <!-- Boutons de fermeture -->
+      <div class="edit-buttons">
+        <button id="closeProjectModal" type="button" aria-label="Fermer">Fermer</button>
       </div>
     </div>
     <div class="edit-popup-overlay" aria-hidden="true"></div>
