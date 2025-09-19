@@ -1,6 +1,6 @@
 @echo off
 title TontonKAD
-color 0A
+color 0F
 
 echo.
 echo  ================================================
