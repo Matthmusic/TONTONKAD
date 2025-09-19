@@ -638,6 +638,15 @@ const CHEMINS_CABLE_FALLBACK = [
     return null;
   }
 
+  /* ====== Fonctions d'arrangement en grille ====== */
+  // Fonction principale d'arrangement - utilise la nouvelle méthode avec fallback
+  function arrangeConduitGrid() {
+    arrangeConduitGridOptimized();
+  }
+
+  // Rendre la fonction accessible globalement
+  window.arrangeConduitGrid = arrangeConduitGrid;
+
   /* ====== Ajout/Suppression d'objets ====== */
   function addFourreauAt(x, y, type, code) {
     const spec = FOURREAUX.find(f => f.type === type && f.code === code);
@@ -690,7 +699,209 @@ const CHEMINS_CABLE_FALLBACK = [
     });
   }
 
-  function arrangeConduitGrid() {
+
+  /* ====== Algorithme de grille optimisé (nouveau) ====== */
+  function arrangeConduitGridOptimized() {
+    if (fourreaux.length === 0) {
+      showToast('Aucun fourreau à disposer en grille');
+      return;
+    }
+
+    try {
+      console.log('🔄 Début arrangement optimisé...', fourreaux.length, 'fourreaux');
+
+      // Empêcher la suppression durant l'arrangement
+      arrangeInProgress = true;
+
+      // Obtenir les dimensions du conteneur
+      const shape = shapeSel.value;
+      let containerWidth, containerHeight;
+
+      if (shape === 'rect') {
+        containerWidth = parseFloat(boxWInput.value);
+        containerHeight = parseFloat(boxHInput.value);
+      } else if (shape === 'circ') {
+        const diameter = parseFloat(boxDInput.value);
+        containerWidth = containerHeight = diameter;
+      } else {
+        showToast('Grille non supportée pour les chemins de câbles');
+        arrangeInProgress = false;
+        return;
+      }
+
+      // Constantes pour l'algorithme
+      const MARGIN_MM = 30;  // Marge entre fourreaux en mm (30mm comme demandé)
+      const CONTAINER_MARGIN_MM = 20; // Marge depuis les bords
+
+      // Étape 1 : Trier les fourreaux par diamètre décroissant (gros d'abord pour remplissage horizontal)
+      const sortedFourreaux = [...fourreaux].sort((a, b) => {
+        const specA = FOURREAUX.find(f => f.type === a.type && f.code === a.code);
+        const specB = FOURREAUX.find(f => f.type === b.type && f.code === b.code);
+        const diameterA = specA ? specA.od : 40;
+        const diameterB = specB ? specB.od : 40;
+        return diameterB - diameterA; // Plus gros d'abord pour remplissage horizontal
+      });
+
+      console.log('📊 Fourreaux triés:', sortedFourreaux.map(f => {
+        const spec = FOURREAUX.find(s => s.type === f.type && s.code === f.code);
+        return { type: f.type, code: f.code, diameter: spec?.od || 40 };
+      }));
+
+      // Étape 2 : Calculer les dimensions de grille optimales
+      const totalFourreaux = sortedFourreaux.length;
+
+      // Calculer le nombre de colonnes optimal (privilégier la largeur)
+      const aspectRatio = containerWidth / containerHeight;
+      let optimalCols = Math.ceil(Math.sqrt(totalFourreaux * Math.max(aspectRatio, 1.2)));
+      let optimalRows = Math.ceil(totalFourreaux / optimalCols);
+
+      // Vérification : s'assurer que la grille peut contenir tous les fourreaux
+      while (optimalCols * optimalRows < totalFourreaux) {
+        optimalCols++;
+        optimalRows = Math.ceil(totalFourreaux / optimalCols);
+      }
+
+      console.log(`📐 Pour ${totalFourreaux} fourreaux : grille ${optimalCols} cols × ${optimalRows} rows = ${optimalCols * optimalRows} cellules`);
+
+      // Étape 3 : Créer la matrice de placement (ligne par ligne, priorité horizontale)
+      const gridCells = [];
+      let fourreauIndex = 0;
+
+      // Remplir ligne par ligne (horizontal en priorité)
+      for (let row = 0; row < optimalRows; row++) {
+        for (let col = 0; col < optimalCols; col++) {
+          if (fourreauIndex < sortedFourreaux.length) {
+            const fourreau = sortedFourreaux[fourreauIndex];
+            const spec = FOURREAUX.find(f => f.type === fourreau.type && f.code === fourreau.code);
+
+            gridCells.push({
+              row,
+              col,
+              fourreau,
+              diameter: spec ? spec.od : 40
+            });
+
+            console.log(`📍 Fourreau ${fourreauIndex + 1}/${totalFourreaux} (${fourreau.type} ${fourreau.code}) → ligne ${row}, col ${col}`);
+            fourreauIndex++;
+          }
+        }
+      }
+
+      console.log(`📊 Matrice créée avec ${gridCells.length} cellules remplies sur ${optimalCols * optimalRows} possibles`);
+
+      // Étape 4 : Calculer les tailles de lignes et colonnes (grille adaptive)
+      const rowHeights = new Array(optimalRows).fill(0);
+      const colWidths = new Array(optimalCols).fill(0);
+
+      // Pour chaque cellule, déterminer la taille nécessaire
+      gridCells.forEach(cell => {
+        const cellSize = cell.diameter + MARGIN_MM;
+        rowHeights[cell.row] = Math.max(rowHeights[cell.row], cellSize);
+        colWidths[cell.col] = Math.max(colWidths[cell.col], cellSize);
+      });
+
+      console.log('📏 Tailles calculées:', { rowHeights, colWidths });
+
+      // Étape 5 : Vérifier que ça rentre dans le conteneur
+      const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + (2 * CONTAINER_MARGIN_MM);
+      const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0) + (2 * CONTAINER_MARGIN_MM);
+
+      console.log(`📊 Espace nécessaire: ${totalWidth.toFixed(1)}×${totalHeight.toFixed(1)}mm`);
+      console.log(`📦 Espace disponible: ${containerWidth}×${containerHeight}mm`);
+
+      if (totalWidth > containerWidth || totalHeight > containerHeight) {
+        // Proposer un redimensionnement
+        const newWidth = Math.max(containerWidth, Math.ceil(totalWidth));
+        const newHeight = Math.max(containerHeight, Math.ceil(totalHeight));
+
+        const message = `Pour disposer ${totalFourreaux} fourreaux en grille optimisée, il faut :\n\n` +
+          `Largeur : ${newWidth} mm (actuel: ${containerWidth} mm)\n` +
+          `Hauteur : ${newHeight} mm (actuel: ${containerHeight} mm)\n\n` +
+          `Appliquer ces dimensions ?`;
+
+        if (confirm(message)) {
+          if (shape === 'rect') {
+            boxWInput.value = newWidth;
+            boxHInput.value = newHeight;
+            WORLD_W_MM = newWidth;
+            WORLD_H_MM = newHeight;
+          } else {
+            const newDiameter = Math.max(newWidth, newHeight);
+            boxDInput.value = newDiameter;
+            WORLD_D_MM = newDiameter;
+          }
+
+          setCanvasSize();
+          showToast(`📐 Conteneur redimensionné pour grille optimisée`);
+        } else {
+          arrangeInProgress = false;
+          showToast('❌ Placement annulé - conteneur trop petit');
+          return;
+        }
+      }
+
+      // Étape 6 : Positionner les fourreaux avec centrage (arrangement depuis le bas)
+      const totalGridHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+      const totalGridWidth = colWidths.reduce((sum, w) => sum + w, 0);
+
+      // Calculer la position de départ pour centrer horizontalement et commencer par le bas
+      const startX = (containerWidth - totalGridWidth) / 2;
+      const startY = containerHeight - CONTAINER_MARGIN_MM - totalGridHeight;
+
+      let currentY = startY;
+
+      for (let row = 0; row < optimalRows; row++) {
+        let currentX = startX;
+        const rowHeight = rowHeights[row];
+
+        for (let col = 0; col < optimalCols; col++) {
+          const colWidth = colWidths[col];
+          const cell = gridCells.find(c => c.row === row && c.col === col);
+
+          if (cell) {
+            // Centrer le fourreau dans sa cellule
+            const centerX = currentX + (colWidth / 2);
+            const centerY = currentY + (rowHeight / 2);
+
+            // Convertir en pixels et appliquer
+            cell.fourreau.x = centerX * MM_TO_PX;
+            cell.fourreau.y = centerY * MM_TO_PX;
+
+            // Réinitialiser la physique ET désactiver la gravité (comportement multitubulaire)
+            cell.fourreau.vx = 0;
+            cell.fourreau.vy = 0;
+            cell.fourreau.dragging = false;
+            cell.fourreau.frozen = true; // Figer en position (pas de gravité)
+
+            console.log(`📍 Fourreau ${cell.fourreau.type} ${cell.fourreau.code} positionné à (${centerX.toFixed(1)}, ${centerY.toFixed(1)})mm - depuis le bas centré`);
+          }
+
+          currentX += colWidth;
+        }
+
+        currentY += rowHeight;
+      }
+
+      // Étape 7 : Finalisation
+      arrangeInProgress = false;
+      updateStats();
+      redraw();
+
+      showToast(`✅ Multitubulaire ${optimalCols}×${optimalRows} créée - ${totalFourreaux} fourreaux figés en position (Ctrl+X pour dégeler)`);
+      console.log('✅ Arrangement multitubulaire terminé avec succès - fourreaux figés (sans gravité)');
+
+    } catch (error) {
+      console.error('❌ Erreur dans l\'arrangement optimisé:', error);
+      arrangeInProgress = false;
+
+      // Fallback vers l'ancienne méthode
+      showToast('⚠️ Erreur arrangement optimisé - basculement vers méthode classique');
+      arrangeConduitGridClassic();
+    }
+  }
+
+  // Ancienne fonction gardée en backup
+  function arrangeConduitGridClassic() {
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à disposer en grille');
       return;
