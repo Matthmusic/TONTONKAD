@@ -991,15 +991,24 @@ select option {
     border-radius: 8px;
     padding: 24px;
     min-width: 300px;
+    max-width: 500px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
     z-index: 2002;
     filter: none !important;
+    white-space: normal;
+    line-height: 1.5;
 }
 
 .edit-popup-content h3 {
     margin: 0 0 16px 0;
     color: #e8edf2;
     font-size: 18px;
+}
+
+.edit-popup-content p {
+    margin: 8px 0;
+    line-height: 1.6;
+    white-space: normal;
 }
 
 .edit-field {

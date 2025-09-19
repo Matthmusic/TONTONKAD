@@ -678,26 +678,6 @@ const CHEMINS_CABLE_FALLBACK = [
     return obj;
   }
 
-  // Fonctions utilitaires pour arrangeConduitGrid
-  function calculateGridDimensions(conduitCount, containerSize) {
-    const aspectRatio = containerSize.width / containerSize.height;
-    const approxCols = Math.ceil(Math.sqrt(conduitCount * aspectRatio));
-    const approxRows = Math.ceil(conduitCount / approxCols);
-    return { cols: approxCols, rows: approxRows };
-  }
-
-  function positionConduitsInGrid(conduits, gridConfig, containerSize, margin) {
-    const { cols, rows, cellWidth, cellHeight } = gridConfig;
-    const startX = margin + cellWidth / 2;
-    const startY = margin + cellHeight / 2;
-    
-    conduits.forEach((conduit, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      conduit.x = startX + col * cellWidth;
-      conduit.y = startY + row * cellHeight;
-    });
-  }
 
 
   /* ====== Algorithme de grille optimisé (nouveau) ====== */
@@ -708,7 +688,7 @@ const CHEMINS_CABLE_FALLBACK = [
     }
 
     try {
-      console.log('🔄 Début arrangement optimisé...', fourreaux.length, 'fourreaux');
+      console.log('🔄 Début arrangement multitubulaire...', fourreaux.length, 'fourreaux');
 
       // Empêcher la suppression durant l'arrangement
       arrangeInProgress = true;
@@ -729,151 +709,287 @@ const CHEMINS_CABLE_FALLBACK = [
         return;
       }
 
-      // Constantes pour l'algorithme
-      const MARGIN_MM = 30;  // Marge entre fourreaux en mm (30mm comme demandé)
-      const CONTAINER_MARGIN_MM = 20; // Marge depuis les bords
+      // Constantes multitubulaires
+      const MARGIN_MM = 30;  // Espacement entre fourreaux (30mm requis)
+      const CONTAINER_MARGIN_MM = 20; // Marge depuis les bords du conteneur
 
-      // Étape 1 : Trier les fourreaux par diamètre décroissant (gros d'abord pour remplissage horizontal)
+      // Étape 1 : Trier les fourreaux par diamètre DÉCROISSANT (gros d'abord pour placement depuis le bas)
       const sortedFourreaux = [...fourreaux].sort((a, b) => {
         const specA = FOURREAUX.find(f => f.type === a.type && f.code === a.code);
         const specB = FOURREAUX.find(f => f.type === b.type && f.code === b.code);
         const diameterA = specA ? specA.od : 40;
         const diameterB = specB ? specB.od : 40;
-        return diameterB - diameterA; // Plus gros d'abord pour remplissage horizontal
+        return diameterB - diameterA; // GROS d'abord car on remplit depuis le bas → gros en bas, petits en haut
       });
 
-      console.log('📊 Fourreaux triés:', sortedFourreaux.map(f => {
+      console.log('📊 Fourreaux triés (gros→petits pour placement bas→haut):', sortedFourreaux.map(f => {
         const spec = FOURREAUX.find(s => s.type === f.type && s.code === f.code);
         return { type: f.type, code: f.code, diameter: spec?.od || 40 };
       }));
 
-      // Étape 2 : Calculer les dimensions de grille optimales
+      // Étape 2 : Calcul simple et équilibré (retour aux bases)
       const totalFourreaux = sortedFourreaux.length;
 
-      // Calculer le nombre de colonnes optimal (privilégier la largeur)
+      // Calcul intelligent évitant les lignes isolées
       const aspectRatio = containerWidth / containerHeight;
-      let optimalCols = Math.ceil(Math.sqrt(totalFourreaux * Math.max(aspectRatio, 1.2)));
-      let optimalRows = Math.ceil(totalFourreaux / optimalCols);
+      let bestCols = 1;
+      let bestScore = -1;
 
-      // Vérification : s'assurer que la grille peut contenir tous les fourreaux
-      while (optimalCols * optimalRows < totalFourreaux) {
-        optimalCols++;
-        optimalRows = Math.ceil(totalFourreaux / optimalCols);
-      }
+      // Tester différentes configurations pour éviter les lignes avec 1 seul fourreau
+      for (let testCols = 1; testCols <= totalFourreaux; testCols++) {
+        const testRows = Math.ceil(totalFourreaux / testCols);
+        const fourreauDerniereLigne = totalFourreaux % testCols || testCols;
 
-      console.log(`📐 Pour ${totalFourreaux} fourreaux : grille ${optimalCols} cols × ${optimalRows} rows = ${optimalCols * optimalRows} cellules`);
+        // Score basé sur plusieurs critères
+        let score = 0;
 
-      // Étape 3 : Créer la matrice de placement (ligne par ligne, priorité horizontale)
-      const gridCells = [];
-      let fourreauIndex = 0;
+        // 1. Éviter les lignes avec 1 seul fourreau (sauf si totalFourreaux = 1)
+        if (fourreauDerniereLigne === 1 && totalFourreaux > 1) {
+          score -= 100; // Pénalité forte
+        }
 
-      // Remplir ligne par ligne (horizontal en priorité)
-      for (let row = 0; row < optimalRows; row++) {
-        for (let col = 0; col < optimalCols; col++) {
-          if (fourreauIndex < sortedFourreaux.length) {
-            const fourreau = sortedFourreaux[fourreauIndex];
-            const spec = FOURREAUX.find(f => f.type === fourreau.type && f.code === fourreau.code);
+        // 2. Privilégier les formes équilibrées selon le ratio du conteneur
+        const configRatio = testCols / testRows;
+        const ratioScore = 1 / (Math.abs(aspectRatio - configRatio) + 0.1);
+        score += ratioScore * 10;
 
-            gridCells.push({
-              row,
-              col,
-              fourreau,
-              diameter: spec ? spec.od : 40
-            });
+        // 3. Bonus pour les lignes bien remplies
+        if (fourreauDerniereLigne >= testCols / 2) {
+          score += 5;
+        }
 
-            console.log(`📍 Fourreau ${fourreauIndex + 1}/${totalFourreaux} (${fourreau.type} ${fourreau.code}) → ligne ${row}, col ${col}`);
-            fourreauIndex++;
-          }
+        // 4. Privilégier la largeur pour multitubulaire (moins de lignes)
+        score += (totalFourreaux / testRows) * 2;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestCols = testCols;
         }
       }
 
-      console.log(`📊 Matrice créée avec ${gridCells.length} cellules remplies sur ${optimalCols * optimalRows} possibles`);
+      const optimalCols = bestCols;
+      const optimalRows = Math.ceil(totalFourreaux / optimalCols);
+      const fourreauDerniereLigne = totalFourreaux % optimalCols || optimalCols;
 
-      // Étape 4 : Calculer les tailles de lignes et colonnes (grille adaptive)
+      console.log(`📐 Grille optimale: ${optimalCols} cols × ${optimalRows} rows (sur ${totalFourreaux} fourreaux)`);
+      console.log(`🎯 Dernière ligne: ${fourreauDerniereLigne} fourreaux (score: ${bestScore.toFixed(1)})`);
+
+      // Étape 3 : Créer la grille et calculer les dimensions réelles
+      const grid = Array(optimalRows).fill(null).map(() => Array(optimalCols).fill(null));
       const rowHeights = new Array(optimalRows).fill(0);
       const colWidths = new Array(optimalCols).fill(0);
 
-      // Pour chaque cellule, déterminer la taille nécessaire
-      gridCells.forEach(cell => {
-        const cellSize = cell.diameter + MARGIN_MM;
-        rowHeights[cell.row] = Math.max(rowHeights[cell.row], cellSize);
-        colWidths[cell.col] = Math.max(colWidths[cell.col], cellSize);
-      });
+      // Algorithme pyramide inversée pour forme rectangulaire optimale
+      function calculatePyramidLayout(totalFourreaux, maxCols) {
+        const layouts = [];
 
-      console.log('📏 Tailles calculées:', { rowHeights, colWidths });
+        // Tester différentes répartitions pyramidales
+        for (let baseCols = Math.min(maxCols, totalFourreaux); baseCols >= 1; baseCols--) {
+          const layout = [];
+          let remaining = totalFourreaux;
+          let currentCols = baseCols;
 
-      // Étape 5 : Vérifier que ça rentre dans le conteneur
-      const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + (2 * CONTAINER_MARGIN_MM);
-      const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0) + (2 * CONTAINER_MARGIN_MM);
+          // Construire la pyramide depuis le BAS vers le haut
+          while (remaining > 0) {
+            const fourreausInRow = Math.min(currentCols, remaining);
+            layout.push(fourreausInRow); // Ajouter à la fin (on remplit de bas en haut)
+            remaining -= fourreausInRow;
 
-      console.log(`📊 Espace nécessaire: ${totalWidth.toFixed(1)}×${totalHeight.toFixed(1)}mm`);
-      console.log(`📦 Espace disponible: ${containerWidth}×${containerHeight}mm`);
-
-      if (totalWidth > containerWidth || totalHeight > containerHeight) {
-        // Proposer un redimensionnement
-        const newWidth = Math.max(containerWidth, Math.ceil(totalWidth));
-        const newHeight = Math.max(containerHeight, Math.ceil(totalHeight));
-
-        const message = `Pour disposer ${totalFourreaux} fourreaux en grille optimisée, il faut :\n\n` +
-          `Largeur : ${newWidth} mm (actuel: ${containerWidth} mm)\n` +
-          `Hauteur : ${newHeight} mm (actuel: ${containerHeight} mm)\n\n` +
-          `Appliquer ces dimensions ?`;
-
-        if (confirm(message)) {
-          if (shape === 'rect') {
-            boxWInput.value = newWidth;
-            boxHInput.value = newHeight;
-            WORLD_W_MM = newWidth;
-            WORLD_H_MM = newHeight;
-          } else {
-            const newDiameter = Math.max(newWidth, newHeight);
-            boxDInput.value = newDiameter;
-            WORLD_D_MM = newDiameter;
+            // Réduire progressivement pour faire une pyramide VERS LE HAUT
+            if (remaining > 0 && currentCols > 1) {
+              currentCols = Math.max(1, currentCols - 1);
+            }
           }
 
-          setCanvasSize();
-          showToast(`📐 Conteneur redimensionné pour grille optimisée`);
-        } else {
-          arrangeInProgress = false;
-          showToast('❌ Placement annulé - conteneur trop petit');
-          return;
+          const rows = layout.length;
+          const totalWidth = baseCols;
+          const aspectRatio = totalWidth / rows;
+          const targetRatio = containerWidth / containerHeight;
+
+          // Score : plus proche du ratio du conteneur = mieux
+          const ratioScore = 1 / (Math.abs(aspectRatio - targetRatio) + 0.1);
+          const compactScore = totalFourreaux / (totalWidth * rows); // Efficacité d'espace
+
+          layouts.push({
+            layout,
+            rows,
+            maxCols: baseCols,
+            score: ratioScore * 10 + compactScore * 5,
+            aspectRatio
+          });
         }
+
+        // Retourner la meilleure configuration
+        layouts.sort((a, b) => b.score - a.score);
+        return layouts[0];
       }
 
-      // Étape 6 : Positionner les fourreaux avec centrage (arrangement depuis le bas)
-      const totalGridHeight = rowHeights.reduce((sum, h) => sum + h, 0);
-      const totalGridWidth = colWidths.reduce((sum, w) => sum + w, 0);
+      const pyramidConfig = calculatePyramidLayout(totalFourreaux, optimalCols);
+      const pyramidLayout = pyramidConfig.layout;
 
-      // Calculer la position de départ pour centrer horizontalement et commencer par le bas
-      const startX = (containerWidth - totalGridWidth) / 2;
+      // Mettre à jour les dimensions de grille selon la pyramide
+      const finalRows = pyramidConfig.rows;
+      const finalCols = pyramidConfig.maxCols;
+
+      // Redimensionner les grilles si nécessaire
+      if (finalRows !== optimalRows || finalCols !== optimalCols) {
+        grid.length = finalRows;
+        for (let i = 0; i < finalRows; i++) {
+          if (!grid[i]) grid[i] = [];
+          grid[i].length = finalCols;
+          grid[i].fill(null);
+        }
+        rowHeights.length = finalRows;
+        rowHeights.fill(0);
+        colWidths.length = finalCols;
+        colWidths.fill(0);
+      }
+
+      console.log(`🔺 Pyramide optimale: ${pyramidLayout.join('+')} fourreaux (${finalRows} lignes, ratio: ${pyramidConfig.aspectRatio.toFixed(2)})`);
+
+      // Remplir selon la configuration pyramidale DEPUIS LE BAS
+      let fourreauIndex = 0;
+      for (let row = 0; row < pyramidLayout.length; row++) {
+        const realRow = pyramidLayout.length - 1 - row; // realRow = ligne dans la grille (bas = index le plus haut)
+        const fourreauDansLigne = pyramidLayout[row]; // row 0 = ligne du bas (la plus large)
+
+        // Calculer l'offset pour centrer la ligne
+        const offset = Math.floor((pyramidConfig.maxCols - fourreauDansLigne) / 2);
+
+        console.log(`🔄 Ligne ${realRow + 1}: ${fourreauDansLigne} fourreaux, offset centrage: ${offset}`);
+
+        // Récupérer et trier les fourreaux de cette ligne par taille
+        const fourreauxLigne = [];
+        for (let i = 0; i < fourreauDansLigne; i++) {
+          const fourreau = sortedFourreaux[fourreauIndex + i];
+          const spec = FOURREAUX.find(f => f.type === fourreau.type && f.code === fourreau.code);
+          fourreauxLigne.push({
+            fourreau,
+            diameter: spec ? spec.od : 40
+          });
+        }
+
+        // Trier par taille décroissante dans chaque ligne
+        fourreauxLigne.sort((a, b) => b.diameter - a.diameter);
+
+        // Placer dans la grille
+        for (let i = 0; i < fourreauDansLigne; i++) {
+          const col = offset + i;
+          const fourreauInfo = fourreauxLigne[i];
+
+          grid[realRow][col] = {
+            fourreau: fourreauInfo.fourreau,
+            diameter: fourreauInfo.diameter
+          };
+
+          const cellSize = fourreauInfo.diameter + MARGIN_MM;
+          rowHeights[realRow] = Math.max(rowHeights[realRow], cellSize);
+          colWidths[col] = Math.max(colWidths[col], cellSize);
+
+          console.log(`📍 Fourreau (${fourreauInfo.fourreau.type} ${fourreauInfo.fourreau.code}, Ø${fourreauInfo.diameter}mm) → ligne ${realRow + 1}, col ${col + 1} (pyramide)`);
+        }
+
+        fourreauIndex += fourreauDansLigne;
+      }
+
+      const totalGridWidth = colWidths.reduce((sum, w) => sum + w, 0);
+      const totalGridHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+
+      console.log('📏 Dimensions grille:', { totalGridWidth: totalGridWidth.toFixed(1), totalGridHeight: totalGridHeight.toFixed(1) });
+
+      // Étape 4 : Calculer l'espace total nécessaire
+      const totalNeededWidth = totalGridWidth + (2 * CONTAINER_MARGIN_MM);
+      const totalNeededHeight = totalGridHeight + (2 * CONTAINER_MARGIN_MM);
+
+      console.log(`📊 Espace requis: ${totalNeededWidth.toFixed(1)}×${totalNeededHeight.toFixed(1)}mm`);
+      console.log(`📦 Espace disponible: ${containerWidth}×${containerHeight}mm`);
+
+      if (totalNeededWidth > containerWidth || totalNeededHeight > containerHeight) {
+        // Auto-redimensionnement intelligent selon les verrous
+        const lockWidth = document.getElementById('lockWidth')?.checked;
+        const lockHeight = document.getElementById('lockHeight')?.checked;
+
+        // Si tout est verrouillé, on ne peut rien faire
+        if (lockWidth && lockHeight) {
+          arrangeInProgress = false;
+          showToast(`🔒 Impossible : dimensions verrouillées (${totalNeededWidth.toFixed(0)}×${totalNeededHeight.toFixed(0)}mm requis)`);
+          return;
+        }
+
+        // Redimensionnement automatique selon les verrous
+        let newWidth = containerWidth;
+        let newHeight = containerHeight;
+
+        if (!lockWidth) {
+          newWidth = Math.ceil(totalNeededWidth / 10) * 10; // Arrondi à la dizaine
+        }
+        if (!lockHeight) {
+          newHeight = Math.ceil(totalNeededHeight / 10) * 10; // Arrondi à la dizaine
+        }
+
+        // Appliquer le redimensionnement automatique
+        console.log(`🔄 Auto-redimensionnement: ${containerWidth}×${containerHeight} → ${newWidth}×${newHeight}mm`);
+
+        if (shape === 'rect') {
+          if (!lockWidth) {
+            boxWInput.value = newWidth;
+            WORLD_W_MM = newWidth;
+          }
+          if (!lockHeight) {
+            boxHInput.value = newHeight;
+            WORLD_H_MM = newHeight;
+          }
+        } else if (shape === 'circ') {
+          const newDiameter = Math.max(newWidth, newHeight);
+          boxDInput.value = newDiameter;
+          WORLD_D_MM = newDiameter;
+        }
+
+        // Mettre à jour les dimensions et continuer l'arrangement
+        setCanvasSize();
+        updateStats();
+
+        // Recalculer avec les nouvelles dimensions
+        containerWidth = shape === 'rect' ? newWidth : Math.max(newWidth, newHeight);
+        containerHeight = shape === 'rect' ? newHeight : Math.max(newWidth, newHeight);
+
+        const lockText = lockWidth && lockHeight ? '' :
+                        lockWidth ? ' (largeur verrouillée)' :
+                        lockHeight ? ' (hauteur verrouillée)' : '';
+
+        showToast(`🔧 Auto-redimensionné à ${Math.round(containerWidth)}×${Math.round(containerHeight)}mm${lockText}`);
+      }
+
+      // Étape 5 : Positionner les fourreaux dans le conteneur (centré, depuis le bas)
+      const startX = CONTAINER_MARGIN_MM + (containerWidth - totalGridWidth - 2 * CONTAINER_MARGIN_MM) / 2;
       const startY = containerHeight - CONTAINER_MARGIN_MM - totalGridHeight;
 
       let currentY = startY;
 
-      for (let row = 0; row < optimalRows; row++) {
+      for (let row = 0; row < finalRows; row++) {
         let currentX = startX;
         const rowHeight = rowHeights[row];
 
-        for (let col = 0; col < optimalCols; col++) {
+        for (let col = 0; col < finalCols; col++) {
           const colWidth = colWidths[col];
-          const cell = gridCells.find(c => c.row === row && c.col === col);
+          const cell = grid[row][col];
 
           if (cell) {
-            // Centrer le fourreau dans sa cellule
+            // Centrer dans la cellule
             const centerX = currentX + (colWidth / 2);
             const centerY = currentY + (rowHeight / 2);
 
-            // Convertir en pixels et appliquer
+            // Appliquer la position (conversion mm → px)
             cell.fourreau.x = centerX * MM_TO_PX;
             cell.fourreau.y = centerY * MM_TO_PX;
 
-            // Réinitialiser la physique ET désactiver la gravité (comportement multitubulaire)
+            // Figer en position multitubulaire (pas de physique)
             cell.fourreau.vx = 0;
             cell.fourreau.vy = 0;
             cell.fourreau.dragging = false;
-            cell.fourreau.frozen = true; // Figer en position (pas de gravité)
+            cell.fourreau.frozen = true;
 
-            console.log(`📍 Fourreau ${cell.fourreau.type} ${cell.fourreau.code} positionné à (${centerX.toFixed(1)}, ${centerY.toFixed(1)})mm - depuis le bas centré`);
+            console.log(`✅ Fourreau ${cell.fourreau.type} ${cell.fourreau.code} fixé à (${centerX.toFixed(1)}, ${centerY.toFixed(1)})mm`);
           }
 
           currentX += colWidth;
@@ -882,20 +998,18 @@ const CHEMINS_CABLE_FALLBACK = [
         currentY += rowHeight;
       }
 
-      // Étape 7 : Finalisation
+      // Finalisation
       arrangeInProgress = false;
       updateStats();
       redraw();
 
-      showToast(`✅ Multitubulaire ${optimalCols}×${optimalRows} créée - ${totalFourreaux} fourreaux figés en position (Ctrl+X pour dégeler)`);
-      console.log('✅ Arrangement multitubulaire terminé avec succès - fourreaux figés (sans gravité)');
+      showToast(`✅ Pyramide ${finalCols}×${finalRows} optimale créée - ${totalFourreaux} fourreaux figés (Ctrl+X pour dégeler)`);
+      console.log('✅ Arrangement pyramidal réussi - fourreaux placés depuis le bas avec optimisation rectangulaire');
 
     } catch (error) {
-      console.error('❌ Erreur dans l\'arrangement optimisé:', error);
+      console.error('❌ Erreur arrangement multitubulaire:', error);
       arrangeInProgress = false;
-
-      // Fallback vers l'ancienne méthode
-      showToast('⚠️ Erreur arrangement optimisé - basculement vers méthode classique');
+      showToast('⚠️ Erreur arrangement - essayez avec moins de fourreaux');
       arrangeConduitGridClassic();
     }
   }
@@ -1042,11 +1156,9 @@ const CHEMINS_CABLE_FALLBACK = [
       const suggestedWidth = Math.ceil(totalWidthMM / 10) * 10; // Arrondi à la dizaine supérieure
       const suggestedHeight = Math.ceil(totalHeightMM / 10) * 10; // Arrondi à la dizaine supérieure
       
-      // Afficher la popup de proposition
-      showResizePopup(shape, fourreaux.length, suggestedWidth, suggestedHeight, optimalCols, optimalRows);
-      
-      // Réactiver la possibilité de suppression
+      // Plus de popup, utiliser le même système que la fonction optimisée
       arrangeInProgress = false;
+      showToast(`⚠️ Espace insuffisant (${suggestedWidth}×${suggestedHeight}mm requis) - Utilisez le bouton de redimensionnement`);
       return;
     }
     
@@ -2536,83 +2648,6 @@ const CHEMINS_CABLE_FALLBACK = [
     setTimeout(() => toast.classList.remove('show'), 1200);
   }
 
-  // Variables globales pour la popup de redimensionnement
-  let pendingResizeData = null;
-
-  function showResizePopup(shape, numFourreaux, suggestedWidth, suggestedHeight, optimalCols, optimalRows) {
-    const popup = document.getElementById('resizePopup');
-    const message = document.getElementById('resizeMessage');
-    
-    if (shape === 'rect') {
-      const currentWidth = Math.round(parseFloat(boxWInput.value));
-      const currentHeight = Math.round(parseFloat(boxHInput.value));
-      message.innerHTML = `
-        <strong>❌ ${numFourreaux} fourreaux ne rentrent pas dans la boîte actuelle (${currentWidth}×${currentHeight}mm).</strong><br><br>
-        💡 <strong>Proposition optimale :</strong><br>
-        • Largeur : <strong>${suggestedWidth}mm</strong> (au lieu de ${currentWidth}mm)<br>
-        • Hauteur : <strong>${suggestedHeight}mm</strong> (au lieu de ${currentHeight}mm)<br>
-        • Grille : <strong>${optimalCols}×${optimalRows}</strong> (privilégiant la largeur)<br><br>
-        Voulez-vous appliquer ces dimensions ?
-      `;
-      
-      pendingResizeData = {
-        shape: 'rect',
-        width: suggestedWidth,
-        height: suggestedHeight,
-        cols: optimalCols,
-        rows: optimalRows
-      };
-    } else {
-      const currentDiam = Math.round(parseFloat(boxDInput.value));
-      const suggestedDiam = Math.max(suggestedWidth, suggestedHeight);
-      message.innerHTML = `
-        <strong>❌ ${numFourreaux} fourreaux ne rentrent pas dans le conduit actuel (Ø${currentDiam}mm).</strong><br><br>
-        💡 <strong>Proposition optimale :</strong><br>
-        • Diamètre : <strong>Ø${suggestedDiam}mm</strong> (au lieu de Ø${currentDiam}mm)<br>
-        • Grille : <strong>${optimalCols}×${optimalRows}</strong><br><br>
-        Voulez-vous appliquer cette dimension ?
-      `;
-      
-      pendingResizeData = {
-        shape: 'circ',
-        diameter: suggestedDiam,
-        cols: optimalCols,
-        rows: optimalRows
-      };
-    }
-    
-    popup.style.display = 'flex';
-  }
-
-  function applyResize() {
-    if (!pendingResizeData) return;
-    
-    const data = pendingResizeData;
-    
-    if (data.shape === 'rect') {
-      boxWInput.value = data.width;
-      boxHInput.value = data.height;
-    } else {
-      boxDInput.value = data.diameter;
-    }
-    
-    // Appliquer les dimensions comme le fait le bouton normal
-    applyDimensions();
-    
-    // Fermer la popup
-    document.getElementById('resizePopup').style.display = 'none';
-    pendingResizeData = null;
-    
-    // Relancer la grille automatiquement
-    setTimeout(() => {
-      arrangeConduitGrid();
-    }, 100);
-  }
-
-  function cancelResize() {
-    document.getElementById('resizePopup').style.display = 'none';
-    pendingResizeData = null;
-  }
 
   function canvasCoords(e) {
     const r = canvas.getBoundingClientRect();
@@ -3325,14 +3360,6 @@ const CHEMINS_CABLE_FALLBACK = [
       }
     });
 
-    // Événements pour la popup de redimensionnement
-    document.getElementById('applyResize').addEventListener('click', applyResize);
-    document.getElementById('cancelResize').addEventListener('click', cancelResize);
-    document.getElementById('resizePopup').addEventListener('click', (e) => {
-      if (e.target.classList.contains('edit-popup-overlay')) {
-        cancelResize();
-      }
-    });
     document.getElementById('resetColor').addEventListener('click', () => {
       if (!selected) return;
       const obj = selected.type === 'fourreau' 
@@ -3563,7 +3590,7 @@ const CHEMINS_CABLE_FALLBACK = [
           updateStats();
           updateInventory();
           updateSelectedInfo();
-          render();
+          redraw();
 
           return true;
         } catch (error) {

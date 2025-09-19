@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tontonkad-v1.0.1';
+const CACHE_NAME = 'tontonkad-dev-v1.0.3';
 const urlsToCache = [
   './',
   './index.html',
@@ -49,6 +49,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Ignorer les requêtes non-HTTP
   if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
+  // Ne pas mettre en cache script.js en développement
+  if (event.request.url.includes('script.js') || event.request.url.includes('localhost') || event.request.url.includes('127.0.0.1')) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
