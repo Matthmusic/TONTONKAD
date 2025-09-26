@@ -2,6 +2,7 @@
   "use strict";
 
   /* ====== Constantes & DOM ====== */
+  const DEBUG = false; // Mode débogage - mettre à true pour activer les logs
   const MM_TO_PX = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--mm-to-px")) || 0.5;
   const VIEWPORT_DEFAULT_W = 900;
   const VIEWPORT_DEFAULT_H = 900;
@@ -106,8 +107,6 @@
   const tabCABLE = document.getElementById("tabCABLE");
   const paneFOURREAU = document.getElementById("paneFOURREAU");
   const paneCABLE = document.getElementById("paneCABLE");
-  const fourreauSelect = document.getElementById("fourreauSelect");
-  const cableSelect = document.getElementById("cableSelect");
   const listCable = document.getElementById("listCable");
   const listFourreau = document.getElementById("listFourreau");
   const countInvC = document.getElementById("countInvC"); //
@@ -203,6 +202,8 @@ const CHEMINS_CABLE_FALLBACK = [
   let clipboard = null; // Pour stocker l'élément copié
   let pasteMode = false; // Mode collage actif
   let mode = "place";
+  let selectedFourreau = null;
+  let selectedCable = null;
   let activeTab = "FOURREAU";
   let showInfo = true;
   let arrangeInProgress = false; // Flag pour éviter la suppression durant l'arrangement en grille
@@ -243,16 +244,16 @@ const CHEMINS_CABLE_FALLBACK = [
     try {
       // Tentative de chargement des fichiers CSV externes
       const [tpcResponse, cableResponse, cheminsCableResponse] = await Promise.all([
-        fetch('../data/fourreaux.csv'),
-        fetch('../data/cables.csv'),
-        fetch('../data/chemins_de_cable.csv')
+        fetch('./data/fourreaux.csv'),
+        fetch('./data/cables.csv'),
+        fetch('./data/chemins_de_cable.csv')
       ]);
 
       if (!tpcResponse.ok || !cableResponse.ok || !cheminsCableResponse.ok) {
         let msg = '';
-        if (!tpcResponse.ok) msg += `../data/fourreaux.csv: ${tpcResponse.statusText}. `;
-        if (!cableResponse.ok) msg += `../data/cables.csv: ${cableResponse.statusText}.`;
-        if (!cheminsCableResponse.ok) msg += `../data/chemins_de_cable.csv: ${cheminsCableResponse.statusText}.`;
+        if (!tpcResponse.ok) msg += `./data/fourreaux.csv: ${tpcResponse.statusText}. `;
+        if (!cableResponse.ok) msg += `./data/cables.csv: ${cableResponse.statusText}.`;
+        if (!cheminsCableResponse.ok) msg += `./data/chemins_de_cable.csv: ${cheminsCableResponse.statusText}.`;
         throw new Error(`Erreur réseau: ${msg}`);
       }
 
@@ -281,40 +282,283 @@ const CHEMINS_CABLE_FALLBACK = [
   }
 
   /* ====== Sélecteurs & Listes ====== */
-  function populateSelectors() {
-    const cableFams = [...new Set(CABLES.map(c => c.fam))];
-    const fourreauTypes = [...new Set(FOURREAUX.map(f => f.type))];
+  function createSearchableDropdown(config) {
+    const { containerId, data, groupBy, optionValue, optionText, placeholder, onSelect } = config;
 
-    fourreauSelect.innerHTML = '';
-    fourreauTypes.forEach(type => {
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = type;
-      
-      FOURREAUX.filter(f => f.type === type).forEach(f => {
-        const option = document.createElement('option');
-        option.value = `${f.type}|${f.code}`;
-        option.textContent = `${f.type} ${f.code} — Øint ≥ ${f.id} mm`;
-        optgroup.appendChild(option);
-      });
-      
-      fourreauSelect.appendChild(optgroup);
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const input = container.querySelector('.search-select-input');
+    const dropdown = container.querySelector('.search-dropdown');
+
+    input.placeholder = placeholder;
+
+    // Function to render options
+    function renderOptions(filter = '') {
+        dropdown.innerHTML = '';
+        const filterLower = filter.toLowerCase();
+        const groupedData = {};
+
+        // Group data
+        data.forEach(item => {
+            const group = item[groupBy];
+            if (!groupedData[group]) {
+                groupedData[group] = [];
+            }
+            groupedData[group].push(item);
+        });
+
+        let hasResults = false;
+        Object.keys(groupedData).sort().forEach(groupName => {
+            const items = groupedData[groupName];
+            const filteredItems = items.filter(item => 
+                optionText(item).toLowerCase().includes(filterLower) || 
+                groupName.toLowerCase().includes(filterLower)
+            );
+
+            if (filteredItems.length > 0) {
+                hasResults = true;
+                const groupEl = document.createElement('div');
+                groupEl.className = 'search-dropdown-group';
+                
+                const labelEl = document.createElement('div');
+                labelEl.className = 'search-dropdown-group-label';
+                labelEl.textContent = groupName;
+                groupEl.appendChild(labelEl);
+
+                filteredItems.forEach(item => {
+                    const optionEl = document.createElement('div');
+                    optionEl.className = 'search-dropdown-option';
+                    optionEl.dataset.value = optionValue(item);
+                    optionEl.textContent = optionText(item);
+
+                    optionEl.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        onSelect(optionValue(item), optionText(item));
+                        closeDropdown();
+                    });
+                    groupEl.appendChild(optionEl);
+                });
+                dropdown.appendChild(groupEl);
+            }
+        });
+
+        if (!hasResults) {
+            dropdown.innerHTML = '<div class="search-no-results">Aucun résultat</div>';
+        }
+    }
+
+    function openDropdown() {
+        renderOptions(input.value);
+        dropdown.style.display = 'block';
+        container.classList.add('dropdown-open');
+    }
+
+    function closeDropdown() {
+        dropdown.style.display = 'none';
+        container.classList.remove('dropdown-open');
+    }
+
+    // Event Listeners
+    input.addEventListener('focus', openDropdown);
+    input.addEventListener('input', () => renderOptions(input.value));
+    input.addEventListener('click', openDropdown);
+
+    document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) {
+            closeDropdown();
+        }
     });
 
-    cableSelect.innerHTML = '';
-    cableFams.forEach(fam => {
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = fam;
-      
-      CABLES.filter(c => c.fam === fam).forEach(c => {
-        const option = document.createElement('option');
-        option.value = `${c.fam}|${c.code}`;
-        option.textContent = `${fam} – ${c.code} (Ø ${c.od} mm)`;
-        optgroup.appendChild(option);
-      });
-      
-      cableSelect.appendChild(optgroup);
-    });
+    // Set initial selection
+    if (data.length > 0) {
+        const firstItem = data[0];
+        onSelect(optionValue(firstItem), optionText(firstItem));
+    }
+}
 
+function initSearchableLists() {
+    // Initialiser la liste des fourreaux avec recherche
+    const fourreauSearch = document.getElementById('fourreauSearch');
+    const fourreauSelect = document.getElementById('fourreauSelect');
+    let fourreauOptions = [];
+
+    if (fourreauSelect && fourreauSearch && FOURREAUX) {
+        // Créer la liste complète des options avec recherche
+        FOURREAUX.forEach(f => {
+            fourreauOptions.push({
+                value: `${f.type}|${f.code}`,
+                text: `${f.type} ${f.code} — Øint ≥ ${f.id} mm`,
+                searchText: `${f.type} ${f.code} ${f.id}`.toLowerCase(),
+                group: f.type
+            });
+        });
+
+        // Fonction pour filtrer et afficher les fourreaux
+        function filterFourreaux(searchTerm = '') {
+            const term = searchTerm.toLowerCase();
+            fourreauSelect.innerHTML = '';
+
+            const filteredOptions = fourreauOptions.filter(opt =>
+                opt.searchText.includes(term)
+            );
+
+            // Grouper les résultats filtrés
+            const groups = {};
+            filteredOptions.forEach(opt => {
+                if (!groups[opt.group]) {
+                    groups[opt.group] = [];
+                }
+                groups[opt.group].push(opt);
+            });
+
+            // Créer les groupes
+            for (const [groupName, options] of Object.entries(groups)) {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'searchable-group';
+
+                const groupLabel = document.createElement('div');
+                groupLabel.className = 'searchable-group-label';
+                groupLabel.textContent = groupName;
+                groupDiv.appendChild(groupLabel);
+
+                options.forEach(opt => {
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'searchable-option';
+                    optionDiv.dataset.value = opt.value;
+                    optionDiv.textContent = opt.text;
+                    optionDiv.addEventListener('click', function() {
+                        selectedFourreau = opt.value;
+                        fourreauSearch.value = opt.text;
+                        hideFourreauList();
+                    });
+                    groupDiv.appendChild(optionDiv);
+                });
+
+                fourreauSelect.appendChild(groupDiv);
+            }
+        }
+
+        // Événement de recherche
+        fourreauSearch.addEventListener('input', function() {
+            filterFourreaux(this.value);
+            showFourreauList();
+        });
+
+        // Événements de focus/blur pour afficher/masquer la liste
+        fourreauSearch.addEventListener('focus', function() {
+            showFourreauList();
+        });
+
+        fourreauSearch.addEventListener('blur', function() {
+            // Délai pour permettre le clic sur la liste
+            setTimeout(() => hideFourreauList(), 150);
+        });
+
+
+        // Fonctions pour afficher/masquer la liste
+        function showFourreauList() {
+            fourreauSelect.classList.add('show');
+        }
+
+        function hideFourreauList() {
+            fourreauSelect.classList.remove('show');
+        }
+
+        // Initialiser avec tous les fourreaux (mais masqué)
+        filterFourreaux();
+    }
+
+    // Initialiser la liste des câbles avec recherche
+    const cableSearch = document.getElementById('cableSearch');
+    const cableSelect = document.getElementById('cableSelect');
+    let cableOptions = [];
+
+    if (cableSelect && cableSearch && CABLES) {
+        // Créer la liste complète des options avec recherche
+        CABLES.forEach(c => {
+            cableOptions.push({
+                value: `${c.fam}|${c.code}`,
+                text: `${c.fam} – ${c.code} (Ø ${c.od} mm)`,
+                searchText: `${c.fam} ${c.code} ${c.od}`.toLowerCase(),
+                group: c.fam
+            });
+        });
+
+        // Fonction pour filtrer et afficher les câbles
+        function filterCables(searchTerm = '') {
+            const term = searchTerm.toLowerCase();
+            cableSelect.innerHTML = '';
+
+            const filteredOptions = cableOptions.filter(opt =>
+                opt.searchText.includes(term)
+            );
+
+            // Grouper les résultats filtrés
+            const groups = {};
+            filteredOptions.forEach(opt => {
+                if (!groups[opt.group]) {
+                    groups[opt.group] = [];
+                }
+                groups[opt.group].push(opt);
+            });
+
+            // Créer les groupes
+            for (const [groupName, options] of Object.entries(groups)) {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'searchable-group';
+
+                const groupLabel = document.createElement('div');
+                groupLabel.className = 'searchable-group-label';
+                groupLabel.textContent = groupName;
+                groupDiv.appendChild(groupLabel);
+
+                options.forEach(opt => {
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'searchable-option';
+                    optionDiv.dataset.value = opt.value;
+                    optionDiv.textContent = opt.text;
+                    optionDiv.addEventListener('click', function() {
+                        selectedCable = opt.value;
+                        cableSearch.value = opt.text;
+                        hideCableList();
+                    });
+                    groupDiv.appendChild(optionDiv);
+                });
+
+                cableSelect.appendChild(groupDiv);
+            }
+        }
+
+        // Événement de recherche
+        cableSearch.addEventListener('input', function() {
+            filterCables(this.value);
+            showCableList();
+        });
+
+        // Événements de focus/blur pour afficher/masquer la liste
+        cableSearch.addEventListener('focus', function() {
+            showCableList();
+        });
+
+        cableSearch.addEventListener('blur', function() {
+            // Délai pour permettre le clic sur la liste
+            setTimeout(() => hideCableList(), 150);
+        });
+
+
+        // Fonctions pour afficher/masquer la liste
+        function showCableList() {
+            cableSelect.classList.add('show');
+        }
+
+        function hideCableList() {
+            cableSelect.classList.remove('show');
+        }
+
+        // Initialiser avec tous les câbles (mais masqué)
+        filterCables();
+    }
     if (CHEMINS_CABLE && CHEMINS_CABLE.length > 0 && cheminCableSelect) {
       cheminCableSelect.innerHTML = '';
       CHEMINS_CABLE.forEach(cdc => {
@@ -324,8 +568,7 @@ const CHEMINS_CABLE_FALLBACK = [
         cheminCableSelect.appendChild(option);
       });
     }
-  }
-
+}
   /* ====== Monde & Canvas ====== */
   function setCanvasSize() {
     if (SHAPE === "rect" || SHAPE === "chemin_de_cable") {
@@ -555,7 +798,7 @@ const CHEMINS_CABLE_FALLBACK = [
       }
       return sum;
     } catch {
-      return NaN
+      return NaN;
     }
   }
 
@@ -647,6 +890,120 @@ const CHEMINS_CABLE_FALLBACK = [
   // Rendre la fonction accessible globalement
   window.arrangeConduitGrid = arrangeConduitGrid;
 
+  /**
+   * Calcule le placement optimal en grille pour un ensemble d'items dans un conteneur.
+   * @param {Array<Object>} items - Tableau d'objets avec {id, diameter}.
+   * @param {Object} container - Dimensions du conteneur {width, height}.
+   * @param {Object} options - Options de placement {margin, gap}.
+   * @returns {Object} - Résultat du placement.
+   */
+  function calculateGridPlacement(items, container, options) {
+    const { margin = 0, gap = 0 } = options || {};
+    const numItems = items.length;
+
+    if (numItems === 0) {
+      return { fits: true, placements: [], grid: { cols: 0, rows: 0 } };
+    }
+
+    const sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
+
+    const availableWidth = container.width - 2 * margin;
+    const availableHeight = container.height - 2 * margin;
+
+    const getGridSize = (cols, rows) => {
+      if (cols === 0 || rows === 0) return { width: 0, height: 0, grid: [] };
+
+      const grid = Array(rows).fill(null).map(() => Array(cols).fill(null));
+      let itemIndex = 0;
+      for (let r = rows - 1; r >= 0; r--) {
+        for (let c = 0; c < cols; c++) {
+          if (itemIndex < numItems) {
+            grid[r][c] = sortedItems[itemIndex++];
+          }
+        }
+      }
+
+      const colWidths = Array(cols).fill(0);
+      for (let c = 0; c < cols; c++) {
+        let maxDiameter = 0;
+        for (let r = 0; r < rows; r++) {
+          if (grid[r][c]) maxDiameter = Math.max(maxDiameter, grid[r][c].diameter);
+        }
+        if (maxDiameter > 0) colWidths[c] = maxDiameter + gap;
+      }
+
+      const rowHeights = Array(rows).fill(0);
+      for (let r = 0; r < rows; r++) {
+        let maxDiameter = 0;
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c]) maxDiameter = Math.max(maxDiameter, grid[r][c].diameter);
+        }
+        if (maxDiameter > 0) rowHeights[r] = maxDiameter + gap;
+      }
+
+      const totalWidth = colWidths.reduce((sum, w) => sum + w, 0);
+      const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+
+      return { totalWidth, totalHeight, grid, colWidths, rowHeights };
+    };
+
+    let validGrids = [];
+    for (let cols = 1; cols <= numItems; cols++) {
+      const rows = Math.ceil(numItems / cols);
+      const { totalWidth, totalHeight } = getGridSize(cols, rows);
+      if (totalWidth <= availableWidth && totalHeight <= availableHeight) {
+        validGrids.push({ cols, rows, ratio: cols / rows });
+      }
+    }
+
+    if (validGrids.length > 0) {
+      // Privilégier la grille la plus large
+      validGrids.sort((a, b) => b.ratio - a.ratio || b.cols - a.cols);
+      const bestGrid = validGrids[0];
+
+      const { totalWidth, totalHeight, grid, colWidths, rowHeights } = getGridSize(bestGrid.cols, bestGrid.rows);
+
+      const startX = (container.width - totalWidth) / 2;
+      const startY = (container.height - totalHeight) / 2;
+
+      const placements = [];
+      let currentY = startY;
+      for (let r = 0; r < bestGrid.rows; r++) {
+        let currentX = startX;
+        for (let c = 0; c < bestGrid.cols; c++) {
+          const item = grid[r][c];
+          if (item) {
+            placements.push({
+              id: item.id,
+              x: currentX + colWidths[c] / 2,
+              y: currentY + rowHeights[r] / 2,
+            });
+          }
+          currentX += colWidths[c];
+        }
+        currentY += rowHeights[r];
+      }
+
+      return { fits: true, placements, grid: { cols: bestGrid.cols, rows: bestGrid.rows } };
+    } else {
+      // Aucune grille ne rentre, calculer la taille suggérée
+      const aspectRatio = container.width / container.height;
+      const cols = Math.ceil(Math.sqrt(numItems * aspectRatio));
+      const rows = Math.ceil(numItems / cols);
+
+      const { totalWidth, totalHeight } = getGridSize(cols, rows);
+
+      return {
+        fits: false,
+        suggestedContainer: {
+          width: Math.ceil((totalWidth + 2 * margin) / 10) * 10,
+          height: Math.ceil((totalHeight + 2 * margin) / 10) * 10,
+        },
+        grid: { cols, rows },
+      };
+    }
+  }
+
   /* ====== Ajout/Suppression d'objets ====== */
   function addFourreauAt(x, y, type, code) {
     const spec = FOURREAUX.find(f => f.type === type && f.code === code);
@@ -661,718 +1018,235 @@ const CHEMINS_CABLE_FALLBACK = [
     return obj;
   }
 
-  function addCableAt(x, y, fam, code, prefTPC) {
+  function addCableAt(x, y, fam, code, prefTPC, options = {}) {
+    const { silent = false } = options;
     const spec = CABLES.find(c => c.fam === fam && c.code === code);
-    if (!spec) return false;
+    if (!spec) return null;
     const r = spec.od * MM_TO_PX / 2;
     let container = prefTPC && fitsInFourreau(spec, prefTPC) ? prefTPC : findFourreauUnder(x, y, spec.od);
     if (container && !fitsInFourreau(spec, container)) container = null;
-    const spot = container ? findFreeSpotInFourreau(x, y, r, container) : findFreeSpot(x, y, r, null);
-    if (!spot) return false;
+    const spot = container ? findFreeSpotInFourreau(x, y, r, container, null) : findFreeSpot(x, y, r, null);
+    if (!spot) return null;
     const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, parent: container ? container.id : null, color: colorForCable(fam, code), customColor: null, label: '', fam, code, vx: 0, vy: 0, dragging: false, frozen: false, _px: spot.x, _py: spot.y };
     cables.push(obj);
     if (container) container.children.push(obj.id);
-    updateStats();
-    updateInventory();
-    redraw();
+
+    if (!silent) {
+      updateStats();
+      updateInventory();
+      redraw();
+    }
+
     return obj;
   }
 
 
 
-  /* ====== Algorithme de grille optimisé (nouveau) ====== */
+  /* ====== Grille virtuelle adaptative pour multitubulaires (VRD/BTP) ====== */
   function arrangeConduitGridOptimized() {
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à disposer en grille');
       return;
     }
 
-    try {
-      console.log('🔄 Début arrangement multitubulaire...', fourreaux.length, 'fourreaux');
-
-      // Empêcher la suppression durant l'arrangement
-      arrangeInProgress = true;
-
-      // Obtenir les dimensions du conteneur
-      const shape = shapeSel.value;
-      let containerWidth, containerHeight;
-
-      if (shape === 'rect') {
-        containerWidth = parseFloat(boxWInput.value);
-        containerHeight = parseFloat(boxHInput.value);
-      } else if (shape === 'circ') {
-        const diameter = parseFloat(boxDInput.value);
-        containerWidth = containerHeight = diameter;
-      } else {
-        showToast('Grille non supportée pour les chemins de câbles');
-        arrangeInProgress = false;
-        return;
-      }
-
-      // Constantes multitubulaires
-      const MARGIN_MM = 30;  // Espacement entre fourreaux (30mm requis)
-      const CONTAINER_MARGIN_MM = 20; // Marge depuis les bords du conteneur
-
-      // Étape 1 : Trier les fourreaux par diamètre DÉCROISSANT (gros d'abord pour placement depuis le bas)
-      const sortedFourreaux = [...fourreaux].sort((a, b) => {
-        const specA = FOURREAUX.find(f => f.type === a.type && f.code === a.code);
-        const specB = FOURREAUX.find(f => f.type === b.type && f.code === b.code);
-        const diameterA = specA ? specA.od : 40;
-        const diameterB = specB ? specB.od : 40;
-        return diameterB - diameterA; // GROS d'abord car on remplit depuis le bas → gros en bas, petits en haut
-      });
-
-      console.log('📊 Fourreaux triés (gros→petits pour placement bas→haut):', sortedFourreaux.map(f => {
-        const spec = FOURREAUX.find(s => s.type === f.type && s.code === f.code);
-        return { type: f.type, code: f.code, diameter: spec?.od || 40 };
-      }));
-
-      // Étape 2 : Calcul simple et équilibré (retour aux bases)
-      const totalFourreaux = sortedFourreaux.length;
-
-      // Calcul intelligent évitant les lignes isolées
-      const aspectRatio = containerWidth / containerHeight;
-      let bestCols = 1;
-      let bestScore = -1;
-
-      // Tester différentes configurations pour éviter les lignes avec 1 seul fourreau
-      for (let testCols = 1; testCols <= totalFourreaux; testCols++) {
-        const testRows = Math.ceil(totalFourreaux / testCols);
-        const fourreauDerniereLigne = totalFourreaux % testCols || testCols;
-
-        // Score basé sur plusieurs critères
-        let score = 0;
-
-        // 1. Éviter les lignes avec 1 seul fourreau (sauf si totalFourreaux = 1)
-        if (fourreauDerniereLigne === 1 && totalFourreaux > 1) {
-          score -= 100; // Pénalité forte
-        }
-
-        // 2. Privilégier les formes équilibrées selon le ratio du conteneur
-        const configRatio = testCols / testRows;
-        const ratioScore = 1 / (Math.abs(aspectRatio - configRatio) + 0.1);
-        score += ratioScore * 10;
-
-        // 3. Bonus pour les lignes bien remplies
-        if (fourreauDerniereLigne >= testCols / 2) {
-          score += 5;
-        }
-
-        // 4. Privilégier la largeur pour multitubulaire (moins de lignes)
-        score += (totalFourreaux / testRows) * 2;
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestCols = testCols;
-        }
-      }
-
-      const optimalCols = bestCols;
-      const optimalRows = Math.ceil(totalFourreaux / optimalCols);
-      const fourreauDerniereLigne = totalFourreaux % optimalCols || optimalCols;
-
-      console.log(`📐 Grille optimale: ${optimalCols} cols × ${optimalRows} rows (sur ${totalFourreaux} fourreaux)`);
-      console.log(`🎯 Dernière ligne: ${fourreauDerniereLigne} fourreaux (score: ${bestScore.toFixed(1)})`);
-
-      // Étape 3 : Créer la grille et calculer les dimensions réelles
-      const grid = Array(optimalRows).fill(null).map(() => Array(optimalCols).fill(null));
-      const rowHeights = new Array(optimalRows).fill(0);
-      const colWidths = new Array(optimalCols).fill(0);
-
-      // Algorithme pyramide inversée pour forme rectangulaire optimale
-      function calculatePyramidLayout(totalFourreaux, maxCols) {
-        const layouts = [];
-
-        // Tester différentes répartitions pyramidales
-        for (let baseCols = Math.min(maxCols, totalFourreaux); baseCols >= 1; baseCols--) {
-          const layout = [];
-          let remaining = totalFourreaux;
-          let currentCols = baseCols;
-
-          // Construire la pyramide depuis le BAS vers le haut
-          while (remaining > 0) {
-            const fourreausInRow = Math.min(currentCols, remaining);
-            layout.push(fourreausInRow); // Ajouter à la fin (on remplit de bas en haut)
-            remaining -= fourreausInRow;
-
-            // Réduire progressivement pour faire une pyramide VERS LE HAUT
-            if (remaining > 0 && currentCols > 1) {
-              currentCols = Math.max(1, currentCols - 1);
-            }
-          }
-
-          const rows = layout.length;
-          const totalWidth = baseCols;
-          const aspectRatio = totalWidth / rows;
-          const targetRatio = containerWidth / containerHeight;
-
-          // Score : plus proche du ratio du conteneur = mieux
-          const ratioScore = 1 / (Math.abs(aspectRatio - targetRatio) + 0.1);
-          const compactScore = totalFourreaux / (totalWidth * rows); // Efficacité d'espace
-
-          layouts.push({
-            layout,
-            rows,
-            maxCols: baseCols,
-            score: ratioScore * 10 + compactScore * 5,
-            aspectRatio
-          });
-        }
-
-        // Retourner la meilleure configuration
-        layouts.sort((a, b) => b.score - a.score);
-        return layouts[0];
-      }
-
-      const pyramidConfig = calculatePyramidLayout(totalFourreaux, optimalCols);
-      const pyramidLayout = pyramidConfig.layout;
-
-      // Mettre à jour les dimensions de grille selon la pyramide
-      const finalRows = pyramidConfig.rows;
-      const finalCols = pyramidConfig.maxCols;
-
-      // Redimensionner les grilles si nécessaire
-      if (finalRows !== optimalRows || finalCols !== optimalCols) {
-        grid.length = finalRows;
-        for (let i = 0; i < finalRows; i++) {
-          if (!grid[i]) grid[i] = [];
-          grid[i].length = finalCols;
-          grid[i].fill(null);
-        }
-        rowHeights.length = finalRows;
-        rowHeights.fill(0);
-        colWidths.length = finalCols;
-        colWidths.fill(0);
-      }
-
-      console.log(`🔺 Pyramide optimale: ${pyramidLayout.join('+')} fourreaux (${finalRows} lignes, ratio: ${pyramidConfig.aspectRatio.toFixed(2)})`);
-
-      // Remplir selon la configuration pyramidale DEPUIS LE BAS
-      let fourreauIndex = 0;
-      for (let row = 0; row < pyramidLayout.length; row++) {
-        const realRow = pyramidLayout.length - 1 - row; // realRow = ligne dans la grille (bas = index le plus haut)
-        const fourreauDansLigne = pyramidLayout[row]; // row 0 = ligne du bas (la plus large)
-
-        // Calculer l'offset pour centrer la ligne
-        const offset = Math.floor((pyramidConfig.maxCols - fourreauDansLigne) / 2);
-
-        console.log(`🔄 Ligne ${realRow + 1}: ${fourreauDansLigne} fourreaux, offset centrage: ${offset}`);
-
-        // Récupérer et trier les fourreaux de cette ligne par taille
-        const fourreauxLigne = [];
-        for (let i = 0; i < fourreauDansLigne; i++) {
-          const fourreau = sortedFourreaux[fourreauIndex + i];
-          const spec = FOURREAUX.find(f => f.type === fourreau.type && f.code === fourreau.code);
-          fourreauxLigne.push({
-            fourreau,
-            diameter: spec ? spec.od : 40
-          });
-        }
-
-        // Trier par taille décroissante dans chaque ligne
-        fourreauxLigne.sort((a, b) => b.diameter - a.diameter);
-
-        // Placer dans la grille
-        for (let i = 0; i < fourreauDansLigne; i++) {
-          const col = offset + i;
-          const fourreauInfo = fourreauxLigne[i];
-
-          grid[realRow][col] = {
-            fourreau: fourreauInfo.fourreau,
-            diameter: fourreauInfo.diameter
-          };
-
-          const cellSize = fourreauInfo.diameter + MARGIN_MM;
-          rowHeights[realRow] = Math.max(rowHeights[realRow], cellSize);
-          colWidths[col] = Math.max(colWidths[col], cellSize);
-
-          console.log(`📍 Fourreau (${fourreauInfo.fourreau.type} ${fourreauInfo.fourreau.code}, Ø${fourreauInfo.diameter}mm) → ligne ${realRow + 1}, col ${col + 1} (pyramide)`);
-        }
-
-        fourreauIndex += fourreauDansLigne;
-      }
-
-      const totalGridWidth = colWidths.reduce((sum, w) => sum + w, 0);
-      const totalGridHeight = rowHeights.reduce((sum, h) => sum + h, 0);
-
-      console.log('📏 Dimensions grille:', { totalGridWidth: totalGridWidth.toFixed(1), totalGridHeight: totalGridHeight.toFixed(1) });
-
-      // Étape 4 : Calculer l'espace total nécessaire
-      const totalNeededWidth = totalGridWidth + (2 * CONTAINER_MARGIN_MM);
-      const totalNeededHeight = totalGridHeight + (2 * CONTAINER_MARGIN_MM);
-
-      console.log(`📊 Espace requis: ${totalNeededWidth.toFixed(1)}×${totalNeededHeight.toFixed(1)}mm`);
-      console.log(`📦 Espace disponible: ${containerWidth}×${containerHeight}mm`);
-
-      if (totalNeededWidth > containerWidth || totalNeededHeight > containerHeight) {
-        // Auto-redimensionnement intelligent selon les verrous
-        const lockWidth = document.getElementById('lockWidth')?.checked;
-        const lockHeight = document.getElementById('lockHeight')?.checked;
-
-        // Si tout est verrouillé, on ne peut rien faire
-        if (lockWidth && lockHeight) {
-          arrangeInProgress = false;
-          showToast(`🔒 Impossible : dimensions verrouillées (${totalNeededWidth.toFixed(0)}×${totalNeededHeight.toFixed(0)}mm requis)`);
-          return;
-        }
-
-        // Redimensionnement automatique selon les verrous
-        let newWidth = containerWidth;
-        let newHeight = containerHeight;
-
-        if (!lockWidth) {
-          newWidth = Math.ceil(totalNeededWidth / 10) * 10; // Arrondi à la dizaine
-        }
-        if (!lockHeight) {
-          newHeight = Math.ceil(totalNeededHeight / 10) * 10; // Arrondi à la dizaine
-        }
-
-        // Appliquer le redimensionnement automatique
-        console.log(`🔄 Auto-redimensionnement: ${containerWidth}×${containerHeight} → ${newWidth}×${newHeight}mm`);
-
-        if (shape === 'rect') {
-          if (!lockWidth) {
-            boxWInput.value = newWidth;
-            WORLD_W_MM = newWidth;
-          }
-          if (!lockHeight) {
-            boxHInput.value = newHeight;
-            WORLD_H_MM = newHeight;
-          }
-        } else if (shape === 'circ') {
-          const newDiameter = Math.max(newWidth, newHeight);
-          boxDInput.value = newDiameter;
-          WORLD_D_MM = newDiameter;
-        }
-
-        // Mettre à jour les dimensions et continuer l'arrangement
-        setCanvasSize();
-        updateStats();
-
-        // Recalculer avec les nouvelles dimensions
-        containerWidth = shape === 'rect' ? newWidth : Math.max(newWidth, newHeight);
-        containerHeight = shape === 'rect' ? newHeight : Math.max(newWidth, newHeight);
-
-        const lockText = lockWidth && lockHeight ? '' :
-                        lockWidth ? ' (largeur verrouillée)' :
-                        lockHeight ? ' (hauteur verrouillée)' : '';
-
-        showToast(`🔧 Auto-redimensionné à ${Math.round(containerWidth)}×${Math.round(containerHeight)}mm${lockText}`);
-      }
-
-      // Étape 5 : Positionner les fourreaux dans le conteneur (centré, depuis le bas)
-      const startX = CONTAINER_MARGIN_MM + (containerWidth - totalGridWidth - 2 * CONTAINER_MARGIN_MM) / 2;
-      const startY = containerHeight - CONTAINER_MARGIN_MM - totalGridHeight;
-
-      let currentY = startY;
-
-      for (let row = 0; row < finalRows; row++) {
-        let currentX = startX;
-        const rowHeight = rowHeights[row];
-
-        for (let col = 0; col < finalCols; col++) {
-          const colWidth = colWidths[col];
-          const cell = grid[row][col];
-
-          if (cell) {
-            // Centrer dans la cellule
-            const centerX = currentX + (colWidth / 2);
-            const centerY = currentY + (rowHeight / 2);
-
-            // Appliquer la position (conversion mm → px)
-            cell.fourreau.x = centerX * MM_TO_PX;
-            cell.fourreau.y = centerY * MM_TO_PX;
-
-            // Figer en position multitubulaire (pas de physique)
-            cell.fourreau.vx = 0;
-            cell.fourreau.vy = 0;
-            cell.fourreau.dragging = false;
-            cell.fourreau.frozen = true;
-
-            console.log(`✅ Fourreau ${cell.fourreau.type} ${cell.fourreau.code} fixé à (${centerX.toFixed(1)}, ${centerY.toFixed(1)})mm`);
-          }
-
-          currentX += colWidth;
-        }
-
-        currentY += rowHeight;
-      }
-
-      // Finalisation
-      arrangeInProgress = false;
-      updateStats();
-      redraw();
-
-      showToast(`✅ Pyramide ${finalCols}×${finalRows} optimale créée - ${totalFourreaux} fourreaux figés (Ctrl+X pour dégeler)`);
-      console.log('✅ Arrangement pyramidal réussi - fourreaux placés depuis le bas avec optimisation rectangulaire');
-
-    } catch (error) {
-      console.error('❌ Erreur arrangement multitubulaire:', error);
-      arrangeInProgress = false;
-      showToast('⚠️ Erreur arrangement - essayez avec moins de fourreaux');
-      arrangeConduitGridClassic();
-    }
-  }
-
-  // Ancienne fonction gardée en backup
-  function arrangeConduitGridClassic() {
-    if (fourreaux.length === 0) {
-      showToast('Aucun fourreau à disposer en grille');
-      return;
-    }
-
-    // Empêcher la suppression des fourreaux durant l'arrangement
+    if (DEBUG) console.log('🔄 Début de l\'arrangement en grille...', fourreaux.length, 'fourreaux');
     arrangeInProgress = true;
 
-    // Obtenir les dimensions de la boîte
     const shape = shapeSel.value;
-    let boxWidth, boxHeight, boxDiameter;
-    
-    if (shape === 'rect') {
-      boxWidth = parseFloat(boxWInput.value) * MM_TO_PX;
-      boxHeight = parseFloat(boxHInput.value) * MM_TO_PX;
-    } else if (shape === 'circ') {
-      boxDiameter = parseFloat(boxDInput.value);
-      boxWidth = boxHeight = boxDiameter * MM_TO_PX;
-    } else {
+    if (shape === 'chemin_de_cable') {
       showToast('Grille non supportée pour les chemins de câbles');
       arrangeInProgress = false;
       return;
     }
 
-    // Étape 1 : Trier les fourreaux par taille (gros en bas)
-    const sortedFourreaux = [...fourreaux].sort((a, b) => b.od - a.od); // Plus gros d'abord
-    
-    // Étape 2 : Calculer les dimensions optimales de grille (privilégier la largeur)
-    const availableWidth = boxWidth - (2 * GRID_MARGIN);
-    const availableHeight = boxHeight - (2 * GRID_MARGIN);
-    
-    // Fonction pour calculer les dimensions qui rentrent strictement dans la boîte
-    function calculateConstrainedGrid(numItems, maxWidth, maxHeight) {
-      if (numItems === 1) return { cols: 1, rows: 1, fits: true };
-      
-      // Estimer l'espacement moyen nécessaire
-      const avgDiameter = fourreaux.reduce((sum, f) => sum + f.od, 0) / fourreaux.length;
-      const avgSpacing = (avgDiameter + EXTERNAL_GAP) * MM_TO_PX;
-      
-      // Calculer le nombre max strict de colonnes/lignes possibles
-      const maxStrictCols = Math.floor(maxWidth / avgSpacing) || 1;
-      const maxStrictRows = Math.floor(maxHeight / avgSpacing) || 1;
-      const maxCapacity = maxStrictCols * maxStrictRows;
-      
-      // Si ça ne peut pas rentrer du tout
-      if (maxCapacity < numItems) {
-        return { cols: maxStrictCols, rows: maxStrictRows, fits: false, maxCapacity };
-      }
-      
-      let bestCols = 1, bestRows = numItems;
-      let bestRatio = 0;
-      
-      // Essayer toutes les combinaisons QUI RENTRENT dans les contraintes
-      for (let cols = 1; cols <= Math.min(numItems, maxStrictCols); cols++) {
-        const rows = Math.ceil(numItems / cols);
-        
-        // Vérifier que ça rentre strictement
-        if (rows > maxStrictRows) continue;
-        if (cols * avgSpacing > maxWidth || rows * avgSpacing > maxHeight) continue;
-        
-        // Privilégier la largeur
-        const ratio = cols / rows;
-        
-        if (ratio > bestRatio) {
-          bestRatio = ratio;
-          bestCols = cols;
-          bestRows = rows;
-        }
-      }
-      
-      return { cols: bestCols, rows: bestRows, fits: true };
-    }
-    
-    // Étape 3 : Essayer de faire rentrer dans les dimensions actuelles
-    const gridResult = calculateConstrainedGrid(fourreaux.length, availableWidth, availableHeight);
-    
-    if (!gridResult.fits) {
-      // Calculer les dimensions minimales nécessaires
-      const avgDiameter = fourreaux.reduce((sum, f) => sum + f.od, 0) / fourreaux.length;
-      const avgSpacing = (avgDiameter + EXTERNAL_GAP) * MM_TO_PX;
-      
-      // Proposition optimale (privilégier la largeur)
-      let optimalCols = Math.ceil(Math.sqrt(fourreaux.length * 1.5)); // Ratio 1.5 pour privilégier la largeur
-      let optimalRows = Math.ceil(fourreaux.length / optimalCols);
-      
-      // Ajuster si nécessaire
-      while (optimalCols * optimalRows < fourreaux.length) {
-        if (optimalCols <= optimalRows) {
-          optimalCols++;
-        } else {
-          optimalRows++;
-        }
-      }
-      
-      // Calculer les dimensions réelles nécessaires avec grille adaptative
-      const tempGrid = [];
-      for (let row = 0; row < optimalRows; row++) {
-        tempGrid[row] = [];
-      }
-      
-      // Simuler le placement des fourreaux triés
-      let index = 0;
-      for (let row = optimalRows - 1; row >= 0 && index < sortedFourreaux.length; row--) {
-        for (let col = 0; col < optimalCols && index < sortedFourreaux.length; col++) {
-          tempGrid[row][col] = sortedFourreaux[index];
-          index++;
-        }
-      }
-      
-      // Calculer les largeurs de colonnes nécessaires
-      const tempColWidths = [];
-      for (let col = 0; col < optimalCols; col++) {
-        let maxDiameter = 0;
-        for (let row = 0; row < tempGrid.length; row++) {
-          if (tempGrid[row] && tempGrid[row][col]) {
-            maxDiameter = Math.max(maxDiameter, tempGrid[row][col].od);
-          }
-        }
-        tempColWidths[col] = maxDiameter > 0 ? (maxDiameter + EXTERNAL_GAP) : 0;
-      }
-      
-      // Calculer les hauteurs de lignes nécessaires
-      const tempRowHeights = [];
-      for (let row = 0; row < tempGrid.length; row++) {
-        let maxDiameter = 0;
-        for (let col = 0; col < tempGrid[row].length; col++) {
-          if (tempGrid[row][col]) {
-            maxDiameter = Math.max(maxDiameter, tempGrid[row][col].od);
-          }
-        }
-        tempRowHeights[row] = maxDiameter > 0 ? (maxDiameter + EXTERNAL_GAP) : 0;
-      }
-      
-      // Calculer les dimensions totales et arrondir à la dizaine supérieure
-      const totalWidthMM = tempColWidths.reduce((sum, w) => sum + w, 0) + (2 * GRID_MARGIN / MM_TO_PX);
-      const totalHeightMM = tempRowHeights.reduce((sum, h) => sum + h, 0) + (2 * GRID_MARGIN / MM_TO_PX);
-      
-      const suggestedWidth = Math.ceil(totalWidthMM / 10) * 10; // Arrondi à la dizaine supérieure
-      const suggestedHeight = Math.ceil(totalHeightMM / 10) * 10; // Arrondi à la dizaine supérieure
-      
-      // Plus de popup, utiliser le même système que la fonction optimisée
-      arrangeInProgress = false;
-      showToast(`⚠️ Espace insuffisant (${suggestedWidth}×${suggestedHeight}mm requis) - Utilisez le bouton de redimensionnement`);
-      return;
-    }
-    
-    const { cols: approxCols, rows: approxRows } = gridResult;
+    const itemsToPlace = fourreaux.map(f => ({ id: f.id, diameter: f.od }));
+    const container = {
+      width: (shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value)),
+      height: (shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value))
+    };
+    const options = { margin: 20, gap: 30 }; // 20mm margin, 30mm gap
 
-    // Étape 4 : Organiser les fourreaux dans la grille (gros en bas)
-    const grid = [];
-    for (let row = 0; row < approxRows; row++) {
-      grid[row] = [];
-    }
-    
-    // Créer des groupes de fourreaux par ligne pour placer les gros en bas
-    const rowGroups = [];
-    for (let i = 0; i < sortedFourreaux.length; i += approxCols) {
-      rowGroups.push(sortedFourreaux.slice(i, i + approxCols));
-    }
-    
-    // Placer les groupes en commençant par le bas (gros fourreaux en bas)
-    let rowIndex = 0;
-    for (let row = approxRows - 1; row >= 0 && rowIndex < rowGroups.length; row--) {
-      const currentRowGroup = rowGroups[rowIndex];
-      for (let col = 0; col < approxCols && col < currentRowGroup.length; col++) {
-        grid[row][col] = currentRowGroup[col];
-      }
-      rowIndex++;
-    }
+    const result = calculateGridPlacement(itemsToPlace, container, options);
 
-    // Étape 5 : Calculer les dimensions adaptatives de chaque ligne et colonne
-    const rowHeights = [];
-    const colWidths = [];
-    
-    // Hauteur de chaque ligne = diamètre du plus gros fourreau de la ligne + gap
-    for (let row = 0; row < grid.length; row++) {
-      let maxDiameter = 0;
-      for (let col = 0; col < grid[row].length; col++) {
-        if (grid[row][col]) {
-          maxDiameter = Math.max(maxDiameter, grid[row][col].od);
-        }
-      }
-      rowHeights[row] = maxDiameter > 0 ? (maxDiameter + EXTERNAL_GAP) * MM_TO_PX : 0;
-    }
-    
-    // Largeur de chaque colonne = diamètre du plus gros fourreau de la colonne + gap
-    for (let col = 0; col < approxCols; col++) {
-      let maxDiameter = 0;
-      for (let row = 0; row < grid.length; row++) {
-        if (grid[row] && grid[row][col]) {
-          maxDiameter = Math.max(maxDiameter, grid[row][col].od);
-        }
-      }
-      colWidths[col] = maxDiameter > 0 ? (maxDiameter + EXTERNAL_GAP) * MM_TO_PX : 0;
-    }
-
-    // Les fourreaux rentrent dans la boîte actuelle - pas de redimensionnement
-    const totalWidth = colWidths.reduce((sum, w) => sum + w, 0);
-    const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
-
-    // Étape 6 : Calculer les positions de départ (centrage)
-    const center = getCanvasCenter();
-    const startX = center.x - totalWidth / 2;
-    const startY = center.y - totalHeight / 2;
-
-    // Arrêter la physique temporairement
-    fourreaux.forEach(f => {
-      f.frozen = true;
-      f.dragging = false;
-      f.vx = 0;
-      f.vy = 0;
-    });
-
-    // Étape 7 : Positionner les fourreaux selon la grille adaptative
-    let currentY = startY;
-    for (let row = 0; row < grid.length; row++) {
-      let currentX = startX;
-      const rowHeight = rowHeights[row];
-      
-      for (let col = 0; col < grid[row].length; col++) {
-        const fourreau = grid[row][col];
-        const colWidth = colWidths[col];
-        
+    if (result.fits) {
+      result.placements.forEach(p => {
+        const fourreau = fourreaux.find(f => f.id === p.id);
         if (fourreau) {
-          // Centrer le fourreau dans sa cellule
-          const cellCenterX = currentX + colWidth / 2;
-          const cellCenterY = currentY + rowHeight / 2;
-          
-          // Vérifier si la position est dans les limites pour les boîtes circulaires
-          if (shape === 'circ') {
-            const centerX = center.x;
-            const centerY = center.y;
-            const distanceFromCenter = Math.sqrt((cellCenterX - centerX) ** 2 + (cellCenterY - centerY) ** 2);
-            const maxRadius = (boxDiameter * MM_TO_PX) / 2 - GRID_MARGIN - (fourreau.od * MM_TO_PX) / 2;
-            
-            if (distanceFromCenter > maxRadius) {
-              currentX += colWidth;
-              continue;
-            }
-          }
-
-          fourreau.x = cellCenterX;
-          fourreau.y = cellCenterY;
-          fourreau._px = cellCenterX;
-          fourreau._py = cellCenterY;
+          fourreau.x = p.x * MM_TO_PX;
+          fourreau.y = p.y * MM_TO_PX;
+          fourreau.frozen = true;
+          fourreau.vx = 0;
+          fourreau.vy = 0;
         }
-        
-        currentX += colWidth;
+      });
+
+      showToast(`✅ ${fourreaux.length} fourreaux placés en grille ${result.grid.cols}x${result.grid.rows} (Ctrl+X pour dégeler)`);
+      if (DEBUG) console.log(`✅ Placement terminé.`);
+    } else {
+      const { width: newWidth, height: newHeight } = result.suggestedContainer;
+      const lockWidth = document.getElementById('lockWidth')?.checked;
+      const lockHeight = document.getElementById('lockHeight')?.checked;
+
+      if (lockWidth && lockHeight) {
+        showToast(`🔒 Impossible : dimensions verrouillées (${newWidth}×${newHeight}mm requis)`);
+        arrangeInProgress = false;
+        return;
       }
-      currentY += rowHeight;
+
+      const finalWidth = lockWidth ? container.width : newWidth;
+      const finalHeight = lockHeight ? container.height : newHeight;
+
+      if (shape === 'rect') {
+        if (!lockWidth) boxWInput.value = finalWidth;
+        if (!lockHeight) boxHInput.value = finalHeight;
+      } else if (shape === 'circ') {
+        const newDiameter = Math.max(finalWidth, finalHeight);
+        boxDInput.value = newDiameter;
+      }
+
+      // Appeler applyDimensions pour mettre à jour le monde, puis relancer l'arrangement
+      applyDimensions();
+      showToast(`🔧 Redimensionnement à ${finalWidth}x${finalHeight}mm. Relance de l'arrangement...`);
+      
+      // Utiliser un timeout pour laisser le DOM se mettre à jour avant de relancer
+      setTimeout(() => {
+        arrangeConduitGridOptimized();
+      }, 100);
+      return; // Sortir pour éviter de déverrouiller arrangeInProgress trop tôt
     }
 
-    // Réactiver la possibilité de suppression
     arrangeInProgress = false;
-
+    updateStats();
     redraw();
-    showToast(`${fourreaux.length} fourreaux disposés en grille adaptative ${approxCols}×${approxRows} avec espacement 3cm`);
-    
   }
+
+
+  // Cache pour éviter les recalculs inutiles
+  let dimensionsCache = { count: -1, result: null };
 
   // Fonction pour calculer les dimensions minimales nécessaires
   function calculateMinimumDimensions() {
     if (fourreaux.length === 0) return null;
 
-    const EXTERNAL_GAP = 30; // 3 cm = 30 mm
-    
+    // Utiliser le cache si le nombre de fourreaux n'a pas changé
+    if (dimensionsCache.count === fourreaux.length && dimensionsCache.result) {
+      return dimensionsCache.result;
+    }
+
+    // === SYNCHRONISATION AVEC arrangeConduitGridOptimized ===
+    const MARGIN_MM = 30;  // Espacement entre fourreaux (30mm requis)
+    const CONTAINER_MARGIN_MM = 20; // Marge depuis les bords du conteneur
+
     // Vérifier les verrous
     const lockWidth = document.getElementById('lockWidth')?.checked;
     const lockHeight = document.getElementById('lockHeight')?.checked;
     const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
     const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
-    
-    // Trier les fourreaux par taille (gros d'abord)
-    const sortedFourreaux = [...fourreaux].sort((a, b) => b.od - a.od);
-    
-    // Calculer la grille optimale en tenant compte des contraintes
+
+    // Modélisation : Chaque tube représenté par son encombrement carré/rectangulaire
+    function getFourreauData(fourreau) {
+      const spec = FOURREAUX.find(s => s.type === fourreau.type && s.code === fourreau.code);
+      const diameter = spec ? spec.od : 40;
+      return {
+        fourreau,
+        diameter,
+        encombrement: diameter + MARGIN_MM, // Encombrement = taille + marge
+        width: diameter + MARGIN_MM,
+        height: diameter + MARGIN_MM
+      };
+    }
+
+    // Trier par ordre décroissant de taille (comme Ctrl+G)
+    const sortedFourreaux = [...fourreaux]
+      .map(getFourreauData)
+      .sort((a, b) => b.diameter - a.diameter);
+
+    // Calculer la grille optimale avec la MÊME LOGIQUE que Ctrl+G
     let optimalCols, optimalRows;
-    
+    const totalFourreaux = sortedFourreaux.length;
+    const availableWidth = currentWidth - 2 * CONTAINER_MARGIN_MM;
+    const availableHeight = currentHeight - 2 * CONTAINER_MARGIN_MM;
+    const aspectRatio = availableWidth / availableHeight;
+
     if (lockWidth && lockHeight) {
       // Les deux dimensions verrouillées = pas de redimensionnement possible
       return null;
     } else if (lockHeight) {
       // Hauteur verrouillée : calculer combien de lignes on peut avoir
-      const avgDiameter = fourreaux.reduce((sum, f) => sum + f.od, 0) / fourreaux.length;
-      const maxRows = Math.floor((currentHeight - 2 * GRID_MARGIN) / (avgDiameter + EXTERNAL_GAP));
-      optimalRows = Math.min(maxRows, fourreaux.length);
-      optimalCols = Math.ceil(fourreaux.length / optimalRows);
+      const avgEncombrement = sortedFourreaux.reduce((sum, f) => sum + f.height, 0) / totalFourreaux;
+      const maxRows = Math.floor(availableHeight / avgEncombrement);
+      optimalRows = Math.min(maxRows, totalFourreaux);
+      optimalCols = Math.ceil(totalFourreaux / optimalRows);
     } else if (lockWidth) {
       // Largeur verrouillée : calculer combien de colonnes on peut avoir
-      const avgDiameter = fourreaux.reduce((sum, f) => sum + f.od, 0) / fourreaux.length;
-      const maxCols = Math.floor((currentWidth - 2 * GRID_MARGIN) / (avgDiameter + EXTERNAL_GAP));
-      optimalCols = Math.min(maxCols, fourreaux.length);
-      optimalRows = Math.ceil(fourreaux.length / optimalCols);
+      const avgEncombrement = sortedFourreaux.reduce((sum, f) => sum + f.width, 0) / totalFourreaux;
+      const maxCols = Math.floor(availableWidth / avgEncombrement);
+      optimalCols = Math.min(maxCols, totalFourreaux);
+      optimalRows = Math.ceil(totalFourreaux / optimalCols);
     } else {
-      // Aucune contrainte : grille optimale libre
-      optimalCols = Math.ceil(Math.sqrt(fourreaux.length * 1.5));
-      optimalRows = Math.ceil(fourreaux.length / optimalCols);
-      
-      while (optimalCols * optimalRows < fourreaux.length) {
-        if (optimalCols <= optimalRows) {
-          optimalCols++;
-        } else {
-          optimalRows++;
+      // MÊME LOGIQUE que Ctrl+G : privilégier horizontal
+      optimalCols = Math.ceil(Math.sqrt(totalFourreaux * aspectRatio * 1.5)); // Facteur 1.5 pour favoriser horizontal
+      optimalRows = Math.ceil(totalFourreaux / optimalCols);
+
+      // Optimiser pour éviter les lignes avec trop peu de fourreaux
+      if (totalFourreaux > 2) {
+        const lastRowItems = totalFourreaux % optimalCols;
+        if (lastRowItems > 0 && lastRowItems < optimalCols * 0.3) {
+          optimalCols = Math.max(1, optimalCols - 1);
+          optimalRows = Math.ceil(totalFourreaux / optimalCols);
         }
       }
-    }
-    
-    // Créer grille temporaire
-    const tempGrid = [];
-    for (let row = 0; row < optimalRows; row++) {
-      tempGrid[row] = [];
-    }
-    
-    // Placer les fourreaux
-    let index = 0;
-    for (let row = optimalRows - 1; row >= 0 && index < sortedFourreaux.length; row--) {
-      for (let col = 0; col < optimalCols && index < sortedFourreaux.length; col++) {
-        tempGrid[row][col] = sortedFourreaux[index];
-        index++;
+
+      // Forcer un minimum horizontal si possible
+      if (totalFourreaux >= 4 && optimalRows > optimalCols) {
+        optimalCols = Math.ceil(totalFourreaux / 2); // Maximum 2 lignes si possible
+        optimalRows = Math.ceil(totalFourreaux / optimalCols);
       }
     }
     
-    // Calculer les dimensions de colonnes et lignes
-    const colWidths = [];
-    for (let col = 0; col < optimalCols; col++) {
-      let maxDiameter = 0;
-      for (let row = 0; row < tempGrid.length; row++) {
-        if (tempGrid[row] && tempGrid[row][col]) {
-          maxDiameter = Math.max(maxDiameter, tempGrid[row][col].od);
-        }
+    // === MÊME ALGORITHME DE PLACEMENT que Ctrl+G ===
+    const grid = Array(optimalRows).fill(null).map(() => Array(optimalCols).fill(null));
+    const rowHeights = new Array(optimalRows).fill(0);
+    const colWidths = new Array(optimalCols).fill(0);
+
+    // Placement séquentiel dans la grille (depuis le bas - multitubulaire)
+    let fourreauIndex = 0;
+    for (let row = optimalRows - 1; row >= 0; row--) {
+      for (let col = 0; col < optimalCols && fourreauIndex < totalFourreaux; col++) {
+        const item = sortedFourreaux[fourreauIndex];
+
+        // Placer dans la grille virtuelle
+        grid[row][col] = item;
+
+        // Ajustement dimensionnel : plus gros tube de la ligne/colonne
+        rowHeights[row] = Math.max(rowHeights[row], item.height);
+        colWidths[col] = Math.max(colWidths[col], item.width);
+
+        fourreauIndex++;
       }
-      colWidths[col] = maxDiameter > 0 ? (maxDiameter + EXTERNAL_GAP) : 0;
     }
-    
-    const rowHeights = [];
-    for (let row = 0; row < tempGrid.length; row++) {
-      let maxDiameter = 0;
-      for (let col = 0; col < tempGrid[row].length; col++) {
-        if (tempGrid[row][col]) {
-          maxDiameter = Math.max(maxDiameter, tempGrid[row][col].od);
-        }
-      }
-      rowHeights[row] = maxDiameter > 0 ? (maxDiameter + EXTERNAL_GAP) : 0;
-    }
-    
-    // Calculer dimensions totales en mm et arrondir à la dizaine supérieure
-    const totalWidthMM = colWidths.reduce((sum, w) => sum + w, 0) + (2 * GRID_MARGIN / MM_TO_PX);
-    const totalHeightMM = rowHeights.reduce((sum, h) => sum + h, 0) + (2 * GRID_MARGIN / MM_TO_PX);
+
+    // Calculer les dimensions totales (MÊME MÉTHODE que Ctrl+G)
+    const totalGridWidth = colWidths.reduce((sum, w) => sum + w, 0);
+    const totalGridHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+
+    // Ajouter les marges du conteneur
+    const totalWidthMM = totalGridWidth + 2 * CONTAINER_MARGIN_MM;
+    const totalHeightMM = totalGridHeight + 2 * CONTAINER_MARGIN_MM;
     
     // Respecter les verrous dans les dimensions finales
     const finalWidth = lockWidth ? currentWidth : Math.ceil(totalWidthMM / 10) * 10;
     const finalHeight = lockHeight ? currentHeight : Math.ceil(totalHeightMM / 10) * 10;
-    
-    return {
+
+    const result = {
       width: finalWidth,
       height: finalHeight
     };
+
+    // Mettre à jour le cache
+    dimensionsCache = { count: fourreaux.length, result };
+
+    return result;
   }
 
   // Vérifier s'il est possible de redimensionner la boîte
@@ -2075,6 +1949,7 @@ const CHEMINS_CABLE_FALLBACK = [
     // Créer des calques par type de câble et phase
     const cableLayerTypes = new Set();
     const layerColorMap = new Map();
+    const layerToCableMap = new Map(); // Pour stocker un câble représentatif par calque
     
     cables.forEach((c, index) => {
       const layerName = generateCableLayerName(c);
@@ -2082,6 +1957,10 @@ const CHEMINS_CABLE_FALLBACK = [
       
       // Définir la couleur du calque selon la phase
       if (!layerColorMap.has(layerName)) {
+        // Stocker le premier câble trouvé pour ce calque comme représentant
+        if (!layerToCableMap.has(layerName)) {
+          layerToCableMap.set(layerName, c);
+        }
         let dxfColor = (index % 6) + 10; // Couleur par défaut
         
         if (c.customColor) {
@@ -2141,7 +2020,9 @@ const CHEMINS_CABLE_FALLBACK = [
       dxf += `62\n${dxfColor}\n`; // Couleur au niveau de l'élément
       dxf += `10\n0.0\n20\n0.0\n40\n${innerRadius}\n`;
       
-      // Ajouter le label du fourreau si disponible
+      // SUSPENDU : Ajouter le label du fourreau si disponible
+      // TODO: Réactiver l'affichage des noms dans les fourreaux plus tard
+      /*
       if (fourreau && (fourreau.label || fourreau.code)) {
         const labelText = fourreau.label || `${fourreau.type} ${fourreau.code}`;
         dxf += `0\nTEXT\n8\n_CEAI_FOURREAU_${type}\n`;
@@ -2154,47 +2035,48 @@ const CHEMINS_CABLE_FALLBACK = [
         dxf += '72\n1\n'; // Justification horizontale centrée
         dxf += '73\n2\n'; // Justification verticale centrée
       }
+      */
       
       dxf += '0\nENDBLK\n8\n0\n';
     });
     
-    // Créer des blocs individuels pour chaque câble
-    cables.forEach(cable => {
+    // Créer des blocs uniques pour chaque type de câble/phase (calque)
+    Array.from(cableLayerTypes).forEach(layerName => {
+      const cable = layerToCableMap.get(layerName); // Obtenir le câble représentatif
+      if (!cable) return;
+
       const radius = (cable.od * MM_TO_PX / 2 / MM_TO_PX / 1000).toFixed(6);
-      const blockName = `_CEAI_CABLE_${cable.id}`;
-      const layerName = generateCableLayerName(cable);
+      const blockName = layerName; // Le nom du bloc est le nom du calque
       
       dxf += '0\nBLOCK\n8\n0\n';
       dxf += `2\n${blockName}\n70\n0\n`;
       dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
       dxf += `3\n${blockName}\n`;
       
-      // Déterminer la couleur du câble
-      let cableDxfColor;
-      if (cable.customColor) {
-        cableDxfColor = convertHexToDXFColor(cable.customColor);
-      } else {
-        cableDxfColor = layerColorMap.get(layerName);
-      }
+      const cableDxfColor = layerColorMap.get(layerName);
       
       // Cercle simple pour le câble avec couleur
       dxf += `0\nCIRCLE\n8\n${layerName}\n`;
-      dxf += `62\n${cableDxfColor}\n`; // Couleur au niveau de l'élément
+      dxf += `62\n${cableDxfColor}\n`;
       dxf += `10\n0.0\n20\n0.0\n40\n${radius}\n`;
       
-      // Ajouter le texte au centre (phase ou label)
-      let textToShow = '';
-      if (cable.label) {
-        textToShow = cable.label;
-      } else if (cable.customColor) {
-        textToShow = getPhaseFromColor(cable.customColor) || `${cable.fam} ${cable.code}`;
-      } else {
-        textToShow = `${cable.fam} ${cable.code}`;
+      // Le texte dans le bloc doit être générique pour le type de câble/phase
+      // On utilise la phase extraite du nom de calque
+      const phase = layerName.split('_').pop();
+      let textToShow = phase;
+      
+      // Si la phase est 'STANDARD' ou 'CUSTOM', on affiche le code du câble
+      if (phase === 'STANDARD' || phase === 'CUSTOM') {
+        textToShow = cable.code;
       }
+      
+      // Ne pas afficher de texte si la phase est STANDARD
+      if (phase === 'STANDARD') textToShow = '';
       
       if (textToShow) {
         dxf += `0\nTEXT\n8\n${layerName}\n`;
-        dxf += `62\n${cableDxfColor}\n`; // Couleur du texte
+        // Le texte est blanc pour une meilleure lisibilité sur fond coloré
+        dxf += `62\n7\n`; // ACI 7 = Blanc
         dxf += '7\nArial\n'; // Police Arial
         dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
         dxf += '40\n0.004\n'; // Hauteur du texte augmentée (4mm au lieu de 2mm)
@@ -2259,7 +2141,7 @@ const CHEMINS_CABLE_FALLBACK = [
       dxf += `14\n${w}\n24\n0.0\n34\n0.0\n`; // Point de définition 2
       dxf += `15\n0.0\n25\n-0.1\n35\n0.0\n`; // Point sur ligne de dimension
       dxf += `16\n0.0\n26\n-0.1\n36\n0.0\n`; // Point sur ligne de dimension 2
-      dxf += `1\n${(WORLD_W_MM).toFixed(0)} mm\n`; // Texte de cotation
+      dxf += '1\n<>\n'; // Texte de cotation automatique
       
       // Cotation verticale (hauteur) à droite
       dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
@@ -2271,7 +2153,7 @@ const CHEMINS_CABLE_FALLBACK = [
       dxf += `14\n${w}\n24\n${h}\n34\n0.0\n`; // Point de définition 2
       dxf += `15\n${(parseFloat(w) + 0.1).toFixed(3)}\n25\n0.0\n35\n0.0\n`; // Point sur ligne de dimension
       dxf += `16\n${(parseFloat(w) + 0.1).toFixed(3)}\n26\n${h}\n36\n0.0\n`; // Point sur ligne de dimension 2
-      dxf += `1\n${(WORLD_H_MM).toFixed(0)} mm\n`; // Texte de cotation
+      dxf += '1\n<>\n'; // Texte de cotation automatique
     } else {
       // Cotation diamètre pour cercle
       const d = (WORLD_D_MM / 1000).toFixed(3);
@@ -2285,7 +2167,7 @@ const CHEMINS_CABLE_FALLBACK = [
       dxf += '140\n0.006\n'; // Hauteur de texte (6mm au lieu de 12mm par défaut)
       dxf += `15\n0.0\n25\n${centerY}\n35\n0.0\n`; // Point sur le cercle
       dxf += `16\n${d}\n26\n${centerY}\n36\n0.0\n`; // Point opposé sur le cercle
-      dxf += `1\nØ${(WORLD_D_MM).toFixed(0)} mm\n`; // Texte de cotation
+      dxf += '1\n<>\n'; // Texte de cotation automatique
     }
     
     // Insérer les blocs de fourreaux
@@ -2306,9 +2188,8 @@ const CHEMINS_CABLE_FALLBACK = [
     cables.forEach(c => {
       const x = (c.x / MM_TO_PX / 1000).toFixed(6);
       const y = ((SHAPE === "rect" || SHAPE === "chemin_de_cable" ? WORLD_H - c.y : c.y) / MM_TO_PX / 1000).toFixed(6);
-      const blockName = `_CEAI_CABLE_${c.id}`;
       const layerName = generateCableLayerName(c);
-      
+      const blockName = layerName; // Utiliser le nom du calque comme nom de bloc
       // Insertion du bloc avec hachures solides
       dxf += `0\nINSERT\n8\n${layerName}\n`;
       dxf += `2\n${blockName}\n`;
@@ -2323,7 +2204,7 @@ const CHEMINS_CABLE_FALLBACK = [
     
     // Titre du tableau avec police Arial
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-    dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.02\n1\nINVENTAIRE TONTONKAD\n`;
+    dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.02\n1\nINVENTAIRE\n`;
     dxf += '7\nARIAL\n'; // Style de texte Arial
     yPos -= 0.03;
     
@@ -2555,14 +2436,18 @@ const CHEMINS_CABLE_FALLBACK = [
   }
 
   let checkReductionTimeout;
+  let lastFourreauxCount = -1;
   function updateStats() {
     statFourreau.textContent = fourreaux.length;
     statCable.textContent = cables.length;
     statOccupation.textContent = `${calculateBoxOccupancy().toFixed(1)} %`;
-    
-    // Déclencher checkForPossibleReduction avec un léger délai pour éviter trop d'appels
-    clearTimeout(checkReductionTimeout);
-    checkReductionTimeout = setTimeout(checkForPossibleReduction, 100);
+
+    // Ne déclencher checkForPossibleReduction que si le nombre de fourreaux a changé
+    if (fourreaux.length !== lastFourreauxCount) {
+      lastFourreauxCount = fourreaux.length;
+      clearTimeout(checkReductionTimeout);
+      checkReductionTimeout = setTimeout(checkForPossibleReduction, 500); // Augmenté à 500ms
+    }
   }
 
   /* ====== Interaction Utilisateur ====== */
@@ -2968,7 +2853,7 @@ const CHEMINS_CABLE_FALLBACK = [
       await loadData();
     } catch (error) {
       // Afficher un message d'erreur clair et bloquer l'application
-      panel.innerHTML = `<div class="p-4 text-red-500 bg-red-100 border border-red-400 rounded"><b>Erreur critique :</b><br>Impossible de charger les fichiers de données (<code>../data/fourreaux.csv</code>, <code>../data/cables.csv</code>, ou <code>../data/chemins_de_cable.csv</code>).<br><br>Assurez-vous qu'ils sont présents dans le dossier <code>data/</code> et que leur format est correct.</div>`;
+      panel.innerHTML = `<div class="p-4 text-red-500 bg-red-100 border border-red-400 rounded"><b>Erreur critique :</b><br>Impossible de charger les fichiers de données (<code>./data/fourreaux.csv</code>, <code>./data/cables.csv</code>, ou <code>./data/chemins_de_cable.csv</code>).<br><br>Assurez-vous qu'ils sont présents dans le dossier <code>app/data/</code> et que leur format est correct.</div>`;
       document.querySelector('.canvas-wrap').innerHTML = ''; // Vider la zone du canvas
       return; // Arrêter l'initialisation
     }
@@ -3006,7 +2891,7 @@ const CHEMINS_CABLE_FALLBACK = [
 
 
     // 2. Remplir les menus déroulants avec les données chargées
-    populateSelectors();
+    initSearchableLists();
 
     // 3. Attacher les écouteurs d'événements
     addEventListener("resize", fitCanvas);
@@ -3062,12 +2947,12 @@ const CHEMINS_CABLE_FALLBACK = [
       }
       if (e.button === 2) { // Clic droit : placement
         if (activeTab === 'FOURREAU') {
-          const v = fourreauSelect.value;
+          const v = selectedFourreau;
           if (!v) { showToast('Choisis un fourreau.'); return; }
           const [type, code] = v.split('|');
           addFourreauAt(p.x, p.y, type, code) || showToast('Emplacement occupé ou hors boîte.');
         } else {
-          const v = cableSelect.value;
+          const v = selectedCable;
           if (!v) { showToast('Choisis un CÂBLE.'); return; }
           const [fam, code] = v.split('|');
           const f = findFourreauUnder(p.x, p.y, null);
@@ -3230,6 +3115,7 @@ const CHEMINS_CABLE_FALLBACK = [
       const labelInput = document.getElementById('editLabel');
       const colorInput = document.getElementById('editColor');
       const phaseSection = document.getElementById('cablePhaseSection');
+      const fourreauFillSection = document.getElementById('fourreauFillSection');
       
       // Mettre à jour le titre du popup pour indiquer la sélection multiple
       const popupTitle = popup.querySelector('h3');
@@ -3270,6 +3156,8 @@ const CHEMINS_CABLE_FALLBACK = [
       // Afficher ou cacher la section des conducteurs selon le type d'objet
       if (currentType === 'cable') {
         phaseSection.style.display = 'block';
+        fourreauFillSection.style.display = 'none';
+
         // Initialiser le bouton radio avec le conducteur actuel
         const currentPhase = obj.selectedPhase || 'none';
         const radioButton = document.getElementById(`phase-${currentPhase}`);
@@ -3281,16 +3169,96 @@ const CHEMINS_CABLE_FALLBACK = [
         }
       } else {
         phaseSection.style.display = 'none';
+        fourreauFillSection.style.display = 'block';
+        populateUnipolarCableSelect();
       }
       
       popup.style.display = 'block';
+      const overlay = popup.querySelector('.edit-popup-overlay');
+      if (overlay) overlay.style.display = 'block';
       setTimeout(() => labelInput.focus(), 100);
     }
     
     function closeEditPopup() {
       // Fermer le dropdown des couleurs s'il est ouvert
       closeColorDropdown();
-      document.getElementById('editPopup').style.display = 'none';
+      const popup = document.getElementById('editPopup');
+      const overlay = popup.querySelector('.edit-popup-overlay');
+      if (overlay) overlay.style.display = 'none';
+      popup.style.display = 'none';
+    }
+
+    // Fonction pour peupler le sélecteur de câbles unipolaires pour le remplissage
+    function populateUnipolarCableSelect() {
+      const fillCableSelect = document.getElementById('fillCableSelect');
+      if (!fillCableSelect) return;
+
+      fillCableSelect.innerHTML = '';
+      const unipolarCables = CABLES.filter(c => c.code.startsWith('1x'));
+
+      if (unipolarCables.length === 0) {
+        const option = document.createElement('option');
+        option.textContent = 'Aucun câble unipolaire trouvé';
+        option.disabled = true;
+        fillCableSelect.appendChild(option);
+        return;
+      }
+
+      unipolarCables.forEach(c => {
+        const option = document.createElement('option');
+        option.value = `${c.fam}|${c.code}`;
+        option.textContent = `${c.fam} – ${c.code} (Ø ${c.od} mm)`;
+        fillCableSelect.appendChild(option);
+      });
+    }
+
+    // Fonction pour gérer le remplissage rapide d'un fourreau
+    function handleFillFourreau(mode) {
+      if (!selected || selected.type !== 'fourreau') return;
+
+      const fourreau = fourreaux.find(f => f.id === selected.id);
+      if (!fourreau) return;
+
+      const fillCableSelect = document.getElementById('fillCableSelect');
+      const selectedCableValue = fillCableSelect.value;
+      if (!selectedCableValue) {
+        showToast('Veuillez sélectionner un type de câble.');
+        return;
+      }
+
+      if (!confirm('Attention : les câbles existants dans ce fourreau seront supprimés. Continuer ?')) {
+        return;
+      }
+
+      const [fam, code] = selectedCableValue.split('|');
+
+      // 1. Supprimer les câbles existants
+      const childrenIds = [...fourreau.children];
+      for (const cableId of childrenIds) {
+        const cableIndex = cables.findIndex(c => c.id === cableId);
+        if (cableIndex > -1) cables.splice(cableIndex, 1);
+      }
+      fourreau.children = [];
+
+      // 2. Ajouter les nouveaux câbles
+      const phases = mode === 'tetra' ? ['ph1', 'ph2', 'ph3', 'n', 'pe'] : ['ph1', 'ph2', 'ph3', 'n'];
+      const phaseNames = { ph1: 'L1', ph2: 'L2', ph3: 'L3', n: 'N', pe: 'PE' };
+
+      for (const phase of phases) {
+        const newCable = addCableAt(fourreau.x, fourreau.y, fam, code, fourreau, { silent: true });
+        if (newCable) {
+          newCable.selectedPhase = phase;
+          newCable.customColor = PHASE_COLORS[phase];
+          newCable.label = phaseNames[phase];
+        }
+      }
+
+      showToast(`${phases.length} câbles ajoutés au fourreau.`);
+      closeEditPopup();
+      redraw();
+      updateStats();
+      updateInventory();
+      updateSelectedInfo();
     }
     
     function saveEdit() {
@@ -3359,6 +3327,10 @@ const CHEMINS_CABLE_FALLBACK = [
         closeEditPopup();
       }
     });
+
+    // Gestionnaires pour le remplissage rapide
+    document.getElementById('fillTetra').addEventListener('click', () => handleFillFourreau('tetra'));
+    document.getElementById('fillTri').addEventListener('click', () => handleFillFourreau('tri'));
 
     document.getElementById('resetColor').addEventListener('click', () => {
       if (!selected) return;
@@ -3594,7 +3566,7 @@ const CHEMINS_CABLE_FALLBACK = [
 
           return true;
         } catch (error) {
-          console.error('Erreur lors de la restauration:', error);
+          if (DEBUG) console.error('Erreur lors de la restauration:', error);
           showToast('Erreur lors du chargement du projet');
           return false;
         }
@@ -3622,7 +3594,7 @@ const CHEMINS_CABLE_FALLBACK = [
         try {
           const state = this.captureCurrentState();
           localStorage.setItem(this.autoSaveKey, JSON.stringify(state));
-          console.log('🔄 Auto-sauvegarde effectuée');
+          if (DEBUG) console.log('🔄 Auto-sauvegarde effectuée');
         } catch (error) {
           console.warn('Erreur auto-sauvegarde:', error);
         }
@@ -3643,24 +3615,49 @@ const CHEMINS_CABLE_FALLBACK = [
       }
 
       // Sauvegarder un projet nommé
-      saveProject(projectName) {
+      saveProject(projectName, folderName = null) {
         if (!projectName || projectName.trim() === '') {
           throw new Error('Nom de projet requis');
         }
 
         try {
-          const projects = this.getAllProjects();
+          const data = this.getAllProjects();
           const projectData = this.captureCurrentState();
 
-          projects[projectName.trim()] = {
+          const finalProjectData = {
             ...projectData,
             name: projectName.trim(),
-            created: projects[projectName.trim()]?.created || new Date().toISOString(),
+            folder: folderName,
             lastModified: new Date().toISOString()
           };
 
-          localStorage.setItem(this.storageKey, JSON.stringify(projects));
-          showToast(`💾 Projet "${projectName}" sauvegardé`);
+          if (folderName) {
+            // Sauvegarder dans un dossier
+            if (!data.folders[folderName]) {
+              data.folders[folderName] = {
+                name: folderName,
+                created: new Date().toISOString(),
+                projects: {}
+              };
+            }
+
+            // Conserver la date de création si le projet existe déjà
+            const existingProject = data.folders[folderName].projects[projectName.trim()];
+            finalProjectData.created = existingProject?.created || new Date().toISOString();
+
+            data.folders[folderName].projects[projectName.trim()] = finalProjectData;
+          } else {
+            // Sauvegarder à la racine
+            const existingProject = data.projects[projectName.trim()];
+            finalProjectData.created = existingProject?.created || new Date().toISOString();
+
+            data.projects[projectName.trim()] = finalProjectData;
+          }
+
+          localStorage.setItem(this.storageKey, JSON.stringify(data));
+
+          const location = folderName ? `dans "${folderName}"` : '';
+          showToast(`💾 Projet "${projectName}" sauvegardé ${location}`);
           return true;
         } catch (error) {
           console.error('Erreur sauvegarde projet:', error);
@@ -3692,6 +3689,38 @@ const CHEMINS_CABLE_FALLBACK = [
       }
 
       // Supprimer un projet
+      renameProject(oldName, newName) {
+        try {
+          const projects = this.getAllProjects();
+
+          if (!projects[oldName]) {
+            showToast(`⚠️ Projet "${oldName}" introuvable`);
+            return false;
+          }
+
+          if (projects[newName]) {
+            showToast(`⚠️ Un projet nommé "${newName}" existe déjà`);
+            return false;
+          }
+
+          // Copier le projet avec le nouveau nom
+          const projectData = { ...projects[oldName] };
+          projectData.name = newName;
+          projectData.lastModified = new Date().toISOString();
+
+          // Ajouter avec le nouveau nom et supprimer l'ancien
+          projects[newName] = projectData;
+          delete projects[oldName];
+
+          localStorage.setItem(this.storageKey, JSON.stringify(projects));
+          return true;
+        } catch (error) {
+          console.error('Erreur renommage projet:', error);
+          showToast('Erreur lors du renommage');
+          return false;
+        }
+      }
+
       deleteProject(projectName) {
         try {
           const projects = this.getAllProjects();
@@ -3709,14 +3738,108 @@ const CHEMINS_CABLE_FALLBACK = [
         }
       }
 
-      // Obtenir tous les projets
+      // Obtenir tous les projets (migration automatique vers nouvelle structure)
       getAllProjects() {
         try {
           const saved = localStorage.getItem(this.storageKey);
-          return saved ? JSON.parse(saved) : {};
+          if (!saved) {
+            return { folders: {}, projects: {} };
+          }
+
+          const data = JSON.parse(saved);
+
+          // Migration automatique depuis l'ancienne structure plate
+          if (!data.folders && !data.projects) {
+            console.log('🔄 Migration vers structure avec dossiers...');
+            const newStructure = {
+              folders: {},
+              projects: data // Anciens projets restent à la racine
+            };
+            localStorage.setItem(this.storageKey, JSON.stringify(newStructure));
+            return newStructure;
+          }
+
+          // Structure déjà moderne
+          return {
+            folders: data.folders || {},
+            projects: data.projects || {}
+          };
         } catch (error) {
           console.warn('Erreur lecture projets:', error);
-          return {};
+          return { folders: {}, projects: {} };
+        }
+      }
+
+      // Obtenir tous les projets dans un format plat (pour compatibilité)
+      getAllProjectsFlat() {
+        const data = this.getAllProjects();
+        const allProjects = { ...data.projects };
+
+        // Ajouter les projets des dossiers
+        Object.values(data.folders).forEach(folder => {
+          Object.entries(folder.projects || {}).forEach(([name, project]) => {
+            allProjects[`${folder.name}/${name}`] = project;
+          });
+        });
+
+        return allProjects;
+      }
+
+      // Créer un nouveau dossier
+      createFolder(folderName) {
+        if (!folderName || folderName.trim() === '') {
+          throw new Error('Nom de dossier requis');
+        }
+
+        try {
+          const data = this.getAllProjects();
+          const trimmedName = folderName.trim();
+
+          if (data.folders[trimmedName]) {
+            showToast(`⚠️ Le dossier "${trimmedName}" existe déjà`);
+            return false;
+          }
+
+          data.folders[trimmedName] = {
+            name: trimmedName,
+            created: new Date().toISOString(),
+            projects: {}
+          };
+
+          localStorage.setItem(this.storageKey, JSON.stringify(data));
+          showToast(`📁 Dossier "${trimmedName}" créé`);
+          return true;
+        } catch (error) {
+          console.error('Erreur création dossier:', error);
+          showToast('Erreur lors de la création du dossier');
+          return false;
+        }
+      }
+
+      // Supprimer un dossier (doit être vide)
+      deleteFolder(folderName) {
+        try {
+          const data = this.getAllProjects();
+          const folder = data.folders[folderName];
+
+          if (!folder) {
+            showToast(`⚠️ Dossier "${folderName}" introuvable`);
+            return false;
+          }
+
+          if (Object.keys(folder.projects || {}).length > 0) {
+            showToast(`⚠️ Le dossier "${folderName}" contient des projets`);
+            return false;
+          }
+
+          delete data.folders[folderName];
+          localStorage.setItem(this.storageKey, JSON.stringify(data));
+          showToast(`🗑️ Dossier "${folderName}" supprimé`);
+          return true;
+        } catch (error) {
+          console.error('Erreur suppression dossier:', error);
+          showToast('Erreur lors de la suppression du dossier');
+          return false;
         }
       }
 
@@ -3879,7 +4002,19 @@ const CHEMINS_CABLE_FALLBACK = [
       this.modal = document.getElementById('projectModal');
       this.projectsList = document.getElementById('projectsList');
       this.newProjectName = document.getElementById('newProjectName');
-      this.autoSaveInfo = document.getElementById('autoSaveInfo');
+      this.newFolderName = document.getElementById('newFolderName');
+      this.projectFolder = document.getElementById('projectFolder');
+      this.autoSaveStatus = document.getElementById('autoSaveStatus');
+      this.autoSaveText = document.getElementById('autoSaveText');
+      this.autoSaveDetails = document.getElementById('autoSaveDetails');
+      this.restoreAutoSave = document.getElementById('restoreAutoSave');
+      this.folderCreationField = document.getElementById('folderCreationField');
+      this.toggleFolderCreation = document.getElementById('toggleFolderCreation');
+      this.renameModal = document.getElementById('renameModal');
+      this.currentProjectName = document.getElementById('currentProjectName');
+      this.newProjectNameInput = document.getElementById('newProjectNameInput');
+      this.confirmRename = document.getElementById('confirmRename');
+      this.cancelRename = document.getElementById('cancelRename');
       this.setupEventListeners();
       this.refreshUI();
     }
@@ -3890,14 +4025,60 @@ const CHEMINS_CABLE_FALLBACK = [
         this.openModal();
       });
 
-      // Fermeture de la modal
-      document.getElementById('closeProjectModal').addEventListener('click', () => {
+
+      // Fermeture de la modal par clic sur l'overlay
+      this.modal.querySelector('.edit-popup-overlay').addEventListener('click', () => {
         this.closeModal();
       });
 
-      // Fermeture par clic sur l'overlay
-      this.modal.querySelector('.edit-popup-overlay').addEventListener('click', () => {
-        this.closeModal();
+      // Toggle création de dossier
+      this.toggleFolderCreation.addEventListener('click', () => {
+        this.toggleFolderCreationField();
+      });
+
+      // Bouton restaurer auto-save
+      this.restoreAutoSave.addEventListener('click', () => {
+        this.loadAutoSave();
+      });
+
+      // Popup de renommage
+      this.confirmRename.addEventListener('click', () => {
+        this.confirmRenameProject();
+      });
+
+      this.cancelRename.addEventListener('click', () => {
+        this.closeRenameModal();
+      });
+
+      this.renameModal.querySelector('.edit-popup-overlay').addEventListener('click', () => {
+        this.closeRenameModal();
+      });
+
+      // Confirmer avec Entrée dans le champ de renommage
+      this.newProjectNameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          this.confirmRenameProject();
+        }
+      });
+
+
+      // Créer nouveau dossier
+      document.getElementById('createNewFolder').addEventListener('click', () => {
+        this.createNewFolder();
+      });
+
+      // Annuler création de dossier
+      document.getElementById('cancelFolderCreation').addEventListener('click', () => {
+        this.hideFolderCreationField();
+      });
+
+      // Entrée pour créer dossier
+      this.newFolderName.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          this.createNewFolder();
+        } else if (e.key === 'Escape') {
+          this.hideFolderCreationField();
+        }
       });
 
       // Sauvegarder nouveau projet
@@ -3953,6 +4134,8 @@ const CHEMINS_CABLE_FALLBACK = [
 
     openModal() {
       this.modal.style.display = 'block';
+      const overlay = this.modal.querySelector('.edit-popup-overlay');
+      if (overlay) overlay.style.display = 'block';
       this.refreshUI();
       // Focus sur le champ de nom
       setTimeout(() => {
@@ -3961,34 +4144,194 @@ const CHEMINS_CABLE_FALLBACK = [
     }
 
     closeModal() {
+      const overlay = this.modal.querySelector('.edit-popup-overlay');
+      if (overlay) overlay.style.display = 'none';
       this.modal.style.display = 'none';
       this.newProjectName.value = '';
+      this.hideFolderCreationField();
+    }
+
+    openRenameModal(oldName, folderName = null, isFolder = false) {
+      this.currentRenameData = { oldName, folderName, isFolder };
+
+      if (isFolder) {
+        this.currentProjectName.textContent = `📁 ${oldName}`;
+        document.getElementById('renameModalTitle').textContent = '✏️ Renommer le dossier';
+      } else {
+        this.currentProjectName.textContent = folderName ? `${folderName}/${oldName}` : oldName;
+        document.getElementById('renameModalTitle').textContent = '✏️ Renommer le projet';
+      }
+
+      this.newProjectNameInput.value = oldName;
+      this.renameModal.style.display = 'block';
+      const overlay = this.renameModal.querySelector('.edit-popup-overlay');
+      if (overlay) overlay.style.display = 'block';
+
+      // Focus et sélection du texte
+      setTimeout(() => {
+        this.newProjectNameInput.focus();
+        this.newProjectNameInput.select();
+      }, 100);
+    }
+
+    closeRenameModal() {
+      const overlay = this.renameModal.querySelector('.edit-popup-overlay');
+      if (overlay) overlay.style.display = 'none';
+      this.renameModal.style.display = 'none';
+      this.newProjectNameInput.value = '';
+      this.currentRenameData = null;
+    }
+
+    confirmRenameProject() {
+      if (!this.currentRenameData) return;
+
+      const newName = this.newProjectNameInput.value.trim();
+      if (!newName) {
+        showToast('⚠️ Veuillez entrer un nom');
+        this.newProjectNameInput.focus();
+        return;
+      }
+
+      const { oldName, folderName, isFolder } = this.currentRenameData;
+
+      if (isFolder) {
+        this.executeRenameFolder(oldName, newName);
+      } else if (folderName) {
+        this.executeRenameInFolder(oldName, folderName, newName);
+      } else {
+        this.executeRename(oldName, newName);
+      }
+
+      this.closeRenameModal();
+    }
+
+
+    toggleFolderCreationField() {
+      if (this.folderCreationField.style.display === 'none') {
+        this.showFolderCreationField();
+      } else {
+        this.hideFolderCreationField();
+      }
+    }
+
+    showFolderCreationField() {
+      this.folderCreationField.style.display = 'flex';
+      this.toggleFolderCreation.textContent = '− Annuler';
+      this.toggleFolderCreation.classList.add('active');
+
+      // Focus sur le champ avec un léger délai pour l'animation
+      setTimeout(() => {
+        this.newFolderName.focus();
+      }, 100);
+    }
+
+    hideFolderCreationField() {
+      this.folderCreationField.style.display = 'none';
+      this.toggleFolderCreation.textContent = '+ Créer un dossier';
+      this.toggleFolderCreation.classList.remove('active');
+      this.newFolderName.value = '';
+    }
+
+    createNewFolder() {
+      const name = this.newFolderName.value.trim();
+      if (!name) {
+        showToast('⚠️ Veuillez entrer un nom de dossier');
+        this.newFolderName.focus();
+        return;
+      }
+
+      if (window.projectManager.createFolder(name)) {
+        this.hideFolderCreationField();
+        this.refreshUI();
+      }
     }
 
     saveNewProject() {
       const name = this.newProjectName.value.trim();
+      const folderName = this.projectFolder.value || null;
+
       if (!name) {
         showToast('⚠️ Veuillez entrer un nom de projet');
         this.newProjectName.focus();
         return;
       }
 
-      if (window.projectManager.saveProject(name)) {
+      // Vérifier si le projet existe déjà dans le bon emplacement
+      const data = window.projectManager.getAllProjects();
+      let existingProject = false;
+
+      if (folderName) {
+        existingProject = data.folders[folderName]?.projects[name];
+      } else {
+        existingProject = data.projects[name];
+      }
+
+      if (existingProject) {
+        const location = folderName ? `dans "${folderName}"` : 'à la racine';
+        const confirmOverwrite = confirm(`Le projet "${name}" existe déjà ${location}.\nVoulez-vous l'écraser ?`);
+        if (!confirmOverwrite) {
+          this.newProjectName.focus();
+          return;
+        }
+      }
+
+      if (window.projectManager.saveProject(name, folderName)) {
         this.newProjectName.value = '';
         this.refreshUI();
+        this.closeModal();
       }
     }
 
     refreshUI() {
       this.renderProjectsList();
       this.renderAutoSaveInfo();
+      this.updateProjectsDatalist();
+      this.updateFoldersSelect();
+    }
+
+    updateProjectsDatalist() {
+      const datalist = document.getElementById('existingProjects');
+      if (!datalist) return;
+
+      const data = window.projectManager.getAllProjects();
+      const allProjectNames = [];
+
+      // Ajouter les projets à la racine
+      Object.keys(data.projects).forEach(name => {
+        allProjectNames.push(name);
+      });
+
+      // Ajouter les projets dans les dossiers
+      Object.values(data.folders).forEach(folder => {
+        Object.keys(folder.projects || {}).forEach(name => {
+          allProjectNames.push(name);
+        });
+      });
+
+      datalist.innerHTML = allProjectNames.map(name =>
+        `<option value="${name}"></option>`
+      ).join('');
+    }
+
+    updateFoldersSelect() {
+      if (!this.projectFolder) return;
+
+      const data = window.projectManager.getAllProjects();
+      const folderNames = Object.keys(data.folders);
+
+      this.projectFolder.innerHTML = `
+        <option value="">🏠 Racine (sans dossier)</option>
+        ${folderNames.map(name =>
+          `<option value="${name}">📁 ${name}</option>`
+        ).join('')}
+      `;
     }
 
     renderProjectsList() {
-      const projects = window.projectManager.getAllProjects();
-      const projectNames = Object.keys(projects);
+      const data = window.projectManager.getAllProjects();
+      const hasProjects = Object.keys(data.projects).length > 0 || Object.keys(data.folders).length > 0;
 
-      if (projectNames.length === 0) {
+      if (!hasProjects) {
         this.projectsList.innerHTML = `
           <div class="projects-empty">
             🗂️ Aucun projet sauvegardé<br>
@@ -3998,6 +4341,75 @@ const CHEMINS_CABLE_FALLBACK = [
         return;
       }
 
+      let html = '';
+
+      // Afficher les dossiers
+      const folderNames = Object.keys(data.folders).sort();
+      folderNames.forEach(folderName => {
+        const folder = data.folders[folderName];
+        const projectCount = Object.keys(folder.projects || {}).length;
+
+        html += `
+          <div class="folder-item drop-zone"
+               data-folder-name="${folderName}"
+               ondragover="projectUI.handleDragOver(event)"
+               ondrop="projectUI.handleDrop(event)"
+               ondragenter="projectUI.handleDragEnter(event)"
+               ondragleave="projectUI.handleDragLeave(event)">
+            <div class="folder-header">
+              <span class="folder-icon">📁</span>
+              <span class="folder-name">${folderName}</span>
+              <span class="folder-count">(${projectCount} projet${projectCount > 1 ? 's' : ''})</span>
+              <div class="folder-actions">
+                <div class="tooltip-btn btn-rename-folder" onclick="projectUI.renameFolder('${folderName.replace(/'/g, "\\'")}')">
+                  <span class="tooltip">Renommer ce dossier</span>
+                  <span class="icon">✏️</span>
+                </div>
+                <div class="tooltip-btn btn-delete-folder" onclick="projectUI.deleteFolder('${folderName.replace(/'/g, "\\'")}')">
+                  <span class="tooltip">Supprimer ce dossier (doit être vide)</span>
+                  <span class="icon">🗑️</span>
+                </div>
+              </div>
+            </div>
+            <div class="folder-projects">
+              ${this.renderFolderProjects(folder.projects || {}, folderName)}
+            </div>
+          </div>
+        `;
+      });
+
+      // Afficher les projets à la racine
+      const rootProjects = Object.keys(data.projects);
+      if (rootProjects.length > 0) {
+        html += `
+          <div class="folder-item drop-zone"
+               data-folder-name=""
+               ondragover="projectUI.handleDragOver(event)"
+               ondrop="projectUI.handleDrop(event)"
+               ondragenter="projectUI.handleDragEnter(event)"
+               ondragleave="projectUI.handleDragLeave(event)">
+            <div class="folder-header">
+              <span class="folder-icon">🏠</span>
+              <span class="folder-name">Projets sans dossier</span>
+              <span class="folder-count">(${rootProjects.length} projet${rootProjects.length > 1 ? 's' : ''})</span>
+            </div>
+            <div class="folder-projects">
+              ${this.renderFolderProjects(data.projects, null)}
+            </div>
+          </div>
+        `;
+      }
+
+      this.projectsList.innerHTML = html;
+    }
+
+    renderFolderProjects(projects, folderName) {
+      const projectNames = Object.keys(projects);
+
+      if (projectNames.length === 0) {
+        return '<div class="folder-empty">Aucun projet dans ce dossier</div>';
+      }
+
       // Trier par date de modification
       projectNames.sort((a, b) => {
         const dateA = new Date(projects[a].lastModified || projects[a].created);
@@ -4005,15 +4417,23 @@ const CHEMINS_CABLE_FALLBACK = [
         return dateB - dateA;
       });
 
-      this.projectsList.innerHTML = projectNames.map(name => {
+      return projectNames.map(name => {
         const project = projects[name];
         const lastModified = new Date(project.lastModified || project.created);
         const totalObjects = (project.fourreaux?.length || 0) + (project.cables?.length || 0);
 
         return `
-          <div class="project-item">
+          <div class="project-item"
+               draggable="true"
+               data-project-name="${name}"
+               data-current-folder="${folderName || ''}"
+               ondragstart="projectUI.handleDragStart(event)"
+               ondragend="projectUI.handleDragEnd(event)">
             <div class="project-info">
-              <div class="project-name" title="${name}">${name}</div>
+              <div class="project-name" title="${name}">
+                <span class="drag-handle">⋮⋮</span>
+                ${name}
+              </div>
               <div class="project-meta">
                 <span>📅 ${this.formatDate(lastModified)}</span>
                 <span>📦 ${totalObjects} objets</span>
@@ -4023,62 +4443,77 @@ const CHEMINS_CABLE_FALLBACK = [
               </div>
             </div>
             <div class="project-actions">
-              <button class="btn-load" onclick="projectUI.loadProject('${name.replace(/'/g, "\\'")}')">
-                📂 Charger
-              </button>
-              <button class="btn-export" onclick="projectUI.exportProject('${name.replace(/'/g, "\\'")}')">
-                📤 Export
-              </button>
-              <button class="btn-delete" onclick="projectUI.deleteProject('${name.replace(/'/g, "\\'")}')">
-                🗑️ Suppr
-              </button>
+              <div class="tooltip-btn btn-load" onclick="projectUI.loadProjectFromFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+                <span class="tooltip">Charger ce projet</span>
+                <span class="icon">📂</span>
+              </div>
+              <div class="tooltip-btn btn-save" onclick="projectUI.overwriteProjectInFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+                <span class="tooltip">Écraser avec l'état actuel</span>
+                <span class="icon">💾</span>
+              </div>
+              <div class="tooltip-btn btn-rename" onclick="projectUI.renameProjectInFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+                <span class="tooltip">Renommer ce projet</span>
+                <span class="icon">✏️</span>
+              </div>
+              <div class="tooltip-btn btn-export" onclick="projectUI.exportProjectFromFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+                <span class="tooltip">Exporter vers fichier</span>
+                <span class="icon">📤</span>
+              </div>
+              <div class="tooltip-btn btn-delete" onclick="projectUI.deleteProjectFromFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+                <span class="tooltip">Supprimer définitivement</span>
+                <span class="icon">🗑️</span>
+              </div>
             </div>
           </div>
         `;
       }).join('');
     }
 
+
     renderAutoSaveInfo() {
+      if (!this.autoSaveStatus || !this.autoSaveText || !this.autoSaveDetails) return;
+
       const autoSave = window.projectManager.loadAutoSave();
       const stats = window.projectManager.getStorageStats();
 
-      let autoSaveContent = '';
       if (autoSave) {
         const lastSave = new Date(autoSave.timestamp);
         const totalObjects = (autoSave.fourreaux?.length || 0) + (autoSave.cables?.length || 0);
+        const timeDiff = Date.now() - lastSave.getTime();
+        const minutesAgo = Math.floor(timeDiff / 60000);
 
-        autoSaveContent = `
-          <div class="auto-save-status">
-            <div class="auto-save-indicator"></div>
-            <span>Auto-sauvegarde active</span>
-          </div>
-          <div>Dernière sauvegarde: ${this.formatDate(lastSave)}</div>
-          <div>Objets: ${totalObjects} • Taille: ${this.formatBytes(JSON.stringify(autoSave).length)}</div>
-          <div style="margin-top: 8px;">
-            <button class="btn-secondary" onclick="projectUI.loadAutoSave()" style="font-size: 12px; padding: 4px 8px;">
-              🔄 Restaurer auto-save
-            </button>
-          </div>
+        // Statut principal
+        this.autoSaveText.textContent = `Auto-sauvegarde disponible`;
+        this.autoSaveStatus.querySelector('.icon').textContent = '💾';
+        this.autoSaveStatus.style.color = '#22c55e';
+
+        // Détails
+        this.autoSaveDetails.innerHTML = `
+          Dernière sauvegarde: ${minutesAgo < 1 ? 'à l\'instant' : `il y a ${minutesAgo}min`}<br>
+          Objets: ${totalObjects} • Taille: ${this.formatBytes(JSON.stringify(autoSave).length)}<br>
+          Projets: ${stats.projectCount} • Stockage: ${this.formatBytes(stats.totalSize)}
         `;
+
+        // Afficher le bouton restaurer
+        this.restoreAutoSave.style.display = 'block';
+
+        // Warning si trop ancien
+        if (timeDiff > 15 * 60 * 1000) {
+          this.autoSaveStatus.style.color = '#f59e0b';
+          this.autoSaveStatus.querySelector('.icon').textContent = '⚠️';
+        }
       } else {
-        autoSaveContent = `
-          <div class="auto-save-status">
-            <div class="auto-save-indicator inactive"></div>
-            <span>Aucune auto-sauvegarde</span>
-          </div>
-          <div>L'auto-sauvegarde se déclenche après 30 secondes d'activité</div>
+        this.autoSaveText.textContent = 'Aucune auto-sauvegarde';
+        this.autoSaveStatus.querySelector('.icon').textContent = '💾';
+        this.autoSaveStatus.style.color = '#94a3b8';
+
+        this.autoSaveDetails.innerHTML = `
+          Auto-sauvegarde toutes les 30 secondes<br>
+          Projets: ${stats.projectCount} • Stockage: ${this.formatBytes(stats.totalSize)}
         `;
+
+        this.restoreAutoSave.style.display = 'none';
       }
-
-      // Ajouter les stats globales
-      autoSaveContent += `
-        <div class="project-stats">
-          <span>📊 ${stats.projectCount} projets</span>
-          <span>💾 ${this.formatBytes(stats.totalSize)} utilisés</span>
-        </div>
-      `;
-
-      this.autoSaveInfo.innerHTML = autoSaveContent;
     }
 
     loadProject(projectName) {
@@ -4091,6 +4526,30 @@ const CHEMINS_CABLE_FALLBACK = [
 
     exportProject(projectName) {
       window.projectManager.exportProject(projectName);
+    }
+
+    overwriteProject(projectName) {
+      if (confirm(`Écraser le projet "${projectName}" avec l'état actuel ?\n\nLes données du projet seront remplacées.`)) {
+        if (window.projectManager.saveProject(projectName)) {
+          this.refreshUI();
+          showToast(`💾 Projet "${projectName}" écrasé avec succès`);
+        }
+      }
+    }
+
+    renameProject(oldName) {
+      this.openRenameModal(oldName);
+    }
+
+    executeRename(oldName, newName) {
+      if (newName === oldName) {
+        return; // Pas de changement
+      }
+
+      if (window.projectManager.renameProject(oldName, newName)) {
+        this.refreshUI();
+        showToast(`✏️ Projet renommé : "${oldName}" → "${newName}"`);
+      }
     }
 
     deleteProject(projectName) {
@@ -4134,6 +4593,345 @@ const CHEMINS_CABLE_FALLBACK = [
         hour: '2-digit',
         minute: '2-digit'
       });
+    }
+
+    // Nouvelles méthodes pour gérer les projets dans les dossiers
+    loadProjectFromFolder(projectName, folderName) {
+      const fullName = folderName ? `${folderName}/${projectName}` : projectName;
+      if (confirm(`Charger le projet "${fullName}" ?\n\nLe projet actuel sera remplacé.`)) {
+        const data = window.projectManager.getAllProjects();
+        let project;
+
+        if (folderName) {
+          project = data.folders[folderName]?.projects[projectName];
+        } else {
+          project = data.projects[projectName];
+        }
+
+        if (project && window.projectManager.restoreState(project)) {
+          this.closeModal();
+        }
+      }
+    }
+
+    overwriteProjectInFolder(projectName, folderName) {
+      const fullName = folderName ? `${folderName}/${projectName}` : projectName;
+      if (confirm(`Écraser le projet "${fullName}" avec l'état actuel ?\n\nLes données du projet seront remplacées.`)) {
+        if (window.projectManager.saveProject(projectName, folderName)) {
+          this.refreshUI();
+          showToast(`💾 Projet "${fullName}" écrasé avec succès`);
+        }
+      }
+    }
+
+    renameProjectInFolder(oldName, folderName) {
+      this.openRenameModal(oldName, folderName);
+    }
+
+    executeRenameInFolder(oldName, folderName, newName) {
+      if (newName === oldName) {
+        return;
+      }
+
+      // Vérifier si le nouveau nom existe déjà
+      const data = window.projectManager.getAllProjects();
+      let exists = false;
+
+      if (folderName) {
+        exists = data.folders[folderName]?.projects[newName];
+      } else {
+        exists = data.projects[newName];
+      }
+
+      if (exists) {
+        showToast(`⚠️ Un projet nommé "${newName}" existe déjà dans cet emplacement`);
+        return;
+      }
+
+      // Effectuer le renommage
+      try {
+        if (folderName) {
+          const folder = data.folders[folderName];
+          const projectData = { ...folder.projects[oldName] };
+          projectData.name = newName;
+          projectData.lastModified = new Date().toISOString();
+
+          folder.projects[newName] = projectData;
+          delete folder.projects[oldName];
+        } else {
+          const projectData = { ...data.projects[oldName] };
+          projectData.name = newName;
+          projectData.lastModified = new Date().toISOString();
+
+          data.projects[newName] = projectData;
+          delete data.projects[oldName];
+        }
+
+        localStorage.setItem(window.projectManager.storageKey, JSON.stringify(data));
+        this.refreshUI();
+        showToast(`✏️ Projet renommé : "${oldName}" → "${newName}"`);
+      } catch (error) {
+        console.error('Erreur renommage projet:', error);
+        showToast('Erreur lors du renommage');
+      }
+    }
+
+    exportProjectFromFolder(projectName, folderName) {
+      const data = window.projectManager.getAllProjects();
+      let project;
+
+      if (folderName) {
+        project = data.folders[folderName]?.projects[projectName];
+      } else {
+        project = data.projects[projectName];
+      }
+
+      if (!project) {
+        showToast('⚠️ Projet introuvable');
+        return;
+      }
+
+      const fullName = folderName ? `${folderName}_${projectName}` : projectName;
+      const filename = `${fullName.replace(/[^a-z0-9]/gi, '_')}.tontonkad`;
+
+      const blob = new Blob([JSON.stringify(project, null, 2)], {
+        type: 'application/json'
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast(`📤 Projet "${projectName}" exporté`);
+    }
+
+    deleteProjectFromFolder(projectName, folderName) {
+      const fullName = folderName ? `${folderName}/${projectName}` : projectName;
+      if (confirm(`Supprimer définitivement le projet "${fullName}" ?\n\nCette action est irréversible.`)) {
+        try {
+          const data = window.projectManager.getAllProjects();
+
+          if (folderName) {
+            if (data.folders[folderName]?.projects[projectName]) {
+              delete data.folders[folderName].projects[projectName];
+            }
+          } else {
+            if (data.projects[projectName]) {
+              delete data.projects[projectName];
+            }
+          }
+
+          localStorage.setItem(window.projectManager.storageKey, JSON.stringify(data));
+          this.refreshUI();
+          showToast(`🗑️ Projet "${fullName}" supprimé`);
+        } catch (error) {
+          console.error('Erreur suppression projet:', error);
+          showToast('Erreur lors de la suppression');
+        }
+      }
+    }
+
+    renameFolder(folderName) {
+      this.openRenameModal(folderName, null, true);
+    }
+
+    executeRenameFolder(oldName, newName) {
+      if (newName === oldName) {
+        return;
+      }
+
+      // Vérifier si le nouveau nom existe déjà
+      const data = window.projectManager.getAllProjects();
+      if (data.folders[newName]) {
+        showToast(`⚠️ Un dossier nommé "${newName}" existe déjà`);
+        return;
+      }
+
+      try {
+        // Copier le dossier avec le nouveau nom
+        const folderData = { ...data.folders[oldName] };
+        folderData.name = newName;
+        folderData.lastModified = new Date().toISOString();
+
+        data.folders[newName] = folderData;
+        delete data.folders[oldName];
+
+        localStorage.setItem(window.projectManager.storageKey, JSON.stringify(data));
+        this.refreshUI();
+        showToast(`✏️ Dossier renommé : "${oldName}" → "${newName}"`);
+      } catch (error) {
+        console.error('Erreur renommage dossier:', error);
+        showToast('Erreur lors du renommage du dossier');
+      }
+    }
+
+    deleteFolder(folderName) {
+      if (window.projectManager.deleteFolder(folderName)) {
+        this.refreshUI();
+      }
+    }
+
+    // ===== LOGIQUE DRAG & DROP =====
+
+    handleDragStart(event) {
+      const projectItem = event.target.closest('.project-item');
+      const projectName = projectItem.dataset.projectName;
+      const currentFolder = projectItem.dataset.currentFolder;
+
+      // Stocker les données du projet en cours de drag
+      event.dataTransfer.setData('text/plain', JSON.stringify({
+        projectName: projectName,
+        currentFolder: currentFolder
+      }));
+
+      // Ajouter une classe visuelle au projet en cours de drag
+      projectItem.classList.add('dragging');
+
+      // Marquer toutes les zones de drop comme visibles
+      document.querySelectorAll('.drop-zone').forEach(zone => {
+        zone.classList.add('drop-available');
+      });
+
+      event.dataTransfer.effectAllowed = 'move';
+    }
+
+    handleDragEnd(event) {
+      const projectItem = event.target.closest('.project-item');
+      projectItem.classList.remove('dragging');
+
+      // Nettoyer toutes les classes visuelles
+      document.querySelectorAll('.drop-zone').forEach(zone => {
+        zone.classList.remove('drop-available', 'drop-hover');
+      });
+    }
+
+    handleDragOver(event) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    }
+
+    handleDragEnter(event) {
+      event.preventDefault();
+      const dropZone = event.currentTarget;
+      dropZone.classList.add('drop-hover');
+    }
+
+    handleDragLeave(event) {
+      const dropZone = event.currentTarget;
+      // Vérifier si on quitte vraiment la zone (pas un enfant)
+      if (!dropZone.contains(event.relatedTarget)) {
+        dropZone.classList.remove('drop-hover');
+      }
+    }
+
+    handleDrop(event) {
+      event.preventDefault();
+
+      const dropZone = event.currentTarget;
+      const targetFolder = dropZone.dataset.folderName;
+
+      // Récupérer les données du projet
+      let dragData;
+      try {
+        dragData = JSON.parse(event.dataTransfer.getData('text/plain'));
+      } catch (error) {
+        console.error('Erreur lecture données drag:', error);
+        return;
+      }
+
+      const { projectName, currentFolder } = dragData;
+
+      // Vérifier si le projet change vraiment de dossier
+      if (currentFolder === targetFolder) {
+        showToast('📁 Le projet est déjà dans ce dossier');
+        return;
+      }
+
+      // Déplacer le projet
+      this.moveProject(projectName, currentFolder, targetFolder);
+
+      // Nettoyer les classes visuelles
+      dropZone.classList.remove('drop-hover');
+    }
+
+    moveProject(projectName, sourceFolder, targetFolder) {
+      try {
+        const data = window.projectManager.getAllProjects();
+
+        // Récupérer le projet source
+        let project;
+        if (sourceFolder) {
+          project = data.folders[sourceFolder]?.projects[projectName];
+          if (!project) {
+            showToast('⚠️ Projet source introuvable');
+            return;
+          }
+        } else {
+          project = data.projects[projectName];
+          if (!project) {
+            showToast('⚠️ Projet source introuvable');
+            return;
+          }
+        }
+
+        // Vérifier si le projet existe déjà dans la destination
+        let existsInTarget = false;
+        if (targetFolder) {
+          existsInTarget = data.folders[targetFolder]?.projects[projectName];
+        } else {
+          existsInTarget = data.projects[projectName];
+        }
+
+        if (existsInTarget) {
+          showToast(`⚠️ Un projet nommé "${projectName}" existe déjà dans la destination`);
+          return;
+        }
+
+        // Mettre à jour les métadonnées du projet
+        const updatedProject = {
+          ...project,
+          folder: targetFolder || null,
+          lastModified: new Date().toISOString()
+        };
+
+        // Ajouter à la destination
+        if (targetFolder) {
+          if (!data.folders[targetFolder]) {
+            showToast(`⚠️ Dossier de destination "${targetFolder}" introuvable`);
+            return;
+          }
+          data.folders[targetFolder].projects[projectName] = updatedProject;
+        } else {
+          data.projects[projectName] = updatedProject;
+        }
+
+        // Supprimer de la source
+        if (sourceFolder) {
+          delete data.folders[sourceFolder].projects[projectName];
+        } else {
+          delete data.projects[projectName];
+        }
+
+        // Sauvegarder
+        localStorage.setItem(window.projectManager.storageKey, JSON.stringify(data));
+
+        // Rafraîchir l'interface
+        this.refreshUI();
+
+        // Message de succès
+        const sourceName = sourceFolder || 'Racine';
+        const targetName = targetFolder || 'Racine';
+        showToast(`📁 Projet "${projectName}" déplacé : ${sourceName} → ${targetName}`);
+
+      } catch (error) {
+        console.error('Erreur déplacement projet:', error);
+        showToast('Erreur lors du déplacement du projet');
+      }
     }
 
     formatBytes(bytes) {

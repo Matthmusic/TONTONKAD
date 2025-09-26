@@ -52,8 +52,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Ne pas mettre en cache script.js en développement
-  if (event.request.url.includes('script.js') || event.request.url.includes('localhost') || event.request.url.includes('127.0.0.1')) {
+  // En développement (servi depuis localhost), toujours aller chercher sur le réseau pour éviter les problèmes de cache.
+  if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') {
     event.respondWith(fetch(event.request));
     return;
   }

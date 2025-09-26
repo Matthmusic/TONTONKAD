@@ -111,7 +111,11 @@
           <div id="paneFOURREAU">
             <div class="row">
               <label for="fourreauSelect">Type de Fourreau</label>
-              <select id="fourreauSelect"></select>
+              <div class="searchable-select-container">
+                <input type="text" id="fourreauSearch" class="searchable-input" placeholder="Taper pour rechercher un fourreau..." autocomplete="off">
+                <div id="fourreauSelect" class="searchable-list">
+                </div>
+              </div>
             </div>
             <div class="small">
               Le Fourreau est un <b>anneau</b> :
@@ -122,7 +126,11 @@
           <div id="paneCABLE" class="hidden">
             <div class="row">
               <label for="cableSelect">Type de Câble</label>
-              <select id="cableSelect"></select>
+              <div class="searchable-select-container">
+                <input type="text" id="cableSearch" class="searchable-input" placeholder="Taper pour rechercher un câble..." autocomplete="off">
+                <div id="cableSelect" class="searchable-list">
+                </div>
+              </div>
             </div>
             <div class="small">
               Un Câble est <b>plein</b>, contrôle Ø si dans un Fourreau.
@@ -457,96 +465,109 @@
 
   <!-- Popup d'édition -->
   <div id="editPopup" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="editPopupTitle" aria-modal="true">
-    <div class="edit-popup-content">
-      <h3 id="editPopupTitle">Éditer l'objet</h3>
-      <div class="edit-field">
-        <label for="editLabel">Libellé/Commentaire :</label>
-        <input type="text" id="editLabel" placeholder="Entrez un libellé..." aria-describedby="editLabelHelp">
-        <small id="editLabelHelp" class="sr-only">Ajoutez un libellé descriptif pour cet objet</small>
-      </div>
-      <div class="edit-field">
-        <label for="editColor">Couleur personnalisée :</label>
-        <div class="color-controls">
-          <input type="color" id="editColor" aria-describedby="editColorHelp">
-          <div class="color-dropdown">
-            <button id="autocadColorBtn" type="button" class="autocad-color-btn" aria-label="Choisir une couleur AutoCAD">
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="2" y="2" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
-                <rect x="6" y="6" width="3" height="3" fill="#ff0000"/>
-                <rect x="10.5" y="6" width="3" height="3" fill="#00ff00"/>
-                <rect x="15" y="6" width="3" height="3" fill="#0000ff"/>
-                <rect x="6" y="10.5" width="3" height="3" fill="#ffff00"/>
-                <rect x="10.5" y="10.5" width="3" height="3" fill="#ff00ff"/>
-                <rect x="15" y="10.5" width="3" height="3" fill="#00ffff"/>
-                <rect x="6" y="15" width="3" height="3" fill="#ffffff" stroke="#666"/>
-                <rect x="10.5" y="15" width="3" height="3" fill="#808080"/>
-                <rect x="15" y="15" width="3" height="3" fill="#000000"/>
-              </svg>
-              Couleurs AutoCAD
-            </button>
-            <div id="colorDropdown" class="color-dropdown-content">
-              <div id="colorGrid" class="color-grid">
-                <!-- Grille générée dynamiquement -->
+    <div class="edit-popup-overlay" aria-hidden="true">
+      <div class="edit-popup-content">
+        <h3 id="editPopupTitle">Éditer l'objet</h3>
+        <div class="edit-field">
+          <label for="editLabel">Libellé/Commentaire :</label>
+          <input type="text" id="editLabel" placeholder="Entrez un libellé..." aria-describedby="editLabelHelp">
+          <small id="editLabelHelp" class="sr-only">Ajoutez un libellé descriptif pour cet objet</small>
+        </div>
+        <div class="edit-field">
+          <label for="editColor">Couleur personnalisée :</label>
+          <div class="color-controls">
+            <input type="color" id="editColor" aria-describedby="editColorHelp">
+            <div class="color-dropdown">
+              <button id="autocadColorBtn" type="button" class="autocad-color-btn" aria-label="Choisir une couleur AutoCAD">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="2" y="2" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+                  <rect x="6" y="6" width="3" height="3" fill="#ff0000"/>
+                  <rect x="10.5" y="6" width="3" height="3" fill="#00ff00"/>
+                  <rect x="15" y="6" width="3" height="3" fill="#0000ff"/>
+                  <rect x="6" y="10.5" width="3" height="3" fill="#ffff00"/>
+                  <rect x="10.5" y="10.5" width="3" height="3" fill="#ff00ff"/>
+                  <rect x="15" y="10.5" width="3" height="3" fill="#00ffff"/>
+                  <rect x="6" y="15" width="3" height="3" fill="#ffffff" stroke="#666"/>
+                  <rect x="10.5" y="15" width="3" height="3" fill="#808080"/>
+                  <rect x="15" y="15" width="3" height="3" fill="#000000"/>
+                </svg>
+                Couleurs AutoCAD
+              </button>
+              <div id="colorDropdown" class="color-dropdown-content">
+                <div id="colorGrid" class="color-grid">
+                  <!-- Grille générée dynamiquement -->
+                </div>
               </div>
             </div>
+            <button id="resetColor" type="button" aria-label="Rétablir la couleur par défaut">Couleur par défaut</button>
           </div>
-          <button id="resetColor" type="button" aria-label="Rétablir la couleur par défaut">Couleur par défaut</button>
+          <small id="editColorHelp" class="sr-only">Choisissez une couleur personnalisée avec la pipette ou la palette AutoCAD</small>
         </div>
-        <small id="editColorHelp" class="sr-only">Choisissez une couleur personnalisée avec la pipette ou la palette AutoCAD</small>
-      </div>
-      <div id="cablePhaseSection" class="edit-field" style="display: none;">
-        <label>Conducteur unifilaire :</label>
-        <div class="phase-checkboxes">
-          <div class="checkbox-row">
-            <input type="radio" id="phase-none" name="cablePhase" data-phase="none" checked>
-            <label for="phase-none">
-              <span class="phase-color" style="background-color: #666666;"></span>
-              Aucun (couleur par défaut)
-            </label>
-          </div>
-          <div class="checkbox-row">
-            <input type="radio" id="phase-ph1" name="cablePhase" data-phase="ph1">
-            <label for="phase-ph1">
-              <span class="phase-color" style="background-color: #8B4513;"></span>
-              L1 (Marron)
-            </label>
-          </div>
-          <div class="checkbox-row">
-            <input type="radio" id="phase-ph2" name="cablePhase" data-phase="ph2">
-            <label for="phase-ph2">
-              <span class="phase-color" style="background-color: #808080;"></span>
-              L2 (Gris)
-            </label>
-          </div>
-          <div class="checkbox-row">
-            <input type="radio" id="phase-ph3" name="cablePhase" data-phase="ph3">
-            <label for="phase-ph3">
-              <span class="phase-color" style="background-color: #000000;"></span>
-              L3 (Noir)
-            </label>
-          </div>
-          <div class="checkbox-row">
-            <input type="radio" id="phase-n" name="cablePhase" data-phase="n">
-            <label for="phase-n">
-              <span class="phase-color" style="background-color: #0000FF;"></span>
-              N (Bleu)
-            </label>
-          </div>
-          <div class="checkbox-row">
-            <input type="radio" id="phase-pe" name="cablePhase" data-phase="pe">
-            <label for="phase-pe">
-              <span class="phase-color" style="background-color: #00FF00;"></span>
-              PE (Vert fluo)
-            </label>
+        <div id="cablePhaseSection" class="edit-field" style="display: none;">
+          <label>Conducteur unifilaire :</label>
+          <div class="phase-checkboxes">
+            <div class="checkbox-row">
+              <input type="radio" id="phase-none" name="cablePhase" data-phase="none" checked>
+              <label for="phase-none">
+                <span class="phase-color" style="background-color: #666666;"></span>
+                Aucun (couleur par défaut)
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <input type="radio" id="phase-ph1" name="cablePhase" data-phase="ph1">
+              <label for="phase-ph1">
+                <span class="phase-color" style="background-color: #8B4513;"></span>
+                L1 (Marron)
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <input type="radio" id="phase-ph2" name="cablePhase" data-phase="ph2">
+              <label for="phase-ph2">
+                <span class="phase-color" style="background-color: #808080;"></span>
+                L2 (Gris)
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <input type="radio" id="phase-ph3" name="cablePhase" data-phase="ph3">
+              <label for="phase-ph3">
+                <span class="phase-color" style="background-color: #000000;"></span>
+                L3 (Noir)
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <input type="radio" id="phase-n" name="cablePhase" data-phase="n">
+              <label for="phase-n">
+                <span class="phase-color" style="background-color: #0000FF;"></span>
+                N (Bleu)
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <input type="radio" id="phase-pe" name="cablePhase" data-phase="pe">
+              <label for="phase-pe">
+                <span class="phase-color" style="background-color: #00FF00;"></span>
+                PE (Vert fluo)
+              </label>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="edit-buttons">
-        <button id="saveEdit" type="button" aria-label="Sauvegarder les modifications">Sauvegarder</button>
-        <button id="cancelEdit" type="button" aria-label="Annuler les modifications">Annuler</button>
+        <!-- Section pour le remplissage rapide des fourreaux -->
+        <div id="fourreauFillSection" class="edit-field" style="display: none;">
+          <label>Remplissage rapide du fourreau</label>
+          <div class="fill-controls">
+              <select id="fillCableSelect" aria-label="Sélectionner le type de câble unipolaire"></select>
+              <div class="fill-buttons">
+                  <button id="fillTetra" type="button">Tétrapolaire (L1,L2,L3,N,PE)</button>
+                  <button id="fillTri" type="button">Triphasé (L1,L2,L3,N)</button>
+              </div>
+          </div>
+          <small>Attention : ceci remplacera les câbles existants dans le fourreau.</small>
+        </div>
+        <div class="edit-buttons">
+          <button id="saveEdit" type="button" aria-label="Sauvegarder les modifications">Sauvegarder</button>
+          <button id="cancelEdit" type="button" aria-label="Annuler les modifications">Annuler</button>
+        </div>
       </div>
     </div>
-    <div class="edit-popup-overlay" aria-hidden="true"></div>
   </div>
 
   <!-- Popup de proposition de redimensionnement -->
@@ -561,69 +582,96 @@
         <button id="cancelResize" type="button">Annuler</button>
       </div>
     </div>
-    <div class="edit-popup-overlay" aria-hidden="true"></div>
   </div>
 
   <!-- Popup de gestion des projets -->
   <div id="projectModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="projectModalTitle" aria-modal="true">
-    <div class="edit-popup-content project-modal-content">
-      <h3 id="projectModalTitle">🗂️ Gestion des Projets</h3>
+    <div class="edit-popup-overlay" aria-hidden="true">
+      <div class="edit-popup-content project-modal-content">
+      <!-- Header -->
+      <div class="modal-header">
+        <h3 id="projectModalTitle">🗂️ Gestion des Projets</h3>
+      </div>
 
-      <!-- Section Nouveau Projet -->
-      <div class="project-section">
-        <h4>💾 Sauvegarder le projet actuel</h4>
+      <!-- Section Projets unifiée -->
+      <div class="projects-section">
+
+        <!-- Sauvegarde projet actuel -->
+        <div class="project-save">
+          <h4>💾 Sauvegarder le projet actuel</h4>
+          <div class="project-field">
+            <select id="projectFolder" class="project-folder-select">
+              <option value="">🏠 Racine (sans dossier)</option>
+            </select>
+            <input type="text" id="newProjectName" placeholder="Nom du projet..." maxlength="50" list="existingProjects">
+            <datalist id="existingProjects"></datalist>
+            <button id="saveNewProject" type="button" class="btn-primary">Sauvegarder</button>
+          </div>
+        </div>
+
+        <!-- Projets sauvegardés -->
+        <div class="projects-list-section">
+          <div class="projects-header">
+            <h4>📂 Projets sauvegardés</h4>
+            <button id="toggleFolderCreation" type="button" class="btn-secondary btn-compact">+ Créer un dossier</button>
+          </div>
+          <div id="folderCreationField" class="folder-field" style="display: none;">
+            <input type="text" id="newFolderName" placeholder="Nom du dossier (ex: Port de Cannes)..." maxlength="50">
+            <button id="createNewFolder" type="button" class="btn-primary">Créer</button>
+            <button id="cancelFolderCreation" type="button" class="btn-cancel">Annuler</button>
+          </div>
+          <div id="projectsList" class="projects-list">
+            <!-- Sera rempli dynamiquement -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Section auto-save -->
+      <div class="auto-save-section" id="autoSaveSection">
+        <div class="auto-save-info">
+          <div class="auto-save-status" id="autoSaveStatus">
+            <span class="icon">💾</span>
+            <span class="text" id="autoSaveText">Aucune auto-sauvegarde</span>
+          </div>
+          <button id="restoreAutoSave" type="button" class="btn-secondary btn-compact" style="display: none;">Restaurer</button>
+        </div>
+        <div class="auto-save-details" id="autoSaveDetails"></div>
+      </div>
+
+      <!-- Éléments cachés pour fonctionnalité existante -->
+      <button id="exportCurrentProject" type="button" style="display: none;">Export actuel</button>
+      <button id="importProject" type="button" style="display: none;">Import</button>
+      <input type="file" id="importProjectFile" accept=".tontonkad,.json" style="display: none;">
+
+      </div> <!-- Fin de project-modal-content -->
+    </div> <!-- Fin de edit-popup-overlay -->
+  </div>
+
+  <!-- Popup de renommage -->
+  <div id="renameModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="renameModalTitle" aria-modal="true">
+    <div class="edit-popup-overlay" aria-hidden="true">
+      <div class="edit-popup-content rename-modal-content">
+      <div class="modal-header">
+        <h3 id="renameModalTitle">✏️ Renommer le projet</h3>
+      </div>
+
+      <div class="rename-form">
+        <div class="rename-info">
+          <span class="current-name-label">Nom actuel :</span>
+          <span id="currentProjectName" class="current-name">Mon Projet</span>
+        </div>
+
         <div class="project-field">
-          <input type="text" id="newProjectName" placeholder="Nom du projet..." maxlength="50">
-          <button id="saveNewProject" type="button" class="btn-primary">Sauvegarder</button>
+          <label for="newProjectNameInput">Nouveau nom :</label>
+          <input type="text" id="newProjectNameInput" placeholder="Entrez le nouveau nom..." maxlength="50">
         </div>
-      </div>
 
-      <!-- Section Projets Existants -->
-      <div class="project-section">
-        <h4>📂 Projets sauvegardés</h4>
-        <div id="projectsList" class="projects-list">
-          <!-- Sera rempli dynamiquement -->
+        <div class="rename-actions">
+          <button id="confirmRename" type="button" class="btn-primary">✓ Confirmer</button>
+          <button id="cancelRename" type="button" class="btn-cancel">✕ Annuler</button>
         </div>
-      </div>
-
-      <!-- Section Import/Export -->
-      <div class="project-section">
-        <h4>📤 Import / Export</h4>
-        <div class="import-export-controls">
-          <button id="exportCurrentProject" type="button" class="btn-secondary">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" fill="none"/>
-              <polyline points="7,10 12,15 17,10" stroke="currentColor" stroke-width="2" fill="none"/>
-              <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
-            </svg>
-            Exporter projet actuel
-          </button>
-          <input type="file" id="importProjectFile" accept=".tontonkad,.json" style="display: none;">
-          <button id="importProject" type="button" class="btn-secondary">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" fill="none"/>
-              <polyline points="17,8 12,3 7,8" stroke="currentColor" stroke-width="2" fill="none"/>
-              <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2"/>
-            </svg>
-            Importer projet
-          </button>
-        </div>
-      </div>
-
-      <!-- Section Auto-save -->
-      <div class="project-section">
-        <h4>🔄 Auto-sauvegarde</h4>
-        <div id="autoSaveInfo" class="auto-save-info">
-          <!-- Sera rempli dynamiquement -->
-        </div>
-      </div>
-
-      <!-- Boutons de fermeture -->
-      <div class="edit-buttons">
-        <button id="closeProjectModal" type="button" aria-label="Fermer">Fermer</button>
-      </div>
-    </div>
-    <div class="edit-popup-overlay" aria-hidden="true"></div>
+      </div> <!-- Fin de rename-modal-content -->
+    </div> <!-- Fin de edit-popup-overlay -->
   </div>
 
 </body></html>

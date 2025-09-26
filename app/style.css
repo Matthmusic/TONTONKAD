@@ -1,5 +1,30 @@
 :root {
     --mm-to-px: .5;
+
+    /* ============================ */
+    /* === HIERARCHIE Z-INDEX === */
+    /* ============================ */
+    /* Basé sur CLAUDE.md */
+
+    /* 1-9 : Éléments de base et surélevés */
+    --z-base: 1;
+    --z-raised: 2;
+    --z-dimension-lines: 5;
+    --z-panel-handle: 10;
+    --z-panel-fade: 10;
+    --z-reduce-button: 10;
+
+    /* 100-999 : Overlays et notifications */
+    --z-dropdown-container-open: 900;
+    --z-toast: 950;
+
+    /* 1000-1999 : Dropdowns et tooltips */
+    --z-dropdown-list: 1000;
+    --z-tooltip: 1100;
+
+    /* 2000+ : Modales */
+    --z-modal-overlay: 2000;
+    --z-modal-content: 2001;
 }
 
 /* ===== DIMENSION LINES STYLES ===== */
@@ -19,7 +44,7 @@
     align-items: center;
     justify-content: center;
     pointer-events: none;
-    z-index: 5;
+    z-index: var(--z-dimension-lines);
 }
 
 .dimension-line .dimension-text {
@@ -47,12 +72,12 @@
     background: #333;
 }
 
-.dimension-line.horizontal::before { 
-    left: 0; 
+.dimension-line.horizontal::before {
+    left: 0;
 }
 
-.dimension-line.horizontal::after { 
-    right: 0; 
+.dimension-line.horizontal::after {
+    right: 0;
 }
 
 /* Ligne de cote verticale (hauteur) */
@@ -74,12 +99,12 @@
     background: #333;
 }
 
-.dimension-line.vertical::before { 
-    top: 0; 
+.dimension-line.vertical::before {
+    top: 0;
 }
 
-.dimension-line.vertical::after { 
-    bottom: 0; 
+.dimension-line.vertical::after {
+    bottom: 0;
 }
 
 .dimension-line.vertical .dimension-text {
@@ -188,11 +213,11 @@ button:disabled:hover {
     .input-lock-group {
         gap: 0.5rem;
     }
-    
+
     .lock-text {
         display: none;
     }
-    
+
     .lock-icon {
         font-size: 1rem;
     }
@@ -270,9 +295,9 @@ button:disabled:hover {
     animation: blinkOpacitySmooth linear 1s infinite alternate;
 }
 
-@keyframes blinkOpacitySmooth {   
-    0% { opacity: 1; } 
-    100% { opacity: 0.3; }  
+@keyframes blinkOpacitySmooth {
+    0% { opacity: 1; }
+    100% { opacity: 0.3; }
 }
 
 /* Le bouton clignote automatiquement quand il est visible (pas caché) */
@@ -354,7 +379,7 @@ html, body {
 }
 
 .panel {
-    width: var(--panel-width, 40%);
+    width: var(--panel-width, 30%);
     min-width: 320px;
     max-width: 50%;
     background: rgba(15, 23, 42, 0.95);
@@ -387,8 +412,8 @@ html, body {
     pointer-events: none; /* Permet de cliquer à travers le dégradé */
     direction: ltr; /* Assure que le dégradé s'applique correctement malgré le rtl */
     transition: opacity 0.3s ease;
-    opacity: 1;
-    z-index: 10;
+    opacity: 1; /* Maintenu pour la transition */
+    z-index: var(--z-panel-fade);
     margin-top: -80px; /* Compense sa propre hauteur */
 }
 
@@ -591,6 +616,293 @@ select option {
     color: #e8edf2;
 }
 
+/* Style de la barre de défilement pour les listes déroulantes */
+#fourreauSelect, #cableSelect {
+    /* Style de base pour Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #475569 #121821;
+}
+
+/* Style de la barre de défilement pour Webkit (Chrome, Safari) - Select */
+#fourreauSelect::-webkit-scrollbar,
+#cableSelect::-webkit-scrollbar {
+    width: 14px;
+}
+
+#fourreauSelect::-webkit-scrollbar-track,
+#cableSelect::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#fourreauSelect::-webkit-scrollbar-thumb,
+#cableSelect::-webkit-scrollbar-thumb {
+    background-color: #475569;
+    border-radius: 10px;
+    border: 4px solid #121821; /* Crée un effet de "padding" */
+}
+
+#fourreauSelect::-webkit-scrollbar-thumb:hover,
+#cableSelect::-webkit-scrollbar-thumb:hover {
+    background-color: #60a5fa;
+}
+
+/* Styles pour les composants de recherche personnalisés */
+.search-select-container {
+    position: relative;
+    flex: 1;
+    /* z-index est géré dynamiquement par la classe .dropdown-open */
+}
+
+.search-select-input {
+    width: 100%;
+    background-color: #0f1621;
+    border: 1px solid #233144;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #e8edf2;
+    transition: border-color .2s;
+    box-sizing: border-box;
+}
+
+.search-select-input:hover {
+    border-color: #475569;
+}
+
+.search-select-input:focus {
+    outline: 2px solid #60a5fa;
+    outline-offset: 1px;
+    border-color: #60a5fa;
+}
+
+/* Style pour le système de liste avec recherche clavier */
+.searchable-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.searchable-input {
+    width: 100%;
+    box-sizing: border-box;
+    background-color: #0f1621;
+    border: 1px solid #233144;
+    border-radius: 8px;
+    color: #e8edf2;
+    padding: 10px 36px 10px 12px;
+    font-size: 14px;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239fb0c3' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 8px center;
+    background-repeat: no-repeat;
+    background-size: 16px 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.searchable-input:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.searchable-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #0f1621;
+    border: 1px solid #233144;
+    border-radius: 8px;
+    color: #e8edf2;
+    font-size: 14px;
+    max-height: 400px;
+    overflow-y: auto;
+    display: none; /* Masqué par défaut */
+    opacity: 0;
+    visibility: hidden;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    z-index: var(--z-dropdown-list);
+    margin-top: 4px;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+    /* Style de base pour Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #475569 #0f1621;
+}
+
+.searchable-list.show {
+    display: block !important;
+    opacity: 1;
+    visibility: visible;
+}
+
+.searchable-list:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-color: #60a5fa;
+}
+
+.searchable-group {
+    border-bottom: 1px solid #1e293b;
+}
+
+.searchable-group:last-child {
+    border-bottom: none;
+}
+
+.searchable-group-label {
+    background: #1e293b;
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #334155;
+}
+
+.searchable-option {
+    background: #0f1621;
+    color: #e8edf2;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    border-bottom: 1px solid #1e293b;
+}
+
+.searchable-option:last-child {
+    border-bottom: none;
+}
+
+.searchable-option:hover {
+    background: #1e293b;
+    color: #60a5fa;
+}
+
+.searchable-option.selected {
+    background: #3b82f6;
+    color: white;
+}
+
+/* Style de la barre de défilement pour Webkit */
+.searchable-list::-webkit-scrollbar {
+    width: 14px;
+}
+
+.searchable-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.searchable-list::-webkit-scrollbar-thumb {
+    background-color: #475569;
+    border-radius: 10px;
+    border: 4px solid #121821;
+}
+
+.searchable-list::-webkit-scrollbar-thumb:hover {
+    background-color: #60a5fa;
+}
+
+.search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #0f1621;
+    border: 1px solid #334155;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    max-height: 400px;
+    overflow-y: auto; /* Maintenu pour la fonctionnalité */
+    z-index: var(--z-dropdown-list);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    /* Style de base pour Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #475569 #121821;
+}
+
+/* Style de la barre de défilement pour Webkit (Chrome, Safari) - Search Dropdown */
+.search-dropdown::-webkit-scrollbar {
+    width: 14px;
+}
+
+.search-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.search-dropdown::-webkit-scrollbar-thumb {
+    background-color: #475569;
+    border-radius: 10px;
+    border: 4px solid #121821;
+}
+
+.search-dropdown::-webkit-scrollbar-thumb:hover {
+    background-color: #60a5fa;
+}
+
+.search-dropdown-group {
+    border-bottom: 1px solid #1e293b;
+}
+
+.search-dropdown-group:last-child {
+    border-bottom: none;
+}
+
+.search-dropdown-group-label {
+    padding: 8px 12px;
+    background: #1e293b;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #334155;
+}
+
+.search-dropdown-option {
+    padding: 10px 12px;
+    cursor: pointer;
+    color: #e8edf2;
+    transition: background-color 0.15s ease;
+    border-bottom: 1px solid #1e293b;
+}
+
+.search-dropdown-option:last-child {
+    border-bottom: none;
+}
+
+.search-dropdown-option:hover {
+    background: #1e293b;
+    color: #60a5fa;
+}
+
+.search-dropdown-option.selected {
+    background: #3b82f6;
+    color: white;
+}
+
+.search-dropdown-option.highlighted {
+    background: #374151;
+}
+
+.search-no-results {
+    padding: 16px 12px;
+    text-align: center;
+    color: #64748b;
+    font-style: italic;
+}
+
+/* Règle cruciale pour que le conteneur du dropdown passe au-dessus des autres cartes */
+.searchable-select-container.dropdown-open,
+.search-select-container:has(.searchable-list.show) {
+    z-index: var(--z-dropdown-container-open); /* 900 */
+}
+
+/* Élever la carte parente lorsque le dropdown est ouvert pour qu'elle passe au-dessus des autres cartes */
+.card:has(.searchable-select-container.dropdown-open),
+.card:has(.searchable-list.show) {
+    z-index: var(--z-dropdown-container-open); /* 900 */
+}
+
+
 .btn {
     width: 100%;
     background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
@@ -625,6 +937,8 @@ select option {
     padding: 16px;
     backdrop-filter: blur(8px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: var(--z-base);
 }
 
 .tabs {
@@ -709,6 +1023,7 @@ select option {
     transition: opacity .2s ease;
     pointer-events: none;
 }
+/* Le z-index du toast sera défini dynamiquement par JS pour une meilleure gestion */
 
 .toast.show {
     opacity: 1;
@@ -721,6 +1036,11 @@ select option {
 .small {
     font-size: 12px;
     color: #9fb0c3;
+}
+
+/* Espacement entre .row et .small */
+.row + .small {
+    margin-top: 8px;
 }
 
 .pill {
@@ -759,8 +1079,8 @@ select option {
     cursor: col-resize;
     background: transparent;
     border-radius: 0 6px 6px 0;
-    transition: background-color 0.2s ease;
-    z-index: 10;
+    transition: background-color 0.2s ease; /* Maintenu pour l'effet visuel */
+    z-index: var(--z-panel-handle);
 }
 
 .panel-resize-handle:hover {
@@ -784,9 +1104,6 @@ select option {
     background: #60a5fa;
 }
 
-.panel {
-    position: relative;
-}
 
 .btn-active {
     outline: 2px solid #60a5fa;
@@ -796,7 +1113,9 @@ select option {
 .listwrap {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 10px; /* Maintenu pour la mise en page */
+    position: relative; /* Maintenu pour le contexte d'empilement */
+    z-index: var(--z-base);
 }
 
 .search {
@@ -808,6 +1127,7 @@ select option {
     color: #e8edf2;
     font-size: 14px;
     box-sizing: border-box;
+    margin-bottom: 12px;
 }
 
 .list {
@@ -870,13 +1190,18 @@ select option {
 }
 
 .brand .logo {
-    height: 100px;
+    height: 80px;
     width: auto;
     display: inline-block;
 }
 
 .panel h1 {
     margin: 0;
+}
+
+.brand h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
 }
 
 .panel-controls {
@@ -965,20 +1290,20 @@ select option {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 2000;
+    width: 100%; /* Maintenu pour couvrir l'écran */
+    height: 100%; /* Maintenu pour couvrir l'écran */
 }
 
 .edit-popup-overlay {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100%; /* Maintenu pour couvrir l'écran */
+    height: 100%; /* Maintenu pour couvrir l'écran */
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(3px);
-    z-index: 2001;
+    z-index: var(--z-modal-overlay);
+    display: none;
 }
 
 .edit-popup-content {
@@ -993,8 +1318,7 @@ select option {
     min-width: 300px;
     max-width: 500px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-    z-index: 2002;
-    filter: none !important;
+    z-index: var(--z-modal-content);
     white-space: normal;
     line-height: 1.5;
 }
@@ -1098,6 +1422,28 @@ select option {
     background: #374151;
 }
 
+/* Styles pour le remplissage rapide */
+.fill-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.fill-controls select {
+    width: 100%;
+}
+
+.fill-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.fill-buttons button {
+    flex: 1;
+    background: #4b5563;
+}
+
 /* Styles pour les conducteurs unifilaires */
 .phase-checkboxes {
     display: flex;
@@ -1138,13 +1484,13 @@ select option {
 
 /* Animation arc-en-ciel pour le bouton PWA */
 @keyframes rainbow {
-    0% { 
+    0% {
         background-position: 0% 50%;
     }
-    50% { 
+    50% {
         background-position: 100% 50%;
     }
-    100% { 
+    100% {
         background-position: 0% 50%;
     }
 }
@@ -1217,8 +1563,8 @@ select option {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    bottom: -45px;
-    z-index: 10;
+    bottom: -45px; /* Maintenu pour la position */
+    z-index: var(--z-reduce-button);
 }
 
 /* Ajuster canvas-wrap pour faire de la place au bouton */
@@ -1320,8 +1666,8 @@ select option {
     display: none;
     position: absolute;
     top: 100%;
-    left: 0;
-    z-index: 1000;
+    left: 0; /* Maintenu pour la position */
+    z-index: var(--z-dropdown-list);
     background: white;
     border: 1px solid #cbd5e1;
     border-radius: 8px;
@@ -1368,7 +1714,7 @@ select option {
     transform: scale(1.15);
     border-color: #1e293b;
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    z-index: 10;
+    z-index: var(--z-raised);
 }
 
 .color-swatch:active {
@@ -1408,34 +1754,299 @@ select option {
 
 /* ===== STYLES MODAL DE PROJETS ===== */
 .project-modal-content {
-    width: 90%;
-    max-width: 600px;
-    max-height: 80vh;
+    width: 60vw;
+    height: 85vh;
+    max-width: none;
+    max-height: none;
     overflow-y: auto;
+    overflow-x: visible;
+    /* Style de base pour Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #475569 #121821;
 }
 
-.project-section {
-    margin-bottom: 24px;
-    padding-bottom: 16px;
+/* Style de la barre de défilement pour Webkit (Chrome, Safari) - Modal */
+.project-modal-content::-webkit-scrollbar {
+    width: 14px;
+}
+.project-modal-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.project-modal-content::-webkit-scrollbar-thumb {
+    background-color: #475569;
+    border-radius: 10px;
+    border: 4px solid #121821; /* Crée un effet de "padding" */
+}
+.project-modal-content::-webkit-scrollbar-thumb:hover {
+    background-color: #60a5fa;
+}
+
+/* ===== HEADER MODAL ===== */
+.modal-header {
+    margin-bottom: 18px;
+    padding-bottom: 12px;
     border-bottom: 1px solid #334155;
 }
 
-.project-section:last-of-type {
-    border-bottom: none;
+.modal-header h3 {
+    margin: 0;
+    color: #e8edf2;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+/* ===== HEADER PROJETS ===== */
+.projects-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 16px;
 }
 
-.project-section h4 {
-    margin: 0 0 12px 0;
-    color: #cbd5e1;
-    font-size: 14px;
+.projects-header h4 {
+    margin: 0;
+    color: #e8edf2;
+    font-size: 16px;
     font-weight: 600;
 }
+
+.btn-compact {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+/* ===== SECTION AUTO-SAVE ===== */
+.auto-save-section {
+    margin-top: 16px;
+    padding: 12px;
+    border-top: 1px solid #334155;
+    background: rgba(15, 23, 42, 0.3);
+    border-radius: 6px;
+}
+
+.auto-save-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.auto-save-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.auto-save-status .icon {
+    font-size: 14px;
+}
+
+.auto-save-status .text {
+    font-weight: 600;
+    color: #e8edf2;
+}
+
+.auto-save-details {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+
+/* ===== POPUP DE RENOMMAGE ===== */
+.rename-modal-content {
+    width: 400px;
+    max-width: 90vw;
+    padding: 24px;
+}
+
+.rename-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.rename-info {
+    background: rgba(15, 23, 42, 0.3);
+    padding: 12px;
+    border-radius: 6px;
+    border-left: 3px solid #3b82f6;
+}
+
+.current-name-label {
+    display: block;
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 4px;
+}
+
+.current-name {
+    font-weight: 600;
+    color: #e8edf2;
+    font-size: 16px;
+}
+
+.project-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #e8edf2;
+    font-size: 14px;
+}
+
+.rename-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+
+/* ===== SECTION PROJETS UNIFIÉE ===== */
+.projects-section {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.project-save {
+    margin-bottom: 12px;
+}
+
+.project-save h4 {
+    margin: 0 0 12px 0;
+    color: #e8edf2;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.projects-list-section h4 {
+    margin: 0 0 16px 0;
+    color: #e8edf2;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* ===== BOUTON FERMETURE MODAL ===== */
+.btn-close {
+    background: rgba(220, 38, 38, 0.1);
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    color: #dc2626;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-close:hover {
+    background: rgba(220, 38, 38, 0.2);
+    border-color: #dc2626;
+    transform: scale(1.1);
+}
+
 
 .project-field {
     display: flex;
     gap: 8px;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+.project-folder-select {
+    background: #334155;
+    border: 1px solid #475569;
+    border-radius: 4px;
+    color: #e8edf2;
+    padding: 8px 12px;
+    font-size: 14px;
+    min-width: 200px;
+}
+
+.project-folder-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+/* ===== STYLES CRÉATION DOSSIER ===== */
+.folder-creation {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.folder-field {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    animation: slideDown 0.3s ease-out;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.folder-field input {
+    flex: 1;
+    padding: 8px 12px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e8edf2;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.folder-field input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        max-height: 100px;
+        transform: translateY(0);
+    }
+}
+
+#toggleFolderCreation {
+    align-self: flex-start;
+    transition: all 0.3s ease;
+}
+
+#toggleFolderCreation.active {
+    background: #ef4444;
+    border-color: #dc2626;
+}
+
+#toggleFolderCreation.active:hover {
+    background: #dc2626;
+}
+
+.btn-cancel {
+    background: #6b7280;
+    color: white;
+    border: 1px solid #6b7280;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-cancel:hover {
+    background: #4b5563;
+    border-color: #4b5563;
 }
 
 .project-field input {
@@ -1454,12 +2065,51 @@ select option {
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
+/* Styles pour la datalist (suggestions d'autocomplétion) */
+#existingProjects {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e8edf2;
+}
+
+#existingProjects option {
+    background: #0f172a;
+    color: #e8edf2;
+    padding: 8px 12px;
+}
+
+#existingProjects option:hover {
+    background: #1e293b;
+    color: #3b82f6;
+}
+
 .projects-list {
-    max-height: 200px;
+    max-height: 50vh;
     overflow-y: auto;
+    overflow-x: hidden;
     border: 1px solid #334155;
     border-radius: 6px;
     background: #0f172a;
+    /* Style de base pour Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #475569 #121821;
+}
+
+/* Style de la barre de défilement pour Webkit (Chrome, Safari) - Projects List */
+.projects-list::-webkit-scrollbar {
+    width: 14px;
+}
+.projects-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+.projects-list::-webkit-scrollbar-thumb {
+    background-color: #475569;
+    border-radius: 10px;
+    border: 4px solid #121821; /* Crée un effet de "padding" */
+}
+.projects-list::-webkit-scrollbar-thumb:hover {
+    background-color: #60a5fa;
 }
 
 .project-item {
@@ -1469,14 +2119,11 @@ select option {
     padding: 12px;
     border-bottom: 1px solid #1e293b;
     transition: background-color 0.2s ease;
+    position: relative; /* Pour le contexte de z-index */
 }
 
 .project-item:last-child {
     border-bottom: none;
-}
-
-.project-item:hover {
-    background: rgba(59, 130, 246, 0.1);
 }
 
 .project-info {
@@ -1502,47 +2149,348 @@ select option {
 
 .project-actions {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     margin-left: 12px;
+    flex-wrap: wrap;
+    position: relative;
 }
 
-.project-actions button {
-    padding: 4px 8px;
-    font-size: 12px;
+/* Système de boutons avec tooltips */
+.tooltip-btn {
+    position: relative;
+    padding: 8px;
+    font-size: 16px;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.btn-load {
+.tooltip-btn .icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* Tooltip bubble */
+.tooltip-btn .tooltip {
+    position: absolute;
+    bottom: 130%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 12px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    border-radius: 6px;
+    font-size: 12px; /* Maintenu pour le style */
+    font-weight: 500;
+    white-space: nowrap;
+    z-index: var(--z-tooltip);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Tooltip spécial pour l'auto-save (override) */
+
+/* Triangle arrow for tooltip */
+.tooltip-btn .tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: inherit;
+}
+
+/* Tooltip appearance on hover */
+.tooltip-btn:hover .tooltip {
+    opacity: 1;
+    visibility: visible;
+    bottom: 140%;
+}
+.tooltip-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Couleurs spécifiques pour les tooltips buttons */
+.tooltip-btn.btn-load {
     background: #3b82f6;
     color: white;
 }
 
-.btn-load:hover {
-    background: #2563eb;
+.tooltip-btn.btn-load .tooltip {
+    background: #3b82f6;
+    color: white;
+    border-top-color: #3b82f6;
 }
 
-.btn-export {
+.tooltip-btn.btn-load:hover {
+    background: #2563eb;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.tooltip-btn.btn-save {
+    background: #f59e0b;
+    color: white;
+}
+
+.tooltip-btn.btn-save .tooltip {
+    background: #f59e0b;
+    color: white;
+    border-top-color: #f59e0b;
+}
+
+.tooltip-btn.btn-save:hover {
+    background: #d97706;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.tooltip-btn.btn-rename {
+    background: #8b5cf6;
+    color: white;
+}
+
+.tooltip-btn.btn-rename .tooltip {
+    background: #8b5cf6;
+    color: white;
+    border-top-color: #8b5cf6;
+}
+
+.tooltip-btn.btn-rename:hover {
+    background: #7c3aed;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+.tooltip-btn.btn-export {
     background: #059669;
     color: white;
 }
 
-.btn-export:hover {
-    background: #047857;
+.tooltip-btn.btn-export .tooltip {
+    background: #059669;
+    color: white;
+    border-top-color: #059669;
 }
 
-.btn-delete {
+.tooltip-btn.btn-export:hover {
+    background: #047857;
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+}
+
+.tooltip-btn.btn-delete {
     background: #dc2626;
     color: white;
 }
 
-.btn-delete:hover {
+.tooltip-btn.btn-delete .tooltip {
+    background: #dc2626;
+    color: white;
+    border-top-color: #dc2626;
+}
+
+.tooltip-btn.btn-delete:hover {
     background: #b91c1c;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+}
+
+.tooltip-btn.btn-delete-folder {
+    background: #dc2626;
+    color: white; /* Maintenu pour le style */
+}
+
+.tooltip-btn.btn-delete-folder .tooltip {
+    background: #dc2626;
+    color: white; /* Maintenu pour le style */
+    border-top-color: #dc2626; /* Maintenu pour le style */
+}
+
+.tooltip-btn.btn-delete-folder:hover {
+    background: #b91c1c;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4); /* Maintenu pour l'effet visuel */
+}
+
+.tooltip-btn.btn-rename-folder {
+    background: #8b5cf6;
+    color: white; /* Maintenu pour le style */
+}
+
+.tooltip-btn.btn-rename-folder .tooltip {
+    background: #8b5cf6;
+    color: white; /* Maintenu pour le style */
+    border-top-color: #8b5cf6; /* Maintenu pour le style */
+}
+
+.tooltip-btn.btn-rename-folder:hover {
+    background: #7c3aed;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4); /* Maintenu pour l'effet visuel */
+}
+
+/* ===== STYLES DOSSIERS ===== */
+.folder-item {
+    margin-bottom: 16px;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    overflow: visible;
+}
+
+.folder-header {
+    background: #1e293b;
+    padding: 12px 16px;
+    border-bottom: 1px solid #374151;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.folder-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto; /* Maintenu pour la mise en page */
+    position: relative; /* Maintenu pour le contexte d'empilement */
+}
+
+.folder-icon {
+    font-size: 16px;
+}
+
+.folder-name {
+    font-weight: 600;
+    color: #e8edf2;
+    flex: 1;
+}
+
+.folder-count {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+
+.folder-projects {
+    background: #0f172a;
+    padding: 12px;
+}
+
+.folder-empty {
+    color: #64748b;
+    font-style: italic;
+    text-align: center;
+    padding: 16px;
+}
+
+/* ===== STYLES DRAG & DROP ===== */
+
+/* Handle de drag dans le nom du projet */
+.drag-handle {
+    color: #64748b;
+    font-size: 12px;
+    margin-right: 8px;
+    cursor: grab;
+    user-select: none;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.project-item:hover .drag-handle {
+    opacity: 1;
+}
+
+.project-item[draggable="true"] {
+    cursor: grab;
+}
+
+.project-item[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+/* Projet en cours de drag */
+.project-item.dragging {
+    opacity: 0.5;
+    transform: rotate(3deg);
+    transition: all 0.2s ease;
+    border: 2px dashed #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+/* Zones de drop disponibles */
+.drop-zone.drop-available {
+    transition: all 0.3s ease;
+    border: 2px dashed #64748b;
+    border-radius: 8px;
+}
+
+.drop-zone.drop-available .folder-header {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+/* Zone de drop au survol */
+.drop-zone.drop-hover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.05);
+    transform: scale(1.02);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
+}
+
+.drop-zone.drop-hover .folder-header {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+}
+
+.drop-zone.drop-hover .folder-icon {
+    transform: scale(1.2);
+    transition: transform 0.2s ease;
+}
+
+/* Animation de feedback */
+@keyframes dropSuccess {
+    0% {
+        transform: scale(1);
+        background: rgba(34, 197, 94, 0.2);
+    }
+    50% {
+        transform: scale(1.05);
+        background: rgba(34, 197, 94, 0.3);
+    }
+    100% {
+        transform: scale(1);
+        background: transparent;
+    }
+}
+
+.drop-zone.drop-success {
+    animation: dropSuccess 0.6s ease;
+}
+
+/* Amélioration de l'apparence pendant le drag */
+.project-item.dragging .project-actions {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* Effet de survol amélioré sur les projets draggables */
+.project-item:hover {
+    background: rgba(59, 130, 246, 0.1);
+    border-bottom-color: rgba(59, 130, 246, 0.3);
+    transform: translateY(-1px);
+    transition: all 0.2s ease; /* Maintenu pour l'effet visuel */
+    /* Augmenter le z-index au survol pour que le tooltip passe au-dessus des autres éléments */
+    z-index: var(--z-raised);
+}
+
+/* Curseur de déplacement */
+.drop-zone.drop-available {
+    cursor: copy;
+}
+
+.drop-zone.drop-hover {
+    cursor: copy;
 }
 
 .import-export-controls {
