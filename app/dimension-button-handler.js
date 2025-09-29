@@ -5,7 +5,7 @@
 (function initDimensionButtonHandler() {
     'use strict';
 
-    // Valeurs initiales pour détecter les changements
+    // Structure gardée pour compatibilité - non utilisée depuis la v1.0.3
     let initialValues = {
         boxW: null,
         boxH: null,
@@ -47,33 +47,59 @@
         elements.applyCirc = document.getElementById('applyCirc');
         elements.shape = document.getElementById('shape');
 
-
-        // Stocker les valeurs initiales
-        if (elements.boxW) initialValues.boxW = parseFloat(elements.boxW.value) || 1000;
-        if (elements.boxH) initialValues.boxH = parseFloat(elements.boxH.value) || 1000;
-        if (elements.boxD) initialValues.boxD = parseFloat(elements.boxD.value) || 1000;
+        // Initialisation gardée pour compatibilité - non utilisée depuis la v1.0.3
+        initialValues.boxW = window.WORLD_W_MM || 1000;
+        initialValues.boxH = window.WORLD_H_MM || 1000;
+        initialValues.boxD = window.WORLD_D_MM || 1000;
     }
 
     /**
      * Vérifie si les valeurs rectangulaires ont changé
      */
     function hasRectValuesChanged() {
-        if (!elements.boxW || !elements.boxH) return false;
+        if (!elements.boxW || !elements.boxH || !elements.shape) return false;
 
-        const currentW = parseFloat(elements.boxW.value) || 0;
-        const currentH = parseFloat(elements.boxH.value) || 0;
+        const currentW = Math.max(0, parseFloat(elements.boxW.value) || 0);
+        const currentH = Math.max(0, parseFloat(elements.boxH.value) || 0);
+        const currentShape = elements.shape.value;
 
-        return currentW !== initialValues.boxW || currentH !== initialValues.boxH;
+        // Comparer avec les valeurs actuelles du monde, pas avec les valeurs initiales
+        const worldW = window.WORLD_W_MM || 1000;
+        const worldH = window.WORLD_H_MM || 1000;
+        const worldShape = window.SHAPE || 'rect';
+
+        // Vérifier si on est en mode rectangulaire et si les valeurs ou la forme ont changé
+        const isRectMode = (currentShape === 'rect' || currentShape === 'chemin_de_cable');
+        const wasRectMode = (worldShape === 'rect' || worldShape === 'chemin_de_cable');
+        const shapeChanged = isRectMode && !wasRectMode;
+
+        // Si on vient de changer de forme (de circulaire vers rectangulaire),
+        // on considère toujours qu'il y a un changement, même si les valeurs numériques sont identiques
+        const valuesChanged = currentW !== worldW || currentH !== worldH;
+
+        return isRectMode && (valuesChanged || shapeChanged);
     }
 
     /**
      * Vérifie si la valeur circulaire a changé
      */
     function hasCircValueChanged() {
-        if (!elements.boxD) return false;
+        if (!elements.boxD || !elements.shape) return false;
 
-        const currentD = parseFloat(elements.boxD.value) || 0;
-        return currentD !== initialValues.boxD;
+        const currentD = Math.max(0, parseFloat(elements.boxD.value) || 0);
+        const currentShape = elements.shape.value;
+
+        // Comparer avec la valeur actuelle du monde, pas avec la valeur initiale
+        const worldD = window.WORLD_D_MM || 1000;
+        const worldShape = window.SHAPE || 'rect';
+
+        // Vérifier si on est en mode circulaire et si la valeur ou la forme a changé
+        const isCircMode = currentShape === 'circ';
+        const wasCircMode = worldShape === 'circ';
+        const shapeChanged = isCircMode && !wasCircMode;
+        const valueChanged = currentD !== worldD;
+
+        return isCircMode && (valueChanged || shapeChanged);
     }
 
     /**
@@ -143,12 +169,10 @@
     }
 
     /**
-     * Remet à jour les valeurs initiales après application
+     * Fonction gardée pour compatibilité - ne fait plus rien depuis v1.0.3
      */
     function updateInitialValues() {
-        if (elements.boxW) initialValues.boxW = parseFloat(elements.boxW.value) || 1000;
-        if (elements.boxH) initialValues.boxH = parseFloat(elements.boxH.value) || 1000;
-        if (elements.boxD) initialValues.boxD = parseFloat(elements.boxD.value) || 1000;
+        // Comparaison directe avec les valeurs du monde maintenant
     }
 
     /**
@@ -198,29 +222,57 @@
     }
 
     /**
+     * Valide et corrige une valeur négative
+     */
+    function validatePositiveValue(input) {
+        const value = parseFloat(input.value);
+        if (value < 0) {
+            input.value = 0;
+        }
+    }
+
+    /**
      * Initialise les événements
      */
     function initEvents() {
         // Événements sur les inputs
         if (elements.boxW) {
-            elements.boxW.addEventListener('input', updateRectButton);
-            elements.boxW.addEventListener('change', updateRectButton);
+            elements.boxW.addEventListener('input', () => {
+                validatePositiveValue(elements.boxW);
+                updateRectButton();
+            });
+            elements.boxW.addEventListener('change', () => {
+                validatePositiveValue(elements.boxW);
+                updateRectButton();
+            });
             elements.boxW.addEventListener('keydown', (e) =>
                 handleInputKeydown(e, elements.applyRect, 'rect')
             );
         }
 
         if (elements.boxH) {
-            elements.boxH.addEventListener('input', updateRectButton);
-            elements.boxH.addEventListener('change', updateRectButton);
+            elements.boxH.addEventListener('input', () => {
+                validatePositiveValue(elements.boxH);
+                updateRectButton();
+            });
+            elements.boxH.addEventListener('change', () => {
+                validatePositiveValue(elements.boxH);
+                updateRectButton();
+            });
             elements.boxH.addEventListener('keydown', (e) =>
                 handleInputKeydown(e, elements.applyRect, 'rect')
             );
         }
 
         if (elements.boxD) {
-            elements.boxD.addEventListener('input', updateCircButton);
-            elements.boxD.addEventListener('change', updateCircButton);
+            elements.boxD.addEventListener('input', () => {
+                validatePositiveValue(elements.boxD);
+                updateCircButton();
+            });
+            elements.boxD.addEventListener('change', () => {
+                validatePositiveValue(elements.boxD);
+                updateCircButton();
+            });
             elements.boxD.addEventListener('keydown', (e) =>
                 handleInputKeydown(e, elements.applyCirc, 'circ')
             );
@@ -255,13 +307,19 @@
                 hideButton(elements.applyRect, 'rect');
                 hideButton(elements.applyCirc, 'circ');
 
-                // Mettre à jour les valeurs initiales et vérifier les boutons
+                // Vérification immédiate avec la nouvelle forme
                 setTimeout(() => {
                     updateInitialValues();
-                    // Vérifier immédiatement si les boutons doivent être affichés
-                    updateRectButton();
-                    updateCircButton();
-                }, 150); // Augmenté à 150ms pour laisser le temps au DOM de se mettre à jour
+                    // Affichage du bouton approprié selon la nouvelle forme
+                    const newShape = e.target.value;
+                    if (newShape === 'rect' || newShape === 'chemin_de_cable') {
+                        // On passe en mode rectangulaire, forcer la vérification
+                        showButton(elements.applyRect, 'rect');
+                    } else if (newShape === 'circ') {
+                        // On passe en mode circulaire, forcer la vérification
+                        showButton(elements.applyCirc, 'circ');
+                    }
+                }, 50); // Réduit à 50ms pour plus de réactivité
             });
         }
     }

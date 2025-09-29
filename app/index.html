@@ -50,26 +50,28 @@
           </select>
         </div>
         <div id="rectInputs">
-          <div class="row">
-            <label for="boxW">Largeur (mm)</label>
-            <div class="input-lock-group">
-              <input id="boxW" type="number" step="0.1" value="1000" />
-              <label class="lock-checkbox">
-                <input type="checkbox" id="lockWidth" />
-                <span class="lock-icon">🔒</span>
-                <span class="lock-text">Verrouiller</span>
-              </label>
+          <div class="row-inline">
+            <div class="inline-input">
+              <label for="boxW">Largeur (mm)</label>
+              <div class="input-lock-group">
+                <input id="boxW" type="number" step="0.1" min="0" value="1000" />
+                <label class="lock-checkbox">
+                  <input type="checkbox" id="lockWidth" />
+                  <span class="lock-icon">🔒</span>
+                  <span class="lock-text">Verrouiller</span>
+                </label>
+              </div>
             </div>
-          </div>
-          <div class="row">
-            <label for="boxH">Hauteur (mm)</label>
-            <div class="input-lock-group">
-              <input id="boxH" type="number" step="0.1" value="1000" />
-              <label class="lock-checkbox">
-                <input type="checkbox" id="lockHeight" />
-                <span class="lock-icon">🔒</span>
-                <span class="lock-text">Verrouiller</span>
-              </label>
+            <div class="inline-input">
+              <label for="boxH">Hauteur (mm)</label>
+              <div class="input-lock-group">
+                <input id="boxH" type="number" step="0.1" min="0" value="1000" />
+                <label class="lock-checkbox">
+                  <input type="checkbox" id="lockHeight" />
+                  <span class="lock-icon">🔒</span>
+                  <span class="lock-text">Verrouiller</span>
+                </label>
+              </div>
             </div>
           </div>
           <div class="apply-dimensions-container">
@@ -85,7 +87,7 @@
         <div id="circInputs" class="hidden">
           <div class="row">
             <label for="boxD">Diamètre (mm)</label>
-            <input id="boxD" type="number" step="0.1" value="1000" />
+            <input id="boxD" type="number" step="0.1" min="0" value="1000" />
           </div>
           <div class="apply-dimensions-container">
             <button id="applyCirc" class="btn apply-btn hidden" aria-label="Appliquer les nouvelles dimensions - Raccourci: Entrée">
@@ -248,23 +250,17 @@
               </button>
             </div>
           </main>
-          <div class="zoom-control-vertical">
-          <label for="zoomSlider">Zoom</label>
-          <input
-            id="zoomSlider"
-            type="range"
-            min="25"
-            max="300"
-            step="5"
-            value="100"
-          />
-          <div class="zoom-value"><span id="zoomLabel">100</span>%</div>
-          </div>
+          <!-- Zoom contrôlé par Ctrl+molette dans le canvas -->
         </div>
       </div>
-      <div class="canvas-controls">
-        <div class="canvas-controls-row">
-          <div class="canvas-controls-left">
+      <!-- Wrapper pour canvas-controls et project-controls -->
+      <div class="canvas-project-controls-wrapper">
+        <div class="canvas-controls">
+          <!-- Ligne principale d'outils groupés logiquement -->
+          <div class="canvas-controls-row">
+          <!-- Groupe 1: Actions d'édition et suppression -->
+          <div class="control-group" data-group="edition">
+            <div class="group-label">Édition</div>
             <button id="toolEdit" class="btn" aria-label="Outil d'édition - Raccourci: E">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                 <title>Icône d'édition</title>
@@ -282,6 +278,13 @@
               </svg>
               Infos (I)
             </button>
+            <button id="toolDelete" class="btn btn-danger" aria-label="Supprimer l'objet sélectionné - Raccourci: Suppr">Supprimer (Suppr)</button>
+            <button id="clear" class="btn btn-warning" aria-label="Vider complètement le canvas - Raccourci: Ctrl+Suppr">Tout vider (Ctrl+Suppr)</button>
+          </div>
+
+          <!-- Groupe 2: Organisation et arrangement -->
+          <div class="control-group" data-group="arrangement">
+            <div class="group-label">Organisation</div>
             <button id="gridArrange" class="btn" aria-label="Disposer les fourreaux en grille 3cm - Raccourci: Ctrl+G">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                 <title>Icône grille</title>
@@ -293,51 +296,50 @@
               Grille (Ctrl+G)
             </button>
             <button id="freezeBtn" class="btn" disabled aria-label="Figer l'objet sélectionné - Raccourci: G">Figer (G)</button>
-            <button id="toolDelete" class="btn" aria-label="Supprimer l'objet sélectionné - Raccourci: Suppr">Supprimer (Suppr)</button>
-          </div>
-          <div class="canvas-controls-right">
-            <button id="projectSave" class="btn" aria-label="Sauvegarder le projet - Raccourci: Ctrl+S">
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                <title>Sauvegarder</title>
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" stroke-width="2" fill="none"/>
-                <polyline points="17,21 17,13 7,13 7,21" stroke="currentColor" stroke-width="2" fill="none"/>
-                <polyline points="7,3 7,8 15,8" stroke="currentColor" stroke-width="2" fill="none"/>
-              </svg>
-              Projets
-            </button>
-            <button id="exportDXF" class="btn" aria-label="Exporter le schéma au format DXF">Export DXF</button>
-            <button id="clear" class="btn" aria-label="Vider complètement le canvas">Tout vider</button>
           </div>
         </div>
-        <div class="canvas-controls-row">
-          <div class="mouse-actions-cards">
-            <div class="mouse-card" role="img" aria-label="Clic gauche pour sélectionner">
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                <title>Clic gauche de souris</title>
-                <rect x="5" y="3" width="14" height="18" rx="7" fill="#4b5563" />
-                <rect x="9" y="5" width="6" height="6" rx="3" fill="#374151" />
-                <path d="M5 9h7V3a7 7 0 0 0-7 6z" fill="#ef4444" />
-              </svg>
-              <span>Sélection</span>
-            </div>
-            <div class="mouse-card" role="img" aria-label="Clic droit pour placer">
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                <title>Clic droit de souris</title>
-                <rect x="5" y="3" width="14" height="18" rx="7" fill="#4b5563" />
-                <rect x="9" y="5" width="6" height="6" rx="3" fill="#374151" />
-                <path d="M12 3v6h7a7 7 0 0 0-7-6z" fill="#ef4444" />
-              </svg>
-              <span>Placer</span>
+
+        <!-- Ligne d'aide et raccourcis consolidée -->
+        <div class="canvas-controls-help">
+          <div class="help-section">
+            <div class="mouse-actions-compact">
+              <div class="mouse-action">
+                <span class="mouse-icon">🖱️</span>
+                <span>Clic gauche: Sélection/déplacement</span>
+              </div>
+              <div class="mouse-action">
+                <span class="mouse-icon">🖱️</span>
+                <span>Clic droit: Placer élément</span>
+              </div>
             </div>
           </div>
-          <div class="card">
-            <div class="small">
-              Sélection/déplacement&nbsp;: clic gauche (glisser). Placer&nbsp;: clic droit. Supprimer&nbsp;: Suppr ou bouton.
+          <div class="help-section">
+            <div class="keyboard-shortcuts">
+              <strong>Raccourcis:</strong>
+              <span class="shortcut">Ctrl+molette: Zoom</span>
+              <span class="shortcut">Ctrl+Z: Annuler</span>
+              <span class="shortcut">Suppr: Supprimer</span>
+              <span class="shortcut">Ctrl+Suppr: Tout vider</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+        <!-- Zone de contrôles projet à droite -->
+        <div class="project-controls-right control-group-vertical" data-group="project">
+          <div class="group-label">Projet</div>
+          <button id="projectSave" class="btn btn-primary" aria-label="Sauvegarder le projet - Raccourci: Ctrl+S">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <title>Sauvegarder</title>
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" stroke-width="2" fill="none"/>
+              <polyline points="17,21 17,13 7,13 7,21" stroke="currentColor" stroke-width="2" fill="none"/>
+              <polyline points="7,3 7,8 15,8" stroke="currentColor" stroke-width="2" fill="none"/>
+            </svg>
+            Projets
+          </button>
+          <button id="exportDXF" class="btn" aria-label="Exporter le schéma au format DXF">Export DXF</button>
+        </div>
+      </div>
   </div>
   <div id="toast" class="toast">Impossible de placer l'élément ici.</div>
   <script src="script.js" defer></script>

@@ -12,7 +12,7 @@
     --z-dimension-lines: 5;
     --z-panel-handle: 10;
     --z-panel-fade: 10;
-    --z-reduce-button: 10;
+    --z-reduce-button: 50;
 
     /* 100-999 : Overlays et notifications */
     --z-dropdown-container-open: 900;
@@ -379,16 +379,16 @@ html, body {
 }
 
 .panel {
-    width: var(--panel-width, 30%);
-    min-width: 320px;
-    max-width: 50%;
+    width: var(--panel-width, 35%);
+    min-width: 20%;
+    max-width: 40%;
     background: rgba(15, 23, 42, 0.95);
     border: 1px solid #334155;
     border-radius: 12px;
     padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 5px;
     overflow-y: auto;
     overflow-x: hidden;
     transition: width 0.3s ease;
@@ -401,21 +401,6 @@ html, body {
     scrollbar-color: #475569 #121821;
 }
 
-.panel::after {
-    content: '';
-    position: sticky;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 80px; /* Hauteur du dégradé pour un effet doux */
-    background: linear-gradient(to top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0));
-    pointer-events: none; /* Permet de cliquer à travers le dégradé */
-    direction: ltr; /* Assure que le dégradé s'applique correctement malgré le rtl */
-    transition: opacity 0.3s ease;
-    opacity: 1; /* Maintenu pour la transition */
-    z-index: var(--z-panel-fade);
-    margin-top: -80px; /* Compense sa propre hauteur */
-}
 
 /* Remet le contenu du panneau dans le bon sens */
 .panel > *:not(.panel-resize-handle) {
@@ -457,68 +442,130 @@ html, body {
     flex: 1;
 }
 
-.zoom-control-vertical {
+/* Ancien code de zoom supprimé - maintenant contrôlé par Ctrl+molette */
+
+/* Nouvelle disposition des contrôles canvas - Version compacte */
+.canvas-controls-row {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 0 24px;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
-.zoom-control-vertical label {
-    font-size: 12px;
-    color: #9fb0c3;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-}
-
-.zoom-value {
-    font-size: 12px;
-    color: #9fb0c3;
-    font-weight: 700;
-}
-
-/* Zoom slider vertical - solution moderne */
-#zoomSlider,
-input[type="range"]#zoomSlider {
-    -webkit-appearance: none !important;
-    appearance: none !important;
-    writing-mode: vertical-lr !important;
-    direction: rtl !important;
-    height: 100% !important;
-    max-height: 300px !important;
-    width: 16px !important;
-    background: linear-gradient(to bottom, #3b82f6 0%, #1e40af 100%);
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(15, 23, 42, 0.6);
     border-radius: 8px;
-    outline: none;
-    border: none;
+    border: 1px solid #334155;
+    backdrop-filter: blur(8px);
 }
 
-/* Style du thumb pour le slider vertical */
-#zoomSlider::-webkit-slider-thumb {
-    -webkit-appearance: none !important;
-    appearance: none !important;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #f8fafc;
-    border: 2px solid #3b82f6;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+.group-label {
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 8px;
+    white-space: nowrap;
 }
 
-#zoomSlider::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #f8fafc;
-    border: 2px solid #3b82f6;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+.control-group .btn {
+    margin: 0;
+    min-width: auto;
+    white-space: nowrap;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+/* Classes de boutons pour différencier visuellement */
+.btn-primary {
+    background: #3b82f6;
+    border-color: #2563eb;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.btn-danger {
+    background: #ef4444;
+    border-color: #dc2626;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
+.btn-warning {
+    background: #f59e0b;
+    border-color: #d97706;
+    color: #1f2937;
+}
+
+.btn-warning:hover {
+    background: #d97706;
+}
+
+/* Ligne d'aide consolidée - Version compacte */
+.canvas-controls-help {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 12px;
+    background: rgba(15, 23, 42, 0.3);
+    border-radius: 6px;
+    border: 1px solid #334155;
+    margin-top: 6px;
+    font-size: 11px;
+}
+
+.help-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mouse-actions-compact {
+    display: flex;
+    gap: 12px;
+}
+
+.mouse-action {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.mouse-icon {
+    font-size: 12px;
+}
+
+.keyboard-shortcuts {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.keyboard-shortcuts strong {
+    color: #e2e8f0;
+    font-size: 10px;
+}
+
+.shortcut {
+    padding: 1px 4px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 3px;
+    color: #93c5fd;
+    font-weight: 500;
+    font-size: 10px;
 }
 
 .canvas-section {
@@ -526,6 +573,58 @@ input[type="range"]#zoomSlider {
     display: flex;
     flex-direction: column;
     position: relative;
+}
+
+.main-view {
+    display: flex;
+    flex: 1;
+    position: relative;
+}
+
+.main-view-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Wrapper pour canvas-controls et project-controls en flexbox */
+.canvas-project-controls-wrapper {
+    display: flex;
+    gap: 20px;
+    align-items: stretch; /* Changé de flex-start à stretch pour aligner les hauteurs */
+}
+
+.control-group-vertical {
+    display: flex;
+    height: auto;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 12px;
+    min-width: 140px; /* Ajout d'une largeur minimale pour plus d'aisance */
+    background: rgba(15, 23, 42, 0.9);
+    border-radius: 12px;
+    border: 1px solid #334155;
+    backdrop-filter: blur(8px);
+}
+
+.control-group-vertical .group-label {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.control-group-vertical .btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 12px;
+    white-space: nowrap;
 }
 
 .canvas-wrap {
@@ -555,6 +654,25 @@ canvas.no-frame {
     align-items: center;
     gap: 12px;
     padding: 4px 0;
+}
+
+.row-inline {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 5px;
+}
+
+.inline-input {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inline-input label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e2e8f0;
 }
 
 .row input[type=number], .row select {
@@ -934,7 +1052,7 @@ select option {
     background: rgba(15, 23, 42, 0.8);
     border: 1px solid #334155;
     border-radius: 12px;
-    padding: 16px;
+    padding: 10px;
     backdrop-filter: blur(8px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     position: relative;
@@ -1018,7 +1136,7 @@ select option {
     color: #e8edf2;
     padding: 8px 12px;
     border-radius: 8px;
-    font-size: 12px;
+    font-size: 15px;
     opacity: 0;
     transition: opacity .2s ease;
     pointer-events: none;
@@ -1183,9 +1301,9 @@ select option {
 .brand {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 15px;
     margin-bottom: 8px;
-    padding-bottom: 12px;
+    padding-bottom: 8px;
     border-bottom: 1px solid #1b2430;
 }
 
@@ -1208,7 +1326,7 @@ select option {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 5px;
 }
 
 .panel-middle {
@@ -1227,13 +1345,13 @@ select option {
 /* Styles pour les contrôles sous le canvas */
 .canvas-controls {
     display: flex;
+    max-width: 700px;
     flex-direction: column; /* Permet d'empiler les lignes */
     gap: 16px; /* Espacement entre les lignes */
     padding: 16px 24px;
     background: rgba(15, 23, 42, 0.9);
     border: 1px solid #334155;
     border-radius: 12px;
-    margin-top: 16px;
     backdrop-filter: blur(10px);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
@@ -1242,7 +1360,7 @@ select option {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 24px;
+    gap: 12px;
 }
 
 .canvas-controls-row:last-child {
@@ -1254,7 +1372,7 @@ select option {
 
 .canvas-controls-left {
     display: flex;
-    gap: 12px;
+    gap: 5px;
     align-items: center;
     flex-wrap: wrap;
     justify-content: flex-start; /* Aligne les boutons à gauche */
@@ -2573,7 +2691,7 @@ select option {
 
 .project-stats {
     display: flex;
-    gap: 16px;
+    gap: 5px;
     margin-top: 8px;
     font-size: 12px;
     color: #64748b;

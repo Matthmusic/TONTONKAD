@@ -27,6 +27,16 @@
   const EXTERNAL_GAP = 30; // Écart extérieur souhaité (3 cm = 30 mm)
   const GRID_MARGIN = 20; // Marge depuis les bords en pixels
 
+  // Zoom et historique
+  let currentZoom = 100; // Zoom actuel en pourcentage
+  const ZOOM_MIN = 25;
+  const ZOOM_MAX = 500;
+  const ZOOM_STEP = 10;
+
+  // Système d'annulation (Ctrl+Z)
+  let actionHistory = [];
+  const MAX_HISTORY = 50;
+
   // Éléments du DOM
   const canvas = document.getElementById("world");
   const ctx = canvas.getContext("2d");
@@ -100,8 +110,6 @@
   const applyBtn = document.getElementById("apply");
   const applyCircBtn = document.getElementById("applyCirc");
   const targetPxPerMmInput = document.getElementById("targetPxPerMm");
-  const zoomSlider = document.getElementById("zoomSlider");
-  const zoomLabel = document.getElementById("zoomLabel");
   const scaleInfo = document.getElementById("scaleInfo");
   const tabFOURREAU = document.getElementById("tabFOURREAU");
   const tabCABLE = document.getElementById("tabCABLE");
@@ -109,16 +117,15 @@
   const paneCABLE = document.getElementById("paneCABLE");
   const listCable = document.getElementById("listCable");
   const listFourreau = document.getElementById("listFourreau");
-  const countInvC = document.getElementById("countInvC"); //
+  const countInvC = document.getElementById("countInvC");
   const countInvF = document.getElementById("countInvF");
-  const typesInvC = document.getElementById("typesInvC"); //
+  const typesInvC = document.getElementById("typesInvC");
   const typesInvF = document.getElementById("typesInvF");
-  const searchCable = document.getElementById("searchCable"); //
+  const searchCable = document.getElementById("searchCable");
   const searchFourreau = document.getElementById("searchFourreau");
-  // Anciens toolPlace et toolSelect supprimés
-  const toolDelete = document.getElementById("toolDelete"); //
+  const toolDelete = document.getElementById("toolDelete");
   const statFourreau = document.getElementById("statFourreau");
-  const statCable = document.getElementById("statCable"); //
+  const statCable = document.getElementById("statCable");
 
   const statOccupation = document.getElementById("statOccupation");
   const selInfo = document.getElementById("selInfo");
@@ -594,7 +601,7 @@ function initSearchableLists() {
     let s = Math.min(def, fit);
     let tpp = parseFloat(targetPxPerMmInput.value);
     if (!isNaN(tpp) && tpp > 0) s = Math.min(s, tpp / MM_TO_PX);
-    const zr = (parseFloat(zoomSlider.value) || 100) / 100;
+    const zr = currentZoom / 100;
     // Le zoom appliqué mais toujours limité par la taille du viewport
     let out = Math.min(s * zr, fit * zr);
     // Garder une limite minimale
@@ -780,6 +787,63 @@ function initSearchableLists() {
 
   /* ====== Utilitaires ====== */
   const areaCircle = d => { const r = d / 2; return Math.PI * r * r };
+
+  /* ====== Système de zoom ====== */
+  function setZoom(newZoom) {
+    currentZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${currentZoom.toFixed(0)}%)`;
+    fitCanvas();
+  }
+
+  function zoomIn() {
+    setZoom(currentZoom + ZOOM_STEP);
+  }
+
+  function zoomOut() {
+    setZoom(currentZoom - ZOOM_STEP);
+  }
+
+  /* ====== Système d'historique pour Ctrl+Z ====== */
+  function saveStateToHistory() {
+    const state = {
+      fourreaux: fourreaux.map(f => ({...f, children: [...f.children]})),
+      cables: cables.map(c => ({...c})),
+      timestamp: Date.now()
+    };
+
+    actionHistory.push(state);
+
+    // Limiter la taille de l'historique
+    if (actionHistory.length > MAX_HISTORY) {
+      actionHistory.shift();
+    }
+
+    if (DEBUG) console.log('🐛 État sauvé dans l\'historique:', actionHistory.length, 'états');
+  }
+
+  function restorePreviousState() {
+    if (actionHistory.length === 0) {
+      if (DEBUG) console.log('🐛 Aucun état à restaurer');
+      return false;
+    }
+
+    const previousState = actionHistory.pop();
+
+    // Restaurer les fourreaux
+    fourreaux.length = 0;
+    fourreaux.push(...previousState.fourreaux.map(f => ({...f, children: [...f.children]})));
+
+    // Restaurer les câbles
+    cables.length = 0;
+    cables.push(...previousState.cables.map(c => ({...c})));
+
+    // Mettre à jour l'affichage
+    updateInventory();
+    redraw();
+
+    if (DEBUG) console.log('🐛 État restauré:', actionHistory.length, 'états restants');
+    return true;
+  }
 
   function parseSectionFromCode(code) {
     try {
@@ -1010,6 +1074,7 @@ function initSearchableLists() {
     if (!spec) return false;
     const ro = spec.od * MM_TO_PX / 2, spot = findFreeSpot(x, y, ro, null);
     if (!spot) return false;
+    saveStateToHistory(); // Sauver l'état avant modification
     const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, idm: spec.id, color: colorForFourreau(type, code), customColor: null, label: '', children: [], vx: 0, vy: 0, dragging: false, frozen: false, _px: spot.x, _py: spot.y, type, code };
     fourreaux.push(obj);
     updateStats();
@@ -1027,6 +1092,7 @@ function initSearchableLists() {
     if (container && !fitsInFourreau(spec, container)) container = null;
     const spot = container ? findFreeSpotInFourreau(x, y, r, container, null) : findFreeSpot(x, y, r, null);
     if (!spot) return null;
+    if (!silent) saveStateToHistory(); // Sauver l'état avant modification (sauf si silent)
     const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, parent: container ? container.id : null, color: colorForCable(fam, code), customColor: null, label: '', fam, code, vx: 0, vy: 0, dragging: false, frozen: false, _px: spot.x, _py: spot.y };
     cables.push(obj);
     if (container) container.children.push(obj.id);
@@ -1511,8 +1577,10 @@ function initSearchableLists() {
   }
 
   function deleteSelected() {
+    if (selected.length === 0) return;
+    saveStateToHistory(); // Sauver l'état avant suppression
     let deletedCount = 0;
-    
+
     // Fonction pour supprimer un élément
     const deleteObject = (sel) => {
       if (sel.type === 'fourreau') {
@@ -2020,8 +2088,7 @@ function initSearchableLists() {
       dxf += `62\n${dxfColor}\n`; // Couleur au niveau de l'élément
       dxf += `10\n0.0\n20\n0.0\n40\n${innerRadius}\n`;
       
-      // SUSPENDU : Ajouter le label du fourreau si disponible
-      // TODO: Réactiver l'affichage des noms dans les fourreaux plus tard
+      // Affichage du label fourreau désactivé pour l'export DXF
       /*
       if (fourreau && (fourreau.label || fourreau.code)) {
         const labelText = fourreau.label || `${fourreau.type} ${fourreau.code}`;
@@ -2380,7 +2447,7 @@ function initSearchableLists() {
       selInfo.classList.add('muted');
       selInfo.innerHTML = '<em>Aucun objet sélectionné.</em>';
       if (freezeBtn) {
-        freezeBtn.disabled = true; //
+        freezeBtn.disabled = true;
         freezeBtn.textContent = 'Figer (X)';
       }
       return;
@@ -2413,7 +2480,7 @@ function initSearchableLists() {
       selInfo.innerHTML = `<div><span class='swatch' style='background:${displayColor}'></span><b>${f.type} ${f.code}</b></div>${customLabel}<div>Ø extérieur : <b>${f.od}</b> — Ø intérieur min : <b>${f.idm}</b> mm</div><div>Aire intérieure : <b>${inner.toFixed(1)}</b> mm²</div><div>Câbles contenus : <b>${f.children.length}</b></div><div>Occupation : <b>${used.toFixed(1)}%</b> — Libre : <b>${free.toFixed(1)}%</b></div><div>Gelé : <b>${frozen ? 'Oui' : 'Non'}</b></div>`;
     }
     if (freezeBtn) {
-      freezeBtn.disabled = false; //
+      freezeBtn.disabled = false;
       freezeBtn.textContent = frozen ? 'Dégeler (X)' : 'Figer (X)';
     }
   }
@@ -2896,10 +2963,34 @@ function initSearchableLists() {
     // 3. Attacher les écouteurs d'événements
     addEventListener("resize", fitCanvas);
     targetPxPerMmInput.addEventListener("input", fitCanvas);
-    zoomSlider.addEventListener("input", () => { zoomLabel.textContent = zoomSlider.value; fitCanvas(); });
-    searchCable.addEventListener('input', updateInventory); //
+
+    // Gestionnaire de zoom par molette (Ctrl+molette)
+    canvas.addEventListener("wheel", (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      }
+    });
+
+    // Gestionnaire global pour Ctrl+Z et Ctrl+Suppr
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        restorePreviousState();
+      } else if (e.ctrlKey && e.key === 'Delete') {
+        e.preventDefault();
+        // Sauvegarder l'état avant de tout vider
+        saveStateToHistory();
+        // Déclencher la fonction de vidage
+        document.getElementById('clear').click();
+      }
+    });
+    searchCable.addEventListener('input', updateInventory);
     searchFourreau.addEventListener('input', updateInventory);
-    // Anciens boutons toolPlace et toolSelect supprimés
     toolDelete.addEventListener('click', () => { setMode('delete'); if (selected) deleteSelected(); });
     document.getElementById('toolEdit').addEventListener('click', openEditPopup);
     document.getElementById('toolInfo').addEventListener('click', toggleShowInfo);
@@ -3750,7 +3841,7 @@ function initSearchableLists() {
 
           // Migration automatique depuis l'ancienne structure plate
           if (!data.folders && !data.projects) {
-            console.log('🔄 Migration vers structure avec dossiers...');
+            // Migration vers structure avec dossiers
             const newStructure = {
               folders: {},
               projects: data // Anciens projets restent à la racine
