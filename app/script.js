@@ -211,6 +211,11 @@ const CHEMINS_CABLE_FALLBACK = [
   let mode = "place";
   let selectedFourreau = null;
   let selectedCable = null;
+  // Variables pour la sélection par rectangle (marquee)
+  let isMarqueeSelecting = false;
+  let marqueeStart = { x: 0, y: 0 };
+  let marqueeEnd = { x: 0, y: 0 };
+
   let activeTab = "FOURREAU";
   let showInfo = true;
   let arrangeInProgress = false; // Flag pour éviter la suppression durant l'arrangement en grille
@@ -1801,6 +1806,30 @@ function initSearchableLists() {
     ctx.restore();
   }
 
+  // Fonction pour dessiner le rectangle de sélection (marquee)
+  function drawMarquee() {
+    if (!isMarqueeSelecting) return;
+
+    ctx.save();
+    ctx.strokeStyle = "#fbbf24"; // Jaune pour la visibilité
+    ctx.lineWidth = getScaledLineWidth(1.5);
+    ctx.setLineDash([4, 2]);
+    ctx.fillStyle = "rgba(251, 191, 36, 0.1)"; // Remplissage semi-transparent
+
+    const x = Math.min(marqueeStart.x, marqueeEnd.x);
+    const y = Math.min(marqueeStart.y, marqueeEnd.y);
+    const width = Math.abs(marqueeStart.x - marqueeEnd.x);
+    const height = Math.abs(marqueeStart.y - marqueeEnd.y);
+
+    ctx.beginPath();
+    ctx.rect(x, y, width, height);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+
   // Fonction pour gérer la sélection multiple
   function handleMultipleSelection(pick) {
     const existingIndex = selectedMultiple.findIndex(sel => sel.type === pick.type && sel.id === pick.id);
@@ -1939,6 +1968,7 @@ function initSearchableLists() {
     clear();
     drawBox();
     drawDimensions();
+    drawMarquee(); // Dessiner le rectangle de sélection s'il est actif
     for (const f of fourreaux) drawFourreau(f);
     for (const c of cables) drawCable(c);
     drawSelection();
@@ -2656,6 +2686,62 @@ function initSearchableLists() {
     addEventListener('mousemove', onMove);
     addEventListener('mouseup', onUp);
   }
+  
+  // Logique pour la sélection par rectangle (marquee)
+  function startMarqueeSelection(e) {
+    isMarqueeSelecting = true;
+    marqueeStart = canvasCoords(e);
+    marqueeEnd = marqueeStart;
+
+    // Si Shift n'est pas pressé, on commence une nouvelle sélection
+    if (!e.shiftKey) {
+      selected = null;
+      selectedMultiple = [];
+    }
+
+    function onMarqueeMove(ev) {
+      if (!isMarqueeSelecting) return;
+      marqueeEnd = canvasCoords(ev);
+      updateMarqueeSelection(e.shiftKey);
+      redraw();
+    }
+
+    function onMarqueeUp(ev) {
+      isMarqueeSelecting = false;
+      document.removeEventListener('mousemove', onMarqueeMove);
+      document.removeEventListener('mouseup', onMarqueeUp);
+      redraw();
+      updateSelectedInfo();
+    }
+
+    document.addEventListener('mousemove', onMarqueeMove);
+    document.addEventListener('mouseup', onMarqueeUp);
+  }
+
+  function updateMarqueeSelection(isAdding) {
+    const x1 = Math.min(marqueeStart.x, marqueeEnd.x);
+    const y1 = Math.min(marqueeStart.y, marqueeEnd.y);
+    const x2 = Math.max(marqueeStart.x, marqueeEnd.x);
+    const y2 = Math.max(marqueeStart.y, marqueeEnd.y);
+
+    const inMarquee = [];
+    const allObjects = [...fourreaux, ...cables];
+
+    allObjects.forEach(obj => {
+      const r = (obj.od * MM_TO_PX) / 2;
+      // Vérifier si le centre de l'objet est dans le rectangle
+      if (obj.x >= x1 && obj.x <= x2 && obj.y >= y1 && obj.y <= y2) {
+        const type = obj.hasOwnProperty('idm') ? 'fourreau' : 'cable';
+        inMarquee.push({ type, id: obj.id });
+      }
+    });
+
+    // Pour l'instant, on ne gère que la sélection de câbles OU de fourreaux, pas les deux
+    if (inMarquee.length > 0) {
+      const firstType = inMarquee[0].type;
+      selectedMultiple = inMarquee.filter(item => item.type === firstType);
+    }
+  }
 
   function setTab(name) {
     activeTab = name;
@@ -2913,6 +2999,578 @@ function initSearchableLists() {
     updateScrollEffect();
   }
 
+  /* ====== Export PDF Functions ====== */
+
+  function openPdfExportModal() {
+    // Supprimer toute modal existante
+    const existingModal = document.getElementById('tontonkadPdfExportModal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    // Créer une modal avec classes CSS propres
+    const modal = document.createElement('div');
+    modal.id = 'tontonkadPdfExportModal';
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'pdf-export-modal-content';
+
+    modalContent.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">🎯 Export PDF - Configuration</h3>
+        <button onclick="closeDynamicPdfModal()" class="btn-close" aria-label="Fermer">&times;</button>
+      </div>
+
+      <div class="pdf-export-body">
+        <div class="pdf-export-grid">
+          <div class="form-group">
+            <label for="dynamicPdfProjectName">Nom du projet</label>
+            <input type="text" id="dynamicPdfProjectName" placeholder="Mon projet TontonKAD" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label for="dynamicPdfViewName">Nom de la vue</label>
+            <input type="text" id="dynamicPdfViewName" placeholder="Vue principale" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label for="dynamicPdfAuthor">Auteur</label>
+            <input type="text" id="dynamicPdfAuthor" placeholder="Votre nom" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label for="dynamicPdfClient">Client</label>
+            <input type="text" id="dynamicPdfClient" placeholder="Nom du client" maxlength="50">
+          </div>
+          <div class="form-group form-group-span-2">
+            <label for="dynamicPdfDescription">Description</label>
+            <textarea id="dynamicPdfDescription" placeholder="Description du projet..." maxlength="200" rows="3"></textarea>
+          </div>
+          <div class="form-group form-group-span-2">
+            <label>Logo client / Photo du projet</label>
+            <div id="dynamicImageDropZone" class="image-drop-zone">
+              <div id="dynamicImagePlaceholder" class="drop-text">
+                <span class="drop-icon">📁</span>
+                <span>Glissez une image ici ou cliquez pour sélectionner</span>
+                <small>Formats acceptés: JPG, PNG, GIF (max 5MB)</small>
+              </div>
+              <div id="dynamicImagePreview" class="image-preview">
+                <img id="dynamicImagePreviewImg" class="preview-img">
+                <button type="button" onclick="removeDynamicImage()" class="remove-img-btn" aria-label="Supprimer l'image">✕</button>
+              </div>
+              <input type="file" id="dynamicImageInput" accept="image/*" style="display: none;">
+            </div>
+          </div>
+        </div>
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="dynamicPdfIncludeStats" checked>
+            Inclure les statistiques détaillées
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button onclick="generateDynamicPDF()" class="btn-primary">📄 Générer PDF</button>
+        <button onclick="closeDynamicPdfModal()" class="btn-secondary">✕ Annuler</button>
+      </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    // Pré-remplir les valeurs
+    const currentDate = new Date().toLocaleDateString('fr-FR');
+    document.getElementById('dynamicPdfProjectName').value = `Projet ${currentDate}`;
+    document.getElementById('dynamicPdfViewName').value = 'Vue principale';
+
+    // Focus sur le premier champ
+    document.getElementById('dynamicPdfProjectName').focus();
+
+    // Configurer le glisser-déposer d'image
+    setupImageDropZone();
+
+    // Restaurer l'image si elle était déjà sélectionnée
+    if (selectedImageBase64) {
+      showImagePreview(selectedImageBase64);
+    }
+  }
+
+  let selectedImageBase64 = null;
+
+  function setupImageDropZone() {
+    const dropZone = document.getElementById('dynamicImageDropZone');
+    const fileInput = document.getElementById('dynamicImageInput');
+
+    // Clic pour ouvrir le sélecteur de fichier
+    dropZone.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    // Glisser-déposer
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleImageFile(files[0]);
+      }
+    });
+
+    // Sélection de fichier
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleImageFile(e.target.files[0]);
+      }
+    });
+  }
+
+  function handleImageFile(file) {
+    // Vérifier le type de fichier
+    if (!file.type.startsWith('image/')) {
+      showToast('Veuillez sélectionner un fichier image');
+      return;
+    }
+
+    // Vérifier la taille (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Le fichier est trop volumineux (max 5MB)');
+      return;
+    }
+
+    // Lire le fichier
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      selectedImageBase64 = e.target.result;
+      showImagePreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function showImagePreview(imageSrc) {
+    const placeholder = document.getElementById('dynamicImagePlaceholder');
+    const preview = document.getElementById('dynamicImagePreview');
+    const previewImg = document.getElementById('dynamicImagePreviewImg');
+
+    placeholder.style.display = 'none';
+    preview.style.display = 'block';
+    previewImg.src = imageSrc;
+  }
+
+  window.removeDynamicImage = function() {
+    selectedImageBase64 = null;
+    const placeholder = document.getElementById('dynamicImagePlaceholder');
+    const preview = document.getElementById('dynamicImagePreview');
+
+    placeholder.style.display = 'block';
+    preview.style.display = 'none';
+
+    // Reset input
+    document.getElementById('dynamicImageInput').value = '';
+  }
+
+  function closePdfExportModal() {
+    const modal = document.getElementById('pdfExportModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  // Nouvelles fonctions pour la modal dynamique
+  window.closeDynamicPdfModal = function() {
+    const modal = document.getElementById('tontonkadPdfExportModal');
+    if (modal) {
+      modal.remove();
+    }
+    // Reset de l'image sélectionnée pour éviter le cache
+    selectedImageBase64 = null;
+  }
+
+  window.generateDynamicPDF = async function() {
+    try {
+      // Récupérer les valeurs des champs dynamiques
+      const formData = {
+        projectName: document.getElementById('dynamicPdfProjectName').value || 'Projet TontonKAD',
+        viewName: document.getElementById('dynamicPdfViewName').value || 'Vue principale',
+        author: document.getElementById('dynamicPdfAuthor').value || 'TontonKAD',
+        client: document.getElementById('dynamicPdfClient').value || '',
+        description: document.getElementById('dynamicPdfDescription').value || '',
+        includeStats: document.getElementById('dynamicPdfIncludeStats').checked
+      };
+
+      // Afficher un indicateur de chargement
+      showToast('Génération du PDF en cours...');
+
+      // Générer le PDF avec les données du formulaire dynamique AVANT de fermer la modal
+      await exportToPDFWithData(formData);
+
+      // Fermer la modal APRÈS la génération du PDF
+      closeDynamicPdfModal();
+    } catch (error) {
+      console.error('Erreur lors de la génération PDF:', error);
+      showToast('Erreur: ' + error.message);
+    }
+  }
+
+  function generatePdfStats() {
+    const stats = {
+      fourreaux: fourreaux.length,
+      cables: cables.length,
+      occupation: calculateBoxOccupancy().toFixed(1),
+      dimensions: {
+        width: (WORLD_W_MM / 1000).toFixed(2),
+        height: (WORLD_H_MM / 1000).toFixed(2)
+      }
+    };
+
+    // Compter les types de fourreaux et câbles
+    const { fc, cc } = countGroups();
+    stats.typesFourreaux = Object.keys(fc).length;
+    stats.typesCables = Object.keys(cc).length;
+
+    // Détail des fourreaux par type
+    stats.detailFourreaux = Object.entries(fc).map(([type, count]) => ({ type, count }));
+    stats.detailCables = Object.entries(cc).map(([type, count]) => ({ type, count }));
+
+    return stats;
+  }
+
+  async function loadLogoAsBase64() {
+    try {
+      const response = await fetch('ico/CEAHN.png');
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.warn('Impossible de charger le logo CEAHN:', error);
+      return null;
+    }
+  }
+
+  function getCanvasImageData() {
+    // Créer un canvas temporaire pour capturer l'image sans les marges
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // Dimensions du contenu utile (sans marges)
+    const contentWidth = canvas.width - (CANVAS_MARGIN * 2 * pixelRatio);
+    const contentHeight = canvas.height - (CANVAS_MARGIN * 2 * pixelRatio);
+
+    tempCanvas.width = contentWidth;
+    tempCanvas.height = contentHeight;
+
+    // Copier le contenu utile du canvas principal
+    tempCtx.drawImage(
+      canvas,
+      CANVAS_MARGIN * pixelRatio, CANVAS_MARGIN * pixelRatio, // source x, y
+      contentWidth, contentHeight, // source width, height
+      0, 0, // destination x, y
+      contentWidth, contentHeight // destination width, height
+    );
+
+    return tempCanvas.toDataURL('image/png', 0.95);
+  }
+
+  async function exportToPDF() {
+    // Pour compatibilité avec l'ancienne modal HTML
+    const formData = {
+      projectName: document.getElementById('pdfProjectName')?.value || 'Projet TontonKAD',
+      viewName: document.getElementById('pdfViewName')?.value || 'Vue principale',
+      author: document.getElementById('pdfAuthor')?.value || 'TontonKAD',
+      client: document.getElementById('pdfClient')?.value || '',
+      description: document.getElementById('pdfDescription')?.value || '',
+      includeStats: document.getElementById('pdfIncludeStats')?.checked || true
+    };
+
+    return exportToPDFWithData(formData);
+  }
+
+  async function loadJsPDFIfNeeded() {
+    console.log('Vérification de jsPDF...');
+    console.log('window.jsPDF:', typeof window.jsPDF);
+    console.log('window.jspdf:', typeof window.jspdf);
+    console.log('Objets window avec "pdf":', Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
+
+    if (typeof window.jsPDF !== 'undefined') {
+      console.log('jsPDF déjà disponible');
+      return; // Déjà chargé
+    }
+
+    console.log('Chargement dynamique de jsPDF...');
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'jspdf.min.js';
+      script.onload = () => {
+        console.log('Script jsPDF chargé');
+        console.log('Après chargement - window.jsPDF:', typeof window.jsPDF);
+        console.log('Après chargement - window.jspdf:', typeof window.jspdf);
+        console.log('Objets window avec "pdf":', Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
+
+        // Attendre un peu que la lib s'initialise
+        setTimeout(() => {
+          console.log('Après timeout - window.jsPDF:', typeof window.jsPDF);
+          resolve();
+        }, 100);
+      };
+      script.onerror = () => {
+        reject(new Error('Impossible de charger jsPDF'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  async function exportToPDFWithData(formData) {
+    try {
+      // Charger jsPDF si nécessaire
+      await loadJsPDFIfNeeded();
+
+      // Vérifier si jsPDF est maintenant disponible
+      console.log('Final check - window.jsPDF:', typeof window.jsPDF);
+      console.log('Final check - window.jspdf:', typeof window.jspdf);
+
+      let jsPDFClass;
+      if (typeof window.jsPDF !== 'undefined') {
+        jsPDFClass = window.jsPDF.jsPDF || window.jsPDF;
+        console.log('Utilisation de window.jsPDF');
+      } else if (typeof window.jspdf !== 'undefined') {
+        jsPDFClass = window.jspdf.jsPDF || window.jspdf;
+        console.log('Utilisation de window.jspdf');
+      } else if (typeof jsPDF !== 'undefined') {
+        jsPDFClass = jsPDF;
+        console.log('Utilisation de jsPDF global');
+      } else {
+        throw new Error('Bibliothèque jsPDF non disponible après chargement');
+      }
+
+      console.log('jsPDFClass:', jsPDFClass);
+
+      // Créer le PDF en format A4 portrait
+      const pdf = new jsPDFClass('portrait', 'mm', 'a4');
+
+      // Dimensions A4 portrait : 210 x 297 mm
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 15;
+      const contentWidth = pageWidth - (margin * 2);
+      const contentHeight = pageHeight - (margin * 2);
+
+      // Charger le logo
+      const logoBase64 = await loadLogoAsBase64();
+
+      // === EN-TÊTE EN 3 SECTIONS === //
+
+      // SECTION 1 : Logo CEAHN (quart gauche)
+      const headerHeight = 25;
+      const leftQuarterWidth = contentWidth * 0.25;
+      const middleWidth = contentWidth * 0.5;
+      const rightQuarterWidth = contentWidth * 0.25;
+
+      if (logoBase64) {
+        // Logo CEAHN centré dans le quart gauche
+        const logoSize = 20;
+        const logoX = margin + (leftQuarterWidth - logoSize) / 2;
+        pdf.addImage(logoBase64, 'PNG', logoX, margin, logoSize, logoSize);
+      }
+
+      // SECTION 2 : Informations centrées (milieu)
+      const middleStartX = margin + leftQuarterWidth;
+      const middleCenterX = middleStartX + (middleWidth / 2);
+
+      // Nom du projet (centré)
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      const projectNameWidth = pdf.getTextWidth(formData.projectName);
+      pdf.text(formData.projectName, middleCenterX - (projectNameWidth / 2), margin + 8);
+
+      // Nom de la vue (centré)
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'normal');
+      const viewNameWidth = pdf.getTextWidth(formData.viewName);
+      pdf.text(formData.viewName, middleCenterX - (viewNameWidth / 2), margin + 14);
+
+      // Auteur (centré, sans date)
+      if (formData.author) {
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'italic');
+        const authorText = `Auteur: ${formData.author}`;
+        const authorWidth = pdf.getTextWidth(authorText);
+        pdf.text(authorText, middleCenterX - (authorWidth / 2), margin + 20);
+      }
+
+      // SECTION 3 : Image client (quart droit) - Préserver l'aspect ratio
+      if (selectedImageBase64) {
+        // Calculer les dimensions de l'image client pour préserver l'aspect ratio
+        const tempClientImg = new Image();
+        tempClientImg.src = selectedImageBase64;
+        await new Promise(resolve => {
+          tempClientImg.onload = resolve;
+        });
+
+        const rightStartX = margin + leftQuarterWidth + middleWidth;
+        const availableWidth = rightQuarterWidth;
+        const availableHeight = 20; // Hauteur max dans l'en-tête
+
+        // Calculer les dimensions en préservant l'aspect ratio
+        const clientAspectRatio = tempClientImg.width / tempClientImg.height;
+        let clientImageWidth = Math.min(availableWidth * 0.9, 25); // Max 25mm
+        let clientImageHeight = clientImageWidth / clientAspectRatio;
+
+        // Si l'image est trop haute, ajuster par la hauteur
+        if (clientImageHeight > availableHeight) {
+          clientImageHeight = availableHeight;
+          clientImageWidth = clientImageHeight * clientAspectRatio;
+        }
+
+        // Centrer l'image dans le quart droit
+        const clientImageX = rightStartX + (availableWidth - clientImageWidth) / 2;
+        const clientImageY = margin + (availableHeight - clientImageHeight) / 2;
+
+        pdf.addImage(selectedImageBase64, 'JPEG', clientImageX, clientImageY, clientImageWidth, clientImageHeight);
+      }
+
+      // Description si fournie
+      if (formData.description) {
+        pdf.setFontSize(10);
+        pdf.text(formData.description, margin, margin + 35, {maxWidth: contentWidth - 70});
+      }
+
+      // Image du canvas au centre
+      const canvasImage = getCanvasImageData();
+      const canvasStartY = margin + 45;
+      const statsAreaHeight = formData.includeStats ? 75 : 0; // Plus d'espace pour les stats
+      const canvasAreaHeight = contentHeight - 80 - statsAreaHeight; // Hauteur disponible pour l'image + cotes
+
+      // Calculer les dimensions pour centrer l'image (format portrait) avec place pour les cotes
+      const maxImageWidth = contentWidth * 0.85; // Agrandi pour un meilleur affichage
+      const maxImageHeight = canvasAreaHeight - 15; // Optimisé pour plus d'espace
+
+      // Obtenir les dimensions réelles de l'image canvas
+      const tempImg = new Image();
+      tempImg.src = canvasImage;
+      await new Promise(resolve => {
+        tempImg.onload = resolve;
+      });
+
+      const aspectRatio = tempImg.width / tempImg.height;
+      let imageWidth = maxImageWidth;
+      let imageHeight = imageWidth / aspectRatio;
+
+      if (imageHeight > maxImageHeight) {
+        imageHeight = maxImageHeight;
+        imageWidth = imageHeight * aspectRatio;
+      }
+
+      const imageX = margin + (contentWidth - imageWidth) / 2;
+      const imageY = canvasStartY + (canvasAreaHeight - imageHeight) / 2;
+
+      pdf.addImage(canvasImage, 'PNG', imageX, imageY, imageWidth, imageHeight);
+
+      // Ajouter les cotes autour du canvas
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setDrawColor(100, 100, 100);
+      pdf.setLineWidth(0.3);
+
+      // Dimensions réelles du projet en mm
+      const realWidth = WORLD_W_MM;
+      const realHeight = WORLD_H_MM;
+
+      // Cote horizontale (largeur) - en bas
+      const dimensionY = imageY + imageHeight + 8;
+      pdf.line(imageX, dimensionY, imageX + imageWidth, dimensionY);
+      pdf.line(imageX, dimensionY - 2, imageX, dimensionY + 2);
+      pdf.line(imageX + imageWidth, dimensionY - 2, imageX + imageWidth, dimensionY + 2);
+
+      const widthText = `${realWidth} mm`;
+      const widthTextWidth = pdf.getTextWidth(widthText);
+      pdf.text(widthText, imageX + (imageWidth - widthTextWidth) / 2, dimensionY + 5);
+
+      // Cote verticale (hauteur) - à droite
+      const dimensionX = imageX + imageWidth + 8;
+      pdf.line(dimensionX, imageY, dimensionX, imageY + imageHeight);
+      pdf.line(dimensionX - 2, imageY, dimensionX + 2, imageY);
+      pdf.line(dimensionX - 2, imageY + imageHeight, dimensionX + 2, imageY + imageHeight);
+
+      const heightText = `${realHeight} mm`;
+
+      // Texte horizontal pour la hauteur (plus simple et lisible)
+      pdf.text(heightText, dimensionX + 3, imageY + imageHeight / 2 + 2);
+
+      // Statistiques en bas
+      if (formData.includeStats) {
+        const stats = generatePdfStats();
+        const statsY = pageHeight - 70; // Encore plus haut pour être sûr
+
+        console.log(`Stats position: Y=${statsY}, pageHeight=${pageHeight}`);
+
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('STATISTIQUES DU PROJET', margin, statsY);
+
+        // Rectangle de fond pour les stats
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(margin, statsY + 2, contentWidth, 40, 'F');
+
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        let col1X = margin + 5;
+        let col2X = margin + 55;
+        let col3X = margin + 105;
+        let col4X = margin + 155;
+        let statsLineY = statsY + 12;
+
+        // Première ligne de stats
+        pdf.text(`Fourreaux: ${stats.fourreaux}`, col1X, statsLineY);
+        pdf.text(`Cables: ${stats.cables}`, col2X, statsLineY);
+        pdf.text(`Occupation: ${stats.occupation}%`, col3X, statsLineY);
+
+        statsLineY += 8;
+        pdf.text(`Dimensions: ${stats.dimensions.width}x${stats.dimensions.height}m`, col1X, statsLineY);
+        pdf.text(`Types fourreaux: ${stats.typesFourreaux}`, col2X, statsLineY);
+        pdf.text(`Types cables: ${stats.typesCables}`, col3X, statsLineY);
+
+        if (stats.typesFourreaux > 0) {
+          statsLineY += 6;
+          pdf.text(`Fourreau principal: ${stats.detailFourreaux[0]?.type || 'N/A'}`, col1X, statsLineY);
+        }
+
+        // Ligne finale avec timestamp
+        statsLineY += 8;
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'italic');
+        const dateStr = new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+        pdf.text(`Genere par TontonKAD le ${dateStr}`, col1X, statsLineY);
+      }
+
+      // Sauvegarder le PDF
+      const fileName = `${formData.projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+      pdf.save(fileName);
+
+      // Reset de l'image sélectionnée pour éviter le cache
+      selectedImageBase64 = null;
+
+      showToast('Export PDF terminé !');
+      closePdfExportModal();
+
+    } catch (error) {
+      console.error('Erreur export PDF:', error);
+      showToast('Erreur lors de l\'export PDF: ' + error.message);
+      // Reset de l'image même en cas d'erreur
+      selectedImageBase64 = null;
+    }
+  }
+
   /* ====== Initialisation & Écouteurs d'événements ====== */
   async function init() {
     // 1. Charger les données en premier
@@ -3028,9 +3686,8 @@ function initSearchableLists() {
             startDrag(obj, selected);
           }
         } else {
-          // Clic sur le vide = désélectionner tout
-          selected = null;
-          selectedMultiple = [];
+          // Clic sur le vide = démarrer la sélection par rectangle
+          startMarqueeSelection(e);
         }
         updateSelectedInfo();
         redraw();
@@ -3068,6 +3725,30 @@ function initSearchableLists() {
     boxHInput.addEventListener('keydown', handleDimensionEnter);
     boxDInput.addEventListener('keydown', handleDimensionEnter);
 
+    // Export PDF
+    document.getElementById('exportPDF').addEventListener('click', openPdfExportModal);
+    document.getElementById('confirmPdfExport').addEventListener('click', exportToPDF);
+    document.getElementById('cancelPdfExport').addEventListener('click', closePdfExportModal);
+
+    // Fermer le modal en cliquant en dehors
+    document.getElementById('pdfExportModal').addEventListener('click', (e) => {
+      if (e.target.id === 'pdfExportModal') {
+        closePdfExportModal();
+      }
+    });
+
+    // Fermer le modal avec Échap
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('pdfExportModal');
+        if (modal.style.display === 'flex') {
+          closePdfExportModal();
+        }
+      }
+    });
+
+    // Exposer les fonctions globalement pour les onclick du HTML
+    window.closePdfExportModal = closePdfExportModal;
     document.getElementById('exportDXF').addEventListener('click', exportDXF);
     document.getElementById('clear').addEventListener('click', () => {
       fourreaux.length = 0;
@@ -4053,6 +4734,9 @@ function initSearchableLists() {
     // Initialiser le système de sauvegarde après que tout soit prêt
     window.projectManager = new ProjectManager();
     window.projectUI = new ProjectUI();
+
+    // Initialiser le sélecteur de thème
+    initThemeSwitcher();
   }
   
   /* ====== Gestion des verrous de dimensions ====== */
@@ -4085,7 +4769,59 @@ function initSearchableLists() {
         checkForPossibleReduction();
       });
     }
+
+    // Rendre les icônes de cadenas cliquables
+    const lockIcons = document.querySelectorAll('.lock-icon');
+    lockIcons.forEach(icon => {
+      icon.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Trouver la checkbox cachée dans cette icône
+        const checkbox = this.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+          checkbox.checked = !checkbox.checked;
+          // Déclencher l'événement change pour activer la logique existante
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+    });
   }
+
+  /* ====== Gestion du thème Light/Dark ====== */
+  function initThemeSwitcher() {
+    const themeSwitcher = document.getElementById('theme-switcher');
+    const body = document.body;
+
+    // Appliquer le thème sauvegardé au chargement
+    const savedTheme = localStorage.getItem('tontonkad-theme') || 'dark';
+    if (savedTheme === 'light') {
+      body.classList.add('light-theme');
+    }
+
+    themeSwitcher.addEventListener('click', () => {
+      if (body.classList.contains('light-theme')) {
+        // Passer au thème sombre
+        body.classList.remove('light-theme');
+        localStorage.setItem('tontonkad-theme', 'dark');
+        showToast('Thème sombre activé');
+      } else {
+        // Passer au thème clair
+        body.classList.add('light-theme');
+        localStorage.setItem('tontonkad-theme', 'light');
+        showToast('Thème clair activé');
+      }
+      // Redessiner pour que les couleurs du canvas (si elles dépendent des variables) soient mises à jour
+      redraw();
+    });
+
+    // Mettre à jour l'icône du sélecteur de thème en fonction du thème actuel
+    const observer = new MutationObserver(() => {
+      // Pas besoin de faire quoi que ce soit ici, le CSS gère l'affichage des icônes
+    });
+    observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+  }
+
 
   /* ====== Interface de Gestion des Projets ====== */
   class ProjectUI {
