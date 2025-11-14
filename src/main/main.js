@@ -297,22 +297,18 @@ autoUpdater.on('download-progress', (progressObj) => {
 });
 
 autoUpdater.on('update-downloaded', () => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Mise à jour prête',
-    message: 'La mise à jour a été téléchargée',
-    detail: 'Elle sera installée au redémarrage de l\'application',
-    buttons: ['Redémarrer maintenant', 'Plus tard'],
-    defaultId: 0
-  }).then(result => {
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall();
-    }
-  });
+  console.log('Mise à jour téléchargée avec succès');
+  mainWindow.webContents.send('update-downloaded');
 });
 
 autoUpdater.on('error', (err) => {
   console.error('Erreur auto-updater:', err);
+  mainWindow.webContents.send('update-error', err.message);
+});
+
+// Listener pour redémarrer et installer
+ipcMain.on('restart-and-install', () => {
+  autoUpdater.quitAndInstall();
 });
 
 // IPC Handlers pour les opérations fichiers

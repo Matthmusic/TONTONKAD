@@ -232,6 +232,33 @@
     updateProgressText.textContent = `Téléchargement en cours... ${percent.toFixed(0)}%`;
   });
 
+  // Mise à jour téléchargée
+  window.electronAPI.onUpdateDownloaded(() => {
+    console.log('Mise à jour téléchargée avec succès');
+    updateProgressContainer.classList.add('hidden');
+    updateBtnDownload.textContent = 'Redémarrer maintenant';
+    updateBtnDownload.disabled = false;
+    updateBtnLater.disabled = false;
+    updateProgressText.textContent = 'Téléchargement terminé !';
+    updateDescription.textContent = 'La mise à jour a été téléchargée. Cliquez sur "Redémarrer maintenant" pour l\'installer.';
+
+    // Changer l'action du bouton
+    updateBtnDownload.onclick = () => {
+      window.electronAPI.restartAndInstall();
+    };
+  });
+
+  // Erreur de mise à jour
+  window.electronAPI.onUpdateError((message) => {
+    console.error('Erreur de mise à jour:', message);
+    updateProgressContainer.classList.add('hidden');
+    updateBtnDownload.textContent = 'Télécharger maintenant';
+    updateBtnDownload.disabled = false;
+    updateBtnLater.disabled = false;
+    updateDescription.textContent = `Erreur lors du téléchargement: ${message}`;
+    updateDescription.style.color = '#dc2626';
+  });
+
   // Détection de changements pour marquer comme modifié
   // Cette fonction devra être appelée dans script.js quand des modifications sont faites
   window.addEventListener('project-modified', () => {
