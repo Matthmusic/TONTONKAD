@@ -254,28 +254,48 @@ const CHEMINS_CABLE_FALLBACK = [
 
   async function loadData() {
     try {
-      // Tentative de chargement des fichiers CSV externes
-      const [tpcResponse, cableResponse, cheminsCableResponse] = await Promise.all([
-        fetch('./data/fourreaux.csv'),
-        fetch('./data/cables.csv'),
-        fetch('./data/chemins_de_cable.csv')
-      ]);
+      let tpcText, cableText, cheminsCableText;
 
-      if (!tpcResponse.ok || !cableResponse.ok || !cheminsCableResponse.ok) {
-        let msg = '';
-        if (!tpcResponse.ok) msg += `./data/fourreaux.csv: ${tpcResponse.statusText}. `;
-        if (!cableResponse.ok) msg += `./data/cables.csv: ${cableResponse.statusText}.`;
-        if (!cheminsCableResponse.ok) msg += `./data/chemins_de_cable.csv: ${cheminsCableResponse.statusText}.`;
-        throw new Error(`Erreur réseau: ${msg}`);
+      // Vérifier si on est en mode Electron
+      if (window.electronAPI && window.electronAPI.isElectron && window.loadCSVFromElectron) {
+        console.log('Chargement des CSV depuis Electron (APPDATA)');
+        // Charger depuis le dossier APPDATA via Electron
+        const [tpcData, cableData, cheminsCableData] = await Promise.all([
+          window.loadCSVFromElectron('fourreaux.csv'),
+          window.loadCSVFromElectron('cables.csv'),
+          window.loadCSVFromElectron('chemins_de_cable.csv')
+        ]);
+
+        tpcText = tpcData;
+        cableText = cableData;
+        cheminsCableText = cheminsCableData;
+      } else {
+        console.log('Chargement des CSV depuis fetch (mode web)');
+        // Mode web - chargement classique
+        const [tpcResponse, cableResponse, cheminsCableResponse] = await Promise.all([
+          fetch('./data/fourreaux.csv'),
+          fetch('./data/cables.csv'),
+          fetch('./data/chemins_de_cable.csv')
+        ]);
+
+        if (!tpcResponse.ok || !cableResponse.ok || !cheminsCableResponse.ok) {
+          let msg = '';
+          if (!tpcResponse.ok) msg += `./data/fourreaux.csv: ${tpcResponse.statusText}. `;
+          if (!cableResponse.ok) msg += `./data/cables.csv: ${cableResponse.statusText}.`;
+          if (!cheminsCableResponse.ok) msg += `./data/chemins_de_cable.csv: ${cheminsCableResponse.statusText}.`;
+          throw new Error(`Erreur réseau: ${msg}`);
+        }
+
+        tpcText = await tpcResponse.text();
+        cableText = await cableResponse.text();
+        cheminsCableText = await cheminsCableResponse.text();
       }
-
-      const tpcText = await tpcResponse.text();
-      const cableText = await cableResponse.text();
-      const cheminsCableText = await cheminsCableResponse.text();
 
       FOURREAUX = parseCSV(tpcText);
       CABLES = parseCSV(cableText);
       CHEMINS_CABLE = parseCSV(cheminsCableText, ',');
+
+      console.log(`Données chargées - Fourreaux: ${FOURREAUX.length}, Câbles: ${CABLES.length}, Chemins: ${CHEMINS_CABLE.length}`);
 
       if (FOURREAUX.length === 0 || CABLES.length === 0 || CHEMINS_CABLE.length === 0) {
         throw new Error('Les données CSV sont vides ou n\'ont pas pu être analysées.');
@@ -498,6 +518,7 @@ function initSearchableLists() {
                 group: c.fam
             });
         });
+        console.log(`${cableOptions.length} options de câbles créées`);
 
         // Fonction pour filtrer et afficher les câbles
         function filterCables(searchTerm = '') {
