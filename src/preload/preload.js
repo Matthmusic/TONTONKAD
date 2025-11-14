@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadCSV: (filename) => ipcRenderer.invoke('load-csv', filename),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
 
+  // Configuration de la base de données
+  getConfig: () => ipcRenderer.invoke('get-config'),
+  setDataPath: (newPath) => ipcRenderer.invoke('set-data-path', newPath),
+  resetDataPath: () => ipcRenderer.invoke('reset-data-path'),
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
+
   // Recevoir les événements du menu
   onMenuNewProject: (callback) => ipcRenderer.on('menu-new-project', callback),
   onProjectLoaded: (callback) => ipcRenderer.on('project-loaded', (event, data) => callback(data)),

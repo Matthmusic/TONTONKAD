@@ -8,24 +8,75 @@ const isDev = process.argv.includes('--dev');
 
 // Dossier de données utilisateur dans APPDATA
 const userDataPath = app.getPath('userData');
-const userDataFolder = path.join(userDataPath, 'data');
+const defaultDataFolder = path.join(userDataPath, 'data');
+const configPath = path.join(userDataPath, 'config.json');
+
+// Configuration par défaut
+let config = {
+  dataPath: defaultDataFolder,
+  useCustomPath: false
+};
+
+// Variable pour le dossier actuellement utilisé
+let activeDataFolder = defaultDataFolder;
+
+// Charger la configuration
+async function loadConfig() {
+  try {
+    const data = await fs.readFile(configPath, 'utf8');
+    config = { ...config, ...JSON.parse(data) };
+    console.log('✓ Configuration chargée:', config);
+  } catch (error) {
+    console.log('ℹ Utilisation de la configuration par défaut');
+  }
+}
+
+// Sauvegarder la configuration
+async function saveConfig() {
+  try {
+    await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf8');
+    console.log('✓ Configuration sauvegardée');
+  } catch (error) {
+    console.error('✗ Erreur lors de la sauvegarde de la configuration:', error);
+  }
+}
+
+// Déterminer le dossier de données à utiliser
+async function determineDataFolder() {
+  // Si un chemin personnalisé est configuré, essayer de l'utiliser
+  if (config.useCustomPath && config.dataPath !== defaultDataFolder) {
+    try {
+      // Vérifier si le chemin est accessible
+      await fs.access(config.dataPath);
+      activeDataFolder = config.dataPath;
+      console.log(`✓ Utilisation du chemin personnalisé: ${activeDataFolder}`);
+      return;
+    } catch (error) {
+      console.warn(`⚠ Chemin personnalisé non accessible (${config.dataPath}), fallback vers APPDATA`);
+      activeDataFolder = defaultDataFolder;
+    }
+  } else {
+    activeDataFolder = defaultDataFolder;
+    console.log(`✓ Utilisation du chemin par défaut: ${activeDataFolder}`);
+  }
+}
 
 // Fonction pour initialiser le dossier data dans APPDATA
 async function initializeUserDataFolder() {
   try {
     // Créer le dossier s'il n'existe pas
-    await fs.mkdir(userDataFolder, { recursive: true });
+    await fs.mkdir(activeDataFolder, { recursive: true });
 
     // Liste des fichiers CSV à copier
     const csvFiles = ['cables.csv', 'chemins_de_cable.csv', 'fourreaux.csv'];
 
     for (const file of csvFiles) {
-      const userFilePath = path.join(userDataFolder, file);
+      const userFilePath = path.join(activeDataFolder, file);
 
       // Vérifier si le fichier existe déjà
       try {
         await fs.access(userFilePath);
-        console.log(`✓ ${file} existe déjà dans APPDATA`);
+        console.log(`✓ ${file} existe déjà`);
       } catch {
         // Le fichier n'existe pas, le copier depuis les ressources
         const sourceFile = isDev
@@ -35,14 +86,14 @@ async function initializeUserDataFolder() {
         try {
           const data = await fs.readFile(sourceFile, 'utf8');
           await fs.writeFile(userFilePath, data, 'utf8');
-          console.log(`✓ ${file} copié vers APPDATA`);
+          console.log(`✓ ${file} copié vers ${activeDataFolder}`);
         } catch (err) {
           console.error(`✗ Erreur lors de la copie de ${file}:`, err);
         }
       }
     }
 
-    console.log(`Dossier de données utilisateur: ${userDataFolder}`);
+    console.log(`Dossier de données actif: ${activeDataFolder}`);
   } catch (error) {
     console.error('Erreur lors de l\'initialisation du dossier data:', error);
   }
@@ -401,10 +452,10 @@ ipcMain.handle('export-file', async (event, { type, content, defaultName }) => {
   return { success: false };
 });
 
-// Charger les données CSV depuis APPDATA
+// Charger les données CSV depuis le dossier actif
 ipcMain.handle('load-csv', async (event, filename) => {
   try {
-    const csvPath = path.join(userDataFolder, filename);
+    const csvPath = path.join(activeDataFolder, filename);
     const data = await fs.readFile(csvPath, 'utf8');
     return { success: true, data };
   } catch (error) {
@@ -415,11 +466,70 @@ ipcMain.handle('load-csv', async (event, filename) => {
 // Ouvrir le dossier data dans l'explorateur
 ipcMain.handle('open-data-folder', async () => {
   try {
-    await shell.openPath(userDataFolder);
+    await shell.openPath(activeDataFolder);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }
+});
+
+// Obtenir la configuration actuelle
+ipcMain.handle('get-config', async () => {
+  return {
+    ...config,
+    activeDataFolder,
+    defaultDataFolder
+  };
+});
+
+// Définir le chemin personnalisé de la base de données
+ipcMain.handle('set-data-path', async (event, newPath) => {
+  try {
+    // Vérifier si le chemin est accessible
+    await fs.access(newPath);
+
+    config.dataPath = newPath;
+    config.useCustomPath = true;
+    await saveConfig();
+
+    // Redéterminer le dossier actif
+    await determineDataFolder();
+    await initializeUserDataFolder();
+
+    return { success: true, path: activeDataFolder };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Réinitialiser au chemin par défaut
+ipcMain.handle('reset-data-path', async () => {
+  try {
+    config.dataPath = defaultDataFolder;
+    config.useCustomPath = false;
+    await saveConfig();
+
+    activeDataFolder = defaultDataFolder;
+    await initializeUserDataFolder();
+
+    return { success: true, path: activeDataFolder };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Sélectionner un dossier via dialog
+ipcMain.handle('select-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Sélectionner le dossier de la base de données CSV',
+    buttonLabel: 'Sélectionner'
+  });
+
+  if (!result.canceled && result.filePaths.length > 0) {
+    return { success: true, path: result.filePaths[0] };
+  }
+  return { success: false };
 });
 
 // Récupérer la version de l'application
@@ -429,6 +539,8 @@ ipcMain.handle('get-app-version', () => {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  await loadConfig();
+  await determineDataFolder();
   await initializeUserDataFolder();
   createWindow();
 });

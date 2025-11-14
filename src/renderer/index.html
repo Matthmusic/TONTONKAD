@@ -65,6 +65,51 @@
     </div>
   </div>
 
+  <!-- Modal de configuration de la base de données -->
+  <div id="settings-modal" class="update-notification hidden">
+    <div class="update-notification-content">
+      <div class="update-notification-header">
+        <div class="update-icon">⚙️</div>
+        <h3>Paramètres de la base de données</h3>
+      </div>
+      <div class="update-notification-body">
+        <p class="update-description">Choisissez l'emplacement des fichiers CSV (câbles, fourreaux, chemins de câble).</p>
+
+        <div style="margin-top: 20px;">
+          <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+            <input type="radio" name="data-location" id="radio-default" checked style="margin-right: 8px;">
+            Utiliser le dossier local (APPDATA)
+          </label>
+          <div id="default-path-info" style="margin-left: 28px; margin-bottom: 16px; font-size: 12px; color: var(--text-secondary);"></div>
+
+          <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+            <input type="radio" name="data-location" id="radio-custom" style="margin-right: 8px;">
+            Utiliser un dossier personnalisé (réseau ou local)
+          </label>
+          <div id="custom-path-container" style="margin-left: 28px; margin-top: 12px; display: none;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="text" id="custom-path-input" readonly
+                     style="flex: 1; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary);"
+                     placeholder="Sélectionner un dossier...">
+              <button id="browse-folder-btn" class="update-btn update-btn-secondary" style="padding: 8px 16px; min-width: auto;">
+                📁 Parcourir
+              </button>
+            </div>
+            <p style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);">
+              Exemple: <code style="background: var(--glass-bg); padding: 2px 6px; border-radius: 4px;">Z:\F - UTILITAIRES\TONTONKAD\DATABASE</code>
+            </p>
+          </div>
+        </div>
+
+        <div id="settings-status" style="margin-top: 16px; padding: 12px; border-radius: 8px; display: none;"></div>
+      </div>
+      <div class="update-notification-footer">
+        <button class="update-btn update-btn-secondary" id="settings-cancel-btn">Annuler</button>
+        <button class="update-btn update-btn-primary" id="settings-save-btn">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
   <div class="wrap">
     <aside class="panel">
       <div class="panel-resize-handle"></div>
@@ -790,24 +835,127 @@
 
   </script>
 
-  <!-- Settings Button Script -->
+  <!-- Settings Button and Modal Script -->
   <script>
     // Gérer le clic sur le bouton paramètres (Electron uniquement)
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       const settingsButton = document.getElementById('settings-button');
+      const settingsModal = document.getElementById('settings-modal');
+      const radioDefault = document.getElementById('radio-default');
+      const radioCustom = document.getElementById('radio-custom');
+      const customPathContainer = document.getElementById('custom-path-container');
+      const customPathInput = document.getElementById('custom-path-input');
+      const browseFolderBtn = document.getElementById('browse-folder-btn');
+      const defaultPathInfo = document.getElementById('default-path-info');
+      const settingsCancelBtn = document.getElementById('settings-cancel-btn');
+      const settingsSaveBtn = document.getElementById('settings-save-btn');
+      const settingsStatus = document.getElementById('settings-status');
 
-      if (settingsButton && window.electronAPI && window.electronAPI.openDataFolder) {
-        settingsButton.addEventListener('click', async () => {
-          try {
-            await window.electronAPI.openDataFolder();
-          } catch (error) {
-            console.error('Erreur lors de l\'ouverture du dossier data:', error);
-            alert('Impossible d\'ouvrir le dossier de données.');
+      if (!window.electronAPI || !window.electronAPI.getConfig) {
+        if (settingsButton) settingsButton.style.display = 'none';
+        return;
+      }
+
+      let currentConfig = null;
+
+      // Charger la configuration actuelle
+      async function loadCurrentConfig() {
+        try {
+          currentConfig = await window.electronAPI.getConfig();
+          defaultPathInfo.textContent = currentConfig.defaultDataFolder;
+
+          if (currentConfig.useCustomPath) {
+            radioCustom.checked = true;
+            customPathContainer.style.display = 'block';
+            customPathInput.value = currentConfig.dataPath;
+          } else {
+            radioDefault.checked = true;
+            customPathContainer.style.display = 'none';
           }
-        });
-      } else if (settingsButton && (!window.electronAPI || !window.electronAPI.openDataFolder)) {
-        // En mode web, cacher le bouton
-        settingsButton.style.display = 'none';
+        } catch (error) {
+          console.error('Erreur lors du chargement de la config:', error);
+        }
+      }
+
+      // Ouvrir la modal
+      settingsButton.addEventListener('click', async () => {
+        await loadCurrentConfig();
+        settingsModal.classList.remove('hidden');
+        settingsStatus.style.display = 'none';
+      });
+
+      // Fermer la modal
+      settingsCancelBtn.addEventListener('click', () => {
+        settingsModal.classList.add('hidden');
+      });
+
+      // Toggle custom path container
+      radioDefault.addEventListener('change', () => {
+        if (radioDefault.checked) {
+          customPathContainer.style.display = 'none';
+        }
+      });
+
+      radioCustom.addEventListener('change', () => {
+        if (radioCustom.checked) {
+          customPathContainer.style.display = 'block';
+        }
+      });
+
+      // Parcourir les dossiers
+      browseFolderBtn.addEventListener('click', async () => {
+        try {
+          const result = await window.electronAPI.selectFolder();
+          if (result.success) {
+            customPathInput.value = result.path;
+          }
+        } catch (error) {
+          console.error('Erreur lors de la sélection du dossier:', error);
+        }
+      });
+
+      // Sauvegarder la configuration
+      settingsSaveBtn.addEventListener('click', async () => {
+        try {
+          settingsSaveBtn.disabled = true;
+          settingsSaveBtn.textContent = 'Enregistrement...';
+
+          let result;
+          if (radioCustom.checked) {
+            const customPath = customPathInput.value.trim();
+            if (!customPath) {
+              showStatus('Veuillez sélectionner un dossier', 'error');
+              return;
+            }
+            result = await window.electronAPI.setDataPath(customPath);
+          } else {
+            result = await window.electronAPI.resetDataPath();
+          }
+
+          if (result.success) {
+            showStatus(`Configuration enregistrée ! Dossier actif : ${result.path}`, 'success');
+            setTimeout(() => {
+              settingsModal.classList.add('hidden');
+              // Recharger la page pour utiliser la nouvelle base de données
+              window.location.reload();
+            }, 2000);
+          } else {
+            showStatus(`Erreur : ${result.error}`, 'error');
+          }
+        } catch (error) {
+          console.error('Erreur lors de la sauvegarde:', error);
+          showStatus(`Erreur : ${error.message}`, 'error');
+        } finally {
+          settingsSaveBtn.disabled = false;
+          settingsSaveBtn.textContent = 'Enregistrer';
+        }
+      });
+
+      function showStatus(message, type) {
+        settingsStatus.textContent = message;
+        settingsStatus.style.display = 'block';
+        settingsStatus.style.background = type === 'success' ? 'var(--success-bg)' : 'var(--error-bg)';
+        settingsStatus.style.color = type === 'success' ? 'var(--success-color)' : 'var(--error-color)';
       }
     });
   </script>
