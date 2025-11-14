@@ -16,7 +16,12 @@
       "Bash(npm install)",
       "Bash(chmod:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(find:*)",
+      "Bash(git remote add:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
