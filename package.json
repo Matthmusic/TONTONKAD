@@ -1,0 +1,79 @@
+{
+  "name": "tontonkad",
+  "version": "2.0.0",
+  "description": "TONTONKAD - Dimensionnement de chemins de câbles et fourreaux",
+  "main": "src/main/main.js",
+  "author": "TONTONKAD Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "release": "electron-builder --publish always"
+  },
+  "keywords": [
+    "electrical",
+    "engineering",
+    "cables",
+    "conduits",
+    "design",
+    "CAD"
+  ],
+  "devDependencies": {
+    "electron": "^32.2.8",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "com.tontonkad.app",
+    "productName": "TONTONKAD",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "data/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icons/ico/icon.ico",
+      "publish": ["github"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TONTONKAD"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "assets/icons/ico/icon.icns",
+      "category": "public.app-category.productivity",
+      "publish": ["github"]
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "assets/icons/ico",
+      "category": "Engineering",
+      "publish": ["github"]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Matthmusic",
+      "repo": "TONTONKAD-v2"
+    }
+  }
+}

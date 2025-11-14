@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+    <title>TontonKAD v2 - Organisateur de Fourreaux & Câbles</title>
+    <meta name="description" content="Application web pour organiser fourreaux et câbles électriques - Calcul d'occupation et visualisation 2D - Thème CEA"/>
+    <meta name="keywords" content="fourreaux, câbles, électricité, organisation, calcul, visualisation, CEA"/>
+    <meta name="author" content="TontonKAD"/>
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website"/>
+    <meta property="og:title" content="TontonKAD v2 - Organisateur de Fourreaux & Câbles"/>
+    <meta property="og:description" content="Application web pour organiser fourreaux et câbles électriques - Nouvelle interface CEA"/>
+    <meta property="og:image" content="TONTONKAD.svg"/>
+
+    <!-- Security - Electron CSP -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self' data:"/>
+
+    <link id="favicon" rel="icon" type="image/x-icon" href="../../assets/icons/ico/TONTONKADN.ico"/>
+
+    <!-- Font Awesome 6 (local) -->
+    <link rel="stylesheet" href="../../assets/fonts/fontawesome-free-6.5.1-web/css/all.min.css"/>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css"/>
+
+    <!-- PWA Configuration -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ff914d">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="TontonKAD v2">
+    <link rel="apple-touch-icon" href="TONTONKAD.svg">
+
+    <!-- Préchargement des ressources critiques -->
+    <link rel="preload" href="script.js" as="script">
+
+    <!-- jsPDF pour l'export PDF -->
+    <script src="jspdf.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <aside class="panel">
+      <div class="panel-resize-handle"></div>
+      <div class="brand">
+        <img id="brandLogo" src="ico/TONTONKADN.png" class="logo" alt="Logo TontonKAD" />
+        <h1>Organisateur de Fourreaux & Câbles</h1>
+      </div>
+      <div class="panel-controls">
+        <div class="row">
+          <label for="shape">Forme de la boîte</label>
+          <select id="shape">
+            <option value="rect">Boîte rectangulaire</option>
+            <option value="circ">Conduit circulaire</option>
+            <option value="chemin_de_cable">Chemin de câble</option>
+          </select>
+        </div>
+        <div id="rectInputs">
+          <div class="row-inline">
+            <div class="inline-input">
+              <label for="boxW">Largeur (mm)</label>
+              <div class="input-lock-group">
+                <input id="boxW" type="number" step="0.1" min="0" value="1000" />
+                <span class="lock-icon" data-target="lockWidth">
+                  <img src="ico/cadenas-ouvert.ico" alt="Cadenas" class="cadenas-icon">
+                  <input type="checkbox" id="lockWidth" style="display: none;" />
+                </span>
+              </div>
+            </div>
+            <div class="inline-input">
+              <label for="boxH">Hauteur (mm)</label>
+              <div class="input-lock-group">
+                <input id="boxH" type="number" step="0.1" min="0" value="1000" />
+                <span class="lock-icon" data-target="lockHeight">
+                  <img src="ico/cadenas-ouvert.ico" alt="Cadenas" class="cadenas-icon">
+                  <input type="checkbox" id="lockHeight" style="display: none;" />
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="apply-dimensions-container">
+            <button id="apply" class="btn apply-btn hidden" aria-label="Appliquer les nouvelles dimensions - Raccourci: Entrée">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Appliquer les dimensions</title>
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="apply-text">Appliquer dimensions</span>
+            </button>
+          </div>
+        </div>
+        <div id="circInputs" class="hidden">
+          <div class="row">
+            <label for="boxD">Diamètre (mm)</label>
+            <input id="boxD" type="number" step="0.1" min="0" value="1000" />
+          </div>
+          <div class="apply-dimensions-container">
+            <button id="applyCirc" class="btn apply-btn hidden" aria-label="Appliquer les nouvelles dimensions - Raccourci: Entrée">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Appliquer les dimensions</title>
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="apply-text">Appliquer dimensions</span>
+            </button>
+          </div>
+        </div>
+        <div class="card hidden">
+          <div class="row">
+            <label for="targetPxPerMm">Échelle cible (px/mm)</label>
+            <input id="targetPxPerMm" type="number" step="0.01" value="1.00" />
+          </div>
+        </div>
+        <div class="card">
+          <div class="tabs">
+            <div id="tabFOURREAU" class="tab active">FOURREAU</div>
+            <div id="tabCABLE" class="tab">CÂBLE</div>
+          </div>
+          <div id="paneFOURREAU">
+            <div class="row">
+              <label for="fourreauSelect">Type de Fourreau</label>
+              <div class="searchable-select-container">
+                <input type="text" id="fourreauSearch" class="searchable-input" placeholder="Taper pour rechercher un fourreau..." autocomplete="off" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="fourreauSelect">
+                <div id="fourreauSelect" class="searchable-list" role="listbox">
+                </div>
+              </div>
+            </div>
+            <div class="small">
+              Le Fourreau est un <b>anneau</b> :
+              <span class="pill">Ø ext = code</span>,
+              <span class="pill">Ø int ≥ liste</span>.
+            </div>
+          </div>
+          <div id="paneCABLE" class="hidden">
+            <div class="row">
+              <label for="cableSelect">Type de Câble</label>
+              <div class="searchable-select-container">
+                <input type="text" id="cableSearch" class="searchable-input" placeholder="Taper pour rechercher un câble..." autocomplete="off" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="cableSelect">
+                <div id="cableSelect" class="searchable-list" role="listbox">
+                </div>
+              </div>
+            </div>
+            <div class="small">
+              Un Câble est <b>plein</b>, contrôle Ø si dans un Fourreau.
+            </div>
+          </div>
+        </div>
+        <div class="two-cols">
+          <div class="card listwrap">
+            <div class="headerline">
+              <b>Inventaire Fourreaux</b>
+              <span class="muted">
+                Objets: <span id="countInvF">0</span> • Types:
+                <span id="typesInvF">0</span>
+              </span>
+            </div>
+            <input
+              id="searchFourreau"
+              class="search"
+              placeholder="Rechercher Fourreau (type, code)…"
+            />
+            <div
+              id="listFourreau"
+              class="list"
+              role="listbox"
+              aria-label="Inventaire Fourreaux"
+            ></div>
+            <div class="small">
+              1 ligne par type (× quantité). Clique pour sélectionner un
+              exemplaire, double‑clic pour passer au suivant.
+            </div>
+          </div>
+          <div class="card listwrap">
+            <div class="headerline">
+              <b>Inventaire Câbles</b>
+              <span class="muted">
+                Objets: <span id="countInvC">0</span> • Types:
+                <span id="typesInvC">0</span>
+              </span>
+            </div>
+            <input
+              id="searchCable"
+              class="search"
+              placeholder="Rechercher CÂBLE (famille, code)…"
+            />
+            <div
+              id="listCable"
+              class="list"
+              role="listbox"
+              aria-label="Inventaire CÂBLES"
+            ></div>
+            <div class="small">
+              1 ligne par type (× quantité). Clique pour sélectionner un
+              exemplaire, double‑clic pour passer au suivant.
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <b>Détails sélection</b>
+          <div id="selInfo" class="info-list muted">
+            Aucun objet sélectionné.
+          </div>
+        </div>
+      </div>
+      
+      <div class="panel-stats">
+        <div class="card">
+          <div class="row">
+            <div>Total Fourreaux</div>
+            <div class="kpi">
+              <span id="statFourreau">0</span>
+            </div>
+          </div>
+          <div class="row">
+            <div>Total Câbles</div>
+            <div class="kpi">
+              <span id="statCable">0</span>
+            </div>
+          </div>
+          <div class="row">
+            <div>Taux d'occupation</div>
+            <div class="kpi">
+              <span id="statOccupation">0.0 %</span>
+            </div>
+          </div>
+          <div class="row">
+            <div>Échelle d'affichage</div>
+            <div>
+              <span id="scaleInfo">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <div class="canvas-section">
+      <div class="main-view">
+        <div class="main-view-content">
+          <main class="canvas-wrap">
+            <canvas id="world"></canvas>
+            <!-- Cotes pour la largeur -->
+            <div id="dimensionWidth" class="dimension-line horizontal" style="display: none;">
+              <span class="dimension-text"></span>
+            </div>
+            <!-- Cotes pour la hauteur -->
+            <div id="dimensionHeight" class="dimension-line vertical" style="display: none;">
+              <span class="dimension-text"></span>
+            </div>
+            
+            <!-- Bouton de réduction automatique -->
+            <div id="reduceButtonContainer" class="reduce-button-container" style="display: none;">
+              <button id="reduceToMinimum" class="btn reduce-btn">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Réduire au minimum
+              </button>
+            </div>
+          </main>
+          <!-- Zoom contrôlé par Ctrl+molette dans le canvas -->
+        </div>
+      </div>
+      <!-- Wrapper pour canvas-controls et project-controls -->
+      <div class="canvas-project-controls-wrapper">
+        <div class="canvas-controls">
+          <!-- Ligne principale d'outils groupés logiquement -->
+          <div class="canvas-controls-row">
+          <!-- Groupe 1: Actions d'édition et suppression -->
+          <div class="control-group" data-group="edition">
+            <div class="group-label">Édition</div>
+            <button id="toolEdit" class="btn" aria-label="Outil d'édition - Raccourci: E">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Icône d'édition</title>
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="#e5f0ff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z" stroke="#e5f0ff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Éditer (E)
+            </button>
+            <button id="toolInfo" class="btn" aria-label="Outil d'information - Raccourci: I">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Icône d'information</title>
+                <circle cx="12" cy="12" r="10" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+                <path d="M9,9 h6 a3,3 0 0,1 0,6 h-6" stroke="#e5f0ff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="17" x2="12.01" y2="17" stroke="#e5f0ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Infos (I)
+            </button>
+            <button id="toolDelete" class="btn btn-danger" aria-label="Supprimer l'objet sélectionné - Raccourci: Suppr">Supprimer (Suppr)</button>
+            <button id="clear" class="btn btn-warning" aria-label="Vider complètement le canvas - Raccourci: Ctrl+Suppr">Tout vider (Ctrl+Suppr)</button>
+          </div>
+
+          <!-- Groupe 2: Organisation et arrangement -->
+          <div class="control-group" data-group="arrangement">
+            <div class="group-label">Organisation</div>
+            <button id="gridArrange" class="btn" aria-label="Disposer les fourreaux en grille 3cm - Raccourci: Ctrl+G">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Icône grille</title>
+                <rect x="3" y="3" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+                <rect x="15" y="3" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+                <rect x="3" y="15" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+                <rect x="15" y="15" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
+              </svg>
+              Grille (Ctrl+G)
+            </button>
+            <button id="freezeBtn" class="btn" disabled aria-label="Figer l'objet sélectionné - Raccourci: G">Figer (G)</button>
+          </div>
+        </div>
+
+        <!-- Ligne d'aide et raccourcis consolidée -->
+        <div class="canvas-controls-help">
+          <div class="help-section">
+            <div class="keyboard-shortcuts">
+              <strong>Raccourcis:</strong>
+              <span class="shortcut mouse-action">
+                Clic G: Sélection/Déplacer
+              </span>
+              <span class="shortcut mouse-action">
+                Clic D: Placer
+              </span>
+              <span class="shortcut">Ctrl+molette: Zoom</span>
+              <span class="shortcut">Ctrl+Z: Annuler</span>
+              <span class="shortcut">Suppr: Supprimer</span>
+              <span class="shortcut">Ctrl+Suppr: Tout vider</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+        <!-- Wrapper pour les contrôles de droite (PWA + Projet) -->
+        <div class="right-controls-wrapper">
+          <div class="project-controls-right control-group-vertical" data-group="project">
+            <div class="group-label">Projet</div>
+            <button id="projectSave" class="btn btn-primary" aria-label="Sauvegarder le projet - Raccourci: Ctrl+S">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Sauvegarder</title>
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" stroke-width="2" fill="none"/>
+                <polyline points="17,21 17,13 7,13 7,21" stroke="currentColor" stroke-width="2" fill="none"/>
+                <polyline points="7,3 7,8 15,8" stroke="currentColor" stroke-width="2" fill="none"/>
+              </svg>
+              Projets
+            </button>
+            <button id="exportDXF" class="btn" aria-label="Exporter le schéma au format DXF">Export DXF</button>
+            <button id="exportPDF" class="btn" aria-label="Exporter le schéma au format PDF">Export PDF</button>
+          </div>
+        </div>
+      </div>
+      <div id="theme-switcher" class="theme-switcher" role="button" tabindex="0" aria-label="Changer de thème">
+        <span class="icon-sun"><img src="ico/SUN.ico" alt="Sun" style="width: 16px; height: 16px;"></span>
+        <span class="icon-moon"><img src="ico/MOON.ico" alt="Moon" style="width: 16px; height: 16px;"></span>
+      </div>      
+  </div>
+  <div id="toast" class="toast">Impossible de placer l'élément ici.</div>
+  <script src="script.js" defer></script>
+  <script src="dimension-button-handler.js" defer></script>
+
+  <!-- Popup d'édition -->
+  <div id="editPopup" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="editPopupTitle" aria-modal="true">
+    <div class="edit-popup-overlay" aria-hidden="true">
+      <div class="edit-popup-content">
+        <h3 id="editPopupTitle">Éditer l'objet</h3>
+        <div class="edit-field">
+          <label for="editLabel">Libellé/Commentaire :</label>
+          <input type="text" id="editLabel" placeholder="Entrez un libellé..." aria-describedby="editLabelHelp">
+          <small id="editLabelHelp" class="sr-only">Ajoutez un libellé descriptif pour cet objet</small>
+        </div>
+        <div class="edit-field">
+          <label for="editColor">Couleur personnalisée :</label>
+          <div class="color-controls">
+            <input type="color" id="editColor" aria-describedby="editColorHelp">
+            <div class="color-dropdown">
+              <button id="autocadColorBtn" type="button" class="autocad-color-btn" aria-label="Choisir une couleur AutoCAD">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="2" y="2" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+                  <rect x="6" y="6" width="3" height="3" fill="#ff0000"/>
+                  <rect x="10.5" y="6" width="3" height="3" fill="#00ff00"/>
+                  <rect x="15" y="6" width="3" height="3" fill="#0000ff"/>
+                  <rect x="6" y="10.5" width="3" height="3" fill="#ffff00"/>
+                  <rect x="10.5" y="10.5" width="3" height="3" fill="#ff00ff"/>
+                  <rect x="15" y="10.5" width="3" height="3" fill="#00ffff"/>
+                  <rect x="6" y="15" width="3" height="3" fill="#ffffff" stroke="#666"/>
+                  <rect x="10.5" y="15" width="3" height="3" fill="#808080"/>
+                  <rect x="15" y="15" width="3" height="3" fill="#000000"/>
+                </svg>
+                Couleurs AutoCAD
+              </button>
+              <div id="colorDropdown" class="color-dropdown-content">
+                <div id="colorGrid" class="color-grid">
+                  <!-- Grille générée dynamiquement -->
+                </div>
+              </div>
+            </div>
+            <button id="resetColor" type="button" aria-label="Rétablir la couleur par défaut">Couleur par défaut</button>
+          </div>
+          <small id="editColorHelp" class="sr-only">Choisissez une couleur personnalisée avec la pipette ou la palette AutoCAD</small>
+        </div>
+        <div id="cablePhaseSection" class="edit-field" style="display: none;">
+          <label>Conducteur unifilaire :</label>
+          <div class="phase-checkboxes">
+            <div class="phase-option">
+              <input type="radio" id="phase-none" name="cablePhase" data-phase="none" checked>
+              <label for="phase-none">
+                <span class="phase-color" style="background-color: #666666;"></span>
+                Aucun (couleur par défaut)
+              </label>
+            </div>
+            <div class="phase-option">
+              <input type="radio" id="phase-ph1" name="cablePhase" data-phase="ph1">
+              <label for="phase-ph1">
+                <span class="phase-color" style="background-color: #8B4513;"></span>
+                L1 (Marron)
+              </label>
+            </div>
+            <div class="phase-option">
+              <input type="radio" id="phase-ph2" name="cablePhase" data-phase="ph2">
+              <label for="phase-ph2">
+                <span class="phase-color" style="background-color: #808080;"></span>
+                L2 (Gris)
+              </label>
+            </div>
+            <div class="phase-option">
+              <input type="radio" id="phase-ph3" name="cablePhase" data-phase="ph3">
+              <label for="phase-ph3">
+                <span class="phase-color" style="background-color: #000000;"></span>
+                L3 (Noir)
+              </label>
+            </div>
+            <div class="phase-option">
+              <input type="radio" id="phase-n" name="cablePhase" data-phase="n">
+              <label for="phase-n">
+                <span class="phase-color" style="background-color: #0000FF;"></span>
+                N (Bleu)
+              </label>
+            </div>
+            <div class="phase-option">
+              <input type="radio" id="phase-pe" name="cablePhase" data-phase="pe">
+              <label for="phase-pe">
+                <span class="phase-color" style="background-color: #00FF00;"></span>
+                PE (Vert fluo)
+              </label>
+            </div>
+          </div>
+        </div>
+        <!-- Section pour le remplissage rapide des fourreaux -->
+        <div id="fourreauFillSection" class="edit-field" style="display: none;">
+          <label>Remplissage rapide du fourreau</label>
+          <div class="fill-controls">
+              <select id="fillCableSelect" aria-label="Sélectionner le type de câble unipolaire"></select>
+              <div class="fill-buttons">
+                  <button id="fillTetra" type="button">Tétrapolaire (L1,L2,L3,N,PE)</button>
+                  <button id="fillTri" type="button">Triphasé (L1,L2,L3,N)</button>
+              </div>
+          </div>
+          <small>Attention : ceci remplacera les câbles existants dans le fourreau.</small>
+        </div>
+        <div class="edit-buttons">
+          <button id="saveEdit" type="button" aria-label="Sauvegarder les modifications">Sauvegarder</button>
+          <button id="cancelEdit" type="button" aria-label="Annuler les modifications">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup de proposition de redimensionnement -->
+  <div id="resizePopup" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="resizePopupTitle" aria-modal="true">
+    <div class="edit-popup-content">
+      <h3 id="resizePopupTitle">Ajustement nécessaire</h3>
+      <div class="edit-field">
+        <p id="resizeMessage"></p>
+      </div>
+      <div class="edit-buttons">
+        <button id="applyResize" type="button">Appliquer</button>
+        <button id="cancelResize" type="button">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup de gestion des projets -->
+  <div id="projectModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="projectModalTitle" aria-modal="true">
+    <div class="edit-popup-overlay" aria-hidden="true">
+      <div class="edit-popup-content project-modal-content">
+      <!-- Header -->
+      <div class="modal-header">
+        <h3 id="projectModalTitle">🗂️ Gestion des Projets</h3>
+      </div>
+
+      <!-- Section Projets unifiée -->
+      <div class="projects-section">
+
+        <!-- Sauvegarde projet actuel -->
+        <div class="project-save">
+          <h4>💾 Sauvegarder le projet actuel</h4>
+          <div class="project-field">
+            <select id="projectFolder" class="project-folder-select">
+              <option value="">🏠 Racine (sans dossier)</option>
+            </select>
+            <input type="text" id="newProjectName" placeholder="Nom du projet..." maxlength="50" list="existingProjects">
+            <datalist id="existingProjects"></datalist>
+            <button id="saveNewProject" type="button" class="btn-primary">Sauvegarder</button>
+          </div>
+        </div>
+
+        <!-- Projets sauvegardés -->
+        <div class="projects-list-section">
+          <div class="projects-header">
+            <h4>📂 Projets sauvegardés</h4>
+            <button id="toggleFolderCreation" type="button" class="btn-secondary btn-compact">+ Créer un dossier</button>
+          </div>
+          <div id="folderCreationField" class="folder-field" style="display: none;">
+            <input type="text" id="newFolderName" placeholder="Nom du dossier (ex: Port de Cannes)..." maxlength="50">
+            <button id="createNewFolder" type="button" class="btn-primary">Créer</button>
+            <button id="cancelFolderCreation" type="button" class="btn-cancel">Annuler</button>
+          </div>
+          <div id="projectsList" class="projects-list">
+            <!-- Sera rempli dynamiquement -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Section auto-save -->
+      <div class="auto-save-section" id="autoSaveSection">
+        <div class="auto-save-info">
+          <div class="auto-save-status" id="autoSaveStatus">
+            <span class="icon">💾</span>
+            <span class="text" id="autoSaveText">Aucune auto-sauvegarde</span>
+          </div>
+          <button id="restoreAutoSave" type="button" class="btn-secondary btn-compact" style="display: none;">Restaurer</button>
+        </div>
+        <div class="auto-save-details" id="autoSaveDetails"></div>
+      </div>
+
+      <!-- Éléments cachés pour fonctionnalité existante -->
+      <button id="exportCurrentProject" type="button" style="display: none;">Export actuel</button>
+      <button id="importProject" type="button" style="display: none;">Import</button>
+      <input type="file" id="importProjectFile" accept=".tontonkad,.json" style="display: none;">
+
+      </div> <!-- Fin de project-modal-content -->
+    </div> <!-- Fin de edit-popup-overlay -->
+  </div>
+
+  <!-- Popup de renommage -->
+  <div id="renameModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="renameModalTitle" aria-modal="true">
+    <div class="edit-popup-overlay" aria-hidden="true">
+      <div class="edit-popup-content rename-modal-content">
+      <div class="modal-header">
+        <h3 id="renameModalTitle">✏️ Renommer le projet</h3>
+      </div>
+
+      <div class="rename-form">
+        <div class="rename-info">
+          <span class="current-name-label">Nom actuel :</span>
+          <span id="currentProjectName" class="current-name">Mon Projet</span>
+        </div>
+
+        <div class="project-field">
+          <label for="newProjectNameInput">Nouveau nom :</label>
+          <input type="text" id="newProjectNameInput" placeholder="Entrez le nouveau nom..." maxlength="50">
+        </div>
+
+        <div class="rename-actions">
+          <button id="confirmRename" type="button" class="btn-primary">✓ Confirmer</button>
+          <button id="cancelRename" type="button" class="btn-cancel">✕ Annuler</button>
+        </div>
+      </div> <!-- Fin de rename-modal-content -->
+    </div> <!-- Fin de edit-popup-overlay -->
+  </div>
+
+  <!-- Modal Export PDF -->
+  <div id="pdfExportModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🎯 Export PDF - Configuration</h3>
+        <button class="modal-close" onclick="closePdfExportModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="export-form">
+          <div class="form-group">
+            <label for="pdfProjectName">Nom du projet :</label>
+            <input type="text" id="pdfProjectName" placeholder="Mon projet TontonKAD" maxlength="50">
+          </div>
+
+          <div class="form-group">
+            <label for="pdfViewName">Nom de la vue :</label>
+            <input type="text" id="pdfViewName" placeholder="Vue principale" maxlength="50">
+          </div>
+
+          <div class="form-group">
+            <label for="pdfAuthor">Auteur :</label>
+            <input type="text" id="pdfAuthor" placeholder="Votre nom" maxlength="50">
+          </div>
+
+          <div class="form-group">
+            <label for="pdfClient">Client :</label>
+            <input type="text" id="pdfClient" placeholder="Nom du client" maxlength="50">
+          </div>
+
+          <div class="form-group">
+            <label for="pdfDescription">Description :</label>
+            <textarea id="pdfDescription" placeholder="Description du projet..." maxlength="200" rows="3"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="pdfIncludeStats">
+              <input type="checkbox" id="pdfIncludeStats" checked>
+              Inclure les statistiques détaillées
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="confirmPdfExport" type="button" class="btn-primary">📄 Générer PDF</button>
+        <button id="cancelPdfExport" type="button" class="btn-cancel">✕ Annuler</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- PWA Service Worker -->
+  <script>
+    (function initPWA() {
+      'use strict';
+      
+      if (!('serviceWorker' in navigator)) {
+        console.warn('⚠️ Service Worker non supporté par ce navigateur');
+        return;
+      }
+
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then((registration) => {
+            
+            // Gérer les mises à jour du service worker
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              if (!newWorker) return;
+              
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // Nouvelle version disponible
+                  const shouldUpdate = confirm('🔄 Une nouvelle version de TontonKAD est disponible. Recharger maintenant ?');
+                  if (shouldUpdate) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    window.location.reload();
+                  }
+                }
+              });
+            });
+          })
+          .catch((error) => {
+            console.error('❌ Erreur lors de l\'enregistrement du Service Worker:', error);
+            // Fallback silencieux - l'application fonctionne sans PWA
+          });
+      });
+
+      // Gérer les mises à jour automatiques
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
+    })();
+
+    // Gestion de l'installation PWA
+    (function initPWAInstall() {
+      'use strict';
+      
+      let deferredPrompt = null;
+      
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+
+        // Vérifier si le bouton existe déjà
+        if (document.querySelector('.rainbow-button')) {
+          return; // Ne pas créer de doublon
+        }
+
+        // Créer un bouton d'installation
+        const installButton = document.createElement('div');
+        installButton.className = 'rainbow-button';
+        installButton.setAttribute('role', 'button');
+        installButton.setAttribute('tabindex', '0');
+        installButton.setAttribute('aria-label', 'Installer TontonKAD comme application');
+
+        // Créer le bouton intérieur
+        const innerButton = document.createElement('button');
+        innerButton.className = 'rainbow-button-inner';
+        innerButton.textContent = '📱 Installer TontonKAD';
+        innerButton.setAttribute('aria-label', 'Installer l\'application TontonKAD');
+
+        installButton.appendChild(innerButton);
+
+        // L'ajouter au-dessus de project-controls-right
+        const rightControlsWrapper = document.querySelector('.right-controls-wrapper');
+        if (rightControlsWrapper) {
+          rightControlsWrapper.insertBefore(installButton, rightControlsWrapper.firstChild);
+        }
+        
+        // Gestionnaire d'événement pour l'installation
+        const handleInstall = () => {
+          if (!deferredPrompt) return;
+          
+          installButton.style.display = 'none';
+          deferredPrompt.prompt();
+          
+          deferredPrompt.userChoice
+            .then((result) => {
+              deferredPrompt = null;
+            })
+            .catch((error) => {
+              console.error('Erreur lors de l\'installation PWA:', error);
+            });
+        };
+        
+        innerButton.addEventListener('click', handleInstall);
+        
+        // Support clavier
+        installButton.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleInstall();
+          }
+        });
+      });
+
+      // Cacher le bouton après installation
+      window.addEventListener('appinstalled', () => {
+        const installButton = document.querySelector('.rainbow-button');
+        if (installButton) {
+          installButton.remove();
+        }
+        deferredPrompt = null;
+      });
+    })();
+  </script>
+
+  <!-- Theme Toggle Script (theme-switcher) -->
+  <script>
+    // Fonction pour mettre à jour le logo et le favicon selon le thème
+    function updateLogo(theme) {
+      const brandLogo = document.getElementById('brandLogo');
+      const favicon = document.getElementById('favicon');
+
+      if (brandLogo) {
+        brandLogo.src = theme === 'dark' ? 'ico/TONTONKADB.png' : 'ico/TONTONKADN.png';
+      }
+
+      if (favicon) {
+        favicon.href = theme === 'dark' ? 'ico/TONTONKADB.ico' : 'ico/TONTONKADN.ico';
+      }
+    }
+
+  </script>
+
+  <!-- Electron integration -->
+  <script src="electron-integration.js"></script>
+
+</body></html>

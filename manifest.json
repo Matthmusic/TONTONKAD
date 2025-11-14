@@ -1,0 +1,37 @@
+{
+  "name": "TontonKAD v2 - Organisateur de Fourreaux & Câbles",
+  "short_name": "TontonKAD v2",
+  "description": "Application web pour organiser et visualiser des fourreaux et câbles électriques dans différents types de boîtiers - Nouvelle interface CEA.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#ff914d",
+  "orientation": "landscape-primary",
+  "scope": "/",
+  "lang": "fr",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "TONTONKAD.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouveau projet",
+      "short_name": "Nouveau",
+      "description": "Démarrer un nouveau projet",
+      "url": "/?action=new",
+      "icons": [{ "src": "TONTONKAD.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Export DXF",
+      "short_name": "Export",
+      "description": "Exporter en DXF",
+      "url": "/?action=export",
+      "icons": [{ "src": "TONTONKAD.svg", "sizes": "96x96" }]
+    }
+  ]
+}
