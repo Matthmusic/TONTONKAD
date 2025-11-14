@@ -170,15 +170,66 @@
     window.dispatchEvent(event);
   });
 
+  // Gestion de la notification de mise à jour
+  const updateNotification = document.getElementById('update-notification');
+  const updateVersionNumber = document.getElementById('update-version-number');
+  const updateDescription = document.getElementById('update-description');
+  const updateProgressContainer = document.getElementById('update-progress-container');
+  const updateProgressFill = document.getElementById('update-progress-fill');
+  const updateProgressText = document.getElementById('update-progress-text');
+  const updateBtnLater = document.getElementById('update-btn-later');
+  const updateBtnDownload = document.getElementById('update-btn-download');
+
+  // Stocker les infos de mise à jour
+  let updateInfo = null;
+
+  // Listener pour l'événement update-available depuis le main process
+  window.electronAPI.onUpdateAvailable((info) => {
+    console.log('Mise à jour disponible:', info);
+    window.showUpdateNotification(info);
+  });
+
+  // Afficher la notification de mise à jour
+  window.showUpdateNotification = (info) => {
+    updateInfo = info;
+    updateVersionNumber.textContent = info.version;
+
+    if (info.releaseNotes) {
+      updateDescription.textContent = info.releaseNotes;
+    }
+
+    updateNotification.classList.remove('hidden');
+  };
+
+  // Bouton "Plus tard"
+  updateBtnLater.addEventListener('click', () => {
+    updateNotification.classList.add('hidden');
+  });
+
+  // Bouton "Télécharger maintenant"
+  updateBtnDownload.addEventListener('click', () => {
+    updateBtnDownload.disabled = true;
+    updateBtnDownload.textContent = 'Téléchargement...';
+    updateBtnLater.disabled = true;
+
+    // Afficher la barre de progression
+    updateProgressContainer.classList.remove('hidden');
+
+    // Déclencher le téléchargement
+    window.electronAPI.downloadUpdate();
+  });
+
   // Notifications de mise à jour
   window.electronAPI.onUpdateDownloading(() => {
     console.log('Téléchargement de la mise à jour...');
-    // Optionnel: afficher une notification dans l'UI
+    updateProgressContainer.classList.remove('hidden');
+    updateProgressText.textContent = 'Téléchargement en cours...';
   });
 
   window.electronAPI.onUpdateProgress((percent) => {
     console.log(`Progression de la mise à jour: ${percent.toFixed(1)}%`);
-    // Optionnel: afficher une barre de progression
+    updateProgressFill.style.width = `${percent}%`;
+    updateProgressText.textContent = `Téléchargement en cours... ${percent.toFixed(0)}%`;
   });
 
   // Détection de changements pour marquer comme modifié

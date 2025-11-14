@@ -229,21 +229,21 @@ function checkForUpdates(manual = false) {
 }
 
 autoUpdater.on('update-available', (info) => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Mise à jour disponible',
-    message: `Une nouvelle version (${info.version}) est disponible !`,
-    detail: 'Voulez-vous la télécharger maintenant ?',
-    buttons: ['Télécharger', 'Plus tard'],
-    defaultId: 0
-  }).then(result => {
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate();
+  console.log('Mise à jour disponible:', info.version);
 
-      // Notification de téléchargement
-      mainWindow.webContents.send('update-downloading');
-    }
+  // Envoyer les infos de mise à jour au renderer
+  mainWindow.webContents.send('update-available', {
+    version: info.version,
+    releaseNotes: info.releaseNotes || 'Nouvelles fonctionnalités et corrections de bugs.',
+    releaseDate: info.releaseDate
   });
+});
+
+// Listener pour déclencher le téléchargement depuis le renderer
+ipcMain.on('download-update', () => {
+  console.log('Démarrage du téléchargement de la mise à jour...');
+  autoUpdater.downloadUpdate();
+  mainWindow.webContents.send('update-downloading');
 });
 
 autoUpdater.on('update-not-available', () => {

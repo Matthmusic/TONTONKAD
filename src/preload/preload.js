@@ -26,8 +26,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMenuShortcuts: (callback) => ipcRenderer.on('menu-shortcuts', callback),
 
   // Mises à jour
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (event, info) => callback(info)),
   onUpdateDownloading: (callback) => ipcRenderer.on('update-downloading', callback),
   onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (event, percent) => callback(percent)),
+  downloadUpdate: () => ipcRenderer.send('download-update'),
 
   // Nettoyer les listeners
   removeListener: (channel) => ipcRenderer.removeAllListeners(channel),
