@@ -371,6 +371,9 @@
         <span class="icon-sun"><img src="../../assets/icons/ico/SUN.ico" alt="Sun" style="width: 16px; height: 16px;"></span>
         <span class="icon-moon"><img src="../../assets/icons/ico/MOON.ico" alt="Moon" style="width: 16px; height: 16px;"></span>
       </div>
+      <div id="settings-button" class="settings-button" role="button" tabindex="0" aria-label="Ouvrir le dossier de données" title="Accéder aux fichiers CSV personnalisables">
+        ⚙️
+      </div>
       <div id="version-info" class="version-info" title="Version de l'application">
         <span id="version-number">v2.0.1</span>
       </div>
@@ -785,6 +788,28 @@
       }
     }
 
+  </script>
+
+  <!-- Settings Button Script -->
+  <script>
+    // Gérer le clic sur le bouton paramètres (Electron uniquement)
+    document.addEventListener('DOMContentLoaded', () => {
+      const settingsButton = document.getElementById('settings-button');
+
+      if (settingsButton && window.electronAPI && window.electronAPI.openDataFolder) {
+        settingsButton.addEventListener('click', async () => {
+          try {
+            await window.electronAPI.openDataFolder();
+          } catch (error) {
+            console.error('Erreur lors de l\'ouverture du dossier data:', error);
+            alert('Impossible d\'ouvrir le dossier de données.');
+          }
+        });
+      } else if (settingsButton && (!window.electronAPI || !window.electronAPI.openDataFolder)) {
+        // En mode web, cacher le bouton
+        settingsButton.style.display = 'none';
+      }
+    });
   </script>
 
   <!-- Electron integration -->

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Charger les données CSV
   loadCSV: (filename) => ipcRenderer.invoke('load-csv', filename),
+  openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
 
   // Recevoir les événements du menu
   onMenuNewProject: (callback) => ipcRenderer.on('menu-new-project', callback),

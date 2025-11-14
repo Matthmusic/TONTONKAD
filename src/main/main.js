@@ -1,10 +1,52 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs').promises;
 
 let mainWindow;
 const isDev = process.argv.includes('--dev');
+
+// Dossier de données utilisateur dans APPDATA
+const userDataPath = app.getPath('userData');
+const userDataFolder = path.join(userDataPath, 'data');
+
+// Fonction pour initialiser le dossier data dans APPDATA
+async function initializeUserDataFolder() {
+  try {
+    // Créer le dossier s'il n'existe pas
+    await fs.mkdir(userDataFolder, { recursive: true });
+
+    // Liste des fichiers CSV à copier
+    const csvFiles = ['cables.csv', 'chemins_de_cable.csv', 'fourreaux.csv'];
+
+    for (const file of csvFiles) {
+      const userFilePath = path.join(userDataFolder, file);
+
+      // Vérifier si le fichier existe déjà
+      try {
+        await fs.access(userFilePath);
+        console.log(`✓ ${file} existe déjà dans APPDATA`);
+      } catch {
+        // Le fichier n'existe pas, le copier depuis les ressources
+        const sourceFile = isDev
+          ? path.join(__dirname, '../../data', file)
+          : path.join(process.resourcesPath, 'data', file);
+
+        try {
+          const data = await fs.readFile(sourceFile, 'utf8');
+          await fs.writeFile(userFilePath, data, 'utf8');
+          console.log(`✓ ${file} copié vers APPDATA`);
+        } catch (err) {
+          console.error(`✗ Erreur lors de la copie de ${file}:`, err);
+        }
+      }
+    }
+
+    console.log(`Dossier de données utilisateur: ${userDataFolder}`);
+  } catch (error) {
+    console.error('Erreur lors de l\'initialisation du dossier data:', error);
+  }
+}
 
 // Configuration de l'auto-updater
 autoUpdater.autoDownload = false;
@@ -363,14 +405,24 @@ ipcMain.handle('export-file', async (event, { type, content, defaultName }) => {
   return { success: false };
 });
 
-// Charger les données CSV
+// Charger les données CSV depuis APPDATA
 ipcMain.handle('load-csv', async (event, filename) => {
   try {
-    const csvPath = path.join(__dirname, '../../data', filename);
+    const csvPath = path.join(userDataFolder, filename);
     const data = await fs.readFile(csvPath, 'utf8');
     return { success: true, data };
   } catch (error) {
     throw new Error(`Impossible de charger ${filename}: ${error.message}`);
+  }
+});
+
+// Ouvrir le dossier data dans l'explorateur
+ipcMain.handle('open-data-folder', async () => {
+  try {
+    await shell.openPath(userDataFolder);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 
@@ -380,7 +432,10 @@ ipcMain.handle('get-app-version', () => {
 });
 
 // App lifecycle
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  await initializeUserDataFolder();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

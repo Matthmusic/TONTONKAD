@@ -41,6 +41,13 @@
       "data/**/*",
       "assets/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "data",
+        "to": "data",
+        "filter": ["**/*"]
+      }
+    ],
     "win": {
       "target": [
         {

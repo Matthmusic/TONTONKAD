@@ -3000,6 +3000,38 @@ select::-webkit-scrollbar-thumb {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.settings-button {
+    position: absolute;
+    top: 64px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-backdrop);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    font-size: 20px;
+    user-select: none;
+}
+
+.settings-button:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(255, 145, 77, 0.3);
+    transform: translateY(-2px) rotate(90deg);
+}
+
+.settings-button:active {
+    transform: translateY(0) rotate(90deg);
+}
+
 .theme-switcher:hover {
     transform: scale(1.1) rotate(15deg);
     box-shadow: 0 4px 16px rgba(255, 145, 77, 0.3);
