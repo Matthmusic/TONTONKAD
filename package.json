@@ -85,7 +85,7 @@
     "publish": {
       "provider": "github",
       "owner": "Matthmusic",
-      "repo": "TONTONKAD-v2"
+      "repo": "TONTONKAD"
     }
   }
 }

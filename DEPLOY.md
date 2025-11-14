@@ -3,7 +3,7 @@
 ## Étape 1 : Créer le repository sur GitHub
 
 1. Allez sur https://github.com/new
-2. **Nom du repository** : `TONTONKAD-v2`
+2. **Nom du repository** : `TONTONKAD`
 3. **Description** : `Application Electron pour le dimensionnement de câbles et fourreaux électriques`
 4. **Visibilité** : Public (recommandé pour les releases automatiques gratuites)
 5. **NE PAS** initialiser avec README, .gitignore ou LICENSE (déjà créés localement)
@@ -11,11 +11,11 @@
 
 ## Étape 2 : Lier votre dépôt local au repository GitHub
 
-Dans votre terminal, depuis le dossier `TONTONKAD-v2` :
+Dans votre terminal, depuis le dossier `TONTONKAD` :
 
 ```bash
 # Ajouter le remote origin
-git remote add origin https://github.com/Matthmusic/TONTONKAD-v2.git
+git remote add origin https://github.com/Matthmusic/TONTONKAD.git
 
 # Pousser le code
 git push -u origin main
@@ -23,7 +23,7 @@ git push -u origin main
 
 Si vous utilisez SSH au lieu de HTTPS :
 ```bash
-git remote add origin git@github.com:Matthmusic/TONTONKAD-v2.git
+git remote add origin git@github.com:Matthmusic/TONTONKAD.git
 git push -u origin main
 ```
 
@@ -143,14 +143,14 @@ git push origin v2.0.0
 
 ## Étape 6 : Suivre le build
 
-1. Allez sur https://github.com/Matthmusic/TONTONKAD-v2/actions
+1. Allez sur https://github.com/Matthmusic/TONTONKAD/actions
 2. Vous verrez le workflow "Build and Release" en cours
 3. Le build prend environ 15-20 minutes (3 plateformes en parallèle)
 4. Si tout est vert ✅, votre release sera créée automatiquement
 
 ## Étape 7 : Vérifier la release
 
-1. Allez sur https://github.com/Matthmusic/TONTONKAD-v2/releases
+1. Allez sur https://github.com/Matthmusic/TONTONKAD/releases
 2. Vous devriez voir `v2.0.0` avec les fichiers :
    - `TONTONKAD-Setup-2.0.0.exe` (Windows)
    - `TONTONKAD-2.0.0.AppImage` (Linux)
@@ -199,7 +199,7 @@ git push
 
 ### "fatal: remote origin already exists"
 
-➜ Utilisez : `git remote set-url origin https://github.com/Matthmusic/TONTONKAD-v2.git`
+➜ Utilisez : `git remote set-url origin https://github.com/Matthmusic/TONTONKAD.git`
 
 ## Support
 

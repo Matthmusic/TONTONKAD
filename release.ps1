@@ -56,7 +56,7 @@ Write-Host "  2. Créer une release GitHub"
 Write-Host "  3. Uploader les installeurs"
 Write-Host ""
 Write-Host "🔗 Suivez la progression sur :"
-Write-Host "   https://github.com/Matthmusic/TONTONKAD-v2/actions" -ForegroundColor Cyan
+Write-Host "   https://github.com/Matthmusic/TONTONKAD/actions" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "🎉 Une fois terminé, la release sera disponible sur :"
-Write-Host "   https://github.com/Matthmusic/TONTONKAD-v2/releases" -ForegroundColor Cyan
+Write-Host "   https://github.com/Matthmusic/TONTONKAD/releases" -ForegroundColor Cyan

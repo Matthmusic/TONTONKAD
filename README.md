@@ -25,19 +25,19 @@ Application de bureau pour le dimensionnement de chemins de câbles et fourreaux
 
 ### Windows
 
-1. Téléchargez le fichier `.exe` depuis la [page des releases](https://github.com/Matthmusic/TONTONKAD-v2/releases)
+1. Téléchargez le fichier `.exe` depuis la [page des releases](https://github.com/Matthmusic/TONTONKAD/releases)
 2. Exécutez l'installeur
 3. Lancez TONTONKAD depuis le menu Démarrer
 
 ### Linux
 
-1. Téléchargez le fichier `.AppImage` depuis la [page des releases](https://github.com/Matthmusic/TONTONKAD-v2/releases)
+1. Téléchargez le fichier `.AppImage` depuis la [page des releases](https://github.com/Matthmusic/TONTONKAD/releases)
 2. Rendez-le exécutable : `chmod +x TONTONKAD-*.AppImage`
 3. Exécutez : `./TONTONKAD-*.AppImage`
 
 ### macOS
 
-1. Téléchargez le fichier `.dmg` depuis la [page des releases](https://github.com/Matthmusic/TONTONKAD-v2/releases)
+1. Téléchargez le fichier `.dmg` depuis la [page des releases](https://github.com/Matthmusic/TONTONKAD/releases)
 2. Ouvrez le DMG et glissez TONTONKAD dans Applications
 3. Lancez depuis le dossier Applications
 
@@ -52,8 +52,8 @@ Application de bureau pour le dimensionnement de chemins de câbles et fourreaux
 ### Cloner le repository
 
 ```bash
-git clone https://github.com/Matthmusic/TONTONKAD-v2.git
-cd TONTONKAD-v2
+git clone https://github.com/Matthmusic/TONTONKAD.git
+cd TONTONKAD
 ```
 
 ### Installer les dépendances
@@ -97,7 +97,7 @@ Les fichiers de build seront dans le dossier `dist/`.
 ## Structure du projet
 
 ```
-TONTONKAD-v2/
+TONTONKAD/
 ├── src/
 │   ├── main/
 │   │   └── main.js              # Process principal Electron
@@ -183,7 +183,7 @@ Dans `package.json`, section `build` :
     "publish": {
       "provider": "github",
       "owner": "Matthmusic",
-      "repo": "TONTONKAD-v2"
+      "repo": "TONTONKAD"
     }
   }
 }
@@ -309,5 +309,5 @@ TONTONKAD Team
 ## Support
 
 Pour toute question ou problème :
-- Ouvrez une [issue](https://github.com/Matthmusic/TONTONKAD-v2/issues)
+- Ouvrez une [issue](https://github.com/Matthmusic/TONTONKAD/issues)
 - Consultez la documentation dans l'application : Menu Aide

@@ -6,8 +6,8 @@
 
 ```bash
 # Cloner le repository
-git clone https://github.com/Matthmusic/TONTONKAD-v2.git
-cd TONTONKAD-v2
+git clone https://github.com/Matthmusic/TONTONKAD.git
+cd TONTONKAD
 
 # Installer les dépendances
 npm install
@@ -71,7 +71,7 @@ git push origin v2.0.1
 ### 1. Créer le repository sur GitHub
 
 1. Allez sur https://github.com/new
-2. Nom : `TONTONKAD-v2`
+2. Nom : `TONTONKAD`
 3. Description : `Application Electron pour le dimensionnement de câbles et fourreaux`
 4. Public ou Private (recommandé : Public pour les releases automatiques)
 5. Créer le repository
@@ -79,7 +79,7 @@ git push origin v2.0.1
 ### 2. Lier votre dépôt local
 
 ```bash
-git remote add origin https://github.com/Matthmusic/TONTONKAD-v2.git
+git remote add origin https://github.com/Matthmusic/TONTONKAD.git
 git push -u origin main
 ```
 

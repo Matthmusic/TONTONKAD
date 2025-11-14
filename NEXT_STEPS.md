@@ -17,7 +17,7 @@ Salut ! Voici exactement ce qu'il te reste à faire pour mettre TONTONKAD en lig
 ### Étape 1 : Créer le repository sur GitHub
 
 1. Va sur https://github.com/new
-2. **Repository name** : `TONTONKAD-v2`
+2. **Repository name** : `TONTONKAD`
 3. **Description** : `Application Electron pour le dimensionnement de câbles et fourreaux électriques`
 4. **Public** (pour releases gratuites et auto-updates)
 5. **NE COCHE RIEN** (pas de README, .gitignore, etc.)
@@ -25,11 +25,11 @@ Salut ! Voici exactement ce qu'il te reste à faire pour mettre TONTONKAD en lig
 
 ### Étape 2 : Pousser ton code sur GitHub
 
-Ouvre ton terminal dans `C:\DEV\TONTONKAD-v2` et exécute :
+Ouvre ton terminal dans `C:\DEV\TONTONKAD` et exécute :
 
 ```bash
 # Ajouter le remote GitHub
-git remote add origin https://github.com/Matthmusic/TONTONKAD-v2.git
+git remote add origin https://github.com/Matthmusic/TONTONKAD.git
 
 # Pousser tout le code
 git push -u origin main
@@ -37,13 +37,13 @@ git push -u origin main
 
 Si tu utilises SSH :
 ```bash
-git remote add origin git@github.com:Matthmusic/TONTONKAD-v2.git
+git remote add origin git@github.com:Matthmusic/TONTONKAD.git
 git push -u origin main
 ```
 
 ### Étape 3 : Configurer les permissions GitHub Actions
 
-1. Va sur https://github.com/Matthmusic/TONTONKAD-v2/settings/actions
+1. Va sur https://github.com/Matthmusic/TONTONKAD/settings/actions
 2. Sous **Workflow permissions**, choisis :
    - ✅ **Read and write permissions**
    - ✅ **Allow GitHub Actions to create and approve pull requests**
@@ -119,14 +119,14 @@ git push origin v2.0.0
 
 ### Étape 6 : Attendre le build
 
-1. Va sur https://github.com/Matthmusic/TONTONKAD-v2/actions
+1. Va sur https://github.com/Matthmusic/TONTONKAD/actions
 2. Tu verras "Build and Release" en cours d'exécution
 3. Attends ~15-20 minutes (3 plateformes en parallèle)
 4. Si tout est vert ✅ → Success !
 
 ### Étape 7 : Télécharger et tester
 
-1. Va sur https://github.com/Matthmusic/TONTONKAD-v2/releases
+1. Va sur https://github.com/Matthmusic/TONTONKAD/releases
 2. Tu devrais voir `v2.0.0` avec 3 fichiers :
    - `TONTONKAD-Setup-2.0.0.exe` (Windows)
    - `TONTONKAD-2.0.0.AppImage` (Linux)
@@ -193,7 +193,7 @@ npm run dev
 ### Erreur "remote origin already exists" ?
 
 ```bash
-git remote set-url origin https://github.com/Matthmusic/TONTONKAD-v2.git
+git remote set-url origin https://github.com/Matthmusic/TONTONKAD.git
 ```
 
 ### Le build GitHub Actions échoue ?
@@ -214,7 +214,7 @@ Les auto-updates fonctionnent UNIQUEMENT :
 
 ```bash
 # Setup initial (à faire UNE FOIS)
-git remote add origin https://github.com/Matthmusic/TONTONKAD-v2.git
+git remote add origin https://github.com/Matthmusic/TONTONKAD.git
 git push -u origin main
 
 # Créer une release (à chaque nouvelle version)

@@ -152,7 +152,7 @@ window.electronAPI.loadCSV(filename)
 
 **Prêt pour :**
 ```bash
-git remote add origin https://github.com/Matthmusic/TONTONKAD-v2.git
+git remote add origin https://github.com/Matthmusic/TONTONKAD.git
 git push -u origin main
 ```
 
@@ -162,7 +162,7 @@ Avant de pousser sur GitHub et créer votre première release :
 
 ### Obligatoire
 
-- [ ] **Créer le repository GitHub** : `Matthmusic/TONTONKAD-v2`
+- [ ] **Créer le repository GitHub** : `Matthmusic/TONTONKAD`
 - [ ] **Lier le remote** : `git remote add origin ...`
 - [ ] **Configurer GitHub Actions permissions** : Read/write dans Settings
 - [ ] **Vérifier package.json** : owner et repo corrects dans `build.publish`
@@ -184,7 +184,7 @@ Avant de pousser sur GitHub et créer votre première release :
 ### 1. Push initial
 
 ```bash
-git remote add origin https://github.com/Matthmusic/TONTONKAD-v2.git
+git remote add origin https://github.com/Matthmusic/TONTONKAD.git
 git push -u origin main
 ```
 
@@ -218,9 +218,9 @@ git push
 
 ### 5. Attendre le build
 
-- Aller sur https://github.com/Matthmusic/TONTONKAD-v2/actions
+- Aller sur https://github.com/Matthmusic/TONTONKAD/actions
 - Attendre ~15-20 minutes
-- Vérifier la release sur https://github.com/Matthmusic/TONTONKAD-v2/releases
+- Vérifier la release sur https://github.com/Matthmusic/TONTONKAD/releases
 
 ### 6. Tester l'application
 
