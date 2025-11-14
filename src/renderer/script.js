@@ -3252,7 +3252,7 @@ function initSearchableLists() {
 
   async function loadLogoAsBase64() {
     try {
-      const response = await fetch('ico/CEAHN.png');
+      const response = await fetch('../../assets/icons/ico/CEAHN.png');
       const blob = await response.blob();
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
