@@ -15,7 +15,8 @@
       "Bash(else echo \"Note: icon.ico not found, will need to be added\")",
       "Bash(npm install)",
       "Bash(chmod:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
