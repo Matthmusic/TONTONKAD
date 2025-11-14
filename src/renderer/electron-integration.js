@@ -14,6 +14,12 @@
 
   console.log('Mode Electron activé');
 
+  // Afficher la version de l'application
+  const versionElement = document.getElementById('version-number');
+  if (versionElement && window.electronAPI.appVersion) {
+    versionElement.textContent = `v${window.electronAPI.appVersion}`;
+  }
+
   // Variables globales pour le tracking du projet
   let currentProjectPath = null;
   let projectModified = false;

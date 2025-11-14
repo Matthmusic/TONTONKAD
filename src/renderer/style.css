@@ -3041,6 +3041,38 @@ select::-webkit-scrollbar-thumb {
     display: flex;
 }
 
+/* Version Badge */
+.version-info {
+    position: absolute;
+    top: 16px;
+    right: 70px;
+    padding: 6px 12px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-backdrop);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all var(--transition-base);
+    cursor: default;
+    user-select: none;
+}
+
+.version-info:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(255, 145, 77, 0.3);
+}
+
+#version-number {
+    font-family: 'Inter', monospace;
+    letter-spacing: 0.5px;
+}
+
 /* ==========================================================================
    PWA INSTALL BUTTON
    ========================================================================== */

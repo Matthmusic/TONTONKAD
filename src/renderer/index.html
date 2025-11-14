@@ -346,7 +346,10 @@
       <div id="theme-switcher" class="theme-switcher" role="button" tabindex="0" aria-label="Changer de thème">
         <span class="icon-sun"><img src="../../assets/icons/ico/SUN.ico" alt="Sun" style="width: 16px; height: 16px;"></span>
         <span class="icon-moon"><img src="../../assets/icons/ico/MOON.ico" alt="Moon" style="width: 16px; height: 16px;"></span>
-      </div>      
+      </div>
+      <div id="version-info" class="version-info" title="Version de l'application">
+        <span id="version-number">v2.0.1</span>
+      </div>
   </div>
   <div id="toast" class="toast">Impossible de placer l'élément ici.</div>
   <script src="script.js" defer></script>
@@ -618,7 +621,13 @@
   <script>
     (function initPWA() {
       'use strict';
-      
+
+      // Skip Service Worker en mode Electron - on utilise electron-updater à la place
+      if (window.electronAPI && window.electronAPI.isElectron) {
+        console.log('Mode Electron: Service Worker désactivé (electron-updater actif)');
+        return;
+      }
+
       if (!('serviceWorker' in navigator)) {
         console.warn('⚠️ Service Worker non supporté par ce navigateur');
         return;
@@ -627,12 +636,12 @@
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
           .then((registration) => {
-            
+
             // Gérer les mises à jour du service worker
             registration.addEventListener('updatefound', () => {
               const newWorker = registration.installing;
               if (!newWorker) return;
-              
+
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                   // Nouvelle version disponible
@@ -660,9 +669,14 @@
     // Gestion de l'installation PWA
     (function initPWAInstall() {
       'use strict';
-      
+
+      // Skip PWA install en mode Electron
+      if (window.electronAPI && window.electronAPI.isElectron) {
+        return;
+      }
+
       let deferredPrompt = null;
-      
+
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
