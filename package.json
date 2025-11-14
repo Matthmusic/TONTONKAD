@@ -23,7 +23,7 @@
     "CAD"
   ],
   "devDependencies": {
-    "electron": "^32.2.8",
+    "electron": "^39.2.0",
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
@@ -45,11 +45,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icons/ico/icon.ico",
-      "publish": ["github"]
+      "publish": [
+        "github"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -59,16 +63,24 @@
       "shortcutName": "TONTONKAD"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "assets/icons/ico/icon.icns",
       "category": "public.app-category.productivity",
-      "publish": ["github"]
+      "publish": [
+        "github"
+      ]
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "icon": "assets/icons/ico",
       "category": "Engineering",
-      "publish": ["github"]
+      "publish": [
+        "github"
+      ]
     },
     "publish": {
       "provider": "github",
