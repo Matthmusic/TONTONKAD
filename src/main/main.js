@@ -374,6 +374,11 @@ ipcMain.handle('load-csv', async (event, filename) => {
   }
 });
 
+// Récupérer la version de l'application
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
 // App lifecycle
 app.whenReady().then(createWindow);
 

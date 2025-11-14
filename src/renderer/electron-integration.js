@@ -15,10 +15,18 @@
   console.log('Mode Electron activé');
 
   // Afficher la version de l'application
-  const versionElement = document.getElementById('version-number');
-  if (versionElement && window.electronAPI.appVersion) {
-    versionElement.textContent = `v${window.electronAPI.appVersion}`;
-  }
+  (async () => {
+    const versionElement = document.getElementById('version-number');
+    if (versionElement && window.electronAPI.getAppVersion) {
+      try {
+        const version = await window.electronAPI.getAppVersion();
+        versionElement.textContent = `v${version}`;
+        console.log('Version de l\'application:', version);
+      } catch (error) {
+        console.error('Erreur lors de la récupération de la version:', error);
+      }
+    }
+  })();
 
   // Variables globales pour le tracking du projet
   let currentProjectPath = null;

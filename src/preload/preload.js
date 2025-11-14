@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Informations système
   platform: process.platform,
   isElectron: true,
-  appVersion: require('../../package.json').version
+  getAppVersion: () => ipcRenderer.invoke('get-app-version')
 });
 
 console.log('Preload script chargé avec succès');
