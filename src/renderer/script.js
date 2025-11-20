@@ -4783,17 +4783,31 @@ function initSearchableLists() {
           // Sauvegarder la valeur actuelle si on verrouille
           WORLD_W_MM = parseFloat(boxW.value);
         }
+        // Mettre à jour l'icône
+        const icon = document.querySelector('.lock-icon[data-target="lockWidth"] .cadenas-icon');
+        if (icon) {
+          icon.src = this.checked
+            ? '../../assets/icons/ico/cadenas.ico'
+            : '../../assets/icons/ico/cadenas-ouvert.ico';
+        }
         // Recalculer les possibilités de redimensionnement
         checkForPossibleReduction();
       });
     }
-    
+
     if (lockHeight && boxH) {
       lockHeight.addEventListener('change', function() {
         boxH.disabled = this.checked;
         if (this.checked) {
           // Sauvegarder la valeur actuelle si on verrouille
           WORLD_H_MM = parseFloat(boxH.value);
+        }
+        // Mettre à jour l'icône
+        const icon = document.querySelector('.lock-icon[data-target="lockHeight"] .cadenas-icon');
+        if (icon) {
+          icon.src = this.checked
+            ? '../../assets/icons/ico/cadenas.ico'
+            : '../../assets/icons/ico/cadenas-ouvert.ico';
         }
         // Recalculer les possibilités de redimensionnement
         checkForPossibleReduction();
