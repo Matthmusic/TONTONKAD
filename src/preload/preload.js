@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resetDataPath: () => ipcRenderer.invoke('reset-data-path'),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
 
+  // Gestion du thème
+  setTheme: (theme) => ipcRenderer.send('set-theme', theme),
+
   // Recevoir les événements du menu
   onMenuNewProject: (callback) => ipcRenderer.on('menu-new-project', callback),
   onProjectLoaded: (callback) => ipcRenderer.on('project-loaded', (event, data) => callback(data)),

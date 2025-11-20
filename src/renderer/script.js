@@ -4809,8 +4809,16 @@ function initSearchableLists() {
 
         // Trouver la checkbox cachée dans cette icône
         const checkbox = this.querySelector('input[type="checkbox"]');
-        if (checkbox) {
+        const img = this.querySelector('.cadenas-icon');
+
+        if (checkbox && img) {
           checkbox.checked = !checkbox.checked;
+
+          // Mettre à jour l'icône en fonction de l'état
+          img.src = checkbox.checked
+            ? '../../assets/icons/ico/cadenas.ico'        // Fermé
+            : '../../assets/icons/ico/cadenas-ouvert.ico'; // Ouvert
+
           // Déclencher l'événement change pour activer la logique existante
           checkbox.dispatchEvent(new Event('change'));
         }
@@ -4828,6 +4836,11 @@ function initSearchableLists() {
       html.setAttribute('data-theme', savedTheme);
       updateLogo(savedTheme);
 
+      // Notifier Electron du thème au chargement
+      if (window.electronAPI && window.electronAPI.setTheme) {
+        window.electronAPI.setTheme(savedTheme);
+      }
+
       if (themeSwitcher) {
         // Fonction toggle
         const toggleTheme = () => {
@@ -4839,6 +4852,11 @@ function initSearchableLists() {
 
           // Mettre à jour le logo
           updateLogo(newTheme);
+
+          // Notifier Electron du changement de thème
+          if (window.electronAPI && window.electronAPI.setTheme) {
+            window.electronAPI.setTheme(newTheme);
+          }
 
           // Afficher le toast APRÈS avoir changé le thème
           showToast(`Thème ${newTheme === 'dark' ? 'sombre' : 'clair'} activé`);

@@ -537,6 +537,14 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+// Gérer le changement de thème
+ipcMain.on('set-theme', (event, theme) => {
+  if (mainWindow) {
+    const backgroundColor = theme === 'dark' ? '#12121c' : '#f0f2f5';
+    mainWindow.setBackgroundColor(backgroundColor);
+  }
+});
+
 // App lifecycle
 app.whenReady().then(async () => {
   await loadConfig();
