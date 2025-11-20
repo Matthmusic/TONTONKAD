@@ -22,6 +22,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Gestion du thème
   setTheme: (theme) => ipcRenderer.send('set-theme', theme),
 
+  // Contrôles de fenêtre (custom titlebar)
+  windowMinimize: () => ipcRenderer.send('window-minimize'),
+  windowMaximize: () => ipcRenderer.send('window-maximize'),
+  windowClose: () => ipcRenderer.send('window-close'),
+  windowIsMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+
   // Recevoir les événements du menu
   onMenuNewProject: (callback) => ipcRenderer.on('menu-new-project', callback),
   onProjectLoaded: (callback) => ipcRenderer.on('project-loaded', (event, data) => callback(data)),

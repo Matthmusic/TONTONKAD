@@ -51,6 +51,117 @@
 }
 
 /* ==========================================================================
+   CUSTOM TITLEBAR (ELECTRON)
+   ========================================================================== */
+
+.custom-titlebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 32px;
+    background: var(--glass-bg-solid);
+    backdrop-filter: var(--glass-backdrop);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 10000;
+    display: none; /* Caché par défaut (mode web) */
+    user-select: none;
+}
+
+/* Afficher seulement en mode Electron */
+body.electron-mode .custom-titlebar {
+    display: block;
+}
+
+/* Ajuster le contenu pour ne pas être caché par la titlebar */
+body.electron-mode .wrap {
+    margin-top: 32px;
+    height: calc(100vh - 32px);
+}
+
+.titlebar-drag-region {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    -webkit-app-region: drag; /* Permet de déplacer la fenêtre */
+}
+
+.titlebar-left,
+.titlebar-center,
+.titlebar-right {
+    display: flex;
+    align-items: center;
+    -webkit-app-region: no-drag; /* Empêche le drag sur les boutons */
+}
+
+.titlebar-left {
+    padding-left: 12px;
+    gap: 10px;
+}
+
+.titlebar-logo {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+}
+
+.titlebar-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    opacity: 0.8;
+}
+
+.titlebar-button {
+    width: 46px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease;
+    padding: 0;
+}
+
+.titlebar-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.titlebar-button:active {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.titlebar-close:hover {
+    background: #e81123;
+    color: white;
+}
+
+.titlebar-close:active {
+    background: #c70011;
+}
+
+.titlebar-theme-btn {
+    width: 40px;
+}
+
+.titlebar-theme-btn:hover {
+    background: var(--primary-orange);
+    color: white;
+}
+
+[data-theme="dark"] .titlebar-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .titlebar-button:active {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+/* ==========================================================================
    BASE & RESET
    ========================================================================== */
 
@@ -1251,7 +1362,7 @@ select::-webkit-scrollbar-thumb {
 }
 
 .brand .logo {
-    height: 80px;
+    height: 100px; /* Agrandi de 80px à 100px */
     width: auto;
     display: inline-block;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));

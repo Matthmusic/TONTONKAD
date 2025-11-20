@@ -109,6 +109,7 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
+    frame: false, // Désactiver la frame native pour custom titlebar
     icon: path.join(__dirname, '../../assets/icons/ico/icon.ico'),
     webPreferences: {
       nodeIntegration: false,
@@ -561,6 +562,29 @@ ipcMain.on('set-theme', (event, theme) => {
       document.documentElement.style.backgroundColor = '${backgroundColor}';
     `).catch(err => console.error('Erreur lors du changement de thème:', err));
   }
+});
+
+// Handlers pour les contrôles de fenêtre (custom titlebar)
+ipcMain.on('window-minimize', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+});
+
+ipcMain.on('window-close', () => {
+  if (mainWindow) mainWindow.close();
+});
+
+ipcMain.handle('window-is-maximized', () => {
+  return mainWindow ? mainWindow.isMaximized() : false;
 });
 
 // App lifecycle

@@ -41,6 +41,49 @@
     <script src="jspdf.min.js"></script>
 </head>
 <body>
+  <!-- Custom Titlebar (Electron seulement) -->
+  <div id="custom-titlebar" class="custom-titlebar">
+    <div class="titlebar-drag-region">
+      <div class="titlebar-left">
+        <img id="titlebar-logo" src="../../assets/icons/ico/TONTONKADN.png" alt="TONTONKAD Logo" class="titlebar-logo">
+        <span class="titlebar-title">TONTONKAD v2</span>
+      </div>
+      <div class="titlebar-center"></div>
+      <div class="titlebar-right">
+        <!-- Toggle thème dans la titlebar -->
+        <button id="titlebar-theme-toggle" class="titlebar-button titlebar-theme-btn" title="Changer de thème">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+        </button>
+        <!-- Boutons de contrôle -->
+        <button id="titlebar-minimize" class="titlebar-button" title="Minimiser">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <rect x="0" y="5" width="12" height="2" fill="currentColor"/>
+          </svg>
+        </button>
+        <button id="titlebar-maximize" class="titlebar-button" title="Agrandir/Restaurer">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <rect x="1" y="1" width="10" height="10" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          </svg>
+        </button>
+        <button id="titlebar-close" class="titlebar-button titlebar-close" title="Fermer">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <path d="M1,1 L11,11 M11,1 L1,11" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Notification de mise à jour -->
   <div id="update-notification" class="update-notification hidden">
     <div class="update-notification-content">
@@ -956,6 +999,77 @@
         settingsStatus.style.display = 'block';
         settingsStatus.style.background = type === 'success' ? 'var(--success-bg)' : 'var(--error-bg)';
         settingsStatus.style.color = type === 'success' ? 'var(--success-color)' : 'var(--error-color)';
+      }
+    });
+  </script>
+
+  <!-- Custom Titlebar Script -->
+  <script>
+    // Initialiser la custom titlebar (Electron uniquement)
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.electronAPI && window.electronAPI.isElectron) {
+        // Ajouter la classe electron-mode au body
+        document.body.classList.add('electron-mode');
+
+        const titlebarLogo = document.getElementById('titlebar-logo');
+        const titlebarThemeToggle = document.getElementById('titlebar-theme-toggle');
+        const minimizeBtn = document.getElementById('titlebar-minimize');
+        const maximizeBtn = document.getElementById('titlebar-maximize');
+        const closeBtn = document.getElementById('titlebar-close');
+
+        // Mettre à jour le logo de la titlebar selon le thème
+        function updateTitlebarLogo(theme) {
+          if (titlebarLogo) {
+            titlebarLogo.src = theme === 'dark'
+              ? '../../assets/icons/ico/TONTONKADB.png'
+              : '../../assets/icons/ico/TONTONKADN.png';
+          }
+        }
+
+        // Appliquer le thème initial
+        const savedTheme = localStorage.getItem('tontonkad-theme') || 'light';
+        updateTitlebarLogo(savedTheme);
+
+        // Toggle thème depuis la titlebar
+        if (titlebarThemeToggle) {
+          titlebarThemeToggle.addEventListener('click', () => {
+            // Déclencher le toggle du thème principal
+            const mainThemeSwitcher = document.getElementById('theme-switcher');
+            if (mainThemeSwitcher) {
+              mainThemeSwitcher.click();
+            }
+          });
+        }
+
+        // Observer les changements de thème pour mettre à jour le logo
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'data-theme') {
+              const newTheme = document.documentElement.getAttribute('data-theme');
+              updateTitlebarLogo(newTheme);
+            }
+          });
+        });
+        observer.observe(document.documentElement, { attributes: true });
+
+        // Boutons de contrôle
+        if (minimizeBtn) {
+          minimizeBtn.addEventListener('click', () => {
+            window.electronAPI.windowMinimize();
+          });
+        }
+
+        if (maximizeBtn) {
+          maximizeBtn.addEventListener('click', () => {
+            window.electronAPI.windowMaximize();
+          });
+        }
+
+        if (closeBtn) {
+          closeBtn.addEventListener('click', () => {
+            window.electronAPI.windowClose();
+          });
+        }
       }
     });
   </script>
