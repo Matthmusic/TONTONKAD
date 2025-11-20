@@ -115,7 +115,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, '../preload/preload.js')
     },
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#f0f2f5', // Light par défaut
     show: false
   });
 
@@ -125,6 +125,16 @@ function createWindow() {
   // Afficher la fenêtre une fois prête
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+  });
+
+  // Une fois le contenu chargé, appliquer le thème depuis localStorage
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.executeJavaScript(`
+      localStorage.getItem('tontonkad-theme') || 'light'
+    `).then(theme => {
+      const backgroundColor = theme === 'dark' ? '#12121c' : '#f0f2f5';
+      mainWindow.setBackgroundColor(backgroundColor);
+    });
   });
 
   // DevTools en mode développement
@@ -539,9 +549,17 @@ ipcMain.handle('get-app-version', () => {
 
 // Gérer le changement de thème
 ipcMain.on('set-theme', (event, theme) => {
-  if (mainWindow) {
+  if (mainWindow && mainWindow.webContents) {
     const backgroundColor = theme === 'dark' ? '#12121c' : '#f0f2f5';
+
+    // Méthode 1: Changer le backgroundColor de la fenêtre
     mainWindow.setBackgroundColor(backgroundColor);
+
+    // Méthode 2: Injecter du CSS dans la page pour forcer la couleur de fond
+    mainWindow.webContents.executeJavaScript(`
+      document.body.style.backgroundColor = '${backgroundColor}';
+      document.documentElement.style.backgroundColor = '${backgroundColor}';
+    `).catch(err => console.error('Erreur lors du changement de thème:', err));
   }
 });
 
