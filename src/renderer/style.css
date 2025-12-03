@@ -1272,32 +1272,106 @@ select::-webkit-scrollbar-thumb {
    TOAST NOTIFICATIONS
    ========================================================================== */
 
-.toast {
+/* Système de notifications intégrées */
+.notification-container {
     position: fixed;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 70px; /* En dessous de la titlebar et header */
+    right: 20px;
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 400px;
+    pointer-events: none;
+}
+
+body.electron-mode .notification-container {
+    top: 102px; /* Ajuster pour la custom titlebar (32px) + header */
+}
+
+.notification {
     background: var(--glass-bg-solid);
     backdrop-filter: var(--glass-backdrop);
     border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary-orange);
     color: var(--text-primary);
-    padding: 12px 20px;
+    padding: 14px 18px 14px 14px;
     border-radius: var(--radius-md);
     font-size: 14px;
     font-weight: 500;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
     box-shadow: 0 8px 32px var(--shadow-color);
-    z-index: var(--z-toast);
-    white-space: nowrap;
-    min-width: 200px;
-    text-align: center;
-    will-change: opacity;
+    min-width: 280px;
+    max-width: 400px;
+    pointer-events: auto;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateX(400px);
+    animation: notificationSlideIn 0.3s ease forwards;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
-.toast.show {
-    opacity: 1;
+.notification:hover {
+    transform: translateX(0) scale(1.02);
+    box-shadow: 0 12px 40px var(--shadow-color);
+}
+
+.notification.removing {
+    animation: notificationSlideOut 0.3s ease forwards;
+}
+
+.notification-icon {
+    flex-shrink: 0;
+    font-size: 20px;
+    line-height: 1;
+}
+
+.notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Types de notifications */
+.notification.success {
+    border-left-color: var(--success-color);
+}
+
+.notification.error {
+    border-left-color: var(--error-color);
+}
+
+.notification.warning {
+    border-left-color: var(--warning-color);
+}
+
+.notification.info {
+    border-left-color: var(--info-color);
+}
+
+@keyframes notificationSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(400px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes notificationSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(400px);
+    }
 }
 
 @keyframes toastFadeIn {
@@ -1359,6 +1433,7 @@ select::-webkit-scrollbar-thumb {
     margin-bottom: var(--spacing-sm);
     padding-bottom: var(--spacing-sm);
     border-bottom: 1px solid var(--border-color);
+    position: relative;
 }
 
 .brand .logo {
@@ -1541,7 +1616,7 @@ select::-webkit-scrollbar-thumb {
 }
 
 .lock-icon:has(input:checked) .cadenas-icon {
-    content: url('ico/cadenas.ico');
+    content: url('../../assets/icons/ico/cadenas.ico');
     filter: invert(17%) sepia(90%) saturate(7471%) hue-rotate(3deg) brightness(97%) contrast(118%);
 }
 
@@ -1573,42 +1648,45 @@ select::-webkit-scrollbar-thumb {
     width: 100%;
     height: 100%;
     z-index: var(--z-modal);
+    pointer-events: none; /* Permet les clics à travers le popup */
 }
 
 .edit-popup-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(5px);
-    z-index: var(--z-modal);
-    display: none;
+    display: none !important; /* Complètement masqué */
 }
 
 .edit-popup-content {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    position: fixed;
     background: var(--glass-bg-solid);
     backdrop-filter: var(--glass-backdrop);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
-    min-width: 300px;
-    max-width: 500px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    min-width: 280px;
+    max-width: 400px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
     z-index: calc(var(--z-modal) + 1);
     white-space: normal;
     line-height: 1.5;
+    pointer-events: auto; /* Réactive les clics sur le contenu */
+    animation: contextMenuAppear 0.15s ease-out;
+}
+
+@keyframes contextMenuAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
 
 .edit-popup-content h3 {
-    margin: 0 0 var(--spacing-lg) 0;
+    margin: 0 0 var(--spacing-md) 0;
     color: var(--text-primary);
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 600;
 }
 
@@ -1619,26 +1697,26 @@ select::-webkit-scrollbar-thumb {
 }
 
 .edit-field {
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
 }
 
 .edit-field label {
     display: block;
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: 4px;
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
 }
 
 .edit-field input[type="text"],
 .edit-field input[type="number"] {
     width: 100%;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: var(--bg-card);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     font-family: 'Inter', sans-serif;
     box-sizing: border-box;
     transition: all var(--transition-base);
@@ -3089,32 +3167,10 @@ select::-webkit-scrollbar-thumb {
 }
 
 /* ==========================================================================
-   THEME SWITCHER
+   SETTINGS BUTTON
    ========================================================================== */
 
-.theme-switcher {
-    position: absolute;
-    top: 16px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-backdrop);
-    border: 1px solid var(--border-color);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all var(--transition-base);
-    z-index: 2;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
 .settings-button {
-    position: absolute;
-    top: 64px;
-    right: 20px;
     width: 40px;
     height: 40px;
     background: var(--glass-bg);
@@ -3126,69 +3182,34 @@ select::-webkit-scrollbar-thumb {
     justify-content: center;
     cursor: pointer;
     transition: all var(--transition-base);
-    z-index: 2;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    font-size: 20px;
     user-select: none;
+    flex-shrink: 0;
+    color: var(--text-primary);
 }
 
 .settings-button:hover {
-    background: var(--primary-color);
-    border-color: var(--primary-color);
+    background: var(--primary-orange);
+    border-color: var(--primary-orange);
     box-shadow: 0 4px 12px rgba(255, 145, 77, 0.3);
-    transform: translateY(-2px) rotate(90deg);
+    transform: scale(1.1);
+    color: white;
 }
 
 .settings-button:active {
-    transform: translateY(0) rotate(90deg);
+    transform: scale(1.05);
 }
 
-.theme-switcher:hover {
-    transform: scale(1.1) rotate(15deg);
-    box-shadow: 0 4px 16px rgba(255, 145, 77, 0.3);
-}
-
-.theme-switcher .icon-sun,
-.theme-switcher .icon-moon {
+.settings-button svg {
     width: 20px;
     height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.theme-switcher .icon-sun img,
-.theme-switcher .icon-moon img {
     display: block;
-    width: 16px;
-    height: 16px;
-}
-
-[data-theme="dark"] .theme-switcher .icon-sun {
-    display: flex;
-}
-
-[data-theme="dark"] .theme-switcher .icon-sun img {
-    filter: brightness(0) invert(1);
-}
-
-[data-theme="dark"] .theme-switcher .icon-moon {
-    display: none;
-}
-
-.theme-switcher .icon-sun {
-    display: none;
-}
-
-.theme-switcher .icon-moon {
-    display: flex;
 }
 
 /* Version Badge */
 .version-info {
-    position: absolute;
-    top: 16px;
-    right: 70px;
+    margin-left: auto;
+    margin-right: var(--spacing-sm);
     padding: 6px 12px;
     background: var(--glass-bg);
     backdrop-filter: var(--glass-backdrop);
@@ -3197,17 +3218,17 @@ select::-webkit-scrollbar-thumb {
     font-size: 12px;
     font-weight: 500;
     color: var(--text-secondary);
-    z-index: 2;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     transition: all var(--transition-base);
     cursor: default;
     user-select: none;
+    flex-shrink: 0;
 }
 
 .version-info:hover {
-    background: var(--primary-color);
+    background: var(--primary-orange);
     color: white;
-    border-color: var(--primary-color);
+    border-color: var(--primary-orange);
     box-shadow: 0 4px 12px rgba(255, 145, 77, 0.3);
 }
 
@@ -3221,8 +3242,8 @@ select::-webkit-scrollbar-thumb {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3235,10 +3256,11 @@ select::-webkit-scrollbar-thumb {
 }
 
 .update-notification-content {
-    background: var(--panel-bg);
+    background: var(--glass-bg-solid);
+    backdrop-filter: var(--glass-backdrop);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow);
     max-width: 500px;
     width: 90%;
     overflow: hidden;
@@ -3267,6 +3289,13 @@ select::-webkit-scrollbar-thumb {
 .update-icon {
     font-size: 32px;
     animation: pulse 2s ease-in-out infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.update-icon svg {
+    display: block;
 }
 
 @keyframes pulse {
@@ -3369,7 +3398,7 @@ select::-webkit-scrollbar-thumb {
 }
 
 .update-btn-primary {
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
     color: white;
     box-shadow: 0 4px 12px rgba(255, 145, 77, 0.3);
 }
@@ -3377,6 +3406,7 @@ select::-webkit-scrollbar-thumb {
 .update-btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(255, 145, 77, 0.4);
+    background: linear-gradient(135deg, var(--primary-orange-dark), var(--primary-brown));
 }
 
 .update-btn-primary:active {
@@ -3540,7 +3570,7 @@ select::-webkit-scrollbar-thumb {
 @media print {
     .panel,
     .canvas-controls,
-    .theme-switcher,
+    .settings-button,
     .rainbow-button {
         display: none;
     }

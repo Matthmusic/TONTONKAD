@@ -61,6 +61,8 @@
   --success-color: #48bb78;
   --error-bg: rgba(245, 101, 101, 0.1);
   --error-color: #f56565;
+  --warning-color: #ed8936;
+  --info-color: #4299e1;
   --input-bg: rgba(255, 255, 255, 0.8);
 }
 
@@ -83,5 +85,9 @@
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 
   /* Status colors (dark mode) */
+  --success-color: #68d391;
+  --error-color: #fc8181;
+  --warning-color: #f6ad55;
+  --info-color: #63b3ed;
   --input-bg: rgba(30, 30, 46, 0.8);
 }

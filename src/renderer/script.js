@@ -2,7 +2,7 @@
   "use strict";
 
   /* ====== Constantes & DOM ====== */
-  const DEBUG = false; // Mode débogage - mettre à true pour activer les logs
+  // Mode production - logs désactivés pour optimisation
   const MM_TO_PX = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--mm-to-px")) || 0.5;
   const VIEWPORT_DEFAULT_W = 900;
   const VIEWPORT_DEFAULT_H = 900;
@@ -129,7 +129,7 @@
 
   const statOccupation = document.getElementById("statOccupation");
   const selInfo = document.getElementById("selInfo");
-  const toast = document.getElementById("toast");
+  const notificationContainer = document.getElementById("notification-container");
   const freezeBtn = document.getElementById("freezeBtn");
   const panel = document.querySelector(".panel");
   const resizeHandle = document.querySelector(".panel-resize-handle");
@@ -479,6 +479,10 @@ function initSearchableLists() {
 
         // Événements de focus/blur pour afficher/masquer la liste
         fourreauSearch.addEventListener('focus', function() {
+            // Sélectionner tout le texte pour faciliter le remplacement
+            this.select();
+            // Afficher tous les fourreaux (filtre vide)
+            filterFourreaux('');
             showFourreauList();
         });
 
@@ -573,6 +577,10 @@ function initSearchableLists() {
 
         // Événements de focus/blur pour afficher/masquer la liste
         cableSearch.addEventListener('focus', function() {
+            // Sélectionner tout le texte pour faciliter le remplacement
+            this.select();
+            // Afficher tous les câbles (filtre vide)
+            filterCables('');
             showCableList();
         });
 
@@ -848,12 +856,10 @@ function initSearchableLists() {
       actionHistory.shift();
     }
 
-    if (DEBUG) console.log('🐛 État sauvé dans l\'historique:', actionHistory.length, 'états');
   }
 
   function restorePreviousState() {
     if (actionHistory.length === 0) {
-      if (DEBUG) console.log('🐛 Aucun état à restaurer');
       return false;
     }
 
@@ -871,7 +877,6 @@ function initSearchableLists() {
     updateInventory();
     redraw();
 
-    if (DEBUG) console.log('🐛 État restauré:', actionHistory.length, 'états restants');
     return true;
   }
 
@@ -1145,7 +1150,6 @@ function initSearchableLists() {
       return;
     }
 
-    if (DEBUG) console.log('🔄 Début de l\'arrangement en grille...', fourreaux.length, 'fourreaux');
     arrangeInProgress = true;
 
     const shape = shapeSel.value;
@@ -1177,11 +1181,11 @@ function initSearchableLists() {
       });
 
       showToast(`✅ ${fourreaux.length} fourreaux placés en grille ${result.grid.cols}x${result.grid.rows} (Ctrl+X pour dégeler)`);
-      if (DEBUG) console.log(`✅ Placement terminé.`);
     } else {
       const { width: newWidth, height: newHeight } = result.suggestedContainer;
       const lockWidth = document.getElementById('lockWidth')?.checked;
       const lockHeight = document.getElementById('lockHeight')?.checked;
+
 
       if (lockWidth && lockHeight) {
         showToast(`🔒 Impossible : dimensions verrouillées (${newWidth}×${newHeight}mm requis)`);
@@ -1200,10 +1204,9 @@ function initSearchableLists() {
         boxDInput.value = newDiameter;
       }
 
-      // Appeler applyDimensions pour mettre à jour le monde, puis relancer l'arrangement
       applyDimensions();
       showToast(`🔧 Redimensionnement à ${finalWidth}x${finalHeight}mm. Relance de l'arrangement...`);
-      
+
       // Utiliser un timeout pour laisser le DOM se mettre à jour avant de relancer
       setTimeout(() => {
         arrangeConduitGridOptimized();
@@ -1452,30 +1455,27 @@ function initSearchableLists() {
 
     const width = parseFloat(button.getAttribute('data-width'));
     const height = parseFloat(button.getAttribute('data-height'));
+    if (isNaN(width) || isNaN(height)) return;
+
+    const lockWidth = document.getElementById('lockWidth')?.checked;
+    const lockHeight = document.getElementById('lockHeight')?.checked;
     
     if (SHAPE === 'rect') {
-      const lockWidth = document.getElementById('lockWidth')?.checked;
-      const lockHeight = document.getElementById('lockHeight')?.checked;
-      
       if (!lockWidth) {
         boxWInput.value = width;
-        WORLD_W_MM = width;
       }
       if (!lockHeight) {
         boxHInput.value = height;
-        WORLD_H_MM = height;
       }
     } else if (SHAPE === 'circ') {
       const diameter = Math.max(width, height);
       boxDInput.value = diameter;
-      WORLD_D_MM = diameter;
     }
     
-    setCanvasSize();
-    updateStats();
+    applyDimensions();
     hideReduceButton();
     
-    showToast(`Boîte réduite à ${width} × ${height} mm`);
+    showToast(`Boîte ajustée à ${width} x ${height} mm`);
   }
 
   // Fonctions de copier-coller
@@ -1485,7 +1485,37 @@ function initSearchableLists() {
       return;
     }
 
-    // Pour l'instant, on copie seulement la sélection simple
+    // Copie multiple de câbles (nouveau comportement pour Ctrl+C sur plusieurs câbles)
+    if (selectedMultiple.length > 0) {
+      const firstType = selectedMultiple[0].type;
+
+      if (firstType === 'cable') {
+        // Copier plusieurs câbles pour les coller dans un autre fourreau
+        const copiedCables = [];
+        for (const sel of selectedMultiple) {
+          const cable = cables.find(c => c.id === sel.id);
+          if (cable) {
+            copiedCables.push({
+              fam: cable.fam,
+              code: cable.code,
+              label: cable.label || '',
+              customColor: cable.customColor,
+              selectedPhase: cable.selectedPhase
+            });
+          }
+        }
+
+        clipboard = {
+          type: 'cables', // Nouveau type pour plusieurs câbles
+          cables: copiedCables
+        };
+
+        showToast(`${copiedCables.length} câbles copiés`);
+        return;
+      }
+    }
+
+    // Copie simple (comportement existant)
     if (selected) {
       if (selected.type === 'fourreau') {
         const fourreau = fourreaux.find(f => f.id === selected.id);
@@ -1541,6 +1571,36 @@ function initSearchableLists() {
       return;
     }
 
+    if (clipboard.type === 'cables') {
+      // Coller plusieurs câbles dans le fourreau sous le curseur
+      const targetFourreau = findFourreauUnder(x, y, null);
+      if (!targetFourreau) {
+        showToast('Sélectionnez un fourreau pour y coller les câbles');
+        return;
+      }
+
+      let pastedCables = 0;
+      for (const cableData of clipboard.cables) {
+        const newCable = addCableAt(x, y, cableData.fam, cableData.code, targetFourreau);
+        if (newCable) {
+          newCable.label = cableData.label;
+          newCable.customColor = cableData.customColor;
+          newCable.selectedPhase = cableData.selectedPhase;
+          pastedCables++;
+        }
+      }
+
+      if (pastedCables > 0) {
+        showToast(`${pastedCables} câbles collés dans le fourreau`);
+        redraw();
+        updateStats();
+        updateInventory();
+      } else {
+        showToast('Impossible de coller les câbles dans ce fourreau');
+      }
+      return;
+    }
+
     if (clipboard.type === 'fourreau') {
       // Créer le nouveau fourreau
       const newFourreau = addFourreauAt(x, y, clipboard.fourreauType, clipboard.fourreauCode);
@@ -1589,6 +1649,42 @@ function initSearchableLists() {
     }
   }
 
+  // Nouvelle fonction pour coller des câbles dans un fourreau sélectionné
+  function pasteCablesIntoSelectedFourreau() {
+    if (!clipboard || clipboard.type !== 'cables') {
+      showToast('Copiez d\'abord des câbles avec Ctrl+C');
+      return;
+    }
+
+    if (!selected || selected.type !== 'fourreau') {
+      showToast('Sélectionnez un fourreau pour y coller les câbles');
+      return;
+    }
+
+    const targetFourreau = fourreaux.find(f => f.id === selected.id);
+    if (!targetFourreau) return;
+
+    let pastedCables = 0;
+    for (const cableData of clipboard.cables) {
+      const newCable = addCableAt(targetFourreau.x, targetFourreau.y, cableData.fam, cableData.code, targetFourreau);
+      if (newCable) {
+        newCable.label = cableData.label;
+        newCable.customColor = cableData.customColor;
+        newCable.selectedPhase = cableData.selectedPhase;
+        pastedCables++;
+      }
+    }
+
+    if (pastedCables > 0) {
+      showToast(`${pastedCables} câbles collés dans le fourreau`);
+      redraw();
+      updateStats();
+      updateInventory();
+    } else {
+      showToast('Impossible de coller les câbles dans ce fourreau');
+    }
+  }
+
   function activatePasteMode() {
     if (!clipboard) {
       showToast('Rien à coller - copiez d\'abord un élément (Ctrl+C)');
@@ -1607,7 +1703,7 @@ function initSearchableLists() {
   }
 
   function deleteSelected() {
-    if (selected.length === 0) return;
+    if (!selected && selectedMultiple.length === 0) return;
     saveStateToHistory(); // Sauver l'état avant suppression
     let deletedCount = 0;
 
@@ -2394,7 +2490,10 @@ function initSearchableLists() {
     a.href = url;
     const wM = (WORLD_W_MM / 1000).toFixed(1);
     const hM = (WORLD_H_MM / 1000).toFixed(1);
-    a.download = `tontonkad_${wM}x${hM}m_${new Date().toISOString().slice(0,10)}.dxf`;
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
+    a.download = `tontonkad_${wM}x${hM}m_${date}_${time}.dxf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2455,26 +2554,64 @@ function initSearchableLists() {
   function selectFromGroup(kind, key, cycle) {
     if (kind === 'c') {
       const [fam, code] = key.split('|');
-      const arr = cables.filter(c => c.fam === fam && c.code === code);
-      if (!arr.length) return;
-      let idx = arr.length - 1;
-      if (cycle) {
-        const prev = cycleIndex.get(key) || -1;
-        idx = (prev + 1) % arr.length;
-        cycleIndex.set(key, idx);
+
+      // Toujours pré-sélectionner ce type de câble dans le formulaire
+      selectedCable = key;
+      const cableSearch = document.getElementById('cableSearch');
+      if (cableSearch) {
+        const spec = CABLES.find(c => c.fam === fam && c.code === code);
+        if (spec) {
+          cableSearch.value = `${spec.fam} – ${spec.code} (Ø ${spec.od} mm)`;
+        }
       }
-      selected = { type: 'cable', id: arr[idx].id }; // CÂBLE
+      // Basculer vers l'onglet CÂBLE
+      setTab('CÂBLE');
+
+      // Si des câbles de ce type existent sur le canvas, les sélectionner
+      const arr = cables.filter(c => c.fam === fam && c.code === code);
+      if (arr.length > 0) {
+        let idx = arr.length - 1;
+        if (cycle) {
+          const prev = cycleIndex.get(key) || -1;
+          idx = (prev + 1) % arr.length;
+          cycleIndex.set(key, idx);
+        }
+        selected = { type: 'cable', id: arr[idx].id };
+      } else {
+        // Aucun câble de ce type sur le canvas, déselectionner
+        selected = null;
+        selectedMultiple = [];
+      }
     } else if (kind === 'f') {
       const [type, code] = key.split('|');
-      const arr = fourreaux.filter(f => f.type === type && f.code === code);
-      if (!arr.length) return;
-      let idx = arr.length - 1;
-      if (cycle) {
-        const prev = cycleIndex.get(key) || -1;
-        idx = (prev + 1) % arr.length;
-        cycleIndex.set(key, idx);
+
+      // Toujours pré-sélectionner ce type de fourreau dans le formulaire
+      selectedFourreau = key;
+      const fourreauSearch = document.getElementById('fourreauSearch');
+      if (fourreauSearch) {
+        const spec = FOURREAUX.find(f => f.type === type && f.code === code);
+        if (spec) {
+          fourreauSearch.value = `${spec.type} ${spec.code} — Øint ≥ ${spec.id} mm`;
+        }
       }
-      selected = { type: 'fourreau', id: arr[idx].id };
+      // Basculer vers l'onglet FOURREAU
+      setTab('FOURREAU');
+
+      // Si des fourreaux de ce type existent sur le canvas, les sélectionner
+      const arr = fourreaux.filter(f => f.type === type && f.code === code);
+      if (arr.length > 0) {
+        let idx = arr.length - 1;
+        if (cycle) {
+          const prev = cycleIndex.get(key) || -1;
+          idx = (prev + 1) % arr.length;
+          cycleIndex.set(key, idx);
+        }
+        selected = { type: 'fourreau', id: arr[idx].id };
+      } else {
+        // Aucun fourreau de ce type sur le canvas, déselectionner
+        selected = null;
+        selectedMultiple = [];
+      }
     }
     updateSelectedInfo();
     redraw();
@@ -2654,10 +2791,64 @@ function initSearchableLists() {
     showToast(showInfo ? 'Infos affichées' : 'Infos masquées');
   }
 
-  function showToast(msg) {
-    toast.textContent = msg;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 1200);
+  // Système de notifications intégrées
+  function showToast(msg, type = 'default') {
+    // Détecter automatiquement le type si msg contient des emojis
+    if (!type || type === 'default') {
+      if (msg.includes('✅') || msg.toLowerCase().includes('succès') || msg.toLowerCase().includes('terminé')) {
+        type = 'success';
+      } else if (msg.includes('❌') || msg.includes('🔒') || msg.toLowerCase().includes('impossible') || msg.toLowerCase().includes('erreur')) {
+        type = 'error';
+      } else if (msg.includes('⚠️') || msg.toLowerCase().includes('attention')) {
+        type = 'warning';
+      } else if (msg.includes('ℹ️') || msg.includes('🔧')) {
+        type = 'info';
+      }
+    }
+
+    // Icônes par type
+    const icons = {
+      success: '✅',
+      error: '❌',
+      warning: '⚠️',
+      info: 'ℹ️',
+      default: '💬'
+    };
+
+    // Nettoyer les emojis du message s'ils sont déjà dans le texte
+    const cleanMsg = msg.replace(/^(✅|❌|⚠️|ℹ️|💬|🔒|🔧)\s*/, '');
+
+    // Créer la notification
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+
+    const icon = document.createElement('span');
+    icon.className = 'notification-icon';
+    icon.textContent = icons[type] || icons.default;
+
+    const content = document.createElement('span');
+    content.className = 'notification-content';
+    content.textContent = cleanMsg;
+
+    notification.appendChild(icon);
+    notification.appendChild(content);
+
+    // Ajouter au conteneur
+    notificationContainer.appendChild(notification);
+
+    // Fermer au clic
+    notification.addEventListener('click', () => {
+      notification.classList.add('removing');
+      setTimeout(() => notification.remove(), 300);
+    });
+
+    // Auto-suppression après 3 secondes
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.classList.add('removing');
+        setTimeout(() => notification.remove(), 300);
+      }
+    }, 3000);
   }
 
 
@@ -2791,22 +2982,25 @@ function initSearchableLists() {
   }
 
   function applyDimensions() {
+    // Vérifier si les fourreaux sont déjà en grille (tous gelés)
+    const wasInGrid = fourreaux.length > 0 && fourreaux.every(f => f.frozen);
+
     SHAPE = shapeSel.value;
     if (SHAPE === 'rect') {
       const lockWidth = document.getElementById('lockWidth')?.checked;
       const lockHeight = document.getElementById('lockHeight')?.checked;
-      
+
       if (!lockWidth) {
         WORLD_W_MM = parseFloat(boxWInput.value);
       }
       if (!lockHeight) {
         WORLD_H_MM = parseFloat(boxHInput.value);
       }
-      
+
       // Mettre à jour les inputs avec les valeurs actuelles (au cas où verrouillées)
       boxWInput.value = WORLD_W_MM;
       boxHInput.value = WORLD_H_MM;
-      
+
     } else if (SHAPE === 'chemin_de_cable') {
       const [w, h] = cheminCableSelect.value.split('|').map(parseFloat);
       WORLD_W_MM = w || 0;
@@ -2819,6 +3013,14 @@ function initSearchableLists() {
     updateStats();
     updateInventory();
     updateSelectedInfo();
+
+    // Si les fourreaux étaient en grille, réappliquer la grille automatiquement
+    if (wasInGrid && fourreaux.length > 0) {
+      // Petite pause pour laisser le canvas se redimensionner
+      setTimeout(() => {
+        arrangeConduitGrid();
+      }, 120);
+    }
   }
 
   function pruneOutside() {
@@ -3008,7 +3210,7 @@ function initSearchableLists() {
 
   /* ====== Effet de scroll pour le panel ====== */
   function initPanelScrollEffect() {
-    const panel = document.querySelector('.panel');
+    if (!panel) return;
     
     function updateScrollEffect() {
       const scrollTop = panel.scrollTop;
@@ -3680,11 +3882,15 @@ function initSearchableLists() {
     searchCable.addEventListener('input', updateInventory);
     searchFourreau.addEventListener('input', updateInventory);
     toolDelete.addEventListener('click', () => { setMode('delete'); if (selected) deleteSelected(); });
-    document.getElementById('toolEdit').addEventListener('click', openEditPopup);
-    document.getElementById('toolInfo').addEventListener('click', toggleShowInfo);
-    document.getElementById('gridArrange').addEventListener('click', arrangeConduitGrid);
+
+    const toolEdit = document.getElementById('toolEdit');
+    const toolInfo = document.getElementById('toolInfo');
+    const gridArrange = document.getElementById('gridArrange');
+
+    if (toolEdit) toolEdit.addEventListener('click', openEditPopup);
+    if (toolInfo) toolInfo.addEventListener('click', toggleShowInfo);
+    if (gridArrange) gridArrange.addEventListener('click', arrangeConduitGrid);
     if (freezeBtn) freezeBtn.addEventListener('click', toggleFreezeSelected);
-    canvas.addEventListener('contextmenu', e => { e.preventDefault(); });
     canvas.addEventListener('mousedown', e => {
       const p = canvasCoords(e);
       if (e.button === 0) { // Clic gauche : sélection + glisser-déposer
@@ -3694,9 +3900,9 @@ function initSearchableLists() {
           deactivatePasteMode();
           return;
         }
-        
+
         const pick = pickAt(p.x, p.y);
-        
+
         if (e.ctrlKey || e.metaKey) { // Sélection multiple avec Ctrl
           if (pick) {
             handleMultipleSelection(pick);
@@ -3705,7 +3911,7 @@ function initSearchableLists() {
           redraw();
           return;
         }
-        
+
         // Sélection simple (comportement classique)
         if (pick) {
           selected = pick;
@@ -3723,7 +3929,8 @@ function initSearchableLists() {
         redraw();
         return;
       }
-      if (e.button === 2) { // Clic droit : placement
+      if (e.button === 1) { // Clic molette : placement
+        e.preventDefault(); // Empêcher le comportement par défaut du clic molette
         if (activeTab === 'FOURREAU') {
           const v = selectedFourreau;
           if (!v) { showToast('Choisis un fourreau.'); return; }
@@ -3735,6 +3942,19 @@ function initSearchableLists() {
           const [fam, code] = v.split('|');
           const f = findFourreauUnder(p.x, p.y, null);
           addCableAt(p.x, p.y, fam, code, f) || showToast('Impossible de poser le CÂBLE ici.');
+        }
+        return;
+      }
+      if (e.button === 2) { // Clic droit : édition
+        e.preventDefault();
+        const pick = pickAt(p.x, p.y);
+        if (pick) {
+          selected = pick;
+          selectedMultiple = []; // Réinitialiser sélection multiple
+          updateSelectedInfo();
+          redraw();
+          // Ouvrir la popup d'édition aux coordonnées du clic
+          openEditPopup(e.clientX, e.clientY);
         }
         return;
       }
@@ -3756,22 +3976,32 @@ function initSearchableLists() {
     boxDInput.addEventListener('keydown', handleDimensionEnter);
 
     // Export PDF
-    document.getElementById('exportPDF').addEventListener('click', openPdfExportModal);
-    document.getElementById('confirmPdfExport').addEventListener('click', exportToPDF);
-    document.getElementById('cancelPdfExport').addEventListener('click', closePdfExportModal);
+    const exportPDF = document.getElementById('exportPDF');
+    const confirmPdfExport = document.getElementById('confirmPdfExport');
+    const cancelPdfExport = document.getElementById('cancelPdfExport');
+    const pdfExportModal = document.getElementById('pdfExportModal');
+    const exportDXFBtn = document.getElementById('exportDXF');
+    const clearBtn = document.getElementById('clear');
+    const reduceToMinimumBtn = document.getElementById('reduceToMinimum');
+
+    if (exportPDF) exportPDF.addEventListener('click', openPdfExportModal);
+    if (confirmPdfExport) confirmPdfExport.addEventListener('click', exportToPDF);
+    if (cancelPdfExport) cancelPdfExport.addEventListener('click', closePdfExportModal);
 
     // Fermer le modal en cliquant en dehors
-    document.getElementById('pdfExportModal').addEventListener('click', (e) => {
-      if (e.target.id === 'pdfExportModal') {
-        closePdfExportModal();
-      }
-    });
+    if (pdfExportModal) {
+      pdfExportModal.addEventListener('click', (e) => {
+        if (e.target.id === 'pdfExportModal') {
+          closePdfExportModal();
+        }
+      });
+    }
 
     // Fermer le modal avec Échap
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         const modal = document.getElementById('pdfExportModal');
-        if (modal.style.display === 'flex') {
+        if (modal && modal.style.display === 'flex') {
           closePdfExportModal();
         }
       }
@@ -3779,20 +4009,23 @@ function initSearchableLists() {
 
     // Exposer les fonctions globalement pour les onclick du HTML
     window.closePdfExportModal = closePdfExportModal;
-    document.getElementById('exportDXF').addEventListener('click', exportDXF);
-    document.getElementById('clear').addEventListener('click', () => {
-      fourreaux.length = 0;
-      cables.length = 0;
-      selected = null;
-      updateStats();
-      updateInventory();
-      updateSelectedInfo();
-      hideReduceButton(); // Cacher le bouton de réduction
-      redraw();
-    });
+
+    if (exportDXFBtn) exportDXFBtn.addEventListener('click', exportDXF);
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        fourreaux.length = 0;
+        cables.length = 0;
+        selected = null;
+        updateStats();
+        updateInventory();
+        updateSelectedInfo();
+        hideReduceButton(); // Cacher le bouton de réduction
+        redraw();
+      });
+    }
 
     // Event listener pour le bouton de réduction
-    document.getElementById('reduceToMinimum').addEventListener('click', reduceToMinimum);
+    if (reduceToMinimumBtn) reduceToMinimumBtn.addEventListener('click', reduceToMinimum);
     
     // Fonction utilitaire pour gérer les changements de couleur des câbles
     function handleCableColorChange(obj, selectedPhase, colorInputValue) {
@@ -3888,32 +4121,33 @@ function initSearchableLists() {
     }
 
     // Fonctions popup d'édition
-    function openEditPopup() {
+    function openEditPopup(mouseX, mouseY) {
       // Vérifier s'il y a une sélection simple ou multiple
       if (!selected && selectedMultiple.length === 0) {
         showToast('Sélectionnez un ou plusieurs objets pour les éditer (clic gauche + Ctrl)');
         return;
       }
-      
+
       let obj = null;
       let isMultiple = false;
-      
+
       if (selectedMultiple.length > 0) {
         // Sélection multiple - prendre le premier pour les valeurs par défaut
         isMultiple = true;
-        obj = selectedMultiple[0].type === 'fourreau' 
+        obj = selectedMultiple[0].type === 'fourreau'
           ? fourreaux.find(f => f.id === selectedMultiple[0].id)
           : cables.find(c => c.id === selectedMultiple[0].id);
       } else {
         // Sélection simple
-        obj = selected.type === 'fourreau' 
+        obj = selected.type === 'fourreau'
           ? fourreaux.find(f => f.id === selected.id)
           : cables.find(c => c.id === selected.id);
       }
-        
+
       if (!obj) return;
-      
+
       const popup = document.getElementById('editPopup');
+      const popupContent = popup.querySelector('.edit-popup-content');
       const labelInput = document.getElementById('editLabel');
       const colorInput = document.getElementById('editColor');
       const phaseSection = document.getElementById('cablePhaseSection');
@@ -3976,8 +4210,45 @@ function initSearchableLists() {
       }
       
       popup.style.display = 'block';
-      const overlay = popup.querySelector('.edit-popup-overlay');
-      if (overlay) overlay.style.display = 'block';
+
+      // Positionner la popup aux coordonnées du clic si fournies
+      if (mouseX !== undefined && mouseY !== undefined && popupContent) {
+        // Attendre que le DOM soit rendu pour obtenir les bonnes dimensions
+        requestAnimationFrame(() => {
+          // Obtenir les dimensions de la popup et de la fenêtre
+          const popupRect = popupContent.getBoundingClientRect();
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+
+          // Calculer la position en s'assurant que la popup reste dans la fenêtre
+          let left = mouseX + 10; // Décalage de 10px à droite du curseur
+          let top = mouseY + 10; // Décalage de 10px en bas du curseur
+
+          // Ajuster si la popup dépasse à droite
+          if (left + popupRect.width > viewportWidth) {
+            left = mouseX - popupRect.width - 10; // Positionner à gauche du curseur
+          }
+
+          // Ajuster si la popup dépasse en bas
+          if (top + popupRect.height > viewportHeight) {
+            top = mouseY - popupRect.height - 10; // Positionner au-dessus du curseur
+          }
+
+          // S'assurer que la popup ne dépasse pas en haut ou à gauche
+          left = Math.max(10, left);
+          top = Math.max(10, top);
+
+          popupContent.style.position = 'fixed';
+          popupContent.style.left = `${left}px`;
+          popupContent.style.top = `${top}px`;
+        });
+      } else if (popupContent) {
+        // Position centrée par défaut
+        popupContent.style.position = '';
+        popupContent.style.left = '';
+        popupContent.style.top = '';
+      }
+
       setTimeout(() => labelInput.focus(), 100);
     }
     
@@ -3985,8 +4256,15 @@ function initSearchableLists() {
       // Fermer le dropdown des couleurs s'il est ouvert
       closeColorDropdown();
       const popup = document.getElementById('editPopup');
-      const overlay = popup.querySelector('.edit-popup-overlay');
-      if (overlay) overlay.style.display = 'none';
+      const popupContent = popup.querySelector('.edit-popup-content');
+
+      // Réinitialiser la position pour la prochaine ouverture
+      if (popupContent) {
+        popupContent.style.position = '';
+        popupContent.style.left = '';
+        popupContent.style.top = '';
+      }
+
       popup.style.display = 'none';
     }
 
@@ -4124,8 +4402,10 @@ function initSearchableLists() {
     // Gestionnaires d'événements popup
     document.getElementById('saveEdit').addEventListener('click', saveEdit);
     document.getElementById('cancelEdit').addEventListener('click', closeEditPopup);
+    // Fermer la popup en cliquant en dehors (sur la zone transparente du popup)
     document.getElementById('editPopup').addEventListener('click', (e) => {
-      if (e.target.classList.contains('edit-popup-overlay')) {
+      // Fermer si on clique sur le fond transparent du popup (pas sur le contenu)
+      if (e.target.id === 'editPopup') {
         closeEditPopup();
       }
     });
@@ -4220,7 +4500,16 @@ function initSearchableLists() {
       if (k === 'x' && e.ctrlKey) { e.preventDefault(); toggleFreezeAll(); return; }
       if (k === 'g' && e.ctrlKey) { e.preventDefault(); arrangeConduitGrid(); return; }
       if (k === 'c' && e.ctrlKey) { e.preventDefault(); copySelected(); return; }
-      if (k === 'v' && e.ctrlKey) { e.preventDefault(); activatePasteMode(); return; }
+      if (k === 'v' && e.ctrlKey) {
+        e.preventDefault();
+        // Si on a copié des câbles et qu'un fourreau est sélectionné, coller directement
+        if (clipboard && clipboard.type === 'cables' && selected && selected.type === 'fourreau') {
+          pasteCablesIntoSelectedFourreau();
+        } else {
+          activatePasteMode();
+        }
+        return;
+      }
       if (k === 'x') { toggleFreezeSelected(); return; }
       if (k === 'e') { openEditPopup(); return; }
       if (k === 'i') { toggleShowInfo(); return; }
@@ -4368,7 +4657,7 @@ function initSearchableLists() {
 
           return true;
         } catch (error) {
-          if (DEBUG) console.error('Erreur lors de la restauration:', error);
+          console.error('Erreur lors de la restauration:', error);
           showToast('Erreur lors du chargement du projet');
           return false;
         }
@@ -4396,7 +4685,6 @@ function initSearchableLists() {
         try {
           const state = this.captureCurrentState();
           localStorage.setItem(this.autoSaveKey, JSON.stringify(state));
-          if (DEBUG) console.log('🔄 Auto-sauvegarde effectuée');
         } catch (error) {
           console.warn('Erreur auto-sauvegarde:', error);
         }

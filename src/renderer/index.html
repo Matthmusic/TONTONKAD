@@ -15,7 +15,7 @@
     <meta property="og:image" content="TONTONKAD.svg"/>
 
     <!-- Security - Electron CSP -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self' data:"/>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self' data: https://fonts.gstatic.com"/>
 
     <link id="favicon" rel="icon" type="image/x-icon" href="../../assets/icons/ico/TONTONKADN.ico"/>
 
@@ -112,7 +112,12 @@
   <div id="settings-modal" class="update-notification hidden">
     <div class="update-notification-content">
       <div class="update-notification-header">
-        <div class="update-icon">⚙️</div>
+        <div class="update-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </div>
         <h3>Paramètres de la base de données</h3>
       </div>
       <div class="update-notification-body">
@@ -159,6 +164,15 @@
       <div class="brand">
         <img id="brandLogo" src="../../assets/icons/ico/TONTONKADN.png" class="logo" alt="Logo TontonKAD" />
         <h1>Organisateur de Fourreaux & Câbles</h1>
+        <div id="version-info" class="version-info" title="Version de l'application">
+          <span id="version-number">v2.3.0</span>
+        </div>
+        <button id="settings-button" class="settings-button" aria-label="Ouvrir le dossier de données" title="Accéder aux fichiers CSV personnalisables">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
       </div>
       <div class="panel-controls">
         <div class="row">
@@ -426,7 +440,10 @@
                 Clic G: Sélection/Déplacer
               </span>
               <span class="shortcut mouse-action">
-                Clic D: Placer
+                Clic molette: Placer
+              </span>
+              <span class="shortcut mouse-action">
+                Clic D: Éditer
               </span>
               <span class="shortcut">Ctrl+molette: Zoom</span>
               <span class="shortcut">Ctrl+Z: Annuler</span>
@@ -455,25 +472,21 @@
           </div>
         </div>
       </div>
-      <div id="theme-switcher" class="theme-switcher" role="button" tabindex="0" aria-label="Changer de thème">
-        <span class="icon-sun"><img src="../../assets/icons/ico/SUN.ico" alt="Sun" style="width: 16px; height: 16px;"></span>
-        <span class="icon-moon"><img src="../../assets/icons/ico/MOON.ico" alt="Moon" style="width: 16px; height: 16px;"></span>
-      </div>
-      <div id="settings-button" class="settings-button" role="button" tabindex="0" aria-label="Ouvrir le dossier de données" title="Accéder aux fichiers CSV personnalisables">
-        ⚙️
-      </div>
-      <div id="version-info" class="version-info" title="Version de l'application">
-        <span id="version-number">v2.0.1</span>
-      </div>
   </div>
-  <div id="toast" class="toast">Impossible de placer l'élément ici.</div>
+  <!-- Conteneur de notifications intégrées -->
+  <div id="notification-container" class="notification-container"></div>
+
+  <!-- Scripts de l'application -->
+  <script src="theme-manager.js" defer></script>
+  <script src="titlebar.js" defer></script>
+  <script src="settings-modal.js" defer></script>
   <script src="script.js" defer></script>
   <script src="dimension-button-handler.js" defer></script>
+  <script src="electron-integration.js" defer></script>
 
   <!-- Popup d'édition -->
   <div id="editPopup" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="editPopupTitle" aria-modal="true">
-    <div class="edit-popup-overlay" aria-hidden="true">
-      <div class="edit-popup-content">
+    <div class="edit-popup-content">
         <h3 id="editPopupTitle">Éditer l'objet</h3>
         <div class="edit-field">
           <label for="editLabel">Libellé/Commentaire :</label>
@@ -573,7 +586,6 @@
           <button id="saveEdit" type="button" aria-label="Sauvegarder les modifications">Sauvegarder</button>
           <button id="cancelEdit" type="button" aria-label="Annuler les modifications">Annuler</button>
         </div>
-      </div>
     </div>
   </div>
 
@@ -731,350 +743,5 @@
       </div>
     </div>
   </div>
-  
-  <!-- PWA Service Worker -->
-  <script>
-    (function initPWA() {
-      'use strict';
-
-      // Skip Service Worker en mode Electron - on utilise electron-updater à la place
-      if (window.electronAPI && window.electronAPI.isElectron) {
-        console.log('Mode Electron: Service Worker désactivé (electron-updater actif)');
-        return;
-      }
-
-      if (!('serviceWorker' in navigator)) {
-        console.warn('⚠️ Service Worker non supporté par ce navigateur');
-        return;
-      }
-
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then((registration) => {
-
-            // Gérer les mises à jour du service worker
-            registration.addEventListener('updatefound', () => {
-              const newWorker = registration.installing;
-              if (!newWorker) return;
-
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  // Nouvelle version disponible
-                  const shouldUpdate = confirm('🔄 Une nouvelle version de TontonKAD est disponible. Recharger maintenant ?');
-                  if (shouldUpdate) {
-                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-                    window.location.reload();
-                  }
-                }
-              });
-            });
-          })
-          .catch((error) => {
-            console.error('❌ Erreur lors de l\'enregistrement du Service Worker:', error);
-            // Fallback silencieux - l'application fonctionne sans PWA
-          });
-      });
-
-      // Gérer les mises à jour automatiques
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
-      });
-    })();
-
-    // Gestion de l'installation PWA
-    (function initPWAInstall() {
-      'use strict';
-
-      // Skip PWA install en mode Electron
-      if (window.electronAPI && window.electronAPI.isElectron) {
-        return;
-      }
-
-      let deferredPrompt = null;
-
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-
-        // Vérifier si le bouton existe déjà
-        if (document.querySelector('.rainbow-button')) {
-          return; // Ne pas créer de doublon
-        }
-
-        // Créer un bouton d'installation
-        const installButton = document.createElement('div');
-        installButton.className = 'rainbow-button';
-        installButton.setAttribute('role', 'button');
-        installButton.setAttribute('tabindex', '0');
-        installButton.setAttribute('aria-label', 'Installer TontonKAD comme application');
-
-        // Créer le bouton intérieur
-        const innerButton = document.createElement('button');
-        innerButton.className = 'rainbow-button-inner';
-        innerButton.textContent = '📱 Installer TontonKAD';
-        innerButton.setAttribute('aria-label', 'Installer l\'application TontonKAD');
-
-        installButton.appendChild(innerButton);
-
-        // L'ajouter au-dessus de project-controls-right
-        const rightControlsWrapper = document.querySelector('.right-controls-wrapper');
-        if (rightControlsWrapper) {
-          rightControlsWrapper.insertBefore(installButton, rightControlsWrapper.firstChild);
-        }
-        
-        // Gestionnaire d'événement pour l'installation
-        const handleInstall = () => {
-          if (!deferredPrompt) return;
-          
-          installButton.style.display = 'none';
-          deferredPrompt.prompt();
-          
-          deferredPrompt.userChoice
-            .then((result) => {
-              deferredPrompt = null;
-            })
-            .catch((error) => {
-              console.error('Erreur lors de l\'installation PWA:', error);
-            });
-        };
-        
-        innerButton.addEventListener('click', handleInstall);
-        
-        // Support clavier
-        installButton.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleInstall();
-          }
-        });
-      });
-
-      // Cacher le bouton après installation
-      window.addEventListener('appinstalled', () => {
-        const installButton = document.querySelector('.rainbow-button');
-        if (installButton) {
-          installButton.remove();
-        }
-        deferredPrompt = null;
-      });
-    })();
-  </script>
-
-  <!-- Theme Toggle Script (theme-switcher) -->
-  <script>
-    // Fonction pour mettre à jour le logo et le favicon selon le thème
-    function updateLogo(theme) {
-      const brandLogo = document.getElementById('brandLogo');
-      const favicon = document.getElementById('favicon');
-
-      if (brandLogo) {
-        brandLogo.src = theme === 'dark' ? '../../assets/icons/ico/TONTONKADB.png' : '../../assets/icons/ico/TONTONKADN.png';
-      }
-
-      if (favicon) {
-        favicon.href = theme === 'dark' ? '../../assets/icons/ico/TONTONKADB.ico' : '../../assets/icons/ico/TONTONKADN.ico';
-      }
-    }
-
-  </script>
-
-  <!-- Settings Button and Modal Script -->
-  <script>
-    // Gérer le clic sur le bouton paramètres (Electron uniquement)
-    document.addEventListener('DOMContentLoaded', async () => {
-      const settingsButton = document.getElementById('settings-button');
-      const settingsModal = document.getElementById('settings-modal');
-      const radioDefault = document.getElementById('radio-default');
-      const radioCustom = document.getElementById('radio-custom');
-      const customPathContainer = document.getElementById('custom-path-container');
-      const customPathInput = document.getElementById('custom-path-input');
-      const browseFolderBtn = document.getElementById('browse-folder-btn');
-      const defaultPathInfo = document.getElementById('default-path-info');
-      const settingsCancelBtn = document.getElementById('settings-cancel-btn');
-      const settingsSaveBtn = document.getElementById('settings-save-btn');
-      const settingsStatus = document.getElementById('settings-status');
-
-      if (!window.electronAPI || !window.electronAPI.getConfig) {
-        if (settingsButton) settingsButton.style.display = 'none';
-        return;
-      }
-
-      let currentConfig = null;
-
-      // Charger la configuration actuelle
-      async function loadCurrentConfig() {
-        try {
-          currentConfig = await window.electronAPI.getConfig();
-          defaultPathInfo.textContent = currentConfig.defaultDataFolder;
-
-          if (currentConfig.useCustomPath) {
-            radioCustom.checked = true;
-            customPathContainer.style.display = 'block';
-            customPathInput.value = currentConfig.dataPath;
-          } else {
-            radioDefault.checked = true;
-            customPathContainer.style.display = 'none';
-          }
-        } catch (error) {
-          console.error('Erreur lors du chargement de la config:', error);
-        }
-      }
-
-      // Ouvrir la modal
-      settingsButton.addEventListener('click', async () => {
-        await loadCurrentConfig();
-        settingsModal.classList.remove('hidden');
-        settingsStatus.style.display = 'none';
-      });
-
-      // Fermer la modal
-      settingsCancelBtn.addEventListener('click', () => {
-        settingsModal.classList.add('hidden');
-      });
-
-      // Toggle custom path container
-      radioDefault.addEventListener('change', () => {
-        if (radioDefault.checked) {
-          customPathContainer.style.display = 'none';
-        }
-      });
-
-      radioCustom.addEventListener('change', () => {
-        if (radioCustom.checked) {
-          customPathContainer.style.display = 'block';
-        }
-      });
-
-      // Parcourir les dossiers
-      browseFolderBtn.addEventListener('click', async () => {
-        try {
-          const result = await window.electronAPI.selectFolder();
-          if (result.success) {
-            customPathInput.value = result.path;
-          }
-        } catch (error) {
-          console.error('Erreur lors de la sélection du dossier:', error);
-        }
-      });
-
-      // Sauvegarder la configuration
-      settingsSaveBtn.addEventListener('click', async () => {
-        try {
-          settingsSaveBtn.disabled = true;
-          settingsSaveBtn.textContent = 'Enregistrement...';
-
-          let result;
-          if (radioCustom.checked) {
-            const customPath = customPathInput.value.trim();
-            if (!customPath) {
-              showStatus('Veuillez sélectionner un dossier', 'error');
-              return;
-            }
-            result = await window.electronAPI.setDataPath(customPath);
-          } else {
-            result = await window.electronAPI.resetDataPath();
-          }
-
-          if (result.success) {
-            showStatus(`Configuration enregistrée ! Dossier actif : ${result.path}`, 'success');
-            setTimeout(() => {
-              settingsModal.classList.add('hidden');
-              // Recharger la page pour utiliser la nouvelle base de données
-              window.location.reload();
-            }, 2000);
-          } else {
-            showStatus(`Erreur : ${result.error}`, 'error');
-          }
-        } catch (error) {
-          console.error('Erreur lors de la sauvegarde:', error);
-          showStatus(`Erreur : ${error.message}`, 'error');
-        } finally {
-          settingsSaveBtn.disabled = false;
-          settingsSaveBtn.textContent = 'Enregistrer';
-        }
-      });
-
-      function showStatus(message, type) {
-        settingsStatus.textContent = message;
-        settingsStatus.style.display = 'block';
-        settingsStatus.style.background = type === 'success' ? 'var(--success-bg)' : 'var(--error-bg)';
-        settingsStatus.style.color = type === 'success' ? 'var(--success-color)' : 'var(--error-color)';
-      }
-    });
-  </script>
-
-  <!-- Custom Titlebar Script -->
-  <script>
-    // Initialiser la custom titlebar (Electron uniquement)
-    document.addEventListener('DOMContentLoaded', () => {
-      if (window.electronAPI && window.electronAPI.isElectron) {
-        // Ajouter la classe electron-mode au body
-        document.body.classList.add('electron-mode');
-
-        const titlebarLogo = document.getElementById('titlebar-logo');
-        const titlebarThemeToggle = document.getElementById('titlebar-theme-toggle');
-        const minimizeBtn = document.getElementById('titlebar-minimize');
-        const maximizeBtn = document.getElementById('titlebar-maximize');
-        const closeBtn = document.getElementById('titlebar-close');
-
-        // Mettre à jour le logo de la titlebar selon le thème
-        function updateTitlebarLogo(theme) {
-          if (titlebarLogo) {
-            titlebarLogo.src = theme === 'dark'
-              ? '../../assets/icons/ico/TONTONKADB.png'
-              : '../../assets/icons/ico/TONTONKADN.png';
-          }
-        }
-
-        // Appliquer le thème initial
-        const savedTheme = localStorage.getItem('tontonkad-theme') || 'light';
-        updateTitlebarLogo(savedTheme);
-
-        // Toggle thème depuis la titlebar
-        if (titlebarThemeToggle) {
-          titlebarThemeToggle.addEventListener('click', () => {
-            // Déclencher le toggle du thème principal
-            const mainThemeSwitcher = document.getElementById('theme-switcher');
-            if (mainThemeSwitcher) {
-              mainThemeSwitcher.click();
-            }
-          });
-        }
-
-        // Observer les changements de thème pour mettre à jour le logo
-        const observer = new MutationObserver((mutations) => {
-          mutations.forEach((mutation) => {
-            if (mutation.attributeName === 'data-theme') {
-              const newTheme = document.documentElement.getAttribute('data-theme');
-              updateTitlebarLogo(newTheme);
-            }
-          });
-        });
-        observer.observe(document.documentElement, { attributes: true });
-
-        // Boutons de contrôle
-        if (minimizeBtn) {
-          minimizeBtn.addEventListener('click', () => {
-            window.electronAPI.windowMinimize();
-          });
-        }
-
-        if (maximizeBtn) {
-          maximizeBtn.addEventListener('click', () => {
-            window.electronAPI.windowMaximize();
-          });
-        }
-
-        if (closeBtn) {
-          closeBtn.addEventListener('click', () => {
-            window.electronAPI.windowClose();
-          });
-        }
-      }
-    });
-  </script>
-
-  <!-- Electron integration -->
-  <script src="electron-integration.js"></script>
 
 </body></html>
