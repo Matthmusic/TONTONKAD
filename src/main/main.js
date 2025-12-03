@@ -1,15 +1,15 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
-const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs').promises;
 
 let mainWindow;
+let autoUpdater = null; // Chargé de façon lazy après que l'app soit prête
 const isDev = process.argv.includes('--dev');
 
-// Dossier de données utilisateur dans APPDATA
-const userDataPath = app.getPath('userData');
-const defaultDataFolder = path.join(userDataPath, 'data');
-const configPath = path.join(userDataPath, 'config.json');
+// Ces variables seront initialisées après que l'app soit prête
+let userDataPath;
+let defaultDataFolder;
+let configPath;
 
 // Configuration par défaut
 let config = {
@@ -99,9 +99,56 @@ async function initializeUserDataFolder() {
   }
 }
 
-// Configuration de l'auto-updater
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
+// Fonction pour initialiser l'auto-updater (seulement en production)
+function initAutoUpdater() {
+  if (isDev || autoUpdater) return;
+
+  try {
+    autoUpdater = require('electron-updater').autoUpdater;
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('update-available', (info) => {
+      console.log('Mise à jour disponible:', info.version);
+      if (mainWindow) {
+        mainWindow.webContents.send('update-available', {
+          version: info.version,
+          releaseNotes: info.releaseNotes || 'Nouvelles fonctionnalités et corrections de bugs.',
+          releaseDate: info.releaseDate
+        });
+      }
+    });
+
+    autoUpdater.on('update-not-available', () => {
+      console.log('Aucune mise à jour disponible');
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      console.log(`Téléchargement: ${progressObj.percent}%`);
+      if (mainWindow) {
+        mainWindow.webContents.send('update-progress', progressObj.percent);
+      }
+    });
+
+    autoUpdater.on('update-downloaded', () => {
+      console.log('Mise à jour téléchargée avec succès');
+      if (mainWindow) {
+        mainWindow.webContents.send('update-downloaded');
+      }
+    });
+
+    autoUpdater.on('error', (err) => {
+      console.error('Erreur auto-updater:', err);
+      if (mainWindow) {
+        mainWindow.webContents.send('update-error', err.message);
+      }
+    });
+
+    console.log('✓ Auto-updater initialisé');
+  } catch (error) {
+    console.error('Erreur lors de l\'initialisation de l\'auto-updater:', error);
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -145,6 +192,9 @@ function createWindow() {
 
   // Créer le menu
   createMenu();
+
+  // Initialiser l'auto-updater (seulement en production)
+  initAutoUpdater();
 
   // Vérifier les mises à jour (seulement en production)
   if (!isDev) {
@@ -332,45 +382,22 @@ function checkForUpdates(manual = false) {
   });
 }
 
-autoUpdater.on('update-available', (info) => {
-  console.log('Mise à jour disponible:', info.version);
-
-  // Envoyer les infos de mise à jour au renderer
-  mainWindow.webContents.send('update-available', {
-    version: info.version,
-    releaseNotes: info.releaseNotes || 'Nouvelles fonctionnalités et corrections de bugs.',
-    releaseDate: info.releaseDate
-  });
-});
-
 // Listener pour déclencher le téléchargement depuis le renderer
 ipcMain.on('download-update', () => {
-  console.log('Démarrage du téléchargement de la mise à jour...');
-  autoUpdater.downloadUpdate();
-  mainWindow.webContents.send('update-downloading');
-});
-
-autoUpdater.on('update-not-available', () => {
-  // Optionnel: afficher un message seulement si vérification manuelle
-});
-
-autoUpdater.on('download-progress', (progressObj) => {
-  mainWindow.webContents.send('update-progress', progressObj.percent);
-});
-
-autoUpdater.on('update-downloaded', () => {
-  console.log('Mise à jour téléchargée avec succès');
-  mainWindow.webContents.send('update-downloaded');
-});
-
-autoUpdater.on('error', (err) => {
-  console.error('Erreur auto-updater:', err);
-  mainWindow.webContents.send('update-error', err.message);
+  if (autoUpdater) {
+    console.log('Démarrage du téléchargement de la mise à jour...');
+    autoUpdater.downloadUpdate();
+    if (mainWindow) {
+      mainWindow.webContents.send('update-downloading');
+    }
+  }
 });
 
 // Listener pour redémarrer et installer
 ipcMain.on('restart-and-install', () => {
-  autoUpdater.quitAndInstall();
+  if (autoUpdater) {
+    autoUpdater.quitAndInstall();
+  }
 });
 
 // IPC Handlers pour les opérations fichiers
@@ -589,6 +616,14 @@ ipcMain.handle('window-is-maximized', () => {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  // Initialiser les chemins après que l'app soit prête
+  userDataPath = app.getPath('userData');
+  defaultDataFolder = path.join(userDataPath, 'data');
+  configPath = path.join(userDataPath, 'config.json');
+
+  // Mettre à jour la config par défaut avec le bon chemin
+  config.dataPath = defaultDataFolder;
+
   await loadConfig();
   await determineDataFolder();
   await initializeUserDataFolder();
