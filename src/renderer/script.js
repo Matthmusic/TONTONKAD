@@ -4229,6 +4229,29 @@ function initSearchableLists() {
       }
     }
 
+    // Synchroniser la couleur affichée quand on change de conducteur (phase)
+    function syncColorInputWithPhase(phase) {
+      const colorInput = document.getElementById('editColor');
+      if (!colorInput) return;
+
+      if (phase && phase !== 'none') {
+        colorInput.value = PHASE_COLORS[phase] || colorInput.value;
+      } else {
+        const target = selectedMultiple.length > 0 ? selectedMultiple[0] : selected;
+        if (target && target.type === 'cable') {
+          const cable = cables.find(c => c.id === target.id);
+          if (cable) {
+            const base = cable.customColor
+              || (cable.selectedPhase && cable.selectedPhase !== 'none' ? PHASE_COLORS[cable.selectedPhase] : null)
+              || cable.color
+              || colorForCable(cable.fam, cable.code);
+            colorInput.value = hslToHex(base);
+          }
+        }
+      }
+      updateColorGridSelection(colorInput.value);
+    }
+
     // Gestion du dropdown des couleurs AutoCAD
     function toggleColorDropdown() {
       const dropdown = document.getElementById('colorDropdown');
@@ -4535,10 +4558,16 @@ function initSearchableLists() {
       redraw();
       updateSelectedInfo();
     }
-    
+
     // Gestionnaires d'événements popup
     document.getElementById('saveEdit').addEventListener('click', saveEdit);
     document.getElementById('cancelEdit').addEventListener('click', closeEditPopup);
+    document.querySelectorAll('input[name="cablePhase"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        const phase = radio.dataset.phase || 'none';
+        syncColorInputWithPhase(phase);
+      });
+    });
     // Fermer la popup en cliquant en dehors (sur la zone transparente du popup)
     document.getElementById('editPopup').addEventListener('click', (e) => {
       // Fermer si on clique sur le fond transparent du popup (pas sur le contenu)
