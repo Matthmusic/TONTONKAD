@@ -3639,16 +3639,39 @@ function initSearchableLists() {
 
   async function loadLogoAsBase64() {
     try {
-      const response = await fetch('../../assets/icons/ico/CEAHN.png');
-      const blob = await response.blob();
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
+      // Charger le logo SVG CEAON et le rasterizer en PNG pour jsPDF
+      const response = await fetch('../../assets/icons/ico/CEAON.svg');
+      const svgText = await response.text();
+      const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgText)));
+
+      const img = new Image();
+      img.src = svgBase64;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
       });
+
+      // Rasterisation dans un canvas pour compatibilité addImage
+      const maxDim = 256;
+      let w = img.width || maxDim;
+      let h = img.height || maxDim;
+      if (Math.max(w, h) > maxDim) {
+        const scale = maxDim / Math.max(w, h);
+        w = Math.floor(w * scale);
+        h = Math.floor(h * scale);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const pngDataUrl = canvas.toDataURL('image/png');
+      logPdf('logo CEAON.svg rasterized', { width: w, height: h });
+      return pngDataUrl;
     } catch (error) {
-      console.warn('Impossible de charger le logo CEAHN:', error);
+      warnPdf('Impossible de charger le logo CEAON.svg:', error);
       return null;
     }
   }
