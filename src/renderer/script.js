@@ -102,6 +102,9 @@
   }
   const canvasWrap = document.querySelector(".canvas-wrap");
   const shapeSel = document.getElementById("shape");
+  const shapeDisplayInput = document.getElementById("shapeDisplay");
+  const shapeSelectList = document.getElementById("shapeSelectList");
+  const shapeSelectContainer = document.getElementById("shapeSelectContainer");
   const rectInputs = document.getElementById("rectInputs");
   const circInputs = document.getElementById("circInputs");
   const boxWInput = document.getElementById("boxW");
@@ -228,6 +231,18 @@ const CHEMINS_CABLE_FALLBACK = [
   let WORLD_W = 0;
   let WORLD_H = 0;
   let WORLD_R = 0;
+  const shapeDropdownOptionEls = new Map();
+  let shapeDropdownOpen = false;
+  let shapeDropdownEventsBound = false;
+
+  function syncDimensionState() {
+    window.SHAPE = SHAPE;
+    window.WORLD_W_MM = WORLD_W_MM;
+    window.WORLD_H_MM = WORLD_H_MM;
+    window.WORLD_D_MM = WORLD_D_MM;
+  }
+
+  syncDimensionState();
 
   /* ====== Chargement des données ====== */
   function parseCSV(text, delimiter = ';') {
@@ -257,18 +272,20 @@ const CHEMINS_CABLE_FALLBACK = [
       let tpcText, cableText, cheminsCableText;
 
       // Vérifier si on est en mode Electron
-      if (window.electronAPI && window.electronAPI.isElectron && window.loadCSVFromElectron) {
-        console.log('Chargement des CSV depuis Electron (APPDATA)');
-        // Charger depuis le dossier APPDATA via Electron
-        const [tpcData, cableData, cheminsCableData] = await Promise.all([
-          window.loadCSVFromElectron('fourreaux.csv'),
-          window.loadCSVFromElectron('cables.csv'),
-          window.loadCSVFromElectron('chemins_de_cable.csv')
-        ]);
+      if (window.electronAPI?.isElectron && window.electronAPI.loadCSV) {
+        const readElectronCsv = async (filename) => {
+          const result = await window.electronAPI.loadCSV(filename);
+          if (!result || result.success === false || typeof result.data !== 'string') {
+            throw new Error(`Réponse CSV invalide pour ${filename}`);
+          }
+          return result.data;
+        };
 
-        tpcText = tpcData;
-        cableText = cableData;
-        cheminsCableText = cheminsCableData;
+        [tpcText, cableText, cheminsCableText] = await Promise.all([
+          readElectronCsv('fourreaux.csv'),
+          readElectronCsv('cables.csv'),
+          readElectronCsv('chemins_de_cable.csv')
+        ]);
       } else {
         console.log('Chargement des CSV depuis fetch (mode web)');
         // Mode web - chargement classique
@@ -305,11 +322,20 @@ const CHEMINS_CABLE_FALLBACK = [
       
     } catch (error) {
       // Impossible de charger les fichiers CSV externes - utilisation des données intégrées
-      
+      console.error('Erreur lors du chargement des CSV:', error);
+      console.warn('Utilisation des données de fallback (base limitée)');
+
       // Utiliser les données de fallback
       FOURREAUX = [...FOURREAUX_FALLBACK];
       CABLES = [...CABLES_FALLBACK];
       CHEMINS_CABLE = [...CHEMINS_CABLE_FALLBACK];
+
+      // Afficher un message d'avertissement à l'utilisateur après initialisation
+      setTimeout(() => {
+        if (typeof showToast === 'function') {
+          showToast('⚠️ Erreur chargement CSV: ' + error.message + ' - Données de secours utilisées', 8000);
+        }
+      }, 1000);
     }
   }
 
@@ -2981,6 +3007,115 @@ function initSearchableLists() {
     }
   }
 
+  function buildShapeDropdownOptions() {
+    if (!shapeSel || !shapeSelectList) return;
+    shapeSelectList.innerHTML = '';
+    shapeDropdownOptionEls.clear();
+
+    Array.from(shapeSel.options).forEach((opt) => {
+      const optionEl = document.createElement('div');
+      optionEl.className = 'searchable-option';
+      optionEl.dataset.value = opt.value;
+      optionEl.setAttribute('role', 'option');
+      optionEl.textContent = opt.textContent;
+      optionEl.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        selectShapeFromDropdown(opt.value);
+      });
+      shapeSelectList.appendChild(optionEl);
+      shapeDropdownOptionEls.set(opt.value, optionEl);
+    });
+  }
+
+  function updateShapeDropdownDisplay() {
+    if (!shapeSel || !shapeDisplayInput) return;
+    if (!shapeDropdownOptionEls.size && shapeSelectList) {
+      buildShapeDropdownOptions();
+    }
+    const optionIndex = shapeSel.selectedIndex >= 0 ? shapeSel.selectedIndex : 0;
+    const selectedOption = shapeSel.options[optionIndex];
+    shapeDisplayInput.value = selectedOption ? selectedOption.textContent : '';
+    shapeDropdownOptionEls.forEach((element, value) => {
+      element.classList.toggle('selected', value === shapeSel.value);
+    });
+  }
+
+  function closeShapeDropdown() {
+    if (!shapeSelectList || !shapeDisplayInput || !shapeDropdownOpen) return;
+    shapeDropdownOpen = false;
+    shapeSelectList.classList.remove('show');
+    shapeDisplayInput.setAttribute('aria-expanded', 'false');
+    shapeSelectContainer?.classList.remove('dropdown-open');
+  }
+
+  function openShapeDropdown() {
+    if (!shapeSelectList || !shapeDisplayInput || shapeDropdownOpen) return;
+    shapeDropdownOpen = true;
+    shapeSelectList.classList.add('show');
+    shapeDisplayInput.setAttribute('aria-expanded', 'true');
+    shapeSelectContainer?.classList.add('dropdown-open');
+  }
+
+  function selectShapeFromDropdown(value) {
+    if (!shapeSel) return;
+    if (shapeSel.value !== value) {
+      shapeSel.value = value;
+      const changeEvent = new Event('change', { bubbles: true });
+      shapeSel.dispatchEvent(changeEvent);
+    } else {
+      updateShapeDropdownDisplay();
+    }
+    closeShapeDropdown();
+  }
+
+  function setupShapeDropdown() {
+    if (!shapeDisplayInput || !shapeSelectList || !shapeSel || shapeDropdownEventsBound) return;
+    shapeDropdownEventsBound = true;
+
+    buildShapeDropdownOptions();
+    updateShapeDropdownDisplay();
+
+    shapeDisplayInput.addEventListener('click', () => {
+      if (shapeDropdownOpen) {
+        closeShapeDropdown();
+      } else {
+        openShapeDropdown();
+      }
+    });
+
+    shapeDisplayInput.addEventListener('focus', () => {
+      openShapeDropdown();
+    });
+
+    shapeDisplayInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        if (shapeDropdownOpen) {
+          closeShapeDropdown();
+        } else {
+          openShapeDropdown();
+        }
+      } else if (event.key === 'Escape') {
+        closeShapeDropdown();
+      }
+    });
+
+    shapeDisplayInput.addEventListener('blur', () => {
+      setTimeout(closeShapeDropdown, 150);
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!shapeSelectContainer?.contains(event.target)) {
+        closeShapeDropdown();
+      }
+    });
+  }
+
+  function handleShapeSelectorChange() {
+    toggleInputGroups();
+    updateShapeDropdownDisplay();
+  }
+
   function applyDimensions() {
     // Vérifier si les fourreaux sont déjà en grille (tous gelés)
     const wasInGrid = fourreaux.length > 0 && fourreaux.every(f => f.frozen);
@@ -3008,6 +3143,7 @@ function initSearchableLists() {
     } else {
       WORLD_D_MM = parseFloat(boxDInput.value);
     }
+    syncDimensionState();
     pruneOutside();
     setCanvasSize();
     updateStats();
@@ -3849,6 +3985,7 @@ function initSearchableLists() {
 
     // 2. Remplir les menus déroulants avec les données chargées
     initSearchableLists();
+    setupShapeDropdown();
 
     // 3. Attacher les écouteurs d'événements
     addEventListener("resize", fitCanvas);
@@ -3961,7 +4098,7 @@ function initSearchableLists() {
     });
     tabFOURREAU.addEventListener('click', () => setTab('FOURREAU'));
     tabCABLE.addEventListener('click', () => setTab('CÂBLE'));
-    shapeSel.addEventListener('change', toggleInputGroups);
+    shapeSel.addEventListener('change', handleShapeSelectorChange);
     applyBtn.addEventListener('click', applyDimensions);
     applyCircBtn.addEventListener('click', applyDimensions);
 
@@ -4617,12 +4754,14 @@ function initSearchableLists() {
           WORLD_W_MM = projectData.container.width || 1000;
           WORLD_H_MM = projectData.container.height || 1000;
           WORLD_D_MM = projectData.container.diameter || 1000;
+          syncDimensionState();
 
           // Mettre à jour l'interface
           shapeSel.value = SHAPE;
           boxWInput.value = WORLD_W_MM;
           boxHInput.value = WORLD_H_MM;
           boxDInput.value = WORLD_D_MM;
+          updateShapeDropdownDisplay();
 
           // Restaurer les objets
           if (projectData.fourreaux) {
@@ -5070,6 +5209,7 @@ function initSearchableLists() {
         if (this.checked) {
           // Sauvegarder la valeur actuelle si on verrouille
           WORLD_W_MM = parseFloat(boxW.value);
+          syncDimensionState();
         }
         // Mettre à jour l'icône
         const icon = document.querySelector('.lock-icon[data-target="lockWidth"] .cadenas-icon');
@@ -5089,6 +5229,7 @@ function initSearchableLists() {
         if (this.checked) {
           // Sauvegarder la valeur actuelle si on verrouille
           WORLD_H_MM = parseFloat(boxH.value);
+          syncDimensionState();
         }
         // Mettre à jour l'icône
         const icon = document.querySelector('.lock-icon[data-target="lockHeight"] .cadenas-icon');
@@ -5129,6 +5270,30 @@ function initSearchableLists() {
   }
 
   /* ====== Gestion du thème Light/Dark ====== */
+  function updateLogo(theme) {
+    const isDark = theme === 'dark';
+    const brandLogo = document.getElementById('brandLogo');
+    const titlebarLogo = document.getElementById('titlebar-logo');
+    const favicon = document.getElementById('favicon');
+
+    if (brandLogo) {
+      brandLogo.src = isDark
+        ? '../../assets/icons/ico/TONTONKADB.png'
+        : '../../assets/icons/ico/TONTONKADN.png';
+    }
+
+    if (titlebarLogo) {
+      titlebarLogo.src = isDark
+        ? '../../assets/icons/ico/TONTONKADB.png'
+        : '../../assets/icons/ico/TONTONKADN.png';
+    }
+
+    if (favicon) {
+      favicon.href = isDark
+        ? '../../assets/icons/ico/TONTONKADB.ico'
+        : '../../assets/icons/ico/TONTONKADN.ico';
+    }
+  }
   function initThemeSwitcher() {
       const themeSwitcher = document.getElementById('theme-switcher');
       const html = document.documentElement;

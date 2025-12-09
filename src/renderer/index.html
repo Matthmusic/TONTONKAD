@@ -3,14 +3,14 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-    <title>TontonKAD v2 - Organisateur de Fourreaux & Câbles</title>
+    <title>TontonKAD - Organisateur de Fourreaux & Câbles</title>
     <meta name="description" content="Application web pour organiser fourreaux et câbles électriques - Calcul d'occupation et visualisation 2D - Thème CEA"/>
     <meta name="keywords" content="fourreaux, câbles, électricité, organisation, calcul, visualisation, CEA"/>
     <meta name="author" content="TontonKAD"/>
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website"/>
-    <meta property="og:title" content="TontonKAD v2 - Organisateur de Fourreaux & Câbles"/>
+    <meta property="og:title" content="TontonKAD - Organisateur de Fourreaux & Câbles"/>
     <meta property="og:description" content="Application web pour organiser fourreaux et câbles électriques - Nouvelle interface CEA"/>
     <meta property="og:image" content="TONTONKAD.svg"/>
 
@@ -31,7 +31,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="TontonKAD v2">
+    <meta name="apple-mobile-web-app-title" content="TontonKAD">
     <link rel="apple-touch-icon" href="TONTONKAD.svg">
 
     <!-- Préchargement des ressources critiques -->
@@ -46,7 +46,7 @@
     <div class="titlebar-drag-region">
       <div class="titlebar-left">
         <img id="titlebar-logo" src="../../assets/icons/ico/TONTONKADN.png" alt="TONTONKAD Logo" class="titlebar-logo">
-        <span class="titlebar-title">TONTONKAD v2</span>
+        <span class="titlebar-title">TONTONKAD</span>
       </div>
       <div class="titlebar-center"></div>
       <div class="titlebar-right">
@@ -165,7 +165,7 @@
         <img id="brandLogo" src="../../assets/icons/ico/TONTONKADN.png" class="logo" alt="Logo TontonKAD" />
         <h1>Organisateur de Fourreaux & Câbles</h1>
         <div id="version-info" class="version-info" title="Version de l'application">
-          <span id="version-number">v2.3.0</span>
+          <span id="version-number">v2.3.1</span>
         </div>
         <button id="settings-button" class="settings-button" aria-label="Ouvrir le dossier de données" title="Accéder aux fichiers CSV personnalisables">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -175,14 +175,26 @@
         </button>
       </div>
       <div class="panel-controls">
-        <div class="row">
-          <label for="shape">Forme de la boîte</label>
-          <select id="shape">
-            <option value="rect">Boîte rectangulaire</option>
-            <option value="circ">Conduit circulaire</option>
-            <option value="chemin_de_cable">Chemin de câble</option>
-          </select>
+        <div class="row shape-row">
+          <label for="shapeDisplay">Forme de la boîte</label>
+          <div class="searchable-select-container" id="shapeSelectContainer">
+            <input type="text"
+                   id="shapeDisplay"
+                   class="searchable-input"
+                   placeholder="Choisir la forme..."
+                   readonly
+                   role="combobox"
+                   aria-haspopup="listbox"
+                   aria-expanded="false"
+                   aria-controls="shapeSelectList" />
+            <div id="shapeSelectList" class="searchable-list" role="listbox"></div>
+          </div>
         </div>
+        <select id="shape" class="sr-only" aria-hidden="true" tabindex="-1">
+          <option value="rect">Boîte rectangulaire</option>
+          <option value="circ">Conduit circulaire</option>
+          <option value="chemin_de_cable">Chemin de câble</option>
+        </select>
         <div id="rectInputs">
           <div class="row-inline">
             <div class="inline-input">

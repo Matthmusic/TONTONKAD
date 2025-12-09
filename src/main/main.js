@@ -618,15 +618,30 @@ ipcMain.handle('window-is-maximized', () => {
 app.whenReady().then(async () => {
   // Initialiser les chemins après que l'app soit prête
   userDataPath = app.getPath('userData');
-  defaultDataFolder = path.join(userDataPath, 'data');
   configPath = path.join(userDataPath, 'config.json');
+
+  // En mode dev, utiliser directement le dossier data du projet
+  // En production, utiliser APPDATA
+  if (isDev) {
+    defaultDataFolder = path.join(__dirname, '../../data');
+    console.log('Mode développement: utilisation du dossier data local');
+  } else {
+    defaultDataFolder = path.join(userDataPath, 'data');
+  }
 
   // Mettre à jour la config par défaut avec le bon chemin
   config.dataPath = defaultDataFolder;
 
   await loadConfig();
   await determineDataFolder();
-  await initializeUserDataFolder();
+
+  // Initialiser le dossier utilisateur seulement en production
+  // (en dev, on utilise directement les fichiers du projet)
+  if (!isDev) {
+    await initializeUserDataFolder();
+  }
+
+  console.log(`Dossier de données actif: ${activeDataFolder}`);
   createWindow();
 });
 
