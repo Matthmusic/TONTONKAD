@@ -3170,6 +3170,7 @@ body.electron-mode .notification-container {
    SETTINGS BUTTON
    ========================================================================== */
 
+.info-button,
 .settings-button {
     width: 40px;
     height: 40px;
@@ -3186,8 +3187,7 @@ body.electron-mode .notification-container {
     user-select: none;
     flex-shrink: 0;
     color: var(--text-primary);
-}
-
+.info-button:hover,
 .settings-button:hover {
     background: var(--primary-orange);
     border-color: var(--primary-orange);
@@ -3196,10 +3196,12 @@ body.electron-mode .notification-container {
     color: white;
 }
 
+.info-button:active,
 .settings-button:active {
     transform: scale(1.05);
 }
 
+.info-button svg,
 .settings-button svg {
     width: 20px;
     height: 20px;
@@ -3373,6 +3375,29 @@ body.electron-mode .notification-container {
     display: flex;
     gap: 12px;
     justify-content: flex-end;
+}
+
+/* Manuel modal */
+.manual-body {
+    max-height: 70vh;
+}
+.manual-scroll {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    line-height: 1.5;
+}
+.manual-scroll p {
+    margin: 0;
+}
+.manual-scroll strong {
+    color: var(--text-primary);
+}
+.manual-scroll em {
+    color: var(--text-secondary);
 }
 
 .update-btn {

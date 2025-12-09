@@ -7,6 +7,9 @@
   document.addEventListener('DOMContentLoaded', async () => {
     const settingsButton = document.getElementById('settings-button');
     const settingsModal = document.getElementById('settings-modal');
+    const manualButton = document.getElementById('manual-button');
+    const manualModal = document.getElementById('manual-modal');
+    const manualCloseBtn = document.getElementById('manual-close-btn');
     const radioDefault = document.getElementById('radio-default');
     const radioCustom = document.getElementById('radio-custom');
     const customPathContainer = document.getElementById('custom-path-container');
@@ -123,6 +126,21 @@
       settingsStatus.style.display = 'block';
       settingsStatus.style.background = type === 'success' ? 'var(--success-bg)' : 'var(--error-bg)';
       settingsStatus.style.color = type === 'success' ? 'var(--success-color)' : 'var(--error-color)';
+    }
+
+    // Manuel utilisateur
+    if (manualButton && manualModal && manualCloseBtn) {
+      manualButton.addEventListener('click', () => {
+        manualModal.classList.remove('hidden');
+      });
+      manualCloseBtn.addEventListener('click', () => {
+        manualModal.classList.add('hidden');
+      });
+      manualModal.addEventListener('click', (e) => {
+        if (e.target.id === 'manual-modal') {
+          manualModal.classList.add('hidden');
+        }
+      });
     }
   });
 
