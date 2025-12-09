@@ -160,37 +160,62 @@
 
   <!-- Modal Manuel d'utilisation -->
   <div id="manual-modal" class="update-notification hidden">
-    <div class="update-notification-content">
-      <div class="update-notification-header">
-        <div class="update-icon">📘</div>
-        <h3>Manuel d'Utilisation - TontonKAD v2</h3>
-      </div>
-      <div class="update-notification-body manual-body">
-        <div class="manual-scroll">
-          <p><strong>1. Présentation Générale</strong><br/>
-          TontonKAD est une application de CAO/DAO spécialisée. Elle permet d’organiser visuellement fourreaux et câbles dans un contenant, de calculer le taux d’occupation et de générer des livrables (Plans PDF, Export DXF). La v2 apporte une refonte graphique (Thème CEA), un mode sombre/clair et une ergonomie fluide.</p>
-
-          <p><strong>2. Interface Utilisateur</strong><br/>
-          <em>Panneau latéral</em> : logo, version, bouton ⚙️ pour la base CSV, choix de forme (rect, circ, chemin), dimensions, onglets FOURREAU/CÂBLE, recherche, inventaires et stats (compteurs, taux d’occupation, échelle).<br/>
-          <em>Canvas</em> : visualisation temps réel, cotations. Zoom Ctrl+Molette, pan clic molette (ou barre d’espace + clic).<br/>
-          <em>Barre d’outils</em> : Éditer/Infos/Supprimer/Tout vider, Grille (Ctrl+G), Figer (G), Projets (sauvegarder/charger), Export DXF/PDF.</p>
-
-          <p><strong>3. Guide Pas-à-Pas</strong><br/>
-          1) Définir le contenant (boîte, chemin).<br/>
-          2) Ajouter des éléments via FOURREAU/CÂBLE, recherche, puis placer sur le canvas. Astuce : double-clic inventaire pour placer le suivant.<br/>
-          3) Manipuler : sélectionner, déplacer, Grille (Ctrl+G), Supprimer.<br/>
-          4) Édition (clic droit) : libellé, couleur (ACI), phases (L1/L2/L3/N/PE), remplissage auto pour fourreaux.<br/>
-          5) Analyse & Export : vérifier taux d’occupation, sauvegarder, Export PDF (cartouche) ou DXF.</p>
-
-          <p><strong>4. Raccourcis</strong><br/>
-          Molette (clic) : placer · Ctrl+Molette : zoom · E : éditer · I : infos · G : figer · Ctrl+G : grille · Suppr : supprimer · Ctrl+S : sauvegarde rapide · Ctrl+Z : annuler.</p>
-
-          <p><strong>5. Astuces</strong><br/>
-          Mode sombre (bouton titre) · Réduire au minimum : ajuste le contenant · Base perso : via ⚙️ pour pointer vers vos CSV partagés.</p>
+    <div class="manual-content">
+      <div class="manual-header">
+        <div class="manual-icon">📘</div>
+        <div>
+          <h3>Manuel d'Utilisation</h3>
+          <p class="manual-subtitle">TontonKAD v2 · aperçu rapide</p>
         </div>
+        <button class="manual-close" id="manual-close-btn" aria-label="Fermer">✕</button>
       </div>
-      <div class="update-notification-footer">
-        <button class="update-btn update-btn-primary" id="manual-close-btn">Fermer</button>
+      <div class="manual-body">
+        <div class="manual-grid">
+          <div class="manual-section">
+            <h4>1. Présentation</h4>
+            <p>TontonKAD organise visuellement fourreaux et câbles, calcule le taux d’occupation et génère vos livrables (PDF, DXF). Thème CEA, mode sombre/clair, interactions fluides.</p>
+          </div>
+          <div class="manual-section">
+            <h4>2. Interface</h4>
+            <ul>
+              <li><strong>Panneau gauche</strong> : forme (rect/circ/chemin), dimensions, onglets FOURREAU/CÂBLE, recherche, inventaires, stats.</li>
+              <li><strong>Canvas</strong> : zoom Ctrl+molette, pan clic molette (ou barre espace + clic), cotations.</li>
+              <li><strong>Barre outils</strong> : Éditer/Infos/Suppr/Tout vider, Grille (Ctrl+G), Figer (G), Projets, Export DXF/PDF.</li>
+            </ul>
+          </div>
+          <div class="manual-section">
+            <h4>3. Pas à pas</h4>
+            <ol>
+              <li>Choisir le contenant (boîte, chemin) et ses dimensions.</li>
+              <li>Ajouter fourreaux/câbles via l’onglet et la recherche, placer sur le canvas (double-clic inventaire pour enchaîner).</li>
+              <li>Organiser : sélectionner, déplacer, Grille (Ctrl+G), Supprimer.</li>
+              <li>Éditer (clic droit) : libellé, couleur ACI, phases L1/L2/L3/N/PE, remplissage auto des fourreaux.</li>
+              <li>Analyser & exporter : vérifier taux d’occupation, sauvegarder, exporter PDF/DXF.</li>
+            </ol>
+          </div>
+          <div class="manual-section">
+            <h4>4. Raccourcis</h4>
+            <div class="shortcut-grid">
+              <span>Molette (clic)</span><span>Placer</span>
+              <span>Ctrl + Molette</span><span>Zoom</span>
+              <span>E</span><span>Éditer</span>
+              <span>I</span><span>Infos</span>
+              <span>G</span><span>Figer</span>
+              <span>Ctrl + G</span><span>Grille</span>
+              <span>Suppr</span><span>Supprimer</span>
+              <span>Ctrl + S</span><span>Sauvegarde</span>
+              <span>Ctrl + Z</span><span>Annuler</span>
+            </div>
+          </div>
+          <div class="manual-section">
+            <h4>5. Astuces</h4>
+            <ul>
+              <li>Mode sombre : bouton dans la barre de titre.</li>
+              <li>Réduire au minimum : ajuste le contenant au plus près.</li>
+              <li>Base partagée : bouton ⚙️ pour pointer vers vos CSV réseau.</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   </div>
