@@ -3403,7 +3403,7 @@ function initSearchableLists() {
     modalContent.innerHTML = `
       <div class="modal-header">
         <h3 class="modal-title">🎯 Export PDF - Configuration</h3>
-        <button onclick="closeDynamicPdfModal()" class="btn-close" aria-label="Fermer">&times;</button>
+        <button id="pdfModalCloseBtn" class="btn-close" aria-label="Fermer">&times;</button>
       </div>
 
       <div class="pdf-export-body">
@@ -3438,7 +3438,7 @@ function initSearchableLists() {
               </div>
               <div id="dynamicImagePreview" class="image-preview">
                 <img id="dynamicImagePreviewImg" class="preview-img">
-                <button type="button" onclick="removeDynamicImage()" class="remove-img-btn" aria-label="Supprimer l'image">✕</button>
+                <button type="button" id="dynamicRemoveImageBtn" class="remove-img-btn" aria-label="Supprimer l'image">✕</button>
               </div>
               <input type="file" id="dynamicImageInput" accept="image/*" style="display: none;">
             </div>
@@ -3453,8 +3453,8 @@ function initSearchableLists() {
       </div>
 
       <div class="modal-footer">
-        <button onclick="generateDynamicPDF()" class="btn-primary">📄 Générer PDF</button>
-        <button onclick="closeDynamicPdfModal()" class="btn-secondary">✕ Annuler</button>
+        <button id="pdfModalGenerateBtn" class="btn-primary">📄 Générer PDF</button>
+        <button id="pdfModalCancelBtn" class="btn-secondary">✕ Annuler</button>
       </div>
     `;
 
@@ -3476,6 +3476,17 @@ function initSearchableLists() {
     if (selectedImageBase64) {
       showImagePreview(selectedImageBase64);
     }
+
+    // Attacher les handlers pour respecter la CSP (pas d'inline handlers)
+    const generateBtn = document.getElementById('pdfModalGenerateBtn');
+    const closeBtn = document.getElementById('pdfModalCloseBtn');
+    const cancelBtn = document.getElementById('pdfModalCancelBtn');
+    const removeImgBtn = document.getElementById('dynamicRemoveImageBtn');
+
+    if (generateBtn) generateBtn.addEventListener('click', generateDynamicPDF);
+    if (closeBtn) closeBtn.addEventListener('click', closeDynamicPdfModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeDynamicPdfModal);
+    if (removeImgBtn) removeImgBtn.addEventListener('click', removeDynamicImage);
   }
 
   let selectedImageBase64 = null;
