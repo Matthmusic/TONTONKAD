@@ -2166,6 +2166,8 @@ function initSearchableLists() {
     
     // En-tête DXF avec section HEADER pour les unités
     dxf += '0\nSECTION\n2\nHEADER\n';
+    // Version R2013 (AC1027) pour compatibilité AutoCAD avec lineweights
+    dxf += '9\n$ACADVER\n1\nAC1027\n';
     dxf += '9\n$INSUNITS\n70\n6\n'; // 6 = meters
     dxf += '0\nENDSEC\n';
     
@@ -2174,7 +2176,8 @@ function initSearchableLists() {
     dxf += '0\nTABLE\n2\nLAYER\n70\n50\n'; // Max 50 calques
     
     // Calque pour la boîte avec épaisseur 3mm
-    dxf += '0\nLAYER\n2\n_CEAI_BOITE\n70\n0\n62\n1\n6\nCONTINUOUS\n370\n300\n';
+    // Lineweight 0.30mm => code 30 (en centièmes de mm, 5..211)
+    dxf += '0\nLAYER\n2\n_CEAI_BOITE\n70\n0\n62\n1\n6\nCONTINUOUS\n370\n30\n';
     
     // Créer des calques pour fourreaux avec gestion des couleurs personnalisées
     const fourreauTypes = [...new Set(fourreaux.map(f => `${f.type}_${f.code}`))];
