@@ -3371,11 +3371,25 @@ function initSearchableLists() {
   }
 
   /* ====== Export PDF Functions ====== */
+  // Helpers de debug PDF
+  const logPdf = (...args) => console.log('[PDF]', ...args);
+  const warnPdf = (...args) => console.warn('[PDF]', ...args);
+  const errorPdf = (...args) => console.error('[PDF]', ...args);
+
+  // Catch global errors pour voir les blocages éventuels
+  window.addEventListener('error', (e) => {
+    errorPdf('window.error', e.message, e.error?.stack || '');
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    errorPdf('window.unhandledrejection', e.reason);
+  });
 
   function openPdfExportModal() {
+    logPdf('openPdfExportModal called');
     // Supprimer toute modal existante
     const existingModal = document.getElementById('tontonkadPdfExportModal');
     if (existingModal) {
+      logPdf('existing modal removed before re-create');
       existingModal.remove();
     }
 
@@ -3667,35 +3681,35 @@ function initSearchableLists() {
   }
 
   async function loadJsPDFIfNeeded() {
-    console.log('Vérification de jsPDF...');
-    console.log('window.jsPDF:', typeof window.jsPDF);
-    console.log('window.jspdf:', typeof window.jspdf);
-    console.log('Objets window avec "pdf":', Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
+    logPdf('Vérification de jsPDF...');
+    logPdf('window.jsPDF:', typeof window.jsPDF);
+    logPdf('window.jspdf:', typeof window.jspdf);
+    logPdf('Objets window avec "pdf":', Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
 
     if (typeof window.jsPDF !== 'undefined') {
-      console.log('jsPDF déjà disponible');
+      logPdf('jsPDF déjà disponible');
       return; // Déjà chargé
     }
 
-    console.log('Chargement dynamique de jsPDF...');
+    logPdf('Chargement dynamique de jsPDF...');
 
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'jspdf.min.js';
       script.onload = () => {
-        console.log('Script jsPDF chargé');
-        console.log('Après chargement - window.jsPDF:', typeof window.jsPDF);
-        console.log('Après chargement - window.jspdf:', typeof window.jspdf);
-        console.log('Objets window avec "pdf":', Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
+        logPdf('Script jsPDF chargé');
+        logPdf('Après chargement - window.jsPDF:', typeof window.jsPDF);
+        logPdf('Après chargement - window.jspdf:', typeof window.jspdf);
+        logPdf('Objets window avec "pdf":', Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
 
         // Attendre un peu que la lib s'initialise
         setTimeout(() => {
-          console.log('Après timeout - window.jsPDF:', typeof window.jsPDF);
+          logPdf('Après timeout - window.jsPDF:', typeof window.jsPDF);
           resolve();
         }, 100);
       };
       script.onerror = () => {
-        reject(new Error('Impossible de charger jsPDF'));
+        reject(new Error('Impossible de charger jsPDF (script onerror)'));
       };
       document.head.appendChild(script);
     });
@@ -3703,31 +3717,34 @@ function initSearchableLists() {
 
   async function exportToPDFWithData(formData) {
     try {
+      logPdf('exportToPDFWithData start', formData);
+      console.time('[PDF] total');
       // Charger jsPDF si nécessaire
       await loadJsPDFIfNeeded();
 
       // Vérifier si jsPDF est maintenant disponible
-      console.log('Final check - window.jsPDF:', typeof window.jsPDF);
-      console.log('Final check - window.jspdf:', typeof window.jspdf);
+      logPdf('Final check - window.jsPDF:', typeof window.jsPDF);
+      logPdf('Final check - window.jspdf:', typeof window.jspdf);
 
       let jsPDFClass;
       if (typeof window.jsPDF !== 'undefined') {
         jsPDFClass = window.jsPDF.jsPDF || window.jsPDF;
-        console.log('Utilisation de window.jsPDF');
+        logPdf('Utilisation de window.jsPDF');
       } else if (typeof window.jspdf !== 'undefined') {
         jsPDFClass = window.jspdf.jsPDF || window.jspdf;
-        console.log('Utilisation de window.jspdf');
+        logPdf('Utilisation de window.jspdf');
       } else if (typeof jsPDF !== 'undefined') {
         jsPDFClass = jsPDF;
-        console.log('Utilisation de jsPDF global');
+        logPdf('Utilisation de jsPDF global');
       } else {
         throw new Error('Bibliothèque jsPDF non disponible après chargement');
       }
 
-      console.log('jsPDFClass:', jsPDFClass);
+      logPdf('jsPDFClass résolue');
 
       // Créer le PDF en format A4 portrait
       const pdf = new jsPDFClass('portrait', 'mm', 'a4');
+      logPdf('instance jsPDF créée');
 
       // Dimensions A4 portrait : 210 x 297 mm
       const pageWidth = 210;
@@ -3738,6 +3755,11 @@ function initSearchableLists() {
 
       // Charger le logo
       const logoBase64 = await loadLogoAsBase64();
+      if (logoBase64) {
+        logPdf('logo chargé (bytes)', logoBase64.length);
+      } else {
+        logPdf('logo non chargé');
+      }
 
       // === EN-TÊTE EN 3 SECTIONS === //
 
@@ -3807,7 +3829,13 @@ function initSearchableLists() {
         const clientImageX = rightStartX + (availableWidth - clientImageWidth) / 2;
         const clientImageY = margin + (availableHeight - clientImageHeight) / 2;
 
-        pdf.addImage(selectedImageBase64, 'JPEG', clientImageX, clientImageY, clientImageWidth, clientImageHeight);
+        try {
+          pdf.addImage(selectedImageBase64, 'JPEG', clientImageX, clientImageY, clientImageWidth, clientImageHeight);
+          logPdf('client image added', { clientImageWidth, clientImageHeight, clientImageX, clientImageY });
+        } catch (err) {
+          errorPdf('addImage client failed', err);
+          throw err;
+        }
       }
 
       // Description si fournie
@@ -3818,6 +3846,7 @@ function initSearchableLists() {
 
       // Image du canvas au centre
       const canvasImage = getCanvasImageData();
+      logPdf('canvas image captured (bytes)', canvasImage.length);
       const canvasStartY = margin + 45;
       const statsAreaHeight = formData.includeStats ? 75 : 0; // Plus d'espace pour les stats
       const canvasAreaHeight = contentHeight - 80 - statsAreaHeight; // Hauteur disponible pour l'image + cotes
@@ -3845,7 +3874,13 @@ function initSearchableLists() {
       const imageX = margin + (contentWidth - imageWidth) / 2;
       const imageY = canvasStartY + (canvasAreaHeight - imageHeight) / 2;
 
-      pdf.addImage(canvasImage, 'PNG', imageX, imageY, imageWidth, imageHeight);
+      try {
+        pdf.addImage(canvasImage, 'PNG', imageX, imageY, imageWidth, imageHeight);
+        logPdf('canvas image added', { imageWidth, imageHeight, imageX, imageY });
+      } catch (err) {
+        errorPdf('addImage canvas failed', err);
+        throw err;
+      }
 
       // Ajouter les cotes autour du canvas
       pdf.setFontSize(8);
@@ -3881,6 +3916,7 @@ function initSearchableLists() {
       // Statistiques en bas
       if (formData.includeStats) {
         const stats = generatePdfStats();
+        logPdf('stats', stats);
         const statsY = pageHeight - 70; // Encore plus haut pour être sûr
 
         console.log(`Stats position: Y=${statsY}, pageHeight=${pageHeight}`);
@@ -3926,7 +3962,13 @@ function initSearchableLists() {
 
       // Sauvegarder le PDF
       const fileName = `${formData.projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
-      pdf.save(fileName);
+      logPdf('saving file', fileName);
+      try {
+        pdf.save(fileName);
+      } catch (err) {
+        errorPdf('pdf.save failed', err);
+        throw err;
+      }
 
       // Reset de l'image sélectionnée pour éviter le cache
       selectedImageBase64 = null;
@@ -3934,8 +3976,10 @@ function initSearchableLists() {
       showToast('Export PDF terminé !');
       closePdfExportModal();
 
+      console.timeEnd('[PDF] total');
+
     } catch (error) {
-      console.error('Erreur export PDF:', error);
+      errorPdf('Erreur export PDF:', error);
       showToast('Erreur lors de l\'export PDF: ' + error.message);
       // Reset de l'image même en cas d'erreur
       selectedImageBase64 = null;
