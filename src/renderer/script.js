@@ -3690,6 +3690,18 @@ function initSearchableLists() {
     }
   }
 
+  async function getImageDimensions(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({
+        width: img.naturalWidth || img.width || 1,
+        height: img.naturalHeight || img.height || 1
+      });
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
   function getCanvasImageData() {
     // Créer un canvas temporaire pour capturer l'image sans les marges
     const tempCanvas = document.createElement('canvas');
@@ -3803,8 +3815,11 @@ function initSearchableLists() {
 
       // Charger le logo
       const logoBase64 = await loadLogoAsBase64();
+      let logoInfo = null;
       if (logoBase64) {
-        logPdf('logo chargé (bytes)', logoBase64.length);
+        const dims = await getImageDimensions(logoBase64);
+        logoInfo = { data: logoBase64, ...dims };
+        logPdf('logo chargé (bytes)', logoBase64.length, 'dims', dims);
       } else {
         logPdf('logo non chargé');
       }
@@ -3817,11 +3832,20 @@ function initSearchableLists() {
       const middleWidth = contentWidth * 0.5;
       const rightQuarterWidth = contentWidth * 0.25;
 
-      if (logoBase64) {
-        // Logo CEAHN centré dans le quart gauche
-        const logoSize = 20;
-        const logoX = margin + (leftQuarterWidth - logoSize) / 2;
-        pdf.addImage(logoBase64, 'PNG', logoX, margin, logoSize, logoSize);
+      if (logoInfo) {
+        // Respecter le ratio du logo
+        const maxLogoWidth = leftQuarterWidth * 0.7; // laisse de l'air
+        const maxLogoHeight = headerHeight * 0.85;
+        const ratio = logoInfo.width / logoInfo.height;
+        let logoW = maxLogoWidth;
+        let logoH = logoW / ratio;
+        if (logoH > maxLogoHeight) {
+          logoH = maxLogoHeight;
+          logoW = logoH * ratio;
+        }
+        const logoX = margin + (leftQuarterWidth - logoW) / 2;
+        const logoY = margin + (headerHeight - logoH) / 2;
+        pdf.addImage(logoInfo.data, 'PNG', logoX, logoY, logoW, logoH);
       }
 
       // SECTION 2 : Informations centrées (milieu)
