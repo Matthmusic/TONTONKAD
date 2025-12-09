@@ -3644,6 +3644,18 @@ function initSearchableLists() {
       const svgText = await response.text();
       const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgText)));
 
+      // Extraire le ratio depuis le viewBox pour éviter toute déformation
+      let viewBoxWidth = null;
+      let viewBoxHeight = null;
+      const viewBoxMatch = svgText.match(/viewBox="([^"]+)"/i);
+      if (viewBoxMatch) {
+        const parts = viewBoxMatch[1].trim().split(/\s+/).map(Number);
+        if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+          viewBoxWidth = parts[2];
+          viewBoxHeight = parts[3];
+        }
+      }
+
       const img = new Image();
       img.src = svgBase64;
       await new Promise((resolve, reject) => {
@@ -3651,14 +3663,16 @@ function initSearchableLists() {
         img.onerror = reject;
       });
 
-      // Rasterisation dans un canvas pour compatibilité addImage
-      const maxDim = 256;
-      let w = img.width || maxDim;
-      let h = img.height || maxDim;
+      // Utiliser les dimensions natives si dispo, sinon celles du viewBox, sinon fallback
+      let w = img.naturalWidth || viewBoxWidth || 256;
+      let h = img.naturalHeight || viewBoxHeight || 256;
+
+      // Garder le ratio, et réduire seulement si c'est très grand pour limiter le poids
+      const maxDim = 512;
       if (Math.max(w, h) > maxDim) {
         const scale = maxDim / Math.max(w, h);
-        w = Math.floor(w * scale);
-        h = Math.floor(h * scale);
+        w = Math.max(1, Math.floor(w * scale));
+        h = Math.max(1, Math.floor(h * scale));
       }
 
       const canvas = document.createElement('canvas');
