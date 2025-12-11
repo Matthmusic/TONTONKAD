@@ -1,6 +1,6 @@
 {
   "name": "tontonkad",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "description": "TONTONKAD - Dimensionnement de chemins de câbles et fourreaux",
   "main": "src/main/main.js",
   "author": "TONTONKAD Team",
@@ -27,6 +27,7 @@
     "electron-builder": "^26.0.12"
   },
   "dependencies": {
+    "dxf-writer": "^1.18.4",
     "electron-updater": "^6.3.10"
   },
   "build": {

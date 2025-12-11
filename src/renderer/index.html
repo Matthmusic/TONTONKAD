@@ -159,62 +159,15 @@
   </div>
 
   <!-- Modal Manuel d'utilisation -->
-  <div id="manual-modal" class="update-notification hidden">
-    <div class="manual-content">
-      <div class="manual-header">
-        <div class="manual-icon">📘</div>
-        <div>
-          <h3>Manuel d'Utilisation</h3>
-          <p class="manual-subtitle">TontonKAD v2 · aperçu rapide</p>
-        </div>
-        <button class="manual-close" id="manual-close-btn" aria-label="Fermer">✕</button>
+  <div id="manual-modal" class="modal-overlay" style="display: none;">
+    <div class="pdf-export-modal-content" style="max-width: 1000px;">
+      <div class="modal-header">
+        <h3 class="modal-title">📘 Manuel d'Utilisation - TontonKAD v2</h3>
+        <button id="manual-close-btn" class="btn-close" aria-label="Fermer">&times;</button>
       </div>
-      <div class="manual-body">
-        <div class="manual-grid">
-          <div class="manual-section">
-            <h4>1. Présentation</h4>
-            <p>TontonKAD organise visuellement fourreaux et câbles, calcule le taux d’occupation et génère vos livrables (PDF, DXF). Thème CEA, mode sombre/clair, interactions fluides.</p>
-          </div>
-          <div class="manual-section">
-            <h4>2. Interface</h4>
-            <ul>
-              <li><strong>Panneau gauche</strong> : forme (rect/circ/chemin), dimensions, onglets FOURREAU/CÂBLE, recherche, inventaires, stats.</li>
-              <li><strong>Canvas</strong> : zoom Ctrl+molette, pan clic molette (ou barre espace + clic), cotations.</li>
-              <li><strong>Barre outils</strong> : Éditer/Infos/Suppr/Tout vider, Grille (Ctrl+G), Figer (G), Projets, Export DXF/PDF.</li>
-            </ul>
-          </div>
-          <div class="manual-section">
-            <h4>3. Pas à pas</h4>
-            <ol>
-              <li>Choisir le contenant (boîte, chemin) et ses dimensions.</li>
-              <li>Ajouter fourreaux/câbles via l’onglet et la recherche, placer sur le canvas (double-clic inventaire pour enchaîner).</li>
-              <li>Organiser : sélectionner, déplacer, Grille (Ctrl+G), Supprimer.</li>
-              <li>Éditer (clic droit) : libellé, couleur ACI, phases L1/L2/L3/N/PE, remplissage auto des fourreaux.</li>
-              <li>Analyser & exporter : vérifier taux d’occupation, sauvegarder, exporter PDF/DXF.</li>
-            </ol>
-          </div>
-          <div class="manual-section">
-            <h4>4. Raccourcis</h4>
-            <div class="shortcut-grid">
-              <span>Molette (clic)</span><span>Placer</span>
-              <span>Ctrl + Molette</span><span>Zoom</span>
-              <span>E</span><span>Éditer</span>
-              <span>I</span><span>Infos</span>
-              <span>G</span><span>Figer</span>
-              <span>Ctrl + G</span><span>Grille</span>
-              <span>Suppr</span><span>Supprimer</span>
-              <span>Ctrl + S</span><span>Sauvegarde</span>
-              <span>Ctrl + Z</span><span>Annuler</span>
-            </div>
-          </div>
-          <div class="manual-section">
-            <h4>5. Astuces</h4>
-            <ul>
-              <li>Mode sombre : bouton dans la barre de titre.</li>
-              <li>Réduire au minimum : ajuste le contenant au plus près.</li>
-              <li>Base partagée : bouton ⚙️ pour pointer vers vos CSV réseau.</li>
-            </ul>
-          </div>
+      <div class="pdf-export-body">
+        <div id="manual-wrapper">
+          <!-- Rendu dynamique inséré via manual.js -->
         </div>
       </div>
     </div>
@@ -548,7 +501,7 @@
               </svg>
               Projets
             </button>
-            <button id="exportDXF" class="btn" aria-label="Exporter le schéma au format DXF">Export DXF</button>
+            <button id="exportDXF" class="btn" aria-label="Exporter le schéma au format DXF R12 (compatible ZWCAD/AutoCAD)">Export DXF</button>
             <button id="exportPDF" class="btn" aria-label="Exporter le schéma au format PDF">Export PDF</button>
           </div>
         </div>
@@ -561,6 +514,7 @@
   <script src="theme-manager.js" defer></script>
   <script src="titlebar.js" defer></script>
   <script src="settings-modal.js" defer></script>
+  <script src="manual.js" defer></script>
   <script src="script.js" defer></script>
   <script src="dimension-button-handler.js" defer></script>
   <script src="electron-integration.js" defer></script>
@@ -686,7 +640,7 @@
 
   <!-- Popup de gestion des projets -->
   <div id="projectModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="projectModalTitle" aria-modal="true">
-    <div class="edit-popup-overlay" aria-hidden="true">
+    <div class="edit-popup-overlay">
       <div class="edit-popup-content project-modal-content">
       <!-- Header -->
       <div class="modal-header">
@@ -749,7 +703,7 @@
 
   <!-- Popup de renommage -->
   <div id="renameModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="renameModalTitle" aria-modal="true">
-    <div class="edit-popup-overlay" aria-hidden="true">
+    <div class="edit-popup-overlay">
       <div class="edit-popup-content rename-modal-content">
       <div class="modal-header">
         <h3 id="renameModalTitle">✏️ Renommer le projet</h3>

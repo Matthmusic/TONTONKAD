@@ -25,9 +25,9 @@ async function loadConfig() {
   try {
     const data = await fs.readFile(configPath, 'utf8');
     config = { ...config, ...JSON.parse(data) };
-    console.log('✓ Configuration chargée:', config);
+    console.log('[OK] Configuration chargee:', config);
   } catch (error) {
-    console.log('ℹ Utilisation de la configuration par défaut');
+    console.log('[INFO] Utilisation de la configuration par defaut');
   }
 }
 
@@ -35,9 +35,9 @@ async function loadConfig() {
 async function saveConfig() {
   try {
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf8');
-    console.log('✓ Configuration sauvegardée');
+    console.log('[OK] Configuration sauvegardee');
   } catch (error) {
-    console.error('✗ Erreur lors de la sauvegarde de la configuration:', error);
+    console.error('[ERROR] Erreur lors de la sauvegarde de la configuration:', error);
   }
 }
 
@@ -49,15 +49,15 @@ async function determineDataFolder() {
       // Vérifier si le chemin est accessible
       await fs.access(config.dataPath);
       activeDataFolder = config.dataPath;
-      console.log(`✓ Utilisation du chemin personnalisé: ${activeDataFolder}`);
+      console.log(`[OK] Utilisation du chemin personnalise: ${activeDataFolder}`);
       return;
     } catch (error) {
-      console.warn(`⚠ Chemin personnalisé non accessible (${config.dataPath}), fallback vers APPDATA`);
+      console.warn(`[WARN] Chemin personnalise non accessible (${config.dataPath}), fallback vers APPDATA`);
       activeDataFolder = defaultDataFolder;
     }
   } else {
     activeDataFolder = defaultDataFolder;
-    console.log(`✓ Utilisation du chemin par défaut: ${activeDataFolder}`);
+    console.log(`[OK] Utilisation du chemin par defaut: ${activeDataFolder}`);
   }
 }
 
@@ -76,7 +76,7 @@ async function initializeUserDataFolder() {
       // Vérifier si le fichier existe déjà
       try {
         await fs.access(userFilePath);
-        console.log(`✓ ${file} existe déjà`);
+        console.log(`[OK] ${file} existe deja`);
       } catch {
         // Le fichier n'existe pas, le copier depuis les ressources
         const sourceFile = isDev
@@ -86,16 +86,16 @@ async function initializeUserDataFolder() {
         try {
           const data = await fs.readFile(sourceFile, 'utf8');
           await fs.writeFile(userFilePath, data, 'utf8');
-          console.log(`✓ ${file} copié vers ${activeDataFolder}`);
+          console.log(`[OK] ${file} copie vers ${activeDataFolder}`);
         } catch (err) {
-          console.error(`✗ Erreur lors de la copie de ${file}:`, err);
+          console.error(`[ERROR] Erreur lors de la copie de ${file}:`, err);
         }
       }
     }
 
-    console.log(`Dossier de données actif: ${activeDataFolder}`);
+    console.log(`[INFO] Dossier de donnees actif: ${activeDataFolder}`);
   } catch (error) {
-    console.error('Erreur lors de l\'initialisation du dossier data:', error);
+    console.error('[ERROR] Erreur lors de l\'initialisation du dossier data:', error);
   }
 }
 
@@ -144,9 +144,9 @@ function initAutoUpdater() {
       }
     });
 
-    console.log('✓ Auto-updater initialisé');
+    console.log('[OK] Auto-updater initialise');
   } catch (error) {
-    console.error('Erreur lors de l\'initialisation de l\'auto-updater:', error);
+    console.error('[ERROR] Erreur lors de l\'initialisation de l\'auto-updater:', error);
   }
 }
 
@@ -481,7 +481,9 @@ ipcMain.handle('export-file', async (event, { type, content, defaultName }) => {
 
   if (!result.canceled && result.filePath) {
     try {
-      await fs.writeFile(result.filePath, content);
+      // Spécifier l'encodage UTF-8 pour les fichiers DXF (important pour les caractères accentués)
+      const encoding = type === 'dxf' ? 'utf8' : undefined;
+      await fs.writeFile(result.filePath, content, encoding ? { encoding } : {});
       return { success: true, path: result.filePath };
     } catch (error) {
       throw new Error(`Impossible d'exporter: ${error.message}`);
@@ -614,6 +616,13 @@ ipcMain.handle('window-is-maximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
 });
 
+// Désactiver le cache GPU pour éviter les erreurs de permissions
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-gpu-program-cache');
+
+// Configurer le cache dans le dossier temporaire système
+app.commandLine.appendSwitch('disk-cache-dir', path.join(app.getPath('temp'), 'tontonkad-cache'));
+
 // App lifecycle
 app.whenReady().then(async () => {
   // Initialiser les chemins après que l'app soit prête
@@ -624,7 +633,7 @@ app.whenReady().then(async () => {
   // En production, utiliser APPDATA
   if (isDev) {
     defaultDataFolder = path.join(__dirname, '../../data');
-    console.log('Mode développement: utilisation du dossier data local');
+    console.log('[DEV] Mode developpement: utilisation du dossier data local');
   } else {
     defaultDataFolder = path.join(userDataPath, 'data');
   }
@@ -641,7 +650,7 @@ app.whenReady().then(async () => {
     await initializeUserDataFolder();
   }
 
-  console.log(`Dossier de données actif: ${activeDataFolder}`);
+  console.log(`[INFO] Dossier de donnees actif: ${activeDataFolder}`);
   createWindow();
 });
 

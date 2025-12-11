@@ -287,7 +287,7 @@ const CHEMINS_CABLE_FALLBACK = [
           readElectronCsv('chemins_de_cable.csv')
         ]);
       } else {
-        console.log('Chargement des CSV depuis fetch (mode web)');
+        console.debug('[DATA] Chargement des CSV depuis fetch (mode web)');
         // Mode web - chargement classique
         const [tpcResponse, cableResponse, cheminsCableResponse] = await Promise.all([
           fetch('./data/fourreaux.csv'),
@@ -312,7 +312,11 @@ const CHEMINS_CABLE_FALLBACK = [
       CABLES = parseCSV(cableText);
       CHEMINS_CABLE = parseCSV(cheminsCableText, ',');
 
-      console.log(`Données chargées - Fourreaux: ${FOURREAUX.length}, Câbles: ${CABLES.length}, Chemins: ${CHEMINS_CABLE.length}`);
+      console.debug('[DATA] Données chargées', {
+        fourreaux: FOURREAUX.length,
+        cables: CABLES.length,
+        chemins: CHEMINS_CABLE.length
+      });
 
       if (FOURREAUX.length === 0 || CABLES.length === 0 || CHEMINS_CABLE.length === 0) {
         throw new Error('Les données CSV sont vides ou n\'ont pas pu être analysées.');
@@ -548,7 +552,7 @@ function initSearchableLists() {
                 group: c.fam
             });
         });
-        console.log(`${cableOptions.length} options de câbles créées`);
+        console.debug('[DATA] Options de câbles préparées', cableOptions.length);
 
         // Fonction pour filtrer et afficher les câbles
         function filterCables(searchTerm = '') {
@@ -1816,27 +1820,40 @@ function initSearchableLists() {
     ctx.restore();
   }
 
-  function drawFourreau(f) {
+  function drawFourreau(f, numero) {
     // Assurer que l'objet a les nouvelles propriétés
     if (f.customColor === undefined) f.customColor = null;
     if (f.label === undefined) f.label = '';
-    
+
     const ro = f.od * MM_TO_PX / 2, ri = f.idm * MM_TO_PX / 2;
     ctx.save();
     const col = f.customColor || f.color || colorForFourreau(f.type, f.code);
     ctx.fillStyle = withAlpha(col, .15);
     ctx.strokeStyle = col;
     ctx.lineWidth = getScaledLineWidth(2);
-    
+
     // Coordonnées entières pour éviter le flou
     const x = Math.round(f.x), y = Math.round(f.y);
-    
+
     ctx.beginPath();
     ctx.arc(x, y, ro, 0, 2 * Math.PI);
     ctx.arc(x, y, ri, 0, 2 * Math.PI, true);
     ctx.fill("evenodd");
     ctx.stroke();
-    
+
+    // Afficher le numéro du fourreau en haut du cercle (toujours visible)
+    if (numero !== undefined) {
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = getScaledLineWidth(3);
+      ctx.font = `bold ${getScaledLineWidth(14)}px Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      // Positionner au-dessus du cercle
+      ctx.strokeText(String(numero), x, y - ro - getScaledLineWidth(5));
+      ctx.fillText(String(numero), x, y - ro - getScaledLineWidth(5));
+    }
+
     // Afficher le libellé si présent et si showInfo est activé
     if (showInfo && f.label && f.label.trim()) {
       ctx.fillStyle = "#fff";
@@ -1844,11 +1861,12 @@ function initSearchableLists() {
       ctx.lineWidth = getScaledLineWidth(2);
       ctx.font = `bold ${getScaledLineWidth(12)}px Arial`;
       ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
       // Contour noir pour meilleure lisibilité
       ctx.strokeText(f.label, x, y + ro + getScaledLineWidth(18));
       ctx.fillText(f.label, x, y + ro + getScaledLineWidth(18));
     }
-    
+
     ctx.restore();
   }
 
@@ -2116,12 +2134,14 @@ function initSearchableLists() {
     ctx.imageSmoothingQuality = 'high';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    
+
     clear();
     drawBox();
     drawDimensions();
     drawMarquee(); // Dessiner le rectangle de sélection s'il est actif
-    for (const f of fourreaux) drawFourreau(f);
+    for (let i = 0; i < fourreaux.length; i++) {
+      drawFourreau(fourreaux[i], i + 1); // Passer le numéro (index + 1)
+    }
     for (const c of cables) drawCable(c);
     drawSelection();
   }
@@ -2161,327 +2181,308 @@ function initSearchableLists() {
     return `_CEAI_CABLE_${cleanFam}_${cleanCode}_${phase}`;
   }
 
-  function generateDXF() {
-    let dxf = '';
-    
-    // En-tête DXF avec section HEADER pour les unités
-    dxf += '0\nSECTION\n2\nHEADER\n';
-    // Version R2013 (AC1027) pour compatibilité AutoCAD avec lineweights
-    dxf += '9\n$ACADVER\n1\nAC1027\n';
-    dxf += '9\n$INSUNITS\n70\n6\n'; // 6 = meters
-    dxf += '0\nENDSEC\n';
-    
-    // Section TABLES pour définir les calques
-    dxf += '0\nSECTION\n2\nTABLES\n';
-    dxf += '0\nTABLE\n2\nLAYER\n70\n50\n'; // Max 50 calques
-    
-    // Calque pour la boîte avec épaisseur 3mm
-    // Lineweight 0.30mm => code 30 (en centièmes de mm, 5..211)
-    dxf += '0\nLAYER\n2\n_CEAI_BOITE\n70\n0\n62\n1\n6\nCONTINUOUS\n370\n30\n';
-    
-    // Créer des calques pour fourreaux avec gestion des couleurs personnalisées
-    const fourreauTypes = [...new Set(fourreaux.map(f => `${f.type}_${f.code}`))];
+  // R12 : noms de calques/blocs limités à 31 caractères
+  const R12_NAME_MAX = 31;
+  function safeName(name) {
+    return typeof name === 'string' && name.length > R12_NAME_MAX
+      ? name.slice(0, R12_NAME_MAX)
+      : name;
+  }
+
+  function generateDXF(acadVer = 'AC1009') {
+    // Filtrer les entités pour éviter toute coordonnée ou diamètre invalide
+    const fourreauxValid = fourreaux.filter(f =>
+      Number.isFinite(f.x) && Number.isFinite(f.y) &&
+      Number.isFinite(f.od) && f.od > 0 &&
+      Number.isFinite(f.idm) && f.idm >= 0
+    );
+    const cablesValid = cables.filter(c =>
+      Number.isFinite(c.x) && Number.isFinite(c.y) &&
+      Number.isFinite(c.od) && c.od > 0
+    );
+
+    // Couleurs/calques pour fourreaux
+    const fourreauTypes = [...new Set(fourreauxValid.map(f => `${f.type}_${f.code}`))];
     const fourreauColorMap = new Map();
-    
+    const fourreauLayerNameMap = new Map(); // type -> safe layer name
     fourreauTypes.forEach((type, index) => {
-      // Chercher si des fourreaux de ce type ont une couleur personnalisée
-      const fourreauxOfType = fourreaux.filter(f => `${f.type}_${f.code}` === type);
-      const customFourreau = fourreauxOfType.find(f => f.customColor);
-      
-      let dxfColor;
-      if (customFourreau && customFourreau.customColor) {
-        dxfColor = convertHexToDXFColor(customFourreau.customColor);
-      } else {
-        dxfColor = (index % 7) + 2; // Couleurs par défaut 2-8
-      }
-      
-      fourreauColorMap.set(type, dxfColor);
-      dxf += `0\nLAYER\n2\n_CEAI_FOURREAU_${type}\n70\n0\n62\n${dxfColor}\n6\nCONTINUOUS\n370\n-3\n`;
+      const custom = fourreauxValid.find(f => `${f.type}_${f.code}` === type && f.customColor);
+      const color = custom && custom.customColor
+        ? convertHexToDXFColor(custom.customColor)
+        : (index % 7) + 2; // couleurs 2-8
+      fourreauColorMap.set(type, color);
+      fourreauLayerNameMap.set(type, safeName(`_CEAI_FOURREAU_${type}`));
     });
-    
-    // Créer des calques par type de câble et phase
+
+    // Couleurs/calques pour câbles
     const cableLayerTypes = new Set();
     const layerColorMap = new Map();
-    const layerToCableMap = new Map(); // Pour stocker un câble représentatif par calque
-    
-    cables.forEach((c, index) => {
-      const layerName = generateCableLayerName(c);
+    const layerNameMap = new Map(); // raw -> safe
+    cablesValid.forEach((c, index) => {
+      const rawLayerName = generateCableLayerName(c);
+      const layerName = safeName(rawLayerName);
       cableLayerTypes.add(layerName);
-      
-      // Définir la couleur du calque selon la phase
+      layerNameMap.set(rawLayerName, layerName);
       if (!layerColorMap.has(layerName)) {
-        // Stocker le premier câble trouvé pour ce calque comme représentant
-        if (!layerToCableMap.has(layerName)) {
-          layerToCableMap.set(layerName, c);
-        }
-        let dxfColor = (index % 6) + 10; // Couleur par défaut
-        
+        let color = (index % 6) + 10;
         if (c.customColor) {
-          dxfColor = convertHexToDXFColor(c.customColor);
+          color = convertHexToDXFColor(c.customColor);
         } else {
-          // Utiliser les couleurs standardisées du système centralisé
           const phase = layerName.split('_').pop();
           const phaseColor = COLOR_SYSTEM.getByPhase(phase);
-          if (phaseColor) {
-            dxfColor = phaseColor.dxf;
-          }
+          if (phaseColor) color = phaseColor.dxf;
         }
-        
-        layerColorMap.set(layerName, dxfColor);
+        layerColorMap.set(layerName, color);
       }
     });
-    
-    // Créer les calques uniques
-    Array.from(cableLayerTypes).forEach(layerName => {
-      const dxfColor = layerColorMap.get(layerName);
-      dxf += `0\nLAYER\n2\n${layerName}\n70\n0\n62\n${dxfColor}\n6\nCONTINUOUS\n370\n-3\n`;
-    });
-    
-    // Calque pour l'inventaire
-    dxf += '0\nLAYER\n2\n_CEAI_INVENTAIRE\n70\n0\n62\n7\n6\nCONTINUOUS\n370\n-3\n';
-    
-    dxf += '0\nENDTAB\n0\nENDSEC\n';
-    
-    // Section BLOCKS pour fourreaux et câbles
-    dxf += '0\nSECTION\n2\nBLOCKS\n';
-    
-    // Créer des blocs uniquement pour les fourreaux utilisés
-    fourreauTypes.forEach(type => {
-      const fourreau = fourreaux.find(f => `${f.type}_${f.code}` === type);
-      const outerRadius = (fourreau.od * MM_TO_PX / 2 / MM_TO_PX / 1000).toFixed(6);
-      const innerRadius = (fourreau.idm * MM_TO_PX / 2 / MM_TO_PX / 1000).toFixed(6);
-      const blockName = `_CEAI_FOURREAU_${type}`;
-      
-      dxf += '0\nBLOCK\n8\n0\n';
-      dxf += `2\n${blockName}\n70\n0\n`;
-      dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
-      dxf += `3\n${blockName}\n`;
-      let dxfColor;
-      if (fourreau && fourreau.customColor) {
-        dxfColor = convertHexToDXFColor(fourreau.customColor);
-      } else {
-        dxfColor = fourreauColorMap.get(type);
-      }
-      
-      // Cercle extérieur avec couleur
-      dxf += `0\nCIRCLE\n8\n_CEAI_FOURREAU_${type}\n`;
-      dxf += `62\n${dxfColor}\n`; // Couleur au niveau de l'élément
-      dxf += `10\n0.0\n20\n0.0\n40\n${outerRadius}\n`;
-      
-      // Cercle intérieur avec couleur
-      dxf += `0\nCIRCLE\n8\n_CEAI_FOURREAU_${type}\n`;
-      dxf += `62\n${dxfColor}\n`; // Couleur au niveau de l'élément
-      dxf += `10\n0.0\n20\n0.0\n40\n${innerRadius}\n`;
-      
-      // Affichage du label fourreau désactivé pour l'export DXF
-      /*
-      if (fourreau && (fourreau.label || fourreau.code)) {
-        const labelText = fourreau.label || `${fourreau.type} ${fourreau.code}`;
-        dxf += `0\nTEXT\n8\n_CEAI_FOURREAU_${type}\n`;
-        dxf += `62\n${dxfColor}\n`; // Couleur du texte
-        dxf += '7\nArial\n'; // Police Arial
-        dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
-        dxf += '40\n0.003\n'; // Hauteur du texte (3mm)
-        dxf += `1\n${labelText}\n`;
-        dxf += '50\n0.0\n'; // Angle de rotation
-        dxf += '72\n1\n'; // Justification horizontale centrée
-        dxf += '73\n2\n'; // Justification verticale centrée
-      }
-      */
-      
-      dxf += '0\nENDBLK\n8\n0\n';
-    });
-    
-    // Créer des blocs uniques pour chaque type de câble/phase (calque)
-    Array.from(cableLayerTypes).forEach(layerName => {
-      const cable = layerToCableMap.get(layerName); // Obtenir le câble représentatif
-      if (!cable) return;
 
-      const radius = (cable.od * MM_TO_PX / 2 / MM_TO_PX / 1000).toFixed(6);
-      const blockName = layerName; // Le nom du bloc est le nom du calque
-      
-      dxf += '0\nBLOCK\n8\n0\n';
-      dxf += `2\n${blockName}\n70\n0\n`;
-      dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
-      dxf += `3\n${blockName}\n`;
-      
-      const cableDxfColor = layerColorMap.get(layerName);
-      
-      // Cercle simple pour le câble avec couleur
-      dxf += `0\nCIRCLE\n8\n${layerName}\n`;
-      dxf += `62\n${cableDxfColor}\n`;
-      dxf += `10\n0.0\n20\n0.0\n40\n${radius}\n`;
-      
-      // Le texte dans le bloc doit être générique pour le type de câble/phase
-      // On utilise la phase extraite du nom de calque
-      const phase = layerName.split('_').pop();
-      let textToShow = phase;
-      
-      // Si la phase est 'STANDARD' ou 'CUSTOM', on affiche le code du câble
-      if (phase === 'STANDARD' || phase === 'CUSTOM') {
-        textToShow = cable.code;
-      }
-      
-      // Ne pas afficher de texte si la phase est STANDARD
-      if (phase === 'STANDARD') textToShow = '';
-      
-      if (textToShow) {
-        dxf += `0\nTEXT\n8\n${layerName}\n`;
-        // Le texte est blanc pour une meilleure lisibilité sur fond coloré
-        dxf += `62\n7\n`; // ACI 7 = Blanc
-        dxf += '7\nArial\n'; // Police Arial
-        dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
-        dxf += '40\n0.004\n'; // Hauteur du texte augmentée (4mm au lieu de 2mm)
-        dxf += `1\n${textToShow}\n`;
-        dxf += '50\n0.0\n'; // Angle de rotation
-        dxf += '72\n1\n'; // Justification horizontale centrée
-        dxf += '73\n2\n'; // Justification verticale centrée
-      }
-      
-      dxf += '0\nENDBLK\n8\n0\n';
-    });
-    
+    // Liste des calques à déclarer
+    const layers = [
+      { name: '0', color: 7 }, // layer 0 requis
+      { name: '_CEAI_BOITE', color: 1 }, // rouge
+      { name: '_CEAI_COTES', color: 1 },
+      ...fourreauTypes.map(type => ({ name: fourreauLayerNameMap.get(type), color: fourreauColorMap.get(type) })),
+      ...Array.from(cableLayerTypes).map(name => ({ name, color: layerColorMap.get(name) })),
+      { name: '_CEAI_INVENTAIRE', color: 7 }
+    ];
+
+    let dxf = '';
+
+    // HEADER minimal (par défaut R12 AC1009, peut être AC1024 pour AutoCAD 2010+)
+    dxf += '0\nSECTION\n2\nHEADER\n';
+    dxf += `9\n$ACADVER\n1\n${acadVer}\n`;
+    dxf += '9\n$INSUNITS\n70\n6\n'; // mètres
+
+    // Variables supplémentaires pour versions modernes
+    if (acadVer !== 'AC1009') {
+      dxf += '9\n$HANDSEED\n5\nFFFF\n'; // Handle seed (requis pour R2000+)
+      dxf += '9\n$ACADMAINTVER\n70\n6\n'; // Maintenance version
+    }
+
+    // Style de texte pour les cotes et hauteur par défaut
+    dxf += '9\n$DIMTXSTY\n7\nARIAL\n';
+    dxf += '9\n$DIMTXT\n40\n0.1\n';
     dxf += '0\nENDSEC\n';
-    
-    // Section ENTITIES
+
+    // TABLES : LTYPE + LAYER + STYLE (+ VPORT si AC1032)
+    dxf += '0\nSECTION\n2\nTABLES\n';
+    if (acadVer !== 'AC1009') {
+      dxf += '0\nTABLE\n2\nVPORT\n70\n1\n';
+      dxf += '0\nVPORT\n2\n*ACTIVE\n70\n0\n10\n0.0\n20\n0.0\n11\n1.0\n21\n1.0\n12\n0.0\n22\n0.0\n13\n1.0\n23\n1.0\n40\n1.0\n41\n1.0\n42\n50.0\n43\n0.0\n44\n0.0\n50\n0.0\n51\n0.0\n71\n0\n72\n1000\n73\n1\n74\n3\n75\n0\n76\n0\n77\n0\n78\n0\n';
+      dxf += '0\nENDTAB\n';
+    }
+    dxf += '0\nTABLE\n2\nLTYPE\n70\n1\n';
+    dxf += '0\nLTYPE\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0.0\n';
+    dxf += '0\nENDTAB\n';
+    dxf += `0\nTABLE\n2\nLAYER\n70\n${layers.length}\n`;
+    layers.forEach(l => {
+      dxf += '0\nLAYER\n70\n0\n';
+      dxf += `2\n${l.name}\n62\n${l.color ?? 7}\n6\nCONTINUOUS\n`;
+    });
+    dxf += '0\nENDTAB\n';
+    dxf += '0\nTABLE\n2\nSTYLE\n70\n1\n';
+    dxf += '0\nSTYLE\n2\nARIAL\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n0.0\n3\narial.ttf\n4\n\n';
+    dxf += '0\nENDTAB\n';
+    if (acadVer !== 'AC1009') {
+      // Table DIMSTYLE pour versions modernes (requis par AutoCAD 2000+)
+      dxf += '0\nTABLE\n2\nDIMSTYLE\n70\n1\n';
+      dxf += '0\nDIMSTYLE\n2\nSTANDARD\n70\n0\n';
+      dxf += '0\nENDTAB\n';
+    }
+    if (acadVer !== 'AC1009') {
+      dxf += '0\nTABLE\n2\nAPPID\n70\n1\n';
+      dxf += '0\nAPPID\n2\nACAD\n70\n0\n';
+      dxf += '0\nENDTAB\n';
+      const blockRecordNames = ['*Model_Space', '*Paper_Space', ...fourreauTypes.map(t => `_CEAI_FOURREAU_${t}`), ...Array.from(cableLayerTypes)];
+      dxf += `0\nTABLE\n2\nBLOCK_RECORD\n70\n${blockRecordNames.length}\n`;
+      blockRecordNames.forEach(name => {
+        dxf += '0\nBLOCK_RECORD\n';
+        dxf += `2\n${name}\n`;
+        dxf += '70\n0\n';
+      });
+      dxf += '0\nENDTAB\n';
+    }
+    dxf += '0\nENDSEC\n';
+
+    // BLOCKS : définitions simples pour fourreaux et câbles (couleur héritée du calque)
+    dxf += '0\nSECTION\n2\nBLOCKS\n';
+
+    // Blocs système requis pour AC1032
+    dxf += '0\nBLOCK\n8\n0\n2\n*Model_Space\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*Model_Space\n1\n\n0\nENDBLK\n5\n0\n8\n0\n';
+    dxf += '0\nBLOCK\n8\n0\n2\n*Paper_Space\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*Paper_Space\n1\n\n0\nENDBLK\n5\n0\n8\n0\n';
+
+    // Fourreaux (double cercle)
+    fourreauTypes.forEach(type => {
+      const f = fourreauxValid.find(ff => `${ff.type}_${ff.code}` === type);
+      if (!f) return;
+      const outerRadius = (f.od / 2 / 1000).toFixed(6);
+      const innerRadius = f.idm > 0 ? (f.idm / 2 / 1000).toFixed(6) : null;
+      const name = fourreauLayerNameMap.get(type);
+
+      dxf += '0\nBLOCK\n8\n0\n';
+      dxf += `2\n${name}\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n${name}\n1\n\n`;
+      dxf += '0\nCIRCLE\n8\n0\n';
+      dxf += `10\n0.0\n20\n0.0\n40\n${outerRadius}\n`;
+      if (innerRadius) {
+        dxf += '0\nCIRCLE\n8\n0\n';
+        dxf += `10\n0.0\n20\n0.0\n40\n${innerRadius}\n`;
+      }
+      dxf += '0\nENDBLK\n5\n0\n8\n0\n';
+    });
+
+    // Câbles (cercle simple)
+    Array.from(cableLayerTypes).forEach(name => {
+      const cable = cablesValid.find(c => safeName(generateCableLayerName(c)) === name);
+      if (!cable) return;
+      const radius = (cable.od / 2 / 1000).toFixed(6);
+      const phase = name.split('_').pop();
+      let textToShow = phase;
+      if (phase === 'STANDARD' || phase === 'CUSTOM') textToShow = cable.code;
+      if (phase === 'STANDARD') textToShow = cable.code || '';
+
+      dxf += '0\nBLOCK\n8\n0\n';
+      dxf += `2\n${name}\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n${name}\n1\n\n`;
+      dxf += '0\nCIRCLE\n8\n0\n';
+      dxf += `10\n0.0\n20\n0.0\n40\n${radius}\n`;
+      if (textToShow) {
+        dxf += '0\nTEXT\n8\n0\n';
+        dxf += '7\nARIAL\n';
+        dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
+        dxf += '40\n0.004\n';
+        dxf += `1\n${textToShow}\n`;
+        dxf += '50\n0.0\n72\n1\n73\n2\n';
+      }
+      dxf += '0\nENDBLK\n5\n0\n8\n0\n';
+    });
+
+    dxf += '0\nENDSEC\n';
+
+    // ENTITIES : uniquement des primitives simples (lignes/cercle)
     dxf += '0\nSECTION\n2\nENTITIES\n';
-    
-    // Dessiner le contour de la boîte - Version fiable avec lignes
-    if (SHAPE === "rect" || SHAPE === "chemin_de_cable") {
-      // Rectangle avec 4 lignes épaisses (plus fiable)
-      const w = (WORLD_W_MM / 1000).toFixed(3);
-      const h = (WORLD_H_MM / 1000).toFixed(3);
-      
-      // Ligne du bas
+
+    // Contour de la boîte
+    if (SHAPE === 'rect' || SHAPE === 'chemin_de_cable') {
+      const w = (WORLD_W_MM / 1000).toFixed(6);
+      const h = (WORLD_H_MM / 1000).toFixed(6);
       dxf += '0\nLINE\n8\n_CEAI_BOITE\n';
       dxf += `10\n0.0\n20\n0.0\n11\n${w}\n21\n0.0\n`;
-      
-      // Ligne de droite
       dxf += '0\nLINE\n8\n_CEAI_BOITE\n';
       dxf += `10\n${w}\n20\n0.0\n11\n${w}\n21\n${h}\n`;
-      
-      // Ligne de gauche
+      dxf += '0\nLINE\n8\n_CEAI_BOITE\n';
+      dxf += `10\n${w}\n20\n${h}\n11\n0.0\n21\n${h}\n`;
       dxf += '0\nLINE\n8\n_CEAI_BOITE\n';
       dxf += `10\n0.0\n20\n${h}\n11\n0.0\n21\n0.0\n`;
-      
-      // Ligne du haut (seulement pour rect, pas pour chemin_de_cable)
-      if (SHAPE === "rect") {
-        dxf += '0\nLINE\n8\n_CEAI_BOITE\n';
-        dxf += `10\n${w}\n20\n${h}\n11\n0.0\n21\n${h}\n`;
+    } else {
+      const center = (WORLD_D_MM / 1000 / 2).toFixed(6);
+      const radius = center;
+      dxf += '0\nCIRCLE\n8\n_CEAI_BOITE\n';
+      dxf += `10\n${center}\n20\n${center}\n40\n${radius}\n`;
+    }
+
+    // Cotes simples (lignes + texte)
+    const allowDims = acadVer === 'AC1009'; // pour AC1032 on évite les DIMENSION R12 qui peuvent faire planter AutoCAD
+
+    if (SHAPE === 'rect' || SHAPE === 'chemin_de_cable') {
+      const w = (WORLD_W_MM / 1000).toFixed(6);
+      const h = (WORLD_H_MM / 1000).toFixed(6);
+      const dimBlock = '*D';
+
+      // Cote horizontale (type aligné)
+      if (allowDims) {
+        dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
+        dxf += `2\n${dimBlock}\n3\nARIAL\n`;
+        dxf += `10\n${(parseFloat(w) / 2).toFixed(6)}\n20\n-0.10\n30\n0.0\n`; // point texte
+        dxf += '70\n0\n'; // alignée
+        dxf += '140\n0.1\n'; // texte 0.1
+        dxf += '1\n<>\n';
+        dxf += `13\n0.0\n23\n0.0\n33\n0.0\n`;
+        dxf += `14\n${w}\n24\n0.0\n34\n0.0\n`;
+        dxf += `15\n0.0\n25\n-0.10\n35\n0.0\n`;
+        dxf += `16\n${w}\n26\n-0.10\n36\n0.0\n`;
+      }
+
+      // Cote verticale (type verticale)
+      if (allowDims) {
+        dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
+        dxf += `2\n${dimBlock}\n3\nARIAL\n`;
+        dxf += `10\n${(parseFloat(w) + 0.10).toFixed(6)}\n20\n${(parseFloat(h) / 2).toFixed(6)}\n30\n0.0\n`; // point texte
+        dxf += '70\n1\n'; // verticale
+        dxf += '140\n0.1\n';
+        dxf += '1\n<>\n';
+        dxf += `13\n${w}\n23\n0.0\n33\n0.0\n`;
+        dxf += `14\n${w}\n24\n${h}\n34\n0.0\n`;
+        dxf += `15\n${(parseFloat(w) + 0.10).toFixed(6)}\n25\n0.0\n35\n0.0\n`;
+        dxf += `16\n${(parseFloat(w) + 0.10).toFixed(6)}\n26\n${h}\n36\n0.0\n`;
       }
     } else {
-      // Cercle simple
-      const centerX = (WORLD_D_MM / 1000 / 2).toFixed(3);
-      const centerY = (WORLD_D_MM / 1000 / 2).toFixed(3);
-      const radius = (WORLD_D_MM / 1000 / 2).toFixed(3);
-      dxf += '0\nCIRCLE\n8\n_CEAI_BOITE\n';
-      dxf += `10\n${centerX}\n20\n${centerY}\n40\n${radius}\n`;
+      // Cote diamètre
+      const d = (WORLD_D_MM / 1000).toFixed(6);
+      const center = (WORLD_D_MM / 1000 / 2).toFixed(6);
+      const dimBlock = '*D';
+      if (allowDims) {
+        dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
+        dxf += `2\n${dimBlock}\n3\nARIAL\n`;
+        dxf += `10\n${center}\n20\n${center}\n30\n0.0\n`;
+        dxf += '70\n3\n'; // diamètre
+        dxf += '140\n0.1\n';
+        dxf += '1\n<>\n';
+        dxf += `15\n0.0\n25\n${center}\n35\n0.0\n`;
+        dxf += `16\n${d}\n26\n${center}\n36\n0.0\n`;
+      }
     }
-    
-    // Ajouter les cotations
-    if (SHAPE === "rect" || SHAPE === "chemin_de_cable") {
-      const w = (WORLD_W_MM / 1000).toFixed(3);
-      const h = (WORLD_H_MM / 1000).toFixed(3);
-      
-      // Cotation horizontale (largeur) en bas
-      dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
-      dxf += '2\n*D\n'; // Nom du bloc dimension
-      dxf += `10\n0.0\n20\n-0.1\n30\n0.0\n`; // Point de texte
-      dxf += '70\n0\n'; // Type dimension (alignée)
-      dxf += '140\n0.006\n'; // Hauteur de texte (6mm au lieu de 12mm par défaut)
-      dxf += `13\n0.0\n23\n0.0\n33\n0.0\n`; // Point de définition 1
-      dxf += `14\n${w}\n24\n0.0\n34\n0.0\n`; // Point de définition 2
-      dxf += `15\n0.0\n25\n-0.1\n35\n0.0\n`; // Point sur ligne de dimension
-      dxf += `16\n0.0\n26\n-0.1\n36\n0.0\n`; // Point sur ligne de dimension 2
-      dxf += '1\n<>\n'; // Texte de cotation automatique
-      
-      // Cotation verticale (hauteur) à droite
-      dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
-      dxf += '2\n*D\n'; // Nom du bloc dimension
-      dxf += `10\n${(parseFloat(w) + 0.1).toFixed(3)}\n20\n0.0\n30\n0.0\n`; // Point de texte
-      dxf += '70\n1\n'; // Type dimension (verticale)
-      dxf += '140\n0.006\n'; // Hauteur de texte (6mm au lieu de 12mm par défaut)
-      dxf += `13\n${w}\n23\n0.0\n33\n0.0\n`; // Point de définition 1
-      dxf += `14\n${w}\n24\n${h}\n34\n0.0\n`; // Point de définition 2
-      dxf += `15\n${(parseFloat(w) + 0.1).toFixed(3)}\n25\n0.0\n35\n0.0\n`; // Point sur ligne de dimension
-      dxf += `16\n${(parseFloat(w) + 0.1).toFixed(3)}\n26\n${h}\n36\n0.0\n`; // Point sur ligne de dimension 2
-      dxf += '1\n<>\n'; // Texte de cotation automatique
-    } else {
-      // Cotation diamètre pour cercle
-      const d = (WORLD_D_MM / 1000).toFixed(3);
-      const centerX = (WORLD_D_MM / 1000 / 2).toFixed(3);
-      const centerY = (WORLD_D_MM / 1000 / 2).toFixed(3);
-      
-      dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
-      dxf += '2\n*D\n'; // Nom du bloc dimension
-      dxf += `10\n${centerX}\n20\n${centerY}\n30\n0.0\n`; // Point de texte
-      dxf += '70\n3\n'; // Type dimension (diamètre)
-      dxf += '140\n0.006\n'; // Hauteur de texte (6mm au lieu de 12mm par défaut)
-      dxf += `15\n0.0\n25\n${centerY}\n35\n0.0\n`; // Point sur le cercle
-      dxf += `16\n${d}\n26\n${centerY}\n36\n0.0\n`; // Point opposé sur le cercle
-      dxf += '1\n<>\n'; // Texte de cotation automatique
-    }
-    
-    // Insérer les blocs de fourreaux
-    fourreaux.forEach(f => {
+
+    // Fourreaux (blocs avec double cercle)
+    fourreauxValid.forEach(f => {
       const x = (f.x / MM_TO_PX / 1000).toFixed(6);
-      const y = ((SHAPE === "rect" || SHAPE === "chemin_de_cable" ? WORLD_H - f.y : f.y) / MM_TO_PX / 1000).toFixed(6);
-      const blockName = `_CEAI_FOURREAU_${f.type}_${f.code}`;
-      const layerName = `_CEAI_FOURREAU_${f.type}_${f.code}`;
-      
-      // Insertion du bloc avec hachures
-      dxf += `0\nINSERT\n8\n${layerName}\n`;
+      const y = ((SHAPE === 'rect' || SHAPE === 'chemin_de_cable' ? WORLD_H - f.y : f.y) / MM_TO_PX / 1000).toFixed(6);
+      const layer = fourreauLayerNameMap.get(`${f.type}_${f.code}`) || safeName(`_CEAI_FOURREAU_${f.type}_${f.code}`);
+      const color = fourreauColorMap.get(`${f.type}_${f.code}`) ?? 7;
+      const blockName = layer;
+      dxf += '0\nINSERT\n';
+      dxf += `8\n${layer}\n`;
+      dxf += `62\n${color}\n`;
       dxf += `2\n${blockName}\n`;
       dxf += `10\n${x}\n20\n${y}\n30\n0.0\n`;
       dxf += '41\n1.0\n42\n1.0\n43\n1.0\n50\n0.0\n';
     });
-    
-    // Insérer les blocs de câbles
-    cables.forEach(c => {
+
+    // Câbles (cercle simple)
+    cablesValid.forEach(c => {
       const x = (c.x / MM_TO_PX / 1000).toFixed(6);
-      const y = ((SHAPE === "rect" || SHAPE === "chemin_de_cable" ? WORLD_H - c.y : c.y) / MM_TO_PX / 1000).toFixed(6);
-      const layerName = generateCableLayerName(c);
-      const blockName = layerName; // Utiliser le nom du calque comme nom de bloc
-      // Insertion du bloc avec hachures solides
-      dxf += `0\nINSERT\n8\n${layerName}\n`;
-      dxf += `2\n${blockName}\n`;
+      const y = ((SHAPE === 'rect' || SHAPE === 'chemin_de_cable' ? WORLD_H - c.y : c.y) / MM_TO_PX / 1000).toFixed(6);
+      const layer = safeName(generateCableLayerName(c));
+      const color = layerColorMap.get(layer) ?? 7;
+      const r = (c.od / 2 / 1000).toFixed(6);
+      dxf += '0\nINSERT\n';
+      dxf += `8\n${layer}\n`;
+      dxf += `62\n${color}\n`;
+      dxf += `2\n${layer}\n`;
       dxf += `10\n${x}\n20\n${y}\n30\n0.0\n`;
       dxf += '41\n1.0\n42\n1.0\n43\n1.0\n50\n0.0\n';
     });
-    
-    // Générer le tableau d'inventaire - décalé à 100cm à gauche
+
+    // Inventaire (texte simple)
     const inventaire = countGroups();
-    const tableauX = -1.0; // -100cm à gauche de l'origine
-    let yPos = (WORLD_H_MM / 1000) + 0.1; // Position 10cm sous la boîte
-    
-    // Titre du tableau avec police Arial
+    const tableauX = -1.0; // m
+    let yPos = (WORLD_H_MM / 1000) + 0.1;
+
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
     dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.02\n1\nINVENTAIRE\n`;
-    dxf += '7\nARIAL\n'; // Style de texte Arial
-    yPos -= 0.03;
-    
-    // Taux d'occupation global simple
-    const occupation = calculateBoxOccupancy();
-    dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-    dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nTAUX OCCUPATION: ${occupation.toFixed(1)}%\n`;
     dxf += '7\nARIAL\n';
-    yPos -= 0.04;
-    
-    // En-têtes du tableau avec Arial
+    yPos -= 0.03;
+
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
     dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nTYPE\n7\nARIAL\n`;
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
     dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nCODE\n7\nARIAL\n`;
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
     dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nQTE\n7\nARIAL\n`;
-    yPos -= 0.025;
-    
-    // Ligne de séparation
+    yPos -= 0.02;
+
     dxf += '0\nLINE\n8\n_CEAI_INVENTAIRE\n';
     dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n11\n${(tableauX + 0.25).toFixed(3)}\n21\n${yPos.toFixed(3)}\n`;
     yPos -= 0.02;
-    
-    // Fourreaux avec Arial
+
     for (const [key, count] of Object.entries(inventaire.fc)) {
       const [type, code] = key.split('|');
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
@@ -2490,10 +2491,8 @@ function initSearchableLists() {
       dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${code}\n7\nARIAL\n`;
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
       dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${count}\n7\nARIAL\n`;
-      yPos -= 0.02;
+      yPos -= 0.018;
     }
-    
-    // Câbles avec Arial
     for (const [key, count] of Object.entries(inventaire.cc)) {
       const [fam, code] = key.split('|');
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
@@ -2502,32 +2501,93 @@ function initSearchableLists() {
       dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${code}\n7\nARIAL\n`;
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
       dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${count}\n7\nARIAL\n`;
-      yPos -= 0.02;
+      yPos -= 0.018;
     }
-    
-    // Fin du fichier DXF
-    dxf += '0\nENDSEC\n0\nEOF\n';
-    
+
+    dxf += '0\nENDSEC\n';
+
+    // Section OBJECTS (requise pour AutoCAD 2000+)
+    if (acadVer !== 'AC1009') {
+      dxf += '0\nSECTION\n2\nOBJECTS\n';
+      // Dictionnaire principal
+      dxf += '0\nDICTIONARY\n5\nC\n330\n0\n100\nAcDbDictionary\n281\n1\n3\nACAD_GROUP\n350\nD\n3\nACAD_LAYOUT\n350\n1A\n3\nACAD_MLINESTYLE\n350\n17\n3\nACAD_PLOTSETTINGS\n350\n19\n3\nACAD_PLOTSTYLENAME\n350\nE\n3\nAcDbVariableDictionary\n350\n66\n';
+      dxf += '0\nENDSEC\n';
+    }
+
+    dxf += '0\nEOF\n';
     return dxf;
   }
   
-  function exportDXF() {
-    const dxfContent = generateDXF();
-    const blob = new Blob([dxfContent], { type: 'application/dxf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+  async function exportDXF() {
+    // Export DXF R12 (compatible ZWCAD)
+    const dxfContent = generateDXF('AC1009');
+
     const wM = (WORLD_W_MM / 1000).toFixed(1);
     const hM = (WORLD_H_MM / 1000).toFixed(1);
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
-    a.download = `tontonkad_${wM}x${hM}m_${date}_${time}.dxf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('Export DXF terminé !');
+    const fileName = `tontonkad_${wM}x${hM}m_${date}_${time}.dxf`;
+
+    // Mode Electron : utiliser exportToFile pour gérer l'encodage UTF-8 correctement
+    if (window.exportToFile) {
+      try {
+        // DXF texte ASCII - pas de BOM UTF-8 (AutoCAD le refuse)
+        await window.exportToFile('dxf', dxfContent, fileName);
+        showToast('Export DXF terminé !');
+      } catch (error) {
+        console.error('Erreur export DXF:', error);
+        showToast('Erreur lors de l\'export DXF');
+      }
+    } else {
+      // Mode Web : utiliser Blob avec charset UTF-8 (sans BOM)
+      const blob = new Blob([dxfContent], { type: 'application/dxf;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Export DXF terminé !');
+    }
+  }
+
+  async function exportDXFAutoCAD() {
+    // Export DXF R2000 (AC1015) - Plus compatible que R2010 avec ZWCAD
+    const dxfContent = generateDXF('AC1015');
+
+    const wM = (WORLD_W_MM / 1000).toFixed(1);
+    const hM = (WORLD_H_MM / 1000).toFixed(1);
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
+    const fileName = `tontonkad_${wM}x${hM}m_${date}_${time}_R2000.dxf`;
+
+    // Mode Electron : utiliser exportToFile pour gérer l'encodage UTF-8 correctement
+    if (window.exportToFile) {
+      try {
+        // DXF texte ASCII - pas de BOM UTF-8 (AutoCAD le refuse)
+        await window.exportToFile('dxf', dxfContent, fileName);
+        showToast('Export DXF R2000 (AutoCAD 2000+) terminé !');
+      } catch (error) {
+        console.error('Erreur export DXF:', error);
+        showToast('Erreur lors de l\'export DXF');
+      }
+    } else {
+      // Mode Web : utiliser Blob avec charset UTF-8 (sans BOM)
+      const blob = new Blob([dxfContent], { type: 'application/dxf;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Export DXF R2000 (AutoCAD 2000+) terminé !');
+    }
   }
 
   /* ====== Inventaires & Panneaux d'info ====== */
@@ -3494,25 +3554,41 @@ function initSearchableLists() {
   function setupImageDropZone() {
     const dropZone = document.getElementById('dynamicImageDropZone');
     const fileInput = document.getElementById('dynamicImageInput');
+    const placeholder = document.getElementById('dynamicImagePlaceholder');
 
-    // Clic pour ouvrir le sélecteur de fichier
-    dropZone.addEventListener('click', () => {
-      fileInput.click();
+    // Clic pour ouvrir le sélecteur de fichier (uniquement sur le placeholder)
+    if (placeholder) {
+      placeholder.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInput.click();
+      });
+    }
+
+    // Empêcher la dropZone de capturer les événements qui ne concernent pas le drag&drop
+    dropZone.addEventListener('click', (e) => {
+      // Ne rien faire si le clic est sur le placeholder ou sur l'input
+      if (e.target === dropZone || e.target === placeholder || placeholder.contains(e.target)) {
+        return;
+      }
+      e.stopPropagation();
     });
 
     // Glisser-déposer
     dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       dropZone.classList.add('dragover');
     });
 
     dropZone.addEventListener('dragleave', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       dropZone.classList.remove('dragover');
     });
 
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       dropZone.classList.remove('dragover');
 
       const files = e.dataTransfer.files;
@@ -3614,6 +3690,19 @@ function initSearchableLists() {
     }
   }
 
+  function calculateFourreauOccupancy(fourreau) {
+    // Calculer l'aire intérieure du fourreau (basée sur le diamètre intérieur)
+    const fourreauInnerArea = areaCircle(fourreau.idm);
+
+    if (fourreauInnerArea <= 0) return 0;
+
+    // Calculer l'aire totale des câbles dans ce fourreau
+    const cablesInFourreau = cables.filter(c => c.parent === fourreau.id);
+    const cablesArea = cablesInFourreau.reduce((sum, c) => sum + areaCircle(c.od), 0);
+
+    return (cablesArea / fourreauInnerArea) * 100;
+  }
+
   function generatePdfStats() {
     const stats = {
       fourreaux: fourreaux.length,
@@ -3633,6 +3722,18 @@ function initSearchableLists() {
     // Détail des fourreaux par type
     stats.detailFourreaux = Object.entries(fc).map(([type, count]) => ({ type, count }));
     stats.detailCables = Object.entries(cc).map(([type, count]) => ({ type, count }));
+
+    // Détail de l'occupation par fourreau avec numérotation
+    stats.fourreauxDetails = fourreaux.map((f, index) => ({
+      numero: index + 1,
+      id: f.id,
+      type: f.type,
+      code: f.code,
+      od: f.od.toFixed(1),
+      idm: f.idm.toFixed(1),
+      nbCables: cables.filter(c => c.parent === f.id).length,
+      occupation: calculateFourreauOccupancy(f).toFixed(1)
+    }));
 
     return stats;
   }
@@ -3703,7 +3804,7 @@ function initSearchableLists() {
   }
 
   function getCanvasImageData() {
-    // Créer un canvas temporaire pour capturer l'image sans les marges
+    // Créer un canvas temporaire haute résolution pour éviter la pixelisation
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
 
@@ -3711,19 +3812,25 @@ function initSearchableLists() {
     const contentWidth = canvas.width - (CANVAS_MARGIN * 2 * pixelRatio);
     const contentHeight = canvas.height - (CANVAS_MARGIN * 2 * pixelRatio);
 
-    tempCanvas.width = contentWidth;
-    tempCanvas.height = contentHeight;
+    // Multiplier par 2 pour améliorer la qualité d'export
+    const exportScale = 2;
+    tempCanvas.width = contentWidth * exportScale;
+    tempCanvas.height = contentHeight * exportScale;
 
-    // Copier le contenu utile du canvas principal
+    // Activer l'antialiasing pour un rendu de meilleure qualité
+    tempCtx.imageSmoothingEnabled = true;
+    tempCtx.imageSmoothingQuality = 'high';
+
+    // Copier le contenu utile du canvas principal avec scaling
     tempCtx.drawImage(
       canvas,
       CANVAS_MARGIN * pixelRatio, CANVAS_MARGIN * pixelRatio, // source x, y
       contentWidth, contentHeight, // source width, height
       0, 0, // destination x, y
-      contentWidth, contentHeight // destination width, height
+      tempCanvas.width, tempCanvas.height // destination width, height (upscaled)
     );
 
-    return tempCanvas.toDataURL('image/png', 0.95);
+    return tempCanvas.toDataURL('image/png', 1.0);
   }
 
   async function exportToPDF() {
@@ -4004,36 +4111,563 @@ function initSearchableLists() {
         pdf.setFontSize(10);
         pdf.setFont('helvetica', 'normal');
         let col1X = margin + 5;
-        let col2X = margin + 55;
-        let col3X = margin + 105;
-        let col4X = margin + 155;
+        let col2X = margin + 70;
+        let col3X = margin + 135;
         let statsLineY = statsY + 12;
 
-        // Première ligne de stats
-        pdf.text(`Fourreaux: ${stats.fourreaux}`, col1X, statsLineY);
-        pdf.text(`Cables: ${stats.cables}`, col2X, statsLineY);
-        pdf.text(`Occupation: ${stats.occupation}%`, col3X, statsLineY);
+        // === SECTION INVENTAIRE === //
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Inventaire', col1X, statsLineY);
+        pdf.setFont('helvetica', 'normal');
+        statsLineY += 6;
+        pdf.text(`• Fourreaux: ${stats.fourreaux}`, col1X + 2, statsLineY);
+        pdf.text(`• Câbles: ${stats.cables}`, col2X, statsLineY);
 
+        // === SECTION OCCUPATION === //
         statsLineY += 8;
-        pdf.text(`Dimensions: ${stats.dimensions.width}x${stats.dimensions.height}m`, col1X, statsLineY);
-        pdf.text(`Types fourreaux: ${stats.typesFourreaux}`, col2X, statsLineY);
-        pdf.text(`Types cables: ${stats.typesCables}`, col3X, statsLineY);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Taux d\'occupation', col1X, statsLineY);
+        pdf.setFont('helvetica', 'normal');
+        statsLineY += 6;
 
-        if (stats.typesFourreaux > 0) {
-          statsLineY += 6;
-          pdf.text(`Fourreau principal: ${stats.detailFourreaux[0]?.type || 'N/A'}`, col1X, statsLineY);
+        // Occupation globale
+        pdf.text(`• Conteneur: ${stats.occupation}%`, col1X + 2, statsLineY);
+
+        // Fourreau le plus chargé et alertes
+        if (stats.fourreauxDetails && stats.fourreauxDetails.length > 0) {
+          const maxOccupation = stats.fourreauxDetails.reduce((max, f) => Math.max(max, parseFloat(f.occupation)), 0).toFixed(1);
+          const fourreauMaxIdx = stats.fourreauxDetails.findIndex(f => parseFloat(f.occupation) === parseFloat(maxOccupation));
+          pdf.text(`• Max fourreau: ${maxOccupation}% (#${fourreauMaxIdx + 1})`, col2X, statsLineY);
+
+          // Fourreaux surchargés (>50%)
+          const fourreauxSaturés = stats.fourreauxDetails.filter(f => parseFloat(f.occupation) > 50).length;
+          if (fourreauxSaturés > 0) {
+            statsLineY += 6;
+            pdf.setTextColor(255, 0, 0);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(`⚠ Attention: ${fourreauxSaturés} fourreau(x) saturé(s) (>50%)`, col1X + 2, statsLineY);
+            pdf.setTextColor(0, 0, 0);
+            pdf.setFont('helvetica', 'normal');
+          }
         }
 
-        // Ligne finale avec timestamp
+        // === SECTION DIMENSIONS === //
         statsLineY += 8;
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Conteneur', col1X, statsLineY);
+        pdf.setFont('helvetica', 'normal');
+        statsLineY += 6;
+        pdf.text(`• Dimensions: ${stats.dimensions.width} x ${stats.dimensions.height} m`, col1X + 2, statsLineY);
+
+        const surfaceM2 = (parseFloat(stats.dimensions.width) * parseFloat(stats.dimensions.height)).toFixed(2);
+        pdf.text(`• Surface: ${surfaceM2} m²`, col2X, statsLineY);
+
+        // Ligne finale avec timestamp
+        statsLineY += 10;
         pdf.setFontSize(8);
         pdf.setFont('helvetica', 'italic');
+        pdf.setTextColor(100, 100, 100);
         const dateStr = new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
-        pdf.text(`Genere par TontonKAD le ${dateStr}`, col1X, statsLineY);
+        pdf.text(`Généré par TontonKAD le ${dateStr}`, col1X, statsLineY);
+        pdf.setTextColor(0, 0, 0);
+
+        // === NOUVELLE PAGE : DÉTAIL DES FOURREAUX === //
+        if (stats.fourreauxDetails && stats.fourreauxDetails.length > 0) {
+          pdf.addPage();
+
+          // Titre
+          pdf.setFontSize(14);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('DÉTAIL DES FOURREAUX', margin, margin + 10);
+
+          // Note explicative
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'italic');
+          pdf.text('Les numéros correspondent aux étiquettes affichées sur le schéma (page précédente)', margin, margin + 17);
+
+          // Configuration du tableau
+          const tableStartY = margin + 25;
+          const rowHeight = 7;
+          const colWidths = {
+            numero: 12,
+            nom: 22,
+            type: 48,
+            code: 42,
+            nbCables: 18,
+            occupation: 38
+          };
+          // Total: 180mm (contentWidth)
+
+          // En-tête du tableau
+          pdf.setFillColor(41, 128, 185); // Bleu
+          pdf.setDrawColor(0, 0, 0); // Bordures noires
+          pdf.setTextColor(255, 255, 255); // Blanc
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'bold');
+
+          // Dessiner un grand rectangle de fond pour toute la ligne d'en-tête
+          const totalWidth = colWidths.numero + colWidths.nom + colWidths.type + colWidths.code + colWidths.nbCables + colWidths.occupation;
+          pdf.rect(margin, tableStartY, totalWidth, rowHeight, 'FD');
+
+          // Écrire les textes d'en-tête
+          let currentX = margin;
+          pdf.text('N°', currentX + 2, tableStartY + 5);
+          currentX += colWidths.numero;
+
+          pdf.text('Nom', currentX + 2, tableStartY + 5);
+          currentX += colWidths.nom;
+
+          pdf.text('Type', currentX + 2, tableStartY + 5);
+          currentX += colWidths.type;
+
+          pdf.text('Code', currentX + 2, tableStartY + 5);
+          currentX += colWidths.code;
+
+          pdf.text('Câbles', currentX + 2, tableStartY + 5);
+          currentX += colWidths.nbCables;
+
+          pdf.text('Occupation', currentX + 2, tableStartY + 5);
+
+          // Lignes de données
+          pdf.setTextColor(0, 0, 0); // Noir
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8);
+
+          let currentY = tableStartY + rowHeight;
+          stats.fourreauxDetails.forEach((f, idx) => {
+            // Vérifier si on doit changer de page
+            if (currentY > pageHeight - 30) {
+              pdf.addPage();
+              currentY = margin + 10;
+
+              // Répéter l'en-tête sur la nouvelle page
+              pdf.setFillColor(41, 128, 185);
+              pdf.setDrawColor(0, 0, 0);
+              pdf.setTextColor(255, 255, 255);
+              pdf.setFont('helvetica', 'bold');
+
+              // Dessiner un grand rectangle pour l'en-tête
+              const headerTotalWidth = colWidths.numero + colWidths.nom + colWidths.type + colWidths.code + colWidths.nbCables + colWidths.occupation;
+              pdf.rect(margin, currentY, headerTotalWidth, rowHeight, 'FD');
+
+              // Écrire les textes
+              let headerX = margin;
+              pdf.text('N°', headerX + 2, currentY + 5);
+              headerX += colWidths.numero;
+              pdf.text('Nom', headerX + 2, currentY + 5);
+              headerX += colWidths.nom;
+              pdf.text('Type', headerX + 2, currentY + 5);
+              headerX += colWidths.type;
+              pdf.text('Code', headerX + 2, currentY + 5);
+              headerX += colWidths.code;
+              pdf.text('Câbles', headerX + 2, currentY + 5);
+              headerX += colWidths.nbCables;
+              pdf.text('Occupation', headerX + 2, currentY + 5);
+
+              currentY += rowHeight;
+              pdf.setTextColor(0, 0, 0);
+              pdf.setFont('helvetica', 'normal');
+            }
+
+            // Couleur alternée pour les lignes
+            if (idx % 2 === 0) {
+              pdf.setFillColor(248, 250, 252);
+              pdf.rect(margin, currentY, contentWidth, rowHeight, 'F');
+            }
+
+            // Coloration selon le taux d'occupation
+            const occupationRate = parseFloat(f.occupation);
+            let occupationColor = [0, 128, 0]; // Vert par défaut (< 33%)
+            if (occupationRate > 50) {
+              occupationColor = [255, 0, 0]; // Rouge si > 50%
+            } else if (occupationRate >= 33) {
+              occupationColor = [255, 165, 0]; // Orange si 33-50%
+            }
+
+            currentX = margin;
+
+            // Bordures
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(currentX, currentY, colWidths.numero, rowHeight);
+            pdf.text(String(f.numero), currentX + 2, currentY + 5);
+            currentX += colWidths.numero;
+
+            // Nom du fourreau (label personnalisé ou auto-généré)
+            pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
+            const fourreauObj = fourreaux.find(fo => fo.id === f.id);
+            const nomFourreau = (fourreauObj && fourreauObj.customLabel) || `F${f.numero}`;
+            pdf.text(nomFourreau, currentX + 2, currentY + 5);
+            currentX += colWidths.nom;
+
+            pdf.rect(currentX, currentY, colWidths.type, rowHeight);
+            const typeText = f.type.length > 20 ? f.type.substring(0, 17) + '...' : f.type;
+            pdf.text(typeText, currentX + 2, currentY + 5);
+            currentX += colWidths.type;
+
+            pdf.rect(currentX, currentY, colWidths.code, rowHeight);
+            const codeText = f.code.length > 18 ? f.code.substring(0, 15) + '...' : f.code;
+            pdf.text(codeText, currentX + 2, currentY + 5);
+            currentX += colWidths.code;
+
+            pdf.rect(currentX, currentY, colWidths.nbCables, rowHeight);
+            pdf.text(String(f.nbCables), currentX + 2, currentY + 5);
+            currentX += colWidths.nbCables;
+
+            pdf.rect(currentX, currentY, colWidths.occupation, rowHeight);
+            pdf.setTextColor(...occupationColor);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(f.occupation + ' %', currentX + 2, currentY + 5);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(0, 0, 0);
+
+            currentY += rowHeight;
+          });
+
+          // Légende des couleurs
+          currentY += 5;
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'italic');
+
+          pdf.setFillColor(0, 128, 0);
+          pdf.circle(margin + 2, currentY + 1, 1.5, 'F');
+          pdf.text('Occupation < 33% (OK)', margin + 6, currentY + 2);
+
+          pdf.setFillColor(255, 165, 0);
+          pdf.circle(margin + 50, currentY + 1, 1.5, 'F');
+          pdf.text('Occupation 33-50% (Attention)', margin + 54, currentY + 2);
+
+          pdf.setFillColor(255, 0, 0);
+          pdf.circle(margin + 110, currentY + 1, 1.5, 'F');
+          pdf.text('Occupation > 50% (Saturé)', margin + 114, currentY + 2);
+        }
+
+        // === NOUVELLE PAGE : LISTING DÉTAILLÉ DES CÂBLES === //
+        if (cables.length > 0) {
+          pdf.addPage();
+
+          // Titre
+          pdf.setFontSize(14);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('LISTING DÉTAILLÉ DES CÂBLES', margin, margin + 10);
+
+          // Configuration du tableau
+          const tableStartY = margin + 20;
+          const rowHeight = 6;
+          const colWidths = {
+            numero: 10,
+            nom: 18,
+            famille: 45,
+            section: 25,
+            localisation: 55,
+            phase: 27
+          };
+          // Total: 180mm (contentWidth)
+
+          // En-tête du tableau
+          pdf.setFillColor(52, 152, 219); // Bleu clair
+          pdf.setDrawColor(0, 0, 0); // Bordures noires
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'bold');
+
+          // Dessiner un grand rectangle de fond pour toute la ligne d'en-tête
+          const totalWidth = colWidths.numero + colWidths.nom + colWidths.famille + colWidths.section + colWidths.localisation + colWidths.phase;
+          pdf.rect(margin, tableStartY, totalWidth, rowHeight, 'FD');
+
+          // Écrire les textes d'en-tête
+          let currentX = margin;
+          pdf.text('N°', currentX + 2, tableStartY + 4);
+          currentX += colWidths.numero;
+
+          pdf.text('Nom', currentX + 2, tableStartY + 4);
+          currentX += colWidths.nom;
+
+          pdf.text('Famille', currentX + 2, tableStartY + 4);
+          currentX += colWidths.famille;
+
+          pdf.text('Section', currentX + 2, tableStartY + 4);
+          currentX += colWidths.section;
+
+          pdf.text('Localisation', currentX + 2, tableStartY + 4);
+          currentX += colWidths.localisation;
+
+          pdf.text('Phase', currentX + 2, tableStartY + 4);
+
+          // Lignes de données
+          pdf.setTextColor(0, 0, 0);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7);
+
+          let currentY = tableStartY + rowHeight;
+          cables.forEach((c, idx) => {
+            // Vérifier si on doit changer de page
+            if (currentY > pageHeight - 30) {
+              pdf.addPage();
+              currentY = margin + 10;
+
+              // Répéter l'en-tête
+              pdf.setFillColor(52, 152, 219);
+              pdf.setDrawColor(0, 0, 0);
+              pdf.setTextColor(255, 255, 255);
+              pdf.setFont('helvetica', 'bold');
+
+              // Dessiner un grand rectangle pour l'en-tête
+              const headerTotalWidth = colWidths.numero + colWidths.nom + colWidths.famille + colWidths.section + colWidths.localisation + colWidths.phase;
+              pdf.rect(margin, currentY, headerTotalWidth, rowHeight, 'FD');
+
+              // Écrire les textes
+              let headerX = margin;
+              pdf.text('N°', headerX + 2, currentY + 4);
+              headerX += colWidths.numero;
+              pdf.text('Nom', headerX + 2, currentY + 4);
+              headerX += colWidths.nom;
+              pdf.text('Famille', headerX + 2, currentY + 4);
+              headerX += colWidths.famille;
+              pdf.text('Section', headerX + 2, currentY + 4);
+              headerX += colWidths.section;
+              pdf.text('Localisation', headerX + 2, currentY + 4);
+              headerX += colWidths.localisation;
+              pdf.text('Phase', headerX + 2, currentY + 4);
+
+              currentY += rowHeight;
+              pdf.setTextColor(0, 0, 0);
+              pdf.setFont('helvetica', 'normal');
+            }
+
+            // Couleur alternée
+            if (idx % 2 === 0) {
+              pdf.setFillColor(248, 250, 252);
+              pdf.rect(margin, currentY, contentWidth, rowHeight, 'F');
+            }
+
+            currentX = margin;
+
+            // Bordures et contenu
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(currentX, currentY, colWidths.numero, rowHeight);
+            pdf.text(String(idx + 1), currentX + 2, currentY + 4);
+            currentX += colWidths.numero;
+
+            // Nom du câble (depuis la couleur, ou label personnalisé, ou numéro)
+            pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
+            let nomCable = `L${idx + 1}`; // Par défaut
+            if (c.customColor) {
+              const phaseFromColor = getPhaseFromColor(c.customColor);
+              if (phaseFromColor) {
+                nomCable = phaseFromColor;
+              }
+            } else if (c.customLabel) {
+              nomCable = c.customLabel;
+            }
+            pdf.text(nomCable, currentX + 2, currentY + 4);
+            currentX += colWidths.nom;
+
+            pdf.rect(currentX, currentY, colWidths.famille, rowHeight);
+            const famText = c.fam.length > 28 ? c.fam.substring(0, 25) + '...' : c.fam;
+            pdf.text(famText, currentX + 2, currentY + 4);
+            currentX += colWidths.famille;
+
+            pdf.rect(currentX, currentY, colWidths.section, rowHeight);
+            const sectionText = c.code + '²';
+            pdf.text(sectionText, currentX + 2, currentY + 4);
+            currentX += colWidths.section;
+
+            pdf.rect(currentX, currentY, colWidths.localisation, rowHeight);
+            let locText = 'Hors fourreau';
+            if (c.parent) {
+              const parentIdx = fourreaux.findIndex(f => f.id === c.parent);
+              if (parentIdx !== -1) {
+                locText = `Fourreau #${parentIdx + 1}`;
+              }
+            }
+            pdf.text(locText, currentX + 2, currentY + 4);
+            currentX += colWidths.localisation;
+
+            pdf.rect(currentX, currentY, colWidths.phase, rowHeight);
+            let phaseText = 'N/A';
+            if (c.customColor) {
+              const phaseFromColor = getPhaseFromColor(c.customColor);
+              if (phaseFromColor) {
+                phaseText = phaseFromColor;
+              }
+            }
+            pdf.text(phaseText, currentX + 2, currentY + 4);
+
+            currentY += rowHeight;
+          });
+
+          // Résumé
+          currentY += 5;
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(`Total: ${cables.length} câble(s)`, margin, currentY);
+        }
+
+        // === NOUVELLE PAGE : LISTING DÉTAILLÉ DES FOURREAUX === //
+        if (fourreaux.length > 0) {
+          pdf.addPage();
+
+          // Titre
+          pdf.setFontSize(14);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('LISTING DÉTAILLÉ DES FOURREAUX', margin, margin + 10);
+
+          // Configuration du tableau
+          const tableStartY = margin + 20;
+          const rowHeight = 6;
+          const colWidths = {
+            numero: 10,
+            nom: 20,
+            type: 45,
+            code: 38,
+            nbCables: 20,
+            cables: 47
+          };
+          // Total: 180mm (contentWidth)
+
+          // En-tête du tableau
+          pdf.setFillColor(46, 204, 113); // Vert
+          pdf.setDrawColor(0, 0, 0); // Bordures noires
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'bold');
+
+          // Dessiner un grand rectangle de fond pour toute la ligne d'en-tête
+          const totalWidth = colWidths.numero + colWidths.nom + colWidths.type + colWidths.code + colWidths.nbCables + colWidths.cables;
+          pdf.rect(margin, tableStartY, totalWidth, rowHeight, 'FD');
+
+          // Écrire les textes d'en-tête
+          let currentX = margin;
+          pdf.text('N°', currentX + 2, tableStartY + 4);
+          currentX += colWidths.numero;
+
+          pdf.text('Nom', currentX + 2, tableStartY + 4);
+          currentX += colWidths.nom;
+
+          pdf.text('Type', currentX + 2, tableStartY + 4);
+          currentX += colWidths.type;
+
+          pdf.text('Code', currentX + 2, tableStartY + 4);
+          currentX += colWidths.code;
+
+          pdf.text('Nb câbles', currentX + 2, tableStartY + 4);
+          currentX += colWidths.nbCables;
+
+          pdf.text('Liste câbles', currentX + 2, tableStartY + 4);
+
+          // Lignes de données
+          pdf.setTextColor(0, 0, 0);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7);
+
+          let currentY = tableStartY + rowHeight;
+          fourreaux.forEach((f, idx) => {
+            // Vérifier si on doit changer de page
+            if (currentY > pageHeight - 30) {
+              pdf.addPage();
+              currentY = margin + 10;
+
+              // Répéter l'en-tête
+              pdf.setFillColor(46, 204, 113);
+              pdf.setDrawColor(0, 0, 0);
+              pdf.setTextColor(255, 255, 255);
+              pdf.setFont('helvetica', 'bold');
+
+              // Dessiner un grand rectangle pour l'en-tête
+              const headerTotalWidth = colWidths.numero + colWidths.nom + colWidths.type + colWidths.code + colWidths.nbCables + colWidths.cables;
+              pdf.rect(margin, currentY, headerTotalWidth, rowHeight, 'FD');
+
+              // Écrire les textes
+              let headerX = margin;
+              pdf.text('N°', headerX + 2, currentY + 4);
+              headerX += colWidths.numero;
+              pdf.text('Nom', headerX + 2, currentY + 4);
+              headerX += colWidths.nom;
+              pdf.text('Type', headerX + 2, currentY + 4);
+              headerX += colWidths.type;
+              pdf.text('Code', headerX + 2, currentY + 4);
+              headerX += colWidths.code;
+              pdf.text('Nb câbles', headerX + 2, currentY + 4);
+              headerX += colWidths.nbCables;
+              pdf.text('Liste câbles', headerX + 2, currentY + 4);
+
+              currentY += rowHeight;
+              pdf.setTextColor(0, 0, 0);
+              pdf.setFont('helvetica', 'normal');
+            }
+
+            // Couleur alternée
+            if (idx % 2 === 0) {
+              pdf.setFillColor(248, 250, 252);
+              pdf.rect(margin, currentY, contentWidth, rowHeight, 'F');
+            }
+
+            currentX = margin;
+
+            // Bordures et contenu
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(currentX, currentY, colWidths.numero, rowHeight);
+            pdf.text(String(idx + 1), currentX + 2, currentY + 4);
+            currentX += colWidths.numero;
+
+            // Nom du fourreau
+            pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
+            const nomFourreau = (f.customLabel) || `F${idx + 1}`;
+            pdf.text(nomFourreau, currentX + 2, currentY + 4);
+            currentX += colWidths.nom;
+
+            pdf.rect(currentX, currentY, colWidths.type, rowHeight);
+            const typeText = f.type.length > 23 ? f.type.substring(0, 20) + '...' : f.type;
+            pdf.text(typeText, currentX + 2, currentY + 4);
+            currentX += colWidths.type;
+
+            pdf.rect(currentX, currentY, colWidths.code, rowHeight);
+            const codeText = f.code.length > 20 ? f.code.substring(0, 17) + '...' : f.code;
+            pdf.text(codeText, currentX + 2, currentY + 4);
+            currentX += colWidths.code;
+
+            // Compter les câbles dans ce fourreau
+            const cablesInFourreau = cables.filter(c => c.parent === f.id);
+            pdf.rect(currentX, currentY, colWidths.nbCables, rowHeight);
+            pdf.text(String(cablesInFourreau.length), currentX + 2, currentY + 4);
+            currentX += colWidths.nbCables;
+
+            // Liste des noms des câbles
+            pdf.rect(currentX, currentY, colWidths.cables, rowHeight);
+            if (cablesInFourreau.length > 0) {
+              const cableNames = cablesInFourreau.map(c => {
+                const cIdx = cables.findIndex(cable => cable.id === c.id);
+                // Déterminer le nom depuis la couleur
+                if (c.customColor) {
+                  const phaseFromColor = getPhaseFromColor(c.customColor);
+                  if (phaseFromColor) return phaseFromColor;
+                }
+                return c.customLabel || `L${cIdx + 1}`;
+              }).join(', ');
+              const namesText = cableNames.length > 20 ? cableNames.substring(0, 17) + '...' : cableNames;
+              pdf.text(namesText, currentX + 2, currentY + 4);
+            } else {
+              pdf.text('Aucun', currentX + 2, currentY + 4);
+            }
+
+            currentY += rowHeight;
+          });
+
+          // Résumé
+          currentY += 5;
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(`Total: ${fourreaux.length} fourreau(x)`, margin, currentY);
+        }
       }
 
-      // Sauvegarder le PDF
-      const fileName = `${formData.projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+      // Sauvegarder le PDF avec horodatage
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0,10); // YYYY-MM-DD
+      const timeStr = now.toTimeString().slice(0,8).replace(/:/g, '-'); // HH-MM-SS
+      const fileName = `${formData.projectName.replace(/[^a-z0-9]/gi, '_')}_${dateStr}_${timeStr}.pdf`;
       logPdf('saving file', fileName);
       try {
         pdf.save(fileName);
@@ -4488,7 +5122,7 @@ function initSearchableLists() {
         populateUnipolarCableSelect();
       }
       
-      popup.style.display = 'block';
+      popup.style.display = 'flex';
 
       // Positionner la popup aux coordonnées du clic si fournies
       if (mouseX !== undefined && mouseY !== undefined && popupContent) {
@@ -5342,6 +5976,84 @@ function initSearchableLists() {
 
     // Initialiser le sélecteur de thème
     initThemeSwitcher();
+
+    // Gérer le positionnement des tooltips en position fixed
+    setupTooltipPositioning();
+  }
+
+function setupTooltipPositioning() {
+    const activeTimers = new WeakMap();
+
+    const showTooltip = (tooltipBtn) => {
+      const tooltip = tooltipBtn?.querySelector('.tooltip');
+      if (!tooltip) return;
+
+      // Rendre visible le temps de mesurer correctement la hauteur
+      tooltip.classList.add('is-visible');
+
+      const rect = tooltipBtn.getBoundingClientRect();
+      const tooltipRect = tooltip.getBoundingClientRect();
+      const tooltipHeight = tooltipRect.height || tooltip.offsetHeight || 0;
+      const tooltipWidth = tooltipRect.width || tooltip.offsetWidth || 0;
+
+      // Classe pour passer en dessous si pas assez de place au-dessus
+      const placeBelow = rect.top - tooltipHeight - 12 < 0;
+      tooltip.classList.toggle('tooltip-bottom', placeBelow);
+
+      const offset = 10;
+      const viewportW = window.innerWidth;
+      const left = Math.min(
+        viewportW - tooltipWidth / 2 - 8,
+        Math.max(tooltipWidth / 2 + 8, rect.left + rect.width / 2)
+      );
+      const top = placeBelow ? rect.bottom + offset : rect.top - offset;
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+      tooltip.style.transform = placeBelow
+        ? 'translate(-50%, 0)'
+        : 'translate(-50%, -100%)';
+
+    };
+
+    const hideTooltip = (tooltipBtn) => {
+      const tooltip = tooltipBtn?.querySelector('.tooltip');
+      if (!tooltip) return;
+      tooltip.classList.remove('is-visible');
+      tooltip.style.display = '';
+      tooltip.style.left = '';
+      tooltip.style.top = '';
+      tooltip.style.transform = '';
+    };
+
+    const scheduleHide = (tooltipBtn) => {
+      clearTimeout(activeTimers.get(tooltipBtn));
+      const t = setTimeout(() => hideTooltip(tooltipBtn), 150);
+      activeTimers.set(tooltipBtn, t);
+    };
+
+    const cancelHide = (tooltipBtn) => {
+      clearTimeout(activeTimers.get(tooltipBtn));
+    };
+
+    document.addEventListener('mouseenter', (e) => {
+      const target = e.target;
+      if (!(target instanceof Element) || typeof target.closest !== 'function') return;
+      const tooltipBtn = target.closest('.tooltip-btn');
+      if (!tooltipBtn) return;
+      cancelHide(tooltipBtn);
+      showTooltip(tooltipBtn);
+    }, true);
+
+    document.addEventListener('mouseleave', (e) => {
+      const target = e.target;
+      if (!(target instanceof Element) || typeof target.closest !== 'function') return;
+      const tooltipBtn = target.closest('.tooltip-btn');
+      if (!tooltipBtn) return;
+      // Si on reste sur le bouton ou l'un de ses enfants, ne pas masquer
+      const related = e.relatedTarget;
+      if (related instanceof Element && tooltipBtn.contains(related)) return;
+      scheduleHide(tooltipBtn);
+    }, true);
   }
   
   /* ====== Gestion des verrous de dimensions ====== */
@@ -5523,14 +6235,26 @@ function initSearchableLists() {
 
     setupEventListeners() {
       // Bouton d'ouverture de la modal
-      document.getElementById('projectSave').addEventListener('click', () => {
-        this.openModal();
-      });
+      const projectSaveBtn = document.getElementById('projectSave');
+      if (projectSaveBtn) {
+        projectSaveBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.debug('[ProjectUI] Bouton Projets clique');
+          this.openModal();
+        });
+        console.debug('[ProjectUI] Event listener attaché au bouton Projets');
+      } else {
+        console.error('[ProjectUI] Bouton #projectSave introuvable !');
+      }
 
 
-      // Fermeture de la modal par clic sur l'overlay
-      this.modal.querySelector('.edit-popup-overlay').addEventListener('click', () => {
-        this.closeModal();
+      // Fermeture de la modal par clic sur l'overlay (pas sur le contenu)
+      this.modal.querySelector('.edit-popup-overlay').addEventListener('click', (e) => {
+        // Fermer seulement si on clique directement sur l'overlay, pas sur ses enfants
+        if (e.target === e.currentTarget) {
+          this.closeModal();
+        }
       });
 
       // Toggle création de dossier
@@ -5632,12 +6356,87 @@ function initSearchableLists() {
           this.closeModal();
         }
       });
+
+      // Event delegation pour les boutons tooltip dans la liste des projets
+      this.projectsList.addEventListener('click', (e) => {
+        const tooltipBtn = e.target.closest('.tooltip-btn');
+        if (!tooltipBtn) return;
+
+        const projectItem = tooltipBtn.closest('.project-item');
+        const folderItem = tooltipBtn.closest('.folder-item');
+
+        // Actions sur les dossiers
+        if (tooltipBtn.classList.contains('btn-rename-folder')) {
+          const folderName = folderItem?.dataset.folderName;
+          if (folderName) this.renameFolder(folderName);
+        } else if (tooltipBtn.classList.contains('btn-delete-folder')) {
+          const folderName = folderItem?.dataset.folderName;
+          if (folderName) this.deleteFolder(folderName);
+        }
+        // Actions sur les projets
+        else if (projectItem) {
+          const projectName = projectItem.dataset.projectName;
+          const currentFolder = projectItem.dataset.currentFolder || null;
+
+          if (tooltipBtn.classList.contains('btn-load')) {
+            this.loadProjectFromFolder(projectName, currentFolder);
+          } else if (tooltipBtn.classList.contains('btn-save')) {
+            this.overwriteProjectInFolder(projectName, currentFolder);
+          } else if (tooltipBtn.classList.contains('btn-rename')) {
+            this.renameProjectInFolder(projectName, currentFolder);
+          } else if (tooltipBtn.classList.contains('btn-export')) {
+            this.exportProjectFromFolder(projectName, currentFolder);
+          } else if (tooltipBtn.classList.contains('btn-delete')) {
+            this.deleteProjectFromFolder(projectName, currentFolder);
+          }
+        }
+      });
+
+      // Event delegation pour le drag & drop
+      this.projectsList.addEventListener('dragstart', (e) => {
+        const projectItem = e.target.closest('.project-item');
+        if (projectItem) this.handleDragStart(e);
+      });
+
+      this.projectsList.addEventListener('dragend', (e) => {
+        const projectItem = e.target.closest('.project-item');
+        if (projectItem) this.handleDragEnd(e);
+      });
+
+      this.projectsList.addEventListener('dragover', (e) => {
+        const dropZone = e.target.closest('.drop-zone');
+        if (dropZone) this.handleDragOver(e);
+      });
+
+      this.projectsList.addEventListener('drop', (e) => {
+        const dropZone = e.target.closest('.drop-zone');
+        if (dropZone) this.handleDrop(e);
+      });
+
+      this.projectsList.addEventListener('dragenter', (e) => {
+        const dropZone = e.target.closest('.drop-zone');
+        if (dropZone) this.handleDragEnter(e);
+      });
+
+      this.projectsList.addEventListener('dragleave', (e) => {
+        const dropZone = e.target.closest('.drop-zone');
+        if (dropZone) this.handleDragLeave(e);
+      });
     }
 
     openModal() {
-      this.modal.style.display = 'block';
+      if (!this.modal) {
+        console.error('[ProjectUI] Modal element introuvable !');
+        return;
+      }
+
+      this.modal.style.display = 'flex';
       const overlay = this.modal.querySelector('.edit-popup-overlay');
-      if (overlay) overlay.style.display = 'block';
+
+      if (overlay) {
+        overlay.style.display = 'flex';
+      }
+
       this.refreshUI();
       // Focus sur le champ de nom
       setTimeout(() => {
@@ -5665,9 +6464,9 @@ function initSearchableLists() {
       }
 
       this.newProjectNameInput.value = oldName;
-      this.renameModal.style.display = 'block';
+      this.renameModal.style.display = 'flex';
       const overlay = this.renameModal.querySelector('.edit-popup-overlay');
-      if (overlay) overlay.style.display = 'block';
+      if (overlay) overlay.style.display = 'flex';
 
       // Focus et sélection du texte
       setTimeout(() => {
@@ -5853,21 +6652,17 @@ function initSearchableLists() {
 
         html += `
           <div class="folder-item drop-zone"
-               data-folder-name="${folderName}"
-               ondragover="projectUI.handleDragOver(event)"
-               ondrop="projectUI.handleDrop(event)"
-               ondragenter="projectUI.handleDragEnter(event)"
-               ondragleave="projectUI.handleDragLeave(event)">
+               data-folder-name="${folderName}">
             <div class="folder-header">
               <span class="folder-icon">📁</span>
               <span class="folder-name">${folderName}</span>
               <span class="folder-count">(${projectCount} projet${projectCount > 1 ? 's' : ''})</span>
               <div class="folder-actions">
-                <div class="tooltip-btn btn-rename-folder" onclick="projectUI.renameFolder('${folderName.replace(/'/g, "\\'")}')">
+                <div class="tooltip-btn btn-rename-folder">
                   <span class="tooltip">Renommer ce dossier</span>
                   <span class="icon">✏️</span>
                 </div>
-                <div class="tooltip-btn btn-delete-folder" onclick="projectUI.deleteFolder('${folderName.replace(/'/g, "\\'")}')">
+                <div class="tooltip-btn btn-delete-folder">
                   <span class="tooltip">Supprimer ce dossier (doit être vide)</span>
                   <span class="icon">🗑️</span>
                 </div>
@@ -5885,11 +6680,7 @@ function initSearchableLists() {
       if (rootProjects.length > 0) {
         html += `
           <div class="folder-item drop-zone"
-               data-folder-name=""
-               ondragover="projectUI.handleDragOver(event)"
-               ondrop="projectUI.handleDrop(event)"
-               ondragenter="projectUI.handleDragEnter(event)"
-               ondragleave="projectUI.handleDragLeave(event)">
+               data-folder-name="">
             <div class="folder-header">
               <span class="folder-icon">🏠</span>
               <span class="folder-name">Projets sans dossier</span>
@@ -5928,9 +6719,7 @@ function initSearchableLists() {
           <div class="project-item"
                draggable="true"
                data-project-name="${name}"
-               data-current-folder="${folderName || ''}"
-               ondragstart="projectUI.handleDragStart(event)"
-               ondragend="projectUI.handleDragEnd(event)">
+               data-current-folder="${folderName || ''}">
             <div class="project-info">
               <div class="project-name" title="${name}">
                 <span class="drag-handle">⋮⋮</span>
@@ -5945,23 +6734,23 @@ function initSearchableLists() {
               </div>
             </div>
             <div class="project-actions">
-              <div class="tooltip-btn btn-load" onclick="projectUI.loadProjectFromFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+              <div class="tooltip-btn btn-load">
                 <span class="tooltip">Charger ce projet</span>
                 <span class="icon">📂</span>
               </div>
-              <div class="tooltip-btn btn-save" onclick="projectUI.overwriteProjectInFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+              <div class="tooltip-btn btn-save">
                 <span class="tooltip">Écraser avec l'état actuel</span>
                 <span class="icon">💾</span>
               </div>
-              <div class="tooltip-btn btn-rename" onclick="projectUI.renameProjectInFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+              <div class="tooltip-btn btn-rename">
                 <span class="tooltip">Renommer ce projet</span>
                 <span class="icon">✏️</span>
               </div>
-              <div class="tooltip-btn btn-export" onclick="projectUI.exportProjectFromFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+              <div class="tooltip-btn btn-export">
                 <span class="tooltip">Exporter vers fichier</span>
                 <span class="icon">📤</span>
               </div>
-              <div class="tooltip-btn btn-delete" onclick="projectUI.deleteProjectFromFolder('${name.replace(/'/g, "\\'")}', ${folderName ? `'${folderName.replace(/'/g, "\\'")}'` : 'null'})">
+              <div class="tooltip-btn btn-delete">
                 <span class="tooltip">Supprimer définitivement</span>
                 <span class="icon">🗑️</span>
               </div>
@@ -6334,8 +7123,18 @@ function initSearchableLists() {
     handleDrop(event) {
       event.preventDefault();
 
-      const dropZone = event.currentTarget;
+      const dropZone = event.target.closest('.drop-zone');
+      if (!dropZone) {
+        console.warn('[DRAG] Pas de drop-zone trouvée');
+        return;
+      }
+
       const targetFolder = dropZone.dataset.folderName;
+      console.debug('[DRAG] Drop détecté:', {
+        dropZoneElement: dropZone,
+        targetFolder: targetFolder || 'Racine',
+        datasetFolderName: dropZone.dataset.folderName
+      });
 
       // Récupérer les données du projet
       let dragData;
@@ -6348,8 +7147,12 @@ function initSearchableLists() {
 
       const { projectName, currentFolder } = dragData;
 
+      // Normaliser les valeurs vides (null, undefined, '') en null
+      const normalizedSource = currentFolder || null;
+      const normalizedTarget = targetFolder || null;
+
       // Vérifier si le projet change vraiment de dossier
-      if (currentFolder === targetFolder) {
+      if (normalizedSource === normalizedTarget) {
         showToast('📁 Le projet est déjà dans ce dossier');
         return;
       }
@@ -6381,7 +7184,7 @@ function initSearchableLists() {
           }
         }
 
-        // Vérifier si le projet existe déjà dans la destination
+        // Vérifier si un AUTRE projet avec le même nom existe déjà dans la destination
         let existsInTarget = false;
         if (targetFolder) {
           existsInTarget = data.folders[targetFolder]?.projects[projectName];
@@ -6389,8 +7192,15 @@ function initSearchableLists() {
           existsInTarget = data.projects[projectName];
         }
 
+        console.debug('[DEBUG] Déplacement projet:', {
+          projectName,
+          sourceFolder: sourceFolder || 'Racine',
+          targetFolder: targetFolder || 'Racine',
+          existsInTarget: !!existsInTarget
+        });
+
         if (existsInTarget) {
-          showToast(`⚠️ Un projet nommé "${projectName}" existe déjà dans la destination`);
+          showToast(`⚠️ Un projet nommé "${projectName}" existe déjà dans le dossier de destination`);
           return;
         }
 
@@ -6444,6 +7254,12 @@ function initSearchableLists() {
       return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
   }
+
+  /* ====== Event listeners pour Electron ====== */
+  // Écouter l'événement d'export DXF depuis le menu Electron
+  window.addEventListener('electron-export-dxf', () => {
+    exportDXF();
+  });
 
   init();
 

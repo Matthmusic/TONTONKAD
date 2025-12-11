@@ -131,14 +131,20 @@
     // Manuel utilisateur
     if (manualButton && manualModal && manualCloseBtn) {
       manualButton.addEventListener('click', () => {
-        manualModal.classList.remove('hidden');
+        manualModal.style.display = 'flex';
       });
       manualCloseBtn.addEventListener('click', () => {
-        manualModal.classList.add('hidden');
+        manualModal.style.display = 'none';
       });
       manualModal.addEventListener('click', (e) => {
-        if (e.target.id === 'manual-modal') {
-          manualModal.classList.add('hidden');
+        if (e.target === manualModal) {
+          manualModal.style.display = 'none';
+        }
+      });
+      // Fermer avec Echap
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && manualModal.style.display === 'flex') {
+          manualModal.style.display = 'none';
         }
       });
     }
