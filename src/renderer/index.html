@@ -84,12 +84,15 @@
     </div>
   </div>
 
-    <!-- Notification de mise ? jour -->
+      <!-- Notification de mise ? jour -->
   <div id="update-notification" class="update-notification hidden" role="status" aria-live="polite">
     <div class="update-notification-card">
       <div class="update-notification-header">
-        <div class="update-chip">Mise ? jour</div>
-        <button id="update-close-btn" class="update-close" aria-label="Fermer">?</button>
+        <div class="update-badge">
+          <span class="update-icon">?</span>
+          <span class="update-chip">Mise &agrave; jour</span>
+        </div>
+        <button id="update-close-btn" class="update-close" aria-label="Fermer">&times;</button>
       </div>
 
       <div class="update-body">
@@ -97,10 +100,10 @@
           <div class="update-title">Version <strong id="update-version-number">0.0.0</strong> disponible</div>
           <div class="update-pulse-dot"></div>
         </div>
-        <p class="update-description" id="update-description">Une nouvelle version de TONTONKAD est disponible avec des am?liorations et corrections.</p>
+        <p class="update-description" id="update-description">Une nouvelle version de TONTONKAD est disponible avec des am&eacute;liorations et corrections.</p>
 
         <div class="update-progress hidden" id="update-progress-container">
-          <div class="update-progress-meta" id="update-progress-text">T?l?chargement en cours...</div>
+          <div class="update-progress-meta" id="update-progress-text">T&eacute;l&eacute;chargement en cours...</div>
           <div class="update-progress-bar">
             <div class="update-progress-fill" id="update-progress-fill"></div>
           </div>
@@ -108,7 +111,7 @@
 
         <div class="update-actions">
           <button class="update-btn ghost" id="update-btn-later">Plus tard</button>
-          <button class="update-btn primary" id="update-btn-download">T?l?charger maintenant</button>
+          <button class="update-btn primary" id="update-btn-download">T&eacute;l&eacute;charger maintenant</button>
         </div>
       </div>
     </div>

@@ -3903,8 +3903,8 @@ body.electron-mode .notification-container {
 
 .update-notification {
     position: fixed;
-    top: 24px;
-    right: 24px;
+    top: 20px;
+    right: 20px;
     z-index: 12000;
     display: flex;
     flex-direction: column;
@@ -3917,13 +3917,13 @@ body.electron-mode .notification-container {
 }
 
 .update-notification-card {
-    width: min(420px, 90vw);
-    background: linear-gradient(135deg, rgba(255, 145, 77, 0.12), rgba(255, 255, 255, 0.08));
+    width: min(380px, 90vw);
+    background: linear-gradient(135deg, rgba(29, 29, 31, 0.92), rgba(29, 29, 31, 0.82));
     border: 1px solid rgba(255, 145, 77, 0.35);
-    border-radius: 16px;
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
-    backdrop-filter: blur(12px);
-    padding: 18px 18px 14px;
+    border-radius: 18px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(16px);
+    padding: 16px 16px 14px;
     color: var(--text-primary);
     animation: updateSlideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1);
     pointer-events: auto;
@@ -3948,10 +3948,29 @@ body.electron-mode .notification-container {
     margin-bottom: 6px;
 }
 
+.update-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.update-icon {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
+    color: #fff;
+    font-size: 16px;
+    box-shadow: 0 10px 25px rgba(255, 145, 77, 0.35);
+}
+
 .update-chip {
-    background: rgba(255, 145, 77, 0.16);
+    background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 145, 77, 0.4);
-    color: var(--primary-orange);
+    color: #fff;
     padding: 6px 12px;
     border-radius: 999px;
     font-size: 12px;
@@ -3994,6 +4013,7 @@ body.electron-mode .notification-container {
 .update-title {
     font-size: 16px;
     font-weight: 700;
+    color: #fff;
 }
 
 .update-title strong {
@@ -4017,7 +4037,7 @@ body.electron-mode .notification-container {
 
 .update-description {
     margin: 0;
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.78);
     line-height: 1.6;
     font-size: 14px;
 }
@@ -4035,7 +4055,7 @@ body.electron-mode .notification-container {
 
 .update-progress-meta {
     font-size: 12px;
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.7);
 }
 
 .update-progress-bar {
@@ -4074,24 +4094,24 @@ body.electron-mode .notification-container {
 }
 
 .update-btn.primary {
-    background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
-    color: #fff;
-    box-shadow: 0 10px 30px rgba(255, 145, 77, 0.35);
+    background: linear-gradient(135deg, #ffb26b, #ff914d);
+    color: #0f0f10;
+    box-shadow: 0 12px 32px rgba(255, 145, 77, 0.45);
 }
 
 .update-btn.primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 12px 36px rgba(255, 145, 77, 0.45);
+    box-shadow: 0 14px 36px rgba(255, 145, 77, 0.55);
 }
 
 .update-btn.ghost {
-    background: transparent;
-    color: var(--primary-orange);
-    border-color: rgba(255, 145, 77, 0.35);
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.12);
 }
 
 .update-btn.ghost:hover {
-    background: rgba(255, 145, 77, 0.08);
+    background: rgba(255, 255, 255, 0.12);
 }
 
 .update-btn:disabled {
