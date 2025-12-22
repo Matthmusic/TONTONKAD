@@ -217,6 +217,21 @@
       updateBtnLater.style.borderRadius = '12px';
       updateBtnLater.style.padding = '10px 18px';
     }
+    if (updateCloseBtn) {
+      updateCloseBtn.style.marginLeft = 'auto';
+      updateCloseBtn.style.width = '28px';
+      updateCloseBtn.style.height = '28px';
+      updateCloseBtn.style.borderRadius = '50%';
+      updateCloseBtn.style.border = '1px solid transparent';
+      updateCloseBtn.style.background = 'transparent';
+      updateCloseBtn.style.color = '#cbd5e1';
+      updateCloseBtn.style.cursor = 'pointer';
+      updateCloseBtn.style.display = 'inline-flex';
+      updateCloseBtn.style.alignItems = 'center';
+      updateCloseBtn.style.justifyContent = 'center';
+      updateCloseBtn.style.fontSize = '18px';
+      updateCloseBtn.style.lineHeight = '1';
+    }
   };
 
   // Stocker les infos de mise à jour
