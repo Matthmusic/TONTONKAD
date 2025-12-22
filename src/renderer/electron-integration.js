@@ -192,6 +192,30 @@
     }
     if (updateCard) {
       updateCard.style.pointerEvents = 'auto';
+      updateCard.style.width = 'min(380px, 90vw)';
+      updateCard.style.background = 'linear-gradient(135deg, rgba(22,22,24,0.95), rgba(29,29,31,0.86))';
+      updateCard.style.border = '1px solid rgba(255,145,77,0.45)';
+      updateCard.style.borderRadius = '18px';
+      updateCard.style.boxShadow = '0 20px 50px rgba(0,0,0,0.4)';
+      updateCard.style.backdropFilter = 'blur(16px)';
+      updateCard.style.padding = '16px 16px 14px';
+    }
+    if (updateBtnDownload) {
+      updateBtnDownload.classList.add('primary');
+      updateBtnDownload.style.background = 'linear-gradient(135deg, #ffb26b, #ff914d)';
+      updateBtnDownload.style.color = '#0f0f10';
+      updateBtnDownload.style.border = '1px solid transparent';
+      updateBtnDownload.style.boxShadow = '0 12px 32px rgba(255,145,77,0.45)';
+      updateBtnDownload.style.borderRadius = '12px';
+      updateBtnDownload.style.padding = '10px 18px';
+    }
+    if (updateBtnLater) {
+      updateBtnLater.classList.add('ghost');
+      updateBtnLater.style.background = 'rgba(255,255,255,0.06)';
+      updateBtnLater.style.color = '#fff';
+      updateBtnLater.style.border = '1px solid rgba(255,255,255,0.12)';
+      updateBtnLater.style.borderRadius = '12px';
+      updateBtnLater.style.padding = '10px 18px';
     }
   };
 
