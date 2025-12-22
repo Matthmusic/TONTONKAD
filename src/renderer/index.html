@@ -84,31 +84,37 @@
     </div>
   </div>
 
-  <!-- Notification de mise à jour -->
-  <div id="update-notification" class="update-notification hidden">
-    <div class="update-notification-content">
+    <!-- Notification de mise ? jour -->
+  <div id="update-notification" class="update-notification hidden" role="status" aria-live="polite">
+    <div class="update-notification-card">
       <div class="update-notification-header">
-        <div class="update-icon">🚀</div>
-        <h3>Mise à jour disponible</h3>
+        <div class="update-chip">Mise ? jour</div>
+        <button id="update-close-btn" class="update-close" aria-label="Fermer">?</button>
       </div>
-      <div class="update-notification-body">
-        <p class="update-version">Version <strong id="update-version-number">0.0.0</strong> est disponible</p>
-        <p class="update-description" id="update-description">Une nouvelle version de TONTONKAD est disponible avec des améliorations et corrections.</p>
+
+      <div class="update-body">
+        <div class="update-title-row">
+          <div class="update-title">Version <strong id="update-version-number">0.0.0</strong> disponible</div>
+          <div class="update-pulse-dot"></div>
+        </div>
+        <p class="update-description" id="update-description">Une nouvelle version de TONTONKAD est disponible avec des am?liorations et corrections.</p>
+
         <div class="update-progress hidden" id="update-progress-container">
+          <div class="update-progress-meta" id="update-progress-text">T?l?chargement en cours...</div>
           <div class="update-progress-bar">
             <div class="update-progress-fill" id="update-progress-fill"></div>
           </div>
-          <p class="update-progress-text" id="update-progress-text">Téléchargement en cours...</p>
         </div>
-      </div>
-      <div class="update-notification-footer">
-        <button class="update-btn update-btn-secondary" id="update-btn-later">Plus tard</button>
-        <button class="update-btn update-btn-primary" id="update-btn-download">Télécharger maintenant</button>
+
+        <div class="update-actions">
+          <button class="update-btn ghost" id="update-btn-later">Plus tard</button>
+          <button class="update-btn primary" id="update-btn-download">T?l?charger maintenant</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Modal de configuration de la base de données -->
+<!-- Modal de configuration de la base de données -->
   <div id="settings-modal" class="modal-overlay" style="display: none;">
     <div class="settings-modal-content">
       <div class="modal-header">

@@ -179,6 +179,7 @@
   const updateProgressText = document.getElementById('update-progress-text');
   const updateBtnLater = document.getElementById('update-btn-later');
   const updateBtnDownload = document.getElementById('update-btn-download');
+  const updateCloseBtn = document.getElementById('update-close-btn');
 
   // Stocker les infos de mise à jour
   let updateInfo = null;
@@ -216,6 +217,12 @@
   updateBtnLater.addEventListener('click', () => {
     updateNotification.classList.add('hidden');
   });
+
+  if (updateCloseBtn) {
+    updateCloseBtn.addEventListener('click', () => {
+      updateNotification.classList.add('hidden');
+    });
+  }
 
   // Bouton "Télécharger maintenant"
   updateBtnDownload.addEventListener('click', () => {
