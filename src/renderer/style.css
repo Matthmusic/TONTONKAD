@@ -3918,10 +3918,10 @@ body.electron-mode .notification-container {
 
 .update-notification-card {
     width: min(380px, 90vw);
-    background: linear-gradient(135deg, rgba(29, 29, 31, 0.92), rgba(29, 29, 31, 0.82));
-    border: 1px solid rgba(255, 145, 77, 0.35);
+    background: linear-gradient(135deg, rgba(22, 22, 24, 0.95), rgba(29, 29, 31, 0.86));
+    border: 1px solid rgba(255, 145, 77, 0.45);
     border-radius: 18px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(16px);
     padding: 16px 16px 14px;
     color: var(--text-primary);
