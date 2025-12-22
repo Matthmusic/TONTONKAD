@@ -185,7 +185,7 @@
   const applyUpdateToastStyles = () => {
     if (updateNotification) {
       updateNotification.style.position = 'fixed';
-      updateNotification.style.top = '20px';
+      updateNotification.style.top = '64px';
       updateNotification.style.right = '20px';
       updateNotification.style.zIndex = '12000';
       updateNotification.style.pointerEvents = 'none';
