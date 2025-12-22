@@ -218,7 +218,10 @@
       updateBtnLater.style.padding = '10px 18px';
     }
     if (updateCloseBtn) {
-      updateCloseBtn.style.marginLeft = 'auto';
+      updateCloseBtn.style.position = 'absolute';
+      updateCloseBtn.style.top = '6px';
+      updateCloseBtn.style.right = '6px';
+      updateCloseBtn.style.marginLeft = '0';
       updateCloseBtn.style.width = '28px';
       updateCloseBtn.style.height = '28px';
       updateCloseBtn.style.borderRadius = '50%';

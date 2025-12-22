@@ -3946,6 +3946,7 @@ body.electron-mode .notification-container {
     align-items: center;
     gap: 10px;
     margin-bottom: 6px;
+    position: relative;
 }
 
 .update-badge {
