@@ -282,6 +282,18 @@
     });
   }
 
+  // Simuler la fin du download en mode dev : switch vers "Redémarrer maintenant"
+  const restartActions = document.getElementById('update-actions-restart');
+  const downloadActions = document.getElementById('update-actions-download');
+  const restartBtn = document.getElementById('update-btn-restart');
+  const showRestartCTA = () => {
+    if (downloadActions) downloadActions.classList.add('hidden');
+    if (restartActions) restartActions.classList.remove('hidden');
+    if (restartBtn) {
+      restartBtn.onclick = () => window.electronAPI.restartAndInstall && window.electronAPI.restartAndInstall();
+    }
+  };
+
   // Bouton "Télécharger maintenant"
   updateBtnDownload.addEventListener('click', () => {
     updateBtnDownload.disabled = true;
@@ -312,16 +324,11 @@
   window.electronAPI.onUpdateDownloaded(() => {
     console.log('Mise à jour téléchargée avec succès');
     updateProgressContainer.classList.add('hidden');
-    updateBtnDownload.textContent = 'Redémarrer maintenant';
-    updateBtnDownload.disabled = false;
-    updateBtnLater.disabled = false;
+    if (downloadActions) downloadActions.classList.add('hidden');
+    if (restartActions) restartActions.classList.remove('hidden');
+    if (restartBtn) restartBtn.onclick = () => window.electronAPI.restartAndInstall();
     updateProgressText.textContent = 'Téléchargement terminé !';
     updateDescription.textContent = 'La mise à jour a été téléchargée. Cliquez sur "Redémarrer maintenant" pour l\'installer.';
-
-    // Changer l'action du bouton
-    updateBtnDownload.onclick = () => {
-      window.electronAPI.restartAndInstall();
-    };
   });
 
   // Erreur de mise à jour
