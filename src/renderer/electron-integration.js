@@ -201,6 +201,17 @@
     updateNotification.classList.remove('hidden');
   };
 
+  // Bouton de test (dev) pour afficher la notification de mise à jour
+  const devUpdateBtn = document.getElementById('dev-update-btn');
+  if (devUpdateBtn) {
+    devUpdateBtn.addEventListener('click', () => {
+      window.showUpdateNotification({
+        version: '9.9.9-dev',
+        releaseNotes: 'Aperçu visuel de la notification de mise à jour. Les boutons fonctionnent comme en production.'
+      });
+    });
+  }
+
   // Bouton "Plus tard"
   updateBtnLater.addEventListener('click', () => {
     updateNotification.classList.add('hidden');
