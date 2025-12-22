@@ -3941,15 +3941,15 @@ body.electron-mode .notification-container {
 }
 
 .update-notification-header {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
     margin-bottom: 6px;
 }
 
 .update-badge {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
 }
