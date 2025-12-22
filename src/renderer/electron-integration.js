@@ -298,13 +298,25 @@
   updateBtnDownload.addEventListener('click', () => {
     updateBtnDownload.disabled = true;
     updateBtnDownload.textContent = 'Téléchargement...';
-    updateBtnLater.disabled = true;
+    if (updateBtnLater) updateBtnLater.disabled = true;
 
-    // Afficher la barre de progression
-    updateProgressContainer.classList.remove('hidden');
+    if (updateProgressContainer) {
+      updateProgressContainer.classList.remove('hidden');
+      updateProgressFill.style.width = '0%';
+      updateProgressText.textContent = 'Téléchargement en cours...';
+    }
 
-    // Déclencher le téléchargement
-    window.electronAPI.downloadUpdate();
+    // Mode Electron : appel réel, sinon simulation rapide pour le test
+    if (window.electronAPI && window.electronAPI.downloadUpdate) {
+      window.electronAPI.downloadUpdate();
+    } else {
+      // Simulation : barre à 100% puis affichage du CTA restart
+      setTimeout(() => {
+        if (updateProgressFill) updateProgressFill.style.width = '100%';
+        updateProgressText.textContent = 'Téléchargement terminé !';
+        showRestartCTA();
+      }, 700);
+    }
   });
 
   // Notifications de mise à jour
@@ -324,9 +336,7 @@
   window.electronAPI.onUpdateDownloaded(() => {
     console.log('Mise à jour téléchargée avec succès');
     updateProgressContainer.classList.add('hidden');
-    if (downloadActions) downloadActions.classList.add('hidden');
-    if (restartActions) restartActions.classList.remove('hidden');
-    if (restartBtn) restartBtn.onclick = () => window.electronAPI.restartAndInstall();
+    showRestartCTA();
     updateProgressText.textContent = 'Téléchargement terminé !';
     updateDescription.textContent = 'La mise à jour a été téléchargée. Cliquez sur "Redémarrer maintenant" pour l\'installer.';
   });
