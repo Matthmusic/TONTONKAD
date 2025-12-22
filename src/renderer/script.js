@@ -42,7 +42,8 @@
   const ctx = canvas.getContext("2d");
   
   // Variables pour la haute résolution - Optimisation adaptative
-  let pixelRatio = window.devicePixelRatio || 1;
+  let basePixelRatio = window.devicePixelRatio || 1;
+  let pixelRatio = basePixelRatio;
   let displayScale = 1;
 
   // Fonctions utilitaires pour les calculs canvas
@@ -74,22 +75,34 @@
     // Ajouter de l'espace pour les cotes
     const totalWidth = logicalWidth + TOTAL_CANVAS_MARGIN;
     const totalHeight = logicalHeight + TOTAL_CANVAS_MARGIN;
-    
+
+    // Adapter pixelRatio pour les petites boîtes afin d'éviter la pixelisation
+    // Pour les boîtes < 500mm, augmenter la résolution pour maintenir une qualité minimale
+    const minDimension = Math.min(WORLD_W_MM, WORLD_H_MM);
+    if (minDimension < 500) {
+      // Augmenter progressivement le pixelRatio pour les petites dimensions
+      // À 250mm : 2x, à 100mm : 3x, etc.
+      const scaleFactor = Math.min(3, 500 / minDimension);
+      pixelRatio = basePixelRatio * scaleFactor;
+    } else {
+      pixelRatio = basePixelRatio;
+    }
+
     // Taille physique (pixels réels)
     canvas.width = totalWidth * pixelRatio;
     canvas.height = totalHeight * pixelRatio;
-    
+
     // Taille d'affichage CSS (taille logique)
     canvas.style.width = totalWidth + 'px';
     canvas.style.height = totalHeight + 'px';
-    
+
     // Réinitialiser et appliquer la transformation pour la haute résolution avec offset
     ctx.setTransform(pixelRatio, 0, 0, pixelRatio, CANVAS_MARGIN * pixelRatio, CANVAS_MARGIN * pixelRatio);
-    
+
     // Activation de l'antialiasing optimisé pour 300 DPI
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    
+
     // Optimisations supplémentaires pour le rendu haute résolution
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -985,7 +998,7 @@ function initSearchableLists() {
     }).sort((a, b) => a.idm - b.idm)[0] || null;
   }
 
-  function findFreeSpotInFourreau(x, y, r, fourreau, ignoreId) {
+  function findFreeSpotInFourreau(x, y, r, fourreau, ignoreId, forcePlace = false) {
     const ri = fourreau.idm * MM_TO_PX / 2;
     const inside = (nx, ny) => Math.hypot(nx - fourreau.x, ny - fourreau.y) <= ri - r;
     const hits = (nx, ny) => {
@@ -1000,12 +1013,17 @@ function initSearchableLists() {
     };
     if (inside(x, y) && !hits(x, y)) return { x, y };
     const step = Math.max(2, r * .25);
-    for (let rad = step; rad < ri; rad += step) {
+    const maxRad = forcePlace ? ri * 3 : ri; // Chercher plus loin si forcePlace
+    for (let rad = step; rad < maxRad; rad += step) {
       const n = Math.ceil(2 * Math.PI * rad / step);
       for (let i = 0; i < n; i++) {
         const a = i / n * 2 * Math.PI, nx = x + rad * Math.cos(a), ny = y + rad * Math.sin(a);
         if (inside(nx, ny) && !hits(nx, ny)) return { x: nx, y: ny }
       }
+    }
+    // Si forcePlace et toujours pas de place, placer au centre même si collision
+    if (forcePlace && inside(fourreau.x, fourreau.y)) {
+      return { x: fourreau.x, y: fourreau.y };
     }
     return null;
   }
@@ -1149,13 +1167,13 @@ function initSearchableLists() {
   }
 
   function addCableAt(x, y, fam, code, prefTPC, options = {}) {
-    const { silent = false } = options;
+    const { silent = false, forcePlace = false } = options;
     const spec = CABLES.find(c => c.fam === fam && c.code === code);
     if (!spec) return null;
     const r = spec.od * MM_TO_PX / 2;
     let container = prefTPC && fitsInFourreau(spec, prefTPC) ? prefTPC : findFourreauUnder(x, y, spec.od);
     if (container && !fitsInFourreau(spec, container)) container = null;
-    const spot = container ? findFreeSpotInFourreau(x, y, r, container, null) : findFreeSpot(x, y, r, null);
+    const spot = container ? findFreeSpotInFourreau(x, y, r, container, null, forcePlace) : findFreeSpot(x, y, r, null);
     if (!spot) return null;
     if (!silent) saveStateToHistory(); // Sauver l'état avant modification (sauf si silent)
     const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, parent: container ? container.id : null, color: colorForCable(fam, code), customColor: null, label: '', fam, code, vx: 0, vy: 0, dragging: false, frozen: false, _px: spot.x, _py: spot.y };
@@ -2293,7 +2311,7 @@ function initSearchableLists() {
       dxf += '0\nTABLE\n2\nAPPID\n70\n1\n';
       dxf += '0\nAPPID\n2\nACAD\n70\n0\n';
       dxf += '0\nENDTAB\n';
-      const blockRecordNames = ['*Model_Space', '*Paper_Space', ...fourreauTypes.map(t => `_CEAI_FOURREAU_${t}`), ...Array.from(cableLayerTypes)];
+      const blockRecordNames = ['*MODEL_SPACE', '*PAPER_SPACE', ...fourreauTypes.map(t => `_CEAI_FOURREAU_${t}`), ...Array.from(cableLayerTypes)];
       dxf += `0\nTABLE\n2\nBLOCK_RECORD\n70\n${blockRecordNames.length}\n`;
       blockRecordNames.forEach(name => {
         dxf += '0\nBLOCK_RECORD\n';
@@ -2307,9 +2325,14 @@ function initSearchableLists() {
     // BLOCKS : définitions simples pour fourreaux et câbles (couleur héritée du calque)
     dxf += '0\nSECTION\n2\nBLOCKS\n';
 
-    // Blocs système requis pour AC1032
-    dxf += '0\nBLOCK\n8\n0\n2\n*Model_Space\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*Model_Space\n1\n\n0\nENDBLK\n5\n0\n8\n0\n';
-    dxf += '0\nBLOCK\n8\n0\n2\n*Paper_Space\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*Paper_Space\n1\n\n0\nENDBLK\n5\n0\n8\n0\n';
+    // Blocs système requis pour R2000+
+    if (acadVer !== 'AC1009') {
+      dxf += '0\nBLOCK\n5\n1F\n100\nAcDbEntity\n8\n0\n100\nAcDbBlockBegin\n2\n*MODEL_SPACE\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*MODEL_SPACE\n1\n\n0\nENDBLK\n5\n20\n100\nAcDbEntity\n8\n0\n100\nAcDbBlockEnd\n';
+      dxf += '0\nBLOCK\n5\n1B\n100\nAcDbEntity\n67\n1\n8\n0\n100\nAcDbBlockBegin\n2\n*PAPER_SPACE\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*PAPER_SPACE\n1\n\n0\nENDBLK\n5\n1C\n100\nAcDbEntity\n67\n1\n8\n0\n100\nAcDbBlockEnd\n';
+    } else {
+      dxf += '0\nBLOCK\n8\n0\n2\n*MODEL_SPACE\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*MODEL_SPACE\n1\n\n0\nENDBLK\n5\n0\n8\n0\n';
+      dxf += '0\nBLOCK\n8\n0\n2\n*PAPER_SPACE\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*PAPER_SPACE\n1\n\n0\nENDBLK\n5\n0\n8\n0\n';
+    }
 
     // Fourreaux (double cercle)
     fourreauTypes.forEach(type => {
@@ -2529,12 +2552,15 @@ function initSearchableLists() {
     const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
     const fileName = `tontonkad_${wM}x${hM}m_${date}_${time}.dxf`;
 
-    // Mode Electron : utiliser exportToFile pour gérer l'encodage UTF-8 correctement
-    if (window.exportToFile) {
+    // Mode Electron : utiliser l'API exportFile avec dialogue de sauvegarde
+    if (window.electronAPI && window.electronAPI.exportFile) {
       try {
-        // DXF texte ASCII - pas de BOM UTF-8 (AutoCAD le refuse)
-        await window.exportToFile('dxf', dxfContent, fileName);
-        showToast('Export DXF terminé !');
+        const result = await window.electronAPI.exportFile('dxf', dxfContent, fileName);
+        if (result.success) {
+          showToast(`Export DXF terminé : ${result.path}`);
+        } else {
+          showToast('Export DXF annulé');
+        }
       } catch (error) {
         console.error('Erreur export DXF:', error);
         showToast('Erreur lors de l\'export DXF');
@@ -2551,42 +2577,6 @@ function initSearchableLists() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showToast('Export DXF terminé !');
-    }
-  }
-
-  async function exportDXFAutoCAD() {
-    // Export DXF R2000 (AC1015) - Plus compatible que R2010 avec ZWCAD
-    const dxfContent = generateDXF('AC1015');
-
-    const wM = (WORLD_W_MM / 1000).toFixed(1);
-    const hM = (WORLD_H_MM / 1000).toFixed(1);
-    const now = new Date();
-    const date = now.toISOString().slice(0, 10);
-    const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
-    const fileName = `tontonkad_${wM}x${hM}m_${date}_${time}_R2000.dxf`;
-
-    // Mode Electron : utiliser exportToFile pour gérer l'encodage UTF-8 correctement
-    if (window.exportToFile) {
-      try {
-        // DXF texte ASCII - pas de BOM UTF-8 (AutoCAD le refuse)
-        await window.exportToFile('dxf', dxfContent, fileName);
-        showToast('Export DXF R2000 (AutoCAD 2000+) terminé !');
-      } catch (error) {
-        console.error('Erreur export DXF:', error);
-        showToast('Erreur lors de l\'export DXF');
-      }
-    } else {
-      // Mode Web : utiliser Blob avec charset UTF-8 (sans BOM)
-      const blob = new Blob([dxfContent], { type: 'application/dxf;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast('Export DXF R2000 (AutoCAD 2000+) terminé !');
     }
   }
 
@@ -2656,21 +2646,9 @@ function initSearchableLists() {
       // Basculer vers l'onglet CÂBLE
       setTab('CÂBLE');
 
-      // Si des câbles de ce type existent sur le canvas, les sélectionner
-      const arr = cables.filter(c => c.fam === fam && c.code === code);
-      if (arr.length > 0) {
-        let idx = arr.length - 1;
-        if (cycle) {
-          const prev = cycleIndex.get(key) || -1;
-          idx = (prev + 1) % arr.length;
-          cycleIndex.set(key, idx);
-        }
-        selected = { type: 'cable', id: arr[idx].id };
-      } else {
-        // Aucun câble de ce type sur le canvas, déselectionner
-        selected = null;
-        selectedMultiple = [];
-      }
+      // Ne pas sélectionner d'objet existant, juste déselectionner
+      selected = null;
+      selectedMultiple = [];
     } else if (kind === 'f') {
       const [type, code] = key.split('|');
 
@@ -2686,21 +2664,9 @@ function initSearchableLists() {
       // Basculer vers l'onglet FOURREAU
       setTab('FOURREAU');
 
-      // Si des fourreaux de ce type existent sur le canvas, les sélectionner
-      const arr = fourreaux.filter(f => f.type === type && f.code === code);
-      if (arr.length > 0) {
-        let idx = arr.length - 1;
-        if (cycle) {
-          const prev = cycleIndex.get(key) || -1;
-          idx = (prev + 1) % arr.length;
-          cycleIndex.set(key, idx);
-        }
-        selected = { type: 'fourreau', id: arr[idx].id };
-      } else {
-        // Aucun fourreau de ce type sur le canvas, déselectionner
-        selected = null;
-        selectedMultiple = [];
-      }
+      // Ne pas sélectionner d'objet existant, juste déselectionner
+      selected = null;
+      selectedMultiple = [];
     }
     updateSelectedInfo();
     redraw();
@@ -2940,6 +2906,98 @@ function initSearchableLists() {
     }, 3000);
   }
 
+  // Fonction de confirmation personnalisée
+  function customConfirm(message, title = 'Confirmation') {
+    return new Promise((resolve) => {
+      const dialog = document.getElementById('confirmDialog');
+      const titleEl = document.getElementById('confirmTitle');
+      const messageEl = document.getElementById('confirmMessage');
+      const okBtn = document.getElementById('confirmOk');
+      const cancelBtn = document.getElementById('confirmCancel');
+
+      // Remplir le contenu
+      titleEl.textContent = title;
+      messageEl.textContent = message;
+
+      // Afficher la modale
+      document.body.appendChild(dialog);
+      dialog.style.display = 'flex';
+      dialog.style.position = 'fixed';
+      dialog.style.top = '0';
+      dialog.style.left = '0';
+      dialog.style.width = '100vw';
+      dialog.style.height = '100vh';
+      dialog.style.zIndex = '99999';
+      dialog.style.alignItems = 'center';
+      dialog.style.justifyContent = 'center';
+      dialog.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+
+      // Gestionnaires d'événements
+      const handleOk = () => {
+        dialog.style.display = 'none';
+        okBtn.removeEventListener('click', handleOk);
+        cancelBtn.removeEventListener('click', handleCancel);
+        resolve(true);
+      };
+
+      const handleCancel = () => {
+        dialog.style.display = 'none';
+        okBtn.removeEventListener('click', handleOk);
+        cancelBtn.removeEventListener('click', handleCancel);
+        resolve(false);
+      };
+
+      okBtn.addEventListener('click', handleOk);
+      cancelBtn.addEventListener('click', handleCancel);
+
+      // Focus sur OK
+      setTimeout(() => okBtn.focus(), 100);
+    });
+  }
+
+  // Boîte d'alerte simple (réutilise le même gabarit que customConfirm)
+  function customAlert(message, title = 'Information') {
+    return new Promise((resolve) => {
+      const dialog = document.getElementById('confirmDialog');
+      const titleEl = document.getElementById('confirmTitle');
+      const messageEl = document.getElementById('confirmMessage');
+      const okBtn = document.getElementById('confirmOk');
+      const cancelBtn = document.getElementById('confirmCancel');
+
+      // Masquer temporairement le bouton Annuler
+      const previousCancelDisplay = cancelBtn.style.display;
+      cancelBtn.style.display = 'none';
+
+      // Remplir le contenu
+      titleEl.textContent = title;
+      messageEl.textContent = message;
+
+      // Afficher la modale
+      document.body.appendChild(dialog);
+      dialog.style.display = 'flex';
+      dialog.style.position = 'fixed';
+      dialog.style.top = '0';
+      dialog.style.left = '0';
+      dialog.style.width = '100vw';
+      dialog.style.height = '100vh';
+      dialog.style.zIndex = '99999';
+      dialog.style.alignItems = 'center';
+      dialog.style.justifyContent = 'center';
+      dialog.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+
+      const handleOk = () => {
+        dialog.style.display = 'none';
+        cancelBtn.style.display = previousCancelDisplay;
+        okBtn.removeEventListener('click', handleOk);
+        resolve(true);
+      };
+
+      okBtn.addEventListener('click', handleOk);
+
+      // Focus sur OK
+      setTimeout(() => okBtn.focus(), 100);
+    });
+  }
 
   function canvasCoords(e) {
     const r = canvas.getBoundingClientRect();
@@ -3138,16 +3196,13 @@ function initSearchableLists() {
     buildShapeDropdownOptions();
     updateShapeDropdownDisplay();
 
-    shapeDisplayInput.addEventListener('click', () => {
+    shapeDisplayInput.addEventListener('click', (event) => {
+      event.preventDefault();
       if (shapeDropdownOpen) {
         closeShapeDropdown();
       } else {
         openShapeDropdown();
       }
-    });
-
-    shapeDisplayInput.addEventListener('focus', () => {
-      openShapeDropdown();
     });
 
     shapeDisplayInput.addEventListener('keydown', (event) => {
@@ -3445,108 +3500,52 @@ function initSearchableLists() {
   });
 
   function openPdfExportModal() {
-    logPdf('openPdfExportModal called');
-    // Supprimer toute modal existante
-    const existingModal = document.getElementById('tontonkadPdfExportModal');
-    if (existingModal) {
-      logPdf('existing modal removed before re-create');
-      existingModal.remove();
+    const modal = document.getElementById('pdfExportModal');
+    if (!modal) {
+      console.error('[PDF] Modal element not found!');
+      return;
     }
 
-    // Créer une modal avec classes CSS propres
-    const modal = document.createElement('div');
-    modal.id = 'tontonkadPdfExportModal';
-
-    const modalContent = document.createElement('div');
-    modalContent.className = 'pdf-export-modal-content';
-
-    modalContent.innerHTML = `
-      <div class="modal-header">
-        <h3 class="modal-title">🎯 Export PDF - Configuration</h3>
-        <button id="pdfModalCloseBtn" class="btn-close" aria-label="Fermer">&times;</button>
-      </div>
-
-      <div class="pdf-export-body">
-        <div class="pdf-export-grid">
-          <div class="form-group">
-            <label for="dynamicPdfProjectName">Nom du projet</label>
-            <input type="text" id="dynamicPdfProjectName" placeholder="Mon projet TontonKAD" maxlength="50">
-          </div>
-          <div class="form-group">
-            <label for="dynamicPdfViewName">Nom de la vue</label>
-            <input type="text" id="dynamicPdfViewName" placeholder="Vue principale" maxlength="50">
-          </div>
-          <div class="form-group">
-            <label for="dynamicPdfAuthor">Auteur</label>
-            <input type="text" id="dynamicPdfAuthor" placeholder="Votre nom" maxlength="50">
-          </div>
-          <div class="form-group">
-            <label for="dynamicPdfClient">Client</label>
-            <input type="text" id="dynamicPdfClient" placeholder="Nom du client" maxlength="50">
-          </div>
-          <div class="form-group form-group-span-2">
-            <label for="dynamicPdfDescription">Description</label>
-            <textarea id="dynamicPdfDescription" placeholder="Description du projet..." maxlength="200" rows="3"></textarea>
-          </div>
-          <div class="form-group form-group-span-2">
-            <label>Logo client / Photo du projet</label>
-            <div id="dynamicImageDropZone" class="image-drop-zone">
-              <div id="dynamicImagePlaceholder" class="drop-text">
-                <span class="drop-icon">📁</span>
-                <span>Glissez une image ici ou cliquez pour sélectionner</span>
-                <small>Formats acceptés: JPG, PNG, GIF (max 5MB)</small>
-              </div>
-              <div id="dynamicImagePreview" class="image-preview">
-                <img id="dynamicImagePreviewImg" class="preview-img">
-                <button type="button" id="dynamicRemoveImageBtn" class="remove-img-btn" aria-label="Supprimer l'image">✕</button>
-              </div>
-              <input type="file" id="dynamicImageInput" accept="image/*" style="display: none;">
-            </div>
-          </div>
-        </div>
-        <div class="checkbox-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="dynamicPdfIncludeStats" checked>
-            Inclure les statistiques détaillées
-          </label>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button id="pdfModalGenerateBtn" class="btn-primary">📄 Générer PDF</button>
-        <button id="pdfModalCancelBtn" class="btn-secondary">✕ Annuler</button>
-      </div>
-    `;
-
-    modal.appendChild(modalContent);
-    document.body.appendChild(modal);
+    const modalContent = modal.querySelector('.pdf-export-modal-enhanced');
 
     // Pré-remplir les valeurs
     const currentDate = new Date().toLocaleDateString('fr-FR');
-    document.getElementById('dynamicPdfProjectName').value = `Projet ${currentDate}`;
-    document.getElementById('dynamicPdfViewName').value = 'Vue principale';
+    const pdfProjectName = document.getElementById('pdfProjectName');
+    const pdfViewName = document.getElementById('pdfViewName');
+    const pdfDescriptionCounter = document.getElementById('pdfDescriptionCounter');
 
-    // Focus sur le premier champ
-    document.getElementById('dynamicPdfProjectName').focus();
+    if (pdfProjectName) pdfProjectName.value = `Projet ${currentDate}`;
+    if (pdfViewName) pdfViewName.value = 'Vue principale';
+    if (pdfDescriptionCounter) pdfDescriptionCounter.textContent = '0';
 
-    // Configurer le glisser-déposer d'image
-    setupImageDropZone();
+    // IMPORTANT : Déplacer la modale à la fin du body pour éviter les conflits de layout
+    // Cela évite que des conteneurs parents avec height:0 ou overflow:hidden ne cachent la modale
+    document.body.appendChild(modal);
 
-    // Restaurer l'image si elle était déjà sélectionnée
-    if (selectedImageBase64) {
-      showImagePreview(selectedImageBase64);
+    // Afficher la modale avec styles forcés
+    modal.style.display = 'flex';
+    modal.style.position = 'fixed';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.width = '100vw';
+    modal.style.height = '100vh';
+    modal.style.zIndex = '10001';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+
+    // Styles du contenu
+    if (modalContent) {
+      modalContent.style.width = '700px';
+      modalContent.style.minHeight = '500px';
+      modalContent.style.display = 'flex';
+      modalContent.style.flexDirection = 'column';
     }
 
-    // Attacher les handlers pour respecter la CSP (pas d'inline handlers)
-    const generateBtn = document.getElementById('pdfModalGenerateBtn');
-    const closeBtn = document.getElementById('pdfModalCloseBtn');
-    const cancelBtn = document.getElementById('pdfModalCancelBtn');
-    const removeImgBtn = document.getElementById('dynamicRemoveImageBtn');
-
-    if (generateBtn) generateBtn.addEventListener('click', generateDynamicPDF);
-    if (closeBtn) closeBtn.addEventListener('click', closeDynamicPdfModal);
-    if (cancelBtn) cancelBtn.addEventListener('click', closeDynamicPdfModal);
-    if (removeImgBtn) removeImgBtn.addEventListener('click', removeDynamicImage);
+    // Focus sur le premier champ
+    setTimeout(() => {
+      if (pdfProjectName) pdfProjectName.focus();
+    }, 100);
   }
 
   let selectedImageBase64 = null;
@@ -3651,7 +3650,9 @@ function initSearchableLists() {
 
   function closePdfExportModal() {
     const modal = document.getElementById('pdfExportModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+      modal.style.display = 'none';
+    }
   }
 
   // Nouvelles fonctions pour la modal dynamique
@@ -4869,19 +4870,34 @@ function initSearchableLists() {
     const exportPDF = document.getElementById('exportPDF');
     const confirmPdfExport = document.getElementById('confirmPdfExport');
     const cancelPdfExport = document.getElementById('cancelPdfExport');
+    const closePdfExportBtn = document.getElementById('closePdfExportModal');
     const pdfExportModal = document.getElementById('pdfExportModal');
+    const pdfDescription = document.getElementById('pdfDescription');
+    const pdfDescriptionCounter = document.getElementById('pdfDescriptionCounter');
     const exportDXFBtn = document.getElementById('exportDXF');
     const clearBtn = document.getElementById('clear');
     const reduceToMinimumBtn = document.getElementById('reduceToMinimum');
 
-    if (exportPDF) exportPDF.addEventListener('click', openPdfExportModal);
+    if (exportPDF) {
+      exportPDF.addEventListener('click', openPdfExportModal);
+    } else {
+      console.error('[PDF] exportPDF button not found!');
+    }
     if (confirmPdfExport) confirmPdfExport.addEventListener('click', exportToPDF);
     if (cancelPdfExport) cancelPdfExport.addEventListener('click', closePdfExportModal);
+    if (closePdfExportBtn) closePdfExportBtn.addEventListener('click', closePdfExportModal);
+
+    // Compteur de caractères pour la description
+    if (pdfDescription && pdfDescriptionCounter) {
+      pdfDescription.addEventListener('input', () => {
+        pdfDescriptionCounter.textContent = pdfDescription.value.length;
+      });
+    }
 
     // Fermer le modal en cliquant en dehors
     if (pdfExportModal) {
       pdfExportModal.addEventListener('click', (e) => {
-        if (e.target.id === 'pdfExportModal') {
+        if (e.target === e.currentTarget) {
           closePdfExportModal();
         }
       });
@@ -5181,72 +5197,181 @@ function initSearchableLists() {
       popup.style.display = 'none';
     }
 
-    // Fonction pour peupler le sélecteur de câbles unipolaires pour le remplissage
+    // Fonction pour initialiser le champ de recherche de câbles unipolaires
     function populateUnipolarCableSelect() {
+      const fillCableSearch = document.getElementById('fillCableSearch');
       const fillCableSelect = document.getElementById('fillCableSelect');
-      if (!fillCableSelect) return;
+      let fillCableOptions = [];
 
-      fillCableSelect.innerHTML = '';
+      if (!fillCableSearch || !fillCableSelect) return;
+
+      // Filtrer uniquement les câbles unipolaires
       const unipolarCables = CABLES.filter(c => c.code.startsWith('1x'));
 
-      if (unipolarCables.length === 0) {
-        const option = document.createElement('option');
-        option.textContent = 'Aucun câble unipolaire trouvé';
-        option.disabled = true;
-        fillCableSelect.appendChild(option);
-        return;
+      // Créer la liste complète des options avec recherche
+      unipolarCables.forEach(c => {
+        fillCableOptions.push({
+          value: `${c.fam}|${c.code}`,
+          text: `${c.fam} – ${c.code} (Ø ${c.od} mm)`,
+          searchText: `${c.fam} ${c.code} ${c.od}`.toLowerCase(),
+          group: c.fam
+        });
+      });
+
+      // Fonction pour filtrer et afficher les câbles unipolaires
+      function filterFillCables(searchTerm = '') {
+        const term = searchTerm.toLowerCase();
+        fillCableSelect.innerHTML = '';
+
+        const filteredOptions = fillCableOptions.filter(opt =>
+          opt.searchText.includes(term)
+        );
+
+        // Grouper les résultats filtrés
+        const groups = {};
+        filteredOptions.forEach(opt => {
+          if (!groups[opt.group]) {
+            groups[opt.group] = [];
+          }
+          groups[opt.group].push(opt);
+        });
+
+        // Créer les groupes
+        for (const [groupName, options] of Object.entries(groups)) {
+          const groupDiv = document.createElement('div');
+          groupDiv.className = 'searchable-group';
+
+          const groupLabel = document.createElement('div');
+          groupLabel.className = 'searchable-group-label';
+          groupLabel.textContent = groupName;
+          groupDiv.appendChild(groupLabel);
+
+          options.forEach(opt => {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'searchable-option';
+            optionDiv.setAttribute('role', 'option');
+            optionDiv.setAttribute('data-value', opt.value);
+            optionDiv.textContent = opt.text;
+
+            optionDiv.addEventListener('mousedown', function(e) {
+              e.preventDefault();
+              fillCableSearch.value = this.textContent;
+              fillCableSearch.dataset.selectedValue = this.getAttribute('data-value');
+              hideFillCableList();
+            });
+
+            groupDiv.appendChild(optionDiv);
+          });
+
+          fillCableSelect.appendChild(groupDiv);
+        }
       }
 
-      unipolarCables.forEach(c => {
-        const option = document.createElement('option');
-        option.value = `${c.fam}|${c.code}`;
-        option.textContent = `${c.fam} – ${c.code} (Ø ${c.od} mm)`;
-        fillCableSelect.appendChild(option);
+      // Événement de recherche
+      fillCableSearch.addEventListener('input', function() {
+        filterFillCables(this.value);
+        showFillCableList();
       });
+
+      // Événements de focus/blur pour afficher/masquer la liste
+      fillCableSearch.addEventListener('focus', function() {
+        // Sélectionner tout le texte pour faciliter le remplacement
+        this.select();
+        // Afficher tous les câbles (filtre vide)
+        filterFillCables('');
+        showFillCableList();
+      });
+
+      fillCableSearch.addEventListener('blur', function() {
+        // Délai pour permettre le clic sur la liste
+        setTimeout(() => hideFillCableList(), 150);
+      });
+
+      // Fonctions pour afficher/masquer la liste
+      function showFillCableList() {
+        fillCableSelect.classList.add('show');
+        fillCableSearch.setAttribute('aria-expanded', 'true');
+      }
+
+      function hideFillCableList() {
+        fillCableSelect.classList.remove('show');
+        fillCableSearch.setAttribute('aria-expanded', 'false');
+      }
+
+      // Initialiser avec tous les câbles (mais masqué)
+      filterFillCables();
     }
 
     // Fonction pour gérer le remplissage rapide d'un fourreau
-    function handleFillFourreau(mode) {
+    async function handleFillFourreau(mode) {
       if (!selected || selected.type !== 'fourreau') return;
 
       const fourreau = fourreaux.find(f => f.id === selected.id);
       if (!fourreau) return;
 
-      const fillCableSelect = document.getElementById('fillCableSelect');
-      const selectedCableValue = fillCableSelect.value;
+      const fillCableSearch = document.getElementById('fillCableSearch');
+      const selectedCableValue = fillCableSearch.dataset.selectedValue;
       if (!selectedCableValue) {
         showToast('Veuillez sélectionner un type de câble.');
         return;
       }
 
-      if (!confirm('Attention : les câbles existants dans ce fourreau seront supprimés. Continuer ?')) {
+      const [fam, code] = selectedCableValue.split('|');
+
+      // Vérifier si le remplissage sera possible
+      const selectedCable = CABLES.find(c => c.fam === fam && c.code === code);
+      if (!selectedCable) {
+        showToast('Câble non trouvé dans la base de données.');
         return;
       }
 
-      const [fam, code] = selectedCableValue.split('|');
+      const nbCables = mode === 'tetra' ? 5 : 4; // tetra = 5 câbles, tri = 4 câbles
+      const totalCableArea = nbCables * areaCircle(selectedCable.od);
+      const fourreauInnerArea = areaCircle(fourreau.idm);
+      const occupationRate = (totalCableArea / fourreauInnerArea) * 100;
+      const maxOccupationRate = 40; // seuil de blocage du remplissage
 
-      // 1. Supprimer les câbles existants
+      if (occupationRate > maxOccupationRate) {
+        await customAlert(
+          `Impossible de remplir le fourreau :\n\n` +
+          `• Câble : ${fam} ${code} (Ø ${selectedCable.od} mm)\n` +
+          `• Nombre de câbles : ${nbCables}\n` +
+          `• Occupation totale : ${occupationRate.toFixed(1)}%\n\n` +
+          `Le taux d'occupation dépasse ${maxOccupationRate}%. Veuillez choisir un câble de section plus petite ou un fourreau de diamètre supérieur.`,
+          'Remplissage impossible'
+        );
+        return;
+      }
+
+      const confirmed = await customConfirm(
+        'Attention : les câbles existants dans ce fourreau seront supprimés. Continuer ?',
+        'Remplissage du fourreau'
+      );
+      if (!confirmed) {
+        return;
+      }
+
       const childrenIds = [...fourreau.children];
       for (const cableId of childrenIds) {
         const cableIndex = cables.findIndex(c => c.id === cableId);
         if (cableIndex > -1) cables.splice(cableIndex, 1);
       }
       fourreau.children = [];
-
-      // 2. Ajouter les nouveaux câbles
       const phases = mode === 'tetra' ? ['ph1', 'ph2', 'ph3', 'n', 'pe'] : ['ph1', 'ph2', 'ph3', 'n'];
       const phaseNames = { ph1: 'L1', ph2: 'L2', ph3: 'L3', n: 'N', pe: 'PE' };
 
+      let addedCount = 0;
       for (const phase of phases) {
-        const newCable = addCableAt(fourreau.x, fourreau.y, fam, code, fourreau, { silent: true });
+        const newCable = addCableAt(fourreau.x, fourreau.y, fam, code, fourreau, { silent: true, forcePlace: true });
         if (newCable) {
           newCable.selectedPhase = phase;
           newCable.customColor = PHASE_COLORS[phase];
           newCable.label = phaseNames[phase];
+          addedCount++;
         }
       }
 
-      showToast(`${phases.length} câbles ajoutés au fourreau.`);
+      showToast(`${addedCount} câbles ajoutés au fourreau.`);
       closeEditPopup();
       redraw();
       updateStats();
@@ -5450,6 +5575,7 @@ function initSearchableLists() {
         return {
           version: "1.0.0",
           timestamp: new Date().toISOString(),
+          nextId: nextId, // Sauvegarder le prochain ID à utiliser
           container: {
             shape: SHAPE,
             width: WORLD_W_MM,
@@ -5530,6 +5656,19 @@ function initSearchableLists() {
           // Nettoyer l'état actuel
           fourreaux.length = 0;
           cables.length = 0;
+
+          // Restaurer le nextId
+          if (projectData.nextId !== undefined) {
+            nextId = projectData.nextId;
+          } else {
+            // Si nextId n'est pas dans les données (anciens projets), le calculer
+            const maxId = Math.max(
+              0,
+              ...projectData.fourreaux?.map(f => f.id) || [],
+              ...projectData.cables?.map(c => c.id) || []
+            );
+            nextId = maxId + 1;
+          }
 
           // Restaurer le conteneur
           SHAPE = projectData.container.shape || 'rect';
@@ -5982,78 +6121,54 @@ function initSearchableLists() {
   }
 
 function setupTooltipPositioning() {
-    const activeTimers = new WeakMap();
+    // Créer un seul élément tooltip réutilisable
+    const tooltip = document.createElement('div');
+    tooltip.className = 'custom-tooltip';
+    document.body.appendChild(tooltip);
 
-    const showTooltip = (tooltipBtn) => {
-      const tooltip = tooltipBtn?.querySelector('.tooltip');
-      if (!tooltip) return;
+    let currentBtn = null;
 
-      // Rendre visible le temps de mesurer correctement la hauteur
-      tooltip.classList.add('is-visible');
+    // Fonction pour afficher le tooltip
+    function showTooltip(btn) {
+      const text = btn.getAttribute('data-tooltip');
+      if (!text) return;
 
-      const rect = tooltipBtn.getBoundingClientRect();
-      const tooltipRect = tooltip.getBoundingClientRect();
-      const tooltipHeight = tooltipRect.height || tooltip.offsetHeight || 0;
-      const tooltipWidth = tooltipRect.width || tooltip.offsetWidth || 0;
+      currentBtn = btn;
+      tooltip.textContent = text;
+      tooltip.style.display = 'block';
 
-      // Classe pour passer en dessous si pas assez de place au-dessus
-      const placeBelow = rect.top - tooltipHeight - 12 < 0;
-      tooltip.classList.toggle('tooltip-bottom', placeBelow);
+      // Positionner le tooltip
+      const rect = btn.getBoundingClientRect();
+      tooltip.style.left = rect.left + rect.width / 2 + 'px';
+      tooltip.style.top = rect.top - 8 + 'px';
 
-      const offset = 10;
-      const viewportW = window.innerWidth;
-      const left = Math.min(
-        viewportW - tooltipWidth / 2 - 8,
-        Math.max(tooltipWidth / 2 + 8, rect.left + rect.width / 2)
-      );
-      const top = placeBelow ? rect.bottom + offset : rect.top - offset;
-      tooltip.style.left = `${left}px`;
-      tooltip.style.top = `${top}px`;
-      tooltip.style.transform = placeBelow
-        ? 'translate(-50%, 0)'
-        : 'translate(-50%, -100%)';
+      // Couleur selon la classe du bouton
+      let color = 'rgba(30, 30, 30, 0.95)'; // Défaut
+      if (btn.classList.contains('btn-load')) color = '#ff914d';
+      else if (btn.classList.contains('btn-save')) color = '#f59e0b';
+      else if (btn.classList.contains('btn-rename') || btn.classList.contains('btn-rename-folder')) color = '#8b5cf6';
+      else if (btn.classList.contains('btn-export')) color = '#059669';
+      else if (btn.classList.contains('btn-delete') || btn.classList.contains('btn-delete-folder')) color = '#dc2626';
 
-    };
+      tooltip.style.backgroundColor = color;
+    }
 
-    const hideTooltip = (tooltipBtn) => {
-      const tooltip = tooltipBtn?.querySelector('.tooltip');
-      if (!tooltip) return;
-      tooltip.classList.remove('is-visible');
-      tooltip.style.display = '';
-      tooltip.style.left = '';
-      tooltip.style.top = '';
-      tooltip.style.transform = '';
-    };
+    // Fonction pour masquer le tooltip
+    function hideTooltip() {
+      tooltip.style.display = 'none';
+      currentBtn = null;
+    }
 
-    const scheduleHide = (tooltipBtn) => {
-      clearTimeout(activeTimers.get(tooltipBtn));
-      const t = setTimeout(() => hideTooltip(tooltipBtn), 150);
-      activeTimers.set(tooltipBtn, t);
-    };
+    // Events
+    document.addEventListener('mouseover', (e) => {
+      const btn = e.target.closest('[data-tooltip]');
+      if (btn) showTooltip(btn);
+    });
 
-    const cancelHide = (tooltipBtn) => {
-      clearTimeout(activeTimers.get(tooltipBtn));
-    };
-
-    document.addEventListener('mouseenter', (e) => {
-      const target = e.target;
-      if (!(target instanceof Element) || typeof target.closest !== 'function') return;
-      const tooltipBtn = target.closest('.tooltip-btn');
-      if (!tooltipBtn) return;
-      cancelHide(tooltipBtn);
-      showTooltip(tooltipBtn);
-    }, true);
-
-    document.addEventListener('mouseleave', (e) => {
-      const target = e.target;
-      if (!(target instanceof Element) || typeof target.closest !== 'function') return;
-      const tooltipBtn = target.closest('.tooltip-btn');
-      if (!tooltipBtn) return;
-      // Si on reste sur le bouton ou l'un de ses enfants, ne pas masquer
-      const related = e.relatedTarget;
-      if (related instanceof Element && tooltipBtn.contains(related)) return;
-      scheduleHide(tooltipBtn);
-    }, true);
+    document.addEventListener('mouseout', (e) => {
+      const btn = e.target.closest('[data-tooltip]');
+      if (btn === currentBtn) hideTooltip();
+    });
   }
   
   /* ====== Gestion des verrous de dimensions ====== */
@@ -6249,10 +6364,20 @@ function setupTooltipPositioning() {
       }
 
 
+      // Bouton de fermeture dans le header
+      const closeBtn = document.getElementById('closeProjectModal');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.closeModal();
+        });
+      }
+
       // Fermeture de la modal par clic sur l'overlay (pas sur le contenu)
-      this.modal.querySelector('.edit-popup-overlay').addEventListener('click', (e) => {
-        // Fermer seulement si on clique directement sur l'overlay, pas sur ses enfants
-        if (e.target === e.currentTarget) {
+      this.modal.addEventListener('click', (e) => {
+        // Fermer seulement si on clique directement sur l'overlay, pas sur le contenu de la modale
+        if (e.target === this.modal) {
           this.closeModal();
         }
       });
@@ -6276,8 +6401,19 @@ function setupTooltipPositioning() {
         this.closeRenameModal();
       });
 
-      this.renameModal.querySelector('.edit-popup-overlay').addEventListener('click', () => {
-        this.closeRenameModal();
+      // Bouton de fermeture dans le header
+      const closeRenameBtn = document.getElementById('closeRenameModal');
+      if (closeRenameBtn) {
+        closeRenameBtn.addEventListener('click', () => {
+          this.closeRenameModal();
+        });
+      }
+
+      // Clic en dehors de la modale
+      this.renameModal.addEventListener('click', (e) => {
+        if (e.target === this.renameModal) {
+          this.closeRenameModal();
+        }
       });
 
       // Confirmer avec Entrée dans le champ de renommage
@@ -6430,14 +6566,39 @@ function setupTooltipPositioning() {
         return;
       }
 
-      this.modal.style.display = 'flex';
-      const overlay = this.modal.querySelector('.edit-popup-overlay');
+      const modalContent = this.modal.querySelector('.project-modal-enhanced');
 
-      if (overlay) {
-        overlay.style.display = 'flex';
+      // Move modal to end of body to avoid layout conflicts
+      document.body.appendChild(this.modal);
+
+      // Display modal with forced styles
+      this.modal.style.display = 'flex';
+      this.modal.style.position = 'fixed';
+      this.modal.style.top = '0';
+      this.modal.style.left = '0';
+      this.modal.style.width = '100vw';
+      this.modal.style.height = '100vh';
+      this.modal.style.zIndex = '10001';
+      this.modal.style.alignItems = 'center';
+      this.modal.style.justifyContent = 'center';
+      this.modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+
+      if (modalContent) {
+        modalContent.style.display = 'flex';
+        modalContent.style.flexDirection = 'column';
+
+        // Masquer les tooltips lors du scroll pour éviter les décalages
+        const modalBody = modalContent.querySelector('.project-modal-body');
+        if (modalBody) {
+          modalBody.addEventListener('scroll', () => {
+            const visibleTooltips = modalContent.querySelectorAll('.tooltip.is-visible');
+            visibleTooltips.forEach(tooltip => tooltip.classList.remove('is-visible'));
+          });
+        }
       }
 
       this.refreshUI();
+
       // Focus sur le champ de nom
       setTimeout(() => {
         this.newProjectName.focus();
@@ -6445,8 +6606,6 @@ function setupTooltipPositioning() {
     }
 
     closeModal() {
-      const overlay = this.modal.querySelector('.edit-popup-overlay');
-      if (overlay) overlay.style.display = 'none';
       this.modal.style.display = 'none';
       this.newProjectName.value = '';
       this.hideFolderCreationField();
@@ -6464,9 +6623,21 @@ function setupTooltipPositioning() {
       }
 
       this.newProjectNameInput.value = oldName;
+
+      // Move modal to end of body to avoid layout conflicts
+      document.body.appendChild(this.renameModal);
+
+      // Display modal with forced styles - z-index plus élevé que la modale projets
       this.renameModal.style.display = 'flex';
-      const overlay = this.renameModal.querySelector('.edit-popup-overlay');
-      if (overlay) overlay.style.display = 'flex';
+      this.renameModal.style.position = 'fixed';
+      this.renameModal.style.top = '0';
+      this.renameModal.style.left = '0';
+      this.renameModal.style.width = '100vw';
+      this.renameModal.style.height = '100vh';
+      this.renameModal.style.zIndex = '10002';
+      this.renameModal.style.alignItems = 'center';
+      this.renameModal.style.justifyContent = 'center';
+      this.renameModal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
 
       // Focus et sélection du texte
       setTimeout(() => {
@@ -6476,8 +6647,6 @@ function setupTooltipPositioning() {
     }
 
     closeRenameModal() {
-      const overlay = this.renameModal.querySelector('.edit-popup-overlay');
-      if (overlay) overlay.style.display = 'none';
       this.renameModal.style.display = 'none';
       this.newProjectNameInput.value = '';
       this.currentRenameData = null;
@@ -6658,14 +6827,8 @@ function setupTooltipPositioning() {
               <span class="folder-name">${folderName}</span>
               <span class="folder-count">(${projectCount} projet${projectCount > 1 ? 's' : ''})</span>
               <div class="folder-actions">
-                <div class="tooltip-btn btn-rename-folder">
-                  <span class="tooltip">Renommer ce dossier</span>
-                  <span class="icon">✏️</span>
-                </div>
-                <div class="tooltip-btn btn-delete-folder">
-                  <span class="tooltip">Supprimer ce dossier (doit être vide)</span>
-                  <span class="icon">🗑️</span>
-                </div>
+                <button class="tooltip-btn btn-rename-folder" data-tooltip="Renommer ce dossier">✏️</button>
+                <button class="tooltip-btn btn-delete-folder" data-tooltip="Supprimer ce dossier">🗑️</button>
               </div>
             </div>
             <div class="folder-projects">
@@ -6734,26 +6897,11 @@ function setupTooltipPositioning() {
               </div>
             </div>
             <div class="project-actions">
-              <div class="tooltip-btn btn-load">
-                <span class="tooltip">Charger ce projet</span>
-                <span class="icon">📂</span>
-              </div>
-              <div class="tooltip-btn btn-save">
-                <span class="tooltip">Écraser avec l'état actuel</span>
-                <span class="icon">💾</span>
-              </div>
-              <div class="tooltip-btn btn-rename">
-                <span class="tooltip">Renommer ce projet</span>
-                <span class="icon">✏️</span>
-              </div>
-              <div class="tooltip-btn btn-export">
-                <span class="tooltip">Exporter vers fichier</span>
-                <span class="icon">📤</span>
-              </div>
-              <div class="tooltip-btn btn-delete">
-                <span class="tooltip">Supprimer définitivement</span>
-                <span class="icon">🗑️</span>
-              </div>
+              <button class="tooltip-btn btn-load" data-tooltip="Charger ce projet">📂</button>
+              <button class="tooltip-btn btn-save" data-tooltip="Écraser avec l'état actuel">💾</button>
+              <button class="tooltip-btn btn-rename" data-tooltip="Renommer ce projet">✏️</button>
+              <button class="tooltip-btn btn-export" data-tooltip="Exporter vers fichier">📤</button>
+              <button class="tooltip-btn btn-delete" data-tooltip="Supprimer définitivement">🗑️</button>
             </div>
           </div>
         `;
@@ -6807,10 +6955,15 @@ function setupTooltipPositioning() {
       }
     }
 
-    loadProject(projectName) {
-      if (confirm(`Charger le projet "${projectName}" ?\n\nLe projet actuel sera remplacé.`)) {
+    async loadProject(projectName) {
+      const confirmed = await customConfirm(
+        `Charger le projet "${projectName}" ?\n\nLe projet actuel sera remplacé.`,
+        'Charger le projet'
+      );
+      if (confirmed) {
         if (window.projectManager.loadProject(projectName)) {
           this.closeModal();
+          showToast(`📂 Projet "${projectName}" chargé avec succès`);
         }
       }
     }
@@ -6819,8 +6972,12 @@ function setupTooltipPositioning() {
       window.projectManager.exportProject(projectName);
     }
 
-    overwriteProject(projectName) {
-      if (confirm(`Écraser le projet "${projectName}" avec l'état actuel ?\n\nLes données du projet seront remplacées.`)) {
+    async overwriteProject(projectName) {
+      const confirmed = await customConfirm(
+        `Écraser le projet "${projectName}" avec l'état actuel ?\n\nLes données du projet seront remplacées.`,
+        'Écraser le projet'
+      );
+      if (confirmed) {
         if (window.projectManager.saveProject(projectName)) {
           this.refreshUI();
           showToast(`💾 Projet "${projectName}" écrasé avec succès`);
@@ -6843,18 +7000,27 @@ function setupTooltipPositioning() {
       }
     }
 
-    deleteProject(projectName) {
-      if (confirm(`Supprimer définitivement le projet "${projectName}" ?\n\nCette action est irréversible.`)) {
+    async deleteProject(projectName) {
+      const confirmed = await customConfirm(
+        `Supprimer définitivement le projet "${projectName}" ?\n\nCette action est irréversible.`,
+        'Supprimer le projet'
+      );
+      if (confirmed) {
         if (window.projectManager.deleteProject(projectName)) {
           this.refreshUI();
+          showToast(`🗑️ Projet "${projectName}" supprimé`);
         }
       }
     }
 
-    loadAutoSave() {
+    async loadAutoSave() {
       const autoSave = window.projectManager.loadAutoSave();
       if (autoSave) {
-        if (confirm('Restaurer la dernière auto-sauvegarde ?\n\nLe projet actuel sera remplacé.')) {
+        const confirmed = await customConfirm(
+          'Restaurer la dernière auto-sauvegarde ?\n\nLe projet actuel sera remplacé.',
+          'Restaurer auto-sauvegarde'
+        );
+        if (confirmed) {
           if (window.projectManager.restoreState(autoSave)) {
             showToast('🔄 Auto-sauvegarde restaurée');
             this.closeModal();
@@ -6887,9 +7053,13 @@ function setupTooltipPositioning() {
     }
 
     // Nouvelles méthodes pour gérer les projets dans les dossiers
-    loadProjectFromFolder(projectName, folderName) {
+    async loadProjectFromFolder(projectName, folderName) {
       const fullName = folderName ? `${folderName}/${projectName}` : projectName;
-      if (confirm(`Charger le projet "${fullName}" ?\n\nLe projet actuel sera remplacé.`)) {
+      const confirmed = await customConfirm(
+        `Charger le projet "${fullName}" ?\n\nLe projet actuel sera remplacé.`,
+        'Charger le projet'
+      );
+      if (confirmed) {
         const data = window.projectManager.getAllProjects();
         let project;
 
@@ -6901,13 +7071,18 @@ function setupTooltipPositioning() {
 
         if (project && window.projectManager.restoreState(project)) {
           this.closeModal();
+          showToast(`📂 Projet "${fullName}" chargé avec succès`);
         }
       }
     }
 
-    overwriteProjectInFolder(projectName, folderName) {
+    async overwriteProjectInFolder(projectName, folderName) {
       const fullName = folderName ? `${folderName}/${projectName}` : projectName;
-      if (confirm(`Écraser le projet "${fullName}" avec l'état actuel ?\n\nLes données du projet seront remplacées.`)) {
+      const confirmed = await customConfirm(
+        `Écraser le projet "${fullName}" avec l'état actuel ?\n\nLes données du projet seront remplacées.`,
+        'Écraser le projet'
+      );
+      if (confirmed) {
         if (window.projectManager.saveProject(projectName, folderName)) {
           this.refreshUI();
           showToast(`💾 Projet "${fullName}" écrasé avec succès`);
@@ -7001,9 +7176,13 @@ function setupTooltipPositioning() {
       showToast(`📤 Projet "${projectName}" exporté`);
     }
 
-    deleteProjectFromFolder(projectName, folderName) {
+    async deleteProjectFromFolder(projectName, folderName) {
       const fullName = folderName ? `${folderName}/${projectName}` : projectName;
-      if (confirm(`Supprimer définitivement le projet "${fullName}" ?\n\nCette action est irréversible.`)) {
+      const confirmed = await customConfirm(
+        `Supprimer définitivement le projet "${fullName}" ?\n\nCette action est irréversible.`,
+        'Supprimer le projet'
+      );
+      if (confirmed) {
         try {
           const data = window.projectManager.getAllProjects();
 

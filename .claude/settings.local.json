@@ -45,7 +45,9 @@
       "Bash(python:*)",
       "Bash(dir \"C:\\Users\\Matthieu MAUREL\\AppData\\Local\\ZWSoft\\ZWCAD\\2026\\fr-FR\"\" /B)",
       "Bash(echo:*)",
-      "Bash(del test-clean-complete.dxf)"
+      "Bash(del test-clean-complete.dxf)",
+      "Bash(npx eslint:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

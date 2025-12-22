@@ -109,51 +109,75 @@
   </div>
 
   <!-- Modal de configuration de la base de données -->
-  <div id="settings-modal" class="update-notification hidden">
-    <div class="update-notification-content">
-      <div class="update-notification-header">
-        <div class="update-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-        </div>
-        <h3>Paramètres de la base de données</h3>
+  <div id="settings-modal" class="modal-overlay" style="display: none;">
+    <div class="settings-modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ Paramètres de la base de données</h3>
+        <button id="settings-close-btn" class="btn-close" aria-label="Fermer">&times;</button>
       </div>
-      <div class="update-notification-body">
-        <p class="update-description">Choisissez l'emplacement des fichiers CSV (câbles, fourreaux, chemins de câble).</p>
 
-        <div style="margin-top: 20px;">
-          <label style="display: block; margin-bottom: 10px; font-weight: 600;">
-            <input type="radio" name="data-location" id="radio-default" checked style="margin-right: 8px;">
-            Utiliser le dossier local (APPDATA)
-          </label>
-          <div id="default-path-info" style="margin-left: 28px; margin-bottom: 16px; font-size: 12px; color: var(--text-secondary);"></div>
+      <div class="settings-modal-body">
+        <p class="settings-description">
+          Configurez l'emplacement de vos données (câbles, fourreaux, chemins de câble).
+        </p>
 
-          <label style="display: block; margin-bottom: 10px; font-weight: 600;">
-            <input type="radio" name="data-location" id="radio-custom" style="margin-right: 8px;">
-            Utiliser un dossier personnalisé (réseau ou local)
-          </label>
-          <div id="custom-path-container" style="margin-left: 28px; margin-top: 12px; display: none;">
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="text" id="custom-path-input" readonly
-                     style="flex: 1; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary);"
-                     placeholder="Sélectionner un dossier...">
-              <button id="browse-folder-btn" class="update-btn update-btn-secondary" style="padding: 8px 16px; min-width: auto;">
-                📁 Parcourir
-              </button>
+        <div class="settings-options">
+          <!-- Option 1: Dossier local -->
+          <div class="settings-option-card" id="option-local">
+            <label class="settings-radio-label">
+              <input type="radio" name="data-location" id="radio-default" checked class="settings-radio">
+              <div class="settings-option-content">
+                <div class="settings-option-header">
+                  <span class="settings-option-icon">💻</span>
+                  <span class="settings-option-title">Dossier local (APPDATA)</span>
+                </div>
+                <div class="settings-option-info">
+                  <span id="default-path-info" class="settings-path-display"></span>
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Option 2: Dossier personnalisé -->
+          <div class="settings-option-card" id="option-custom">
+            <label class="settings-radio-label">
+              <input type="radio" name="data-location" id="radio-custom" class="settings-radio">
+              <div class="settings-option-content">
+                <div class="settings-option-header">
+                  <span class="settings-option-icon">🌐</span>
+                  <span class="settings-option-title">Dossier personnalisé</span>
+                </div>
+                <div class="settings-option-subtitle">
+                  Choisissez un dossier sur le réseau ou en local
+                </div>
+              </div>
+            </label>
+
+            <div id="custom-path-container" class="custom-path-section" style="display: none;">
+              <div class="custom-path-input-group">
+                <input type="text" id="custom-path-input" readonly class="custom-path-input" placeholder="Aucun dossier sélectionné">
+                <button id="browse-folder-btn" class="browse-folder-btn">
+                  <span class="browse-icon">📁</span>
+                  <span>Parcourir</span>
+                </button>
+              </div>
+              <div class="custom-path-hint">
+                <span class="hint-icon">💡</span>
+                <span>Exemple : <code>Z:\F - UTILITAIRES\TONTONKAD\DATABASE</code></span>
+              </div>
             </div>
-            <p style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);">
-              Exemple: <code style="background: var(--glass-bg); padding: 2px 6px; border-radius: 4px;">Z:\F - UTILITAIRES\TONTONKAD\DATABASE</code>
-            </p>
           </div>
         </div>
 
-        <div id="settings-status" style="margin-top: 16px; padding: 12px; border-radius: 8px; display: none;"></div>
+        <div id="settings-status" class="settings-status" style="display: none;"></div>
       </div>
-      <div class="update-notification-footer">
-        <button class="update-btn update-btn-secondary" id="settings-cancel-btn">Annuler</button>
-        <button class="update-btn update-btn-primary" id="settings-save-btn">Enregistrer</button>
+
+      <div class="modal-actions">
+        <button id="settings-cancel-btn" type="button" class="btn-cancel">Annuler</button>
+        <button id="settings-save-btn" type="button" class="btn-primary">
+          <span>💾</span>
+          <span>Enregistrer</span>
+        </button>
       </div>
     </div>
   </div>
@@ -222,7 +246,7 @@
             <div class="inline-input">
               <label for="boxW">Largeur (mm)</label>
               <div class="input-lock-group">
-                <input id="boxW" type="number" step="0.1" min="0" value="1000" />
+                <input id="boxW" type="number" step="1" min="0" value="1000" />
                 <span class="lock-icon" data-target="lockWidth">
                   <img src="../../assets/icons/ico/cadenas-ouvert.ico" alt="Cadenas" class="cadenas-icon">
                   <input type="checkbox" id="lockWidth" style="display: none;" />
@@ -232,7 +256,7 @@
             <div class="inline-input">
               <label for="boxH">Hauteur (mm)</label>
               <div class="input-lock-group">
-                <input id="boxH" type="number" step="0.1" min="0" value="1000" />
+                <input id="boxH" type="number" step="1" min="0" value="1000" />
                 <span class="lock-icon" data-target="lockHeight">
                   <img src="../../assets/icons/ico/cadenas-ouvert.ico" alt="Cadenas" class="cadenas-icon">
                   <input type="checkbox" id="lockHeight" style="display: none;" />
@@ -609,7 +633,11 @@
         <div id="fourreauFillSection" class="edit-field" style="display: none;">
           <label>Remplissage rapide du fourreau</label>
           <div class="fill-controls">
-              <select id="fillCableSelect" aria-label="Sélectionner le type de câble unipolaire"></select>
+              <div class="searchable-select-container">
+                <input type="text" id="fillCableSearch" class="searchable-input" placeholder="Taper pour rechercher un câble unipolaire..." autocomplete="off" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="fillCableSelect">
+                <div id="fillCableSelect" class="searchable-list" role="listbox">
+                </div>
+              </div>
               <div class="fill-buttons">
                   <button id="fillTetra" type="button">Tétrapolaire (L1,L2,L3,N,PE)</button>
                   <button id="fillTri" type="button">Triphasé (L1,L2,L3,N)</button>
@@ -639,77 +667,78 @@
   </div>
 
   <!-- Popup de gestion des projets -->
-  <div id="projectModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="projectModalTitle" aria-modal="true">
-    <div class="edit-popup-overlay">
-      <div class="edit-popup-content project-modal-content">
+  <div id="projectModal" class="modal-overlay" style="display: none;" role="dialog" aria-labelledby="projectModalTitle" aria-modal="true">
+    <div class="project-modal-enhanced">
       <!-- Header -->
       <div class="modal-header">
-        <h3 id="projectModalTitle">🗂️ Gestion des Projets</h3>
+        <h3 id="projectModalTitle" class="modal-title">🗂️ Gestion des Projets</h3>
+        <button class="btn-close" id="closeProjectModal" aria-label="Fermer">&times;</button>
       </div>
 
-      <!-- Section Projets unifiée -->
-      <div class="projects-section">
+      <!-- Body -->
+      <div class="project-modal-body">
+        <!-- Section Projets unifiée -->
+        <div class="projects-section">
 
-        <!-- Sauvegarde projet actuel -->
-        <div class="project-save">
-          <h4>💾 Sauvegarder le projet actuel</h4>
-          <div class="project-field">
-            <select id="projectFolder" class="project-folder-select">
-              <option value="">🏠 Racine (sans dossier)</option>
-            </select>
-            <input type="text" id="newProjectName" placeholder="Nom du projet..." maxlength="50" list="existingProjects">
-            <datalist id="existingProjects"></datalist>
-            <button id="saveNewProject" type="button" class="btn-primary">Sauvegarder</button>
+          <!-- Sauvegarde projet actuel -->
+          <div class="project-save">
+            <h4>💾 Sauvegarder le projet actuel</h4>
+            <div class="project-field">
+              <select id="projectFolder" class="project-folder-select">
+                <option value="">🏠 Racine (sans dossier)</option>
+              </select>
+              <input type="text" id="newProjectName" placeholder="Nom du projet..." maxlength="50" list="existingProjects">
+              <datalist id="existingProjects"></datalist>
+              <button id="saveNewProject" type="button" class="btn-primary">Sauvegarder</button>
+            </div>
+          </div>
+
+          <!-- Projets sauvegardés -->
+          <div class="projects-list-section">
+            <div class="projects-header">
+              <h4>📂 Projets sauvegardés</h4>
+              <button id="toggleFolderCreation" type="button" class="btn-secondary btn-compact">+ Créer un dossier</button>
+            </div>
+            <div id="folderCreationField" class="folder-field" style="display: none;">
+              <input type="text" id="newFolderName" placeholder="Nom du dossier (ex: Port de Cannes)..." maxlength="50">
+              <button id="createNewFolder" type="button" class="btn-primary">Créer</button>
+              <button id="cancelFolderCreation" type="button" class="btn-cancel">Annuler</button>
+            </div>
+            <div id="projectsList" class="projects-list">
+              <!-- Sera rempli dynamiquement -->
+            </div>
           </div>
         </div>
 
-        <!-- Projets sauvegardés -->
-        <div class="projects-list-section">
-          <div class="projects-header">
-            <h4>📂 Projets sauvegardés</h4>
-            <button id="toggleFolderCreation" type="button" class="btn-secondary btn-compact">+ Créer un dossier</button>
+        <!-- Section auto-save -->
+        <div class="auto-save-section" id="autoSaveSection">
+          <div class="auto-save-info">
+            <div class="auto-save-status" id="autoSaveStatus">
+              <span class="icon">💾</span>
+              <span class="text" id="autoSaveText">Aucune auto-sauvegarde</span>
+            </div>
+            <button id="restoreAutoSave" type="button" class="btn-secondary btn-compact" style="display: none;">Restaurer</button>
           </div>
-          <div id="folderCreationField" class="folder-field" style="display: none;">
-            <input type="text" id="newFolderName" placeholder="Nom du dossier (ex: Port de Cannes)..." maxlength="50">
-            <button id="createNewFolder" type="button" class="btn-primary">Créer</button>
-            <button id="cancelFolderCreation" type="button" class="btn-cancel">Annuler</button>
-          </div>
-          <div id="projectsList" class="projects-list">
-            <!-- Sera rempli dynamiquement -->
-          </div>
+          <div class="auto-save-details" id="autoSaveDetails"></div>
         </div>
+
+        <!-- Éléments cachés pour fonctionnalité existante -->
+        <button id="exportCurrentProject" type="button" style="display: none;">Export actuel</button>
+        <button id="importProject" type="button" style="display: none;">Import</button>
+        <input type="file" id="importProjectFile" accept=".tontonkad,.json" style="display: none;">
       </div>
-
-      <!-- Section auto-save -->
-      <div class="auto-save-section" id="autoSaveSection">
-        <div class="auto-save-info">
-          <div class="auto-save-status" id="autoSaveStatus">
-            <span class="icon">💾</span>
-            <span class="text" id="autoSaveText">Aucune auto-sauvegarde</span>
-          </div>
-          <button id="restoreAutoSave" type="button" class="btn-secondary btn-compact" style="display: none;">Restaurer</button>
-        </div>
-        <div class="auto-save-details" id="autoSaveDetails"></div>
-      </div>
-
-      <!-- Éléments cachés pour fonctionnalité existante -->
-      <button id="exportCurrentProject" type="button" style="display: none;">Export actuel</button>
-      <button id="importProject" type="button" style="display: none;">Import</button>
-      <input type="file" id="importProjectFile" accept=".tontonkad,.json" style="display: none;">
-
-      </div> <!-- Fin de project-modal-content -->
-    </div> <!-- Fin de edit-popup-overlay -->
+    </div>
   </div>
 
   <!-- Popup de renommage -->
-  <div id="renameModal" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="renameModalTitle" aria-modal="true">
-    <div class="edit-popup-overlay">
-      <div class="edit-popup-content rename-modal-content">
+  <div id="renameModal" class="modal-overlay" style="display: none;" role="dialog" aria-labelledby="renameModalTitle" aria-modal="true">
+    <div class="rename-modal-enhanced">
       <div class="modal-header">
-        <h3 id="renameModalTitle">✏️ Renommer le projet</h3>
+        <h3 id="renameModalTitle" class="modal-title">✏️ Renommer le projet</h3>
+        <button class="btn-close" id="closeRenameModal" aria-label="Fermer">&times;</button>
       </div>
 
-      <div class="rename-form">
+      <div class="rename-modal-body">
         <div class="rename-info">
           <span class="current-name-label">Nom actuel :</span>
           <span id="currentProjectName" class="current-name">Mon Projet</span>
@@ -724,57 +753,133 @@
           <button id="confirmRename" type="button" class="btn-primary">✓ Confirmer</button>
           <button id="cancelRename" type="button" class="btn-cancel">✕ Annuler</button>
         </div>
-      </div> <!-- Fin de rename-modal-content -->
-    </div> <!-- Fin de edit-popup-overlay -->
+      </div>
+    </div>
   </div>
 
   <!-- Modal Export PDF -->
   <div id="pdfExportModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content">
+    <div class="pdf-export-modal-enhanced">
       <div class="modal-header">
-        <h3>🎯 Export PDF - Configuration</h3>
-        <button class="modal-close" onclick="closePdfExportModal()">&times;</button>
+        <h3 class="modal-title">📄 Export PDF - Configuration</h3>
+        <button class="btn-close" id="closePdfExportModal" aria-label="Fermer">&times;</button>
       </div>
 
-      <div class="modal-body">
-        <div class="export-form">
-          <div class="form-group">
-            <label for="pdfProjectName">Nom du projet :</label>
-            <input type="text" id="pdfProjectName" placeholder="Mon projet TontonKAD" maxlength="50">
+      <div class="pdf-export-body">
+        <p class="pdf-export-description">
+          Configurez les informations de votre document PDF avant l'export.
+        </p>
+
+        <div class="pdf-export-form">
+          <!-- Section Informations du projet -->
+          <div class="pdf-form-section">
+            <div class="pdf-section-header">
+              <span class="pdf-section-icon">📋</span>
+              <h4 class="pdf-section-title">Informations du projet</h4>
+            </div>
+
+            <div class="pdf-form-grid">
+              <div class="pdf-form-field">
+                <label for="pdfProjectName" class="pdf-field-label">
+                  <span class="label-icon">🏷️</span>
+                  <span>Nom du projet</span>
+                </label>
+                <input type="text" id="pdfProjectName" class="pdf-input" placeholder="Mon projet TontonKAD" maxlength="50">
+              </div>
+
+              <div class="pdf-form-field">
+                <label for="pdfViewName" class="pdf-field-label">
+                  <span class="label-icon">👁️</span>
+                  <span>Nom de la vue</span>
+                </label>
+                <input type="text" id="pdfViewName" class="pdf-input" placeholder="Vue principale" maxlength="50">
+              </div>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="pdfViewName">Nom de la vue :</label>
-            <input type="text" id="pdfViewName" placeholder="Vue principale" maxlength="50">
+          <!-- Section Informations client -->
+          <div class="pdf-form-section">
+            <div class="pdf-section-header">
+              <span class="pdf-section-icon">👥</span>
+              <h4 class="pdf-section-title">Informations client</h4>
+            </div>
+
+            <div class="pdf-form-grid">
+              <div class="pdf-form-field">
+                <label for="pdfAuthor" class="pdf-field-label">
+                  <span class="label-icon">✍️</span>
+                  <span>Auteur</span>
+                </label>
+                <input type="text" id="pdfAuthor" class="pdf-input" placeholder="Votre nom" maxlength="50">
+              </div>
+
+              <div class="pdf-form-field">
+                <label for="pdfClient" class="pdf-field-label">
+                  <span class="label-icon">🏢</span>
+                  <span>Client</span>
+                </label>
+                <input type="text" id="pdfClient" class="pdf-input" placeholder="Nom du client" maxlength="50">
+              </div>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="pdfAuthor">Auteur :</label>
-            <input type="text" id="pdfAuthor" placeholder="Votre nom" maxlength="50">
+          <!-- Section Description -->
+          <div class="pdf-form-section">
+            <div class="pdf-section-header">
+              <span class="pdf-section-icon">📝</span>
+              <h4 class="pdf-section-title">Description</h4>
+            </div>
+
+            <div class="pdf-form-field">
+              <textarea id="pdfDescription" class="pdf-textarea" placeholder="Description du projet, notes, remarques..." maxlength="200" rows="4"></textarea>
+              <div class="pdf-char-counter">
+                <span id="pdfDescriptionCounter">0</span>/200 caractères
+              </div>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="pdfClient">Client :</label>
-            <input type="text" id="pdfClient" placeholder="Nom du client" maxlength="50">
-          </div>
+          <!-- Section Options -->
+          <div class="pdf-form-section">
+            <div class="pdf-section-header">
+              <span class="pdf-section-icon">⚙️</span>
+              <h4 class="pdf-section-title">Options d'export</h4>
+            </div>
 
-          <div class="form-group">
-            <label for="pdfDescription">Description :</label>
-            <textarea id="pdfDescription" placeholder="Description du projet..." maxlength="200" rows="3"></textarea>
-          </div>
-
-          <div class="form-group">
-            <label for="pdfIncludeStats">
-              <input type="checkbox" id="pdfIncludeStats" checked>
-              Inclure les statistiques détaillées
-            </label>
+            <div class="pdf-options-card">
+              <label class="pdf-checkbox-label">
+                <input type="checkbox" id="pdfIncludeStats" checked class="pdf-checkbox">
+                <div class="pdf-checkbox-content">
+                  <div class="pdf-checkbox-title">📊 Inclure les statistiques détaillées</div>
+                  <div class="pdf-checkbox-subtitle">Ajoute un tableau récapitulatif des câbles et fourreaux</div>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="modal-actions">
-        <button id="confirmPdfExport" type="button" class="btn-primary">📄 Générer PDF</button>
-        <button id="cancelPdfExport" type="button" class="btn-cancel">✕ Annuler</button>
+        <button id="cancelPdfExport" type="button" class="btn-cancel">Annuler</button>
+        <button id="confirmPdfExport" type="button" class="btn-primary">
+          <span>📄</span>
+          <span>Générer le PDF</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialog de confirmation personnalisé -->
+  <div id="confirmDialog" class="modal-overlay" style="display: none;">
+    <div class="confirm-dialog">
+      <div class="confirm-header">
+        <h3 id="confirmTitle">Confirmation</h3>
+      </div>
+      <div class="confirm-body">
+        <p id="confirmMessage"></p>
+      </div>
+      <div class="confirm-actions">
+        <button id="confirmCancel" class="btn btn-secondary">Annuler</button>
+        <button id="confirmOk" class="btn btn-primary">OK</button>
       </div>
     </div>
   </div>

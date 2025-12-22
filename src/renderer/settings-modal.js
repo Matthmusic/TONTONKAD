@@ -7,6 +7,7 @@
   document.addEventListener('DOMContentLoaded', async () => {
     const settingsButton = document.getElementById('settings-button');
     const settingsModal = document.getElementById('settings-modal');
+    const settingsCloseBtn = document.getElementById('settings-close-btn');
     const manualButton = document.getElementById('manual-button');
     const manualModal = document.getElementById('manual-modal');
     const manualCloseBtn = document.getElementById('manual-close-btn');
@@ -50,13 +51,30 @@
     // Ouvrir la modal
     settingsButton.addEventListener('click', async () => {
       await loadCurrentConfig();
-      settingsModal.classList.remove('hidden');
+      settingsModal.style.display = 'flex';
       settingsStatus.style.display = 'none';
     });
 
     // Fermer la modal
-    settingsCancelBtn.addEventListener('click', () => {
-      settingsModal.classList.add('hidden');
+    const closeModal = () => {
+      settingsModal.style.display = 'none';
+    };
+
+    settingsCancelBtn.addEventListener('click', closeModal);
+    settingsCloseBtn.addEventListener('click', closeModal);
+
+    // Fermer en cliquant sur l'overlay
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) {
+        closeModal();
+      }
+    });
+
+    // Fermer avec Echap
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && settingsModal.style.display === 'flex') {
+        closeModal();
+      }
     });
 
     // Toggle custom path container
@@ -71,6 +89,34 @@
         customPathContainer.style.display = 'block';
       }
     });
+
+    // Permettre le clic sur toute la carte pour sélectionner l'option
+    const optionLocalCard = document.getElementById('option-local');
+    const optionCustomCard = document.getElementById('option-custom');
+
+    if (optionLocalCard) {
+      optionLocalCard.addEventListener('click', (e) => {
+        // Ne pas déclencher si on clique déjà sur le radio button
+        if (e.target !== radioDefault && !radioDefault.contains(e.target)) {
+          radioDefault.checked = true;
+          radioDefault.dispatchEvent(new Event('change'));
+        }
+      });
+    }
+
+    if (optionCustomCard) {
+      optionCustomCard.addEventListener('click', (e) => {
+        // Ne pas déclencher si on clique sur le radio button, l'input ou le bouton parcourir
+        if (e.target !== radioCustom &&
+            !radioCustom.contains(e.target) &&
+            e.target !== customPathInput &&
+            e.target !== browseFolderBtn &&
+            !browseFolderBtn.contains(e.target)) {
+          radioCustom.checked = true;
+          radioCustom.dispatchEvent(new Event('change'));
+        }
+      });
+    }
 
     // Parcourir les dossiers
     browseFolderBtn.addEventListener('click', async () => {
@@ -105,7 +151,7 @@
         if (result.success) {
           showStatus(`Configuration enregistrée ! Dossier actif : ${result.path}`, 'success');
           setTimeout(() => {
-            settingsModal.classList.add('hidden');
+            closeModal();
             // Recharger la page pour utiliser la nouvelle base de données
             window.location.reload();
           }, 2000);
