@@ -180,18 +180,6 @@
   const updateBtnLater = document.getElementById('update-btn-later');
   const updateBtnDownload = document.getElementById('update-btn-download');
   const updateCloseBtn = document.getElementById('update-close-btn');
-  const updateCard = document.querySelector('.update-notification-card');
-
-  const applyUpdateToastStyles = () => {
-    if (updateNotification) {
-      updateNotification.style.position = 'fixed';
-      updateNotification.style.top = '64px';
-      updateNotification.style.right = '20px';
-      updateNotification.style.zIndex = '12000';
-      updateNotification.style.pointerEvents = 'none';
-    }
-    if (updateCard) updateCard.style.pointerEvents = 'auto';
-  };
 
   // Stocker les infos de mise à jour
   let updateInfo = null;
@@ -204,7 +192,6 @@
 
   // Afficher la notification de mise à jour
   window.showUpdateNotification = (info) => {
-    applyUpdateToastStyles();
     updateInfo = info;
     updateVersionNumber.textContent = info.version;
 
@@ -219,7 +206,6 @@
   const devUpdateBtn = document.getElementById('dev-update-btn');
   if (devUpdateBtn) {
     devUpdateBtn.addEventListener('click', () => {
-      applyUpdateToastStyles();
       window.showUpdateNotification({
         version: '9.9.9-dev',
         releaseNotes: 'Aperçu visuel de la notification de mise à jour. Les boutons fonctionnent comme en production.'
