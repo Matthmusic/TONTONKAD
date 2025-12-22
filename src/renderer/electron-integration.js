@@ -190,51 +190,7 @@
       updateNotification.style.zIndex = '12000';
       updateNotification.style.pointerEvents = 'none';
     }
-    if (updateCard) {
-      updateCard.style.pointerEvents = 'auto';
-      updateCard.style.width = 'min(380px, 90vw)';
-      updateCard.style.background = 'linear-gradient(135deg, rgba(22,22,24,0.95), rgba(29,29,31,0.86))';
-      updateCard.style.border = '1px solid rgba(255,145,77,0.45)';
-      updateCard.style.borderRadius = '18px';
-      updateCard.style.boxShadow = '0 20px 50px rgba(0,0,0,0.4)';
-      updateCard.style.backdropFilter = 'blur(16px)';
-      updateCard.style.padding = '16px 16px 14px';
-    }
-    if (updateBtnDownload) {
-      updateBtnDownload.classList.add('primary');
-      updateBtnDownload.style.background = 'linear-gradient(135deg, #ffb26b, #ff914d)';
-      updateBtnDownload.style.color = '#0f0f10';
-      updateBtnDownload.style.border = '1px solid transparent';
-      updateBtnDownload.style.boxShadow = '0 12px 32px rgba(255,145,77,0.45)';
-      updateBtnDownload.style.borderRadius = '12px';
-      updateBtnDownload.style.padding = '10px 18px';
-    }
-    if (updateBtnLater) {
-      updateBtnLater.classList.add('ghost');
-      updateBtnLater.style.background = 'rgba(255,255,255,0.06)';
-      updateBtnLater.style.color = '#fff';
-      updateBtnLater.style.border = '1px solid rgba(255,255,255,0.12)';
-      updateBtnLater.style.borderRadius = '12px';
-      updateBtnLater.style.padding = '10px 18px';
-    }
-    if (updateCloseBtn) {
-      updateCloseBtn.style.position = 'absolute';
-      updateCloseBtn.style.top = '6px';
-      updateCloseBtn.style.right = '6px';
-      updateCloseBtn.style.marginLeft = '0';
-      updateCloseBtn.style.width = '28px';
-      updateCloseBtn.style.height = '28px';
-      updateCloseBtn.style.borderRadius = '50%';
-      updateCloseBtn.style.border = '1px solid transparent';
-      updateCloseBtn.style.background = 'transparent';
-      updateCloseBtn.style.color = '#cbd5e1';
-      updateCloseBtn.style.cursor = 'pointer';
-      updateCloseBtn.style.display = 'inline-flex';
-      updateCloseBtn.style.alignItems = 'center';
-      updateCloseBtn.style.justifyContent = 'center';
-      updateCloseBtn.style.fontSize = '18px';
-      updateCloseBtn.style.lineHeight = '1';
-    }
+    if (updateCard) updateCard.style.pointerEvents = 'auto';
   };
 
   // Stocker les infos de mise à jour

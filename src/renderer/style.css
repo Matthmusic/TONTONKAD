@@ -3918,15 +3918,21 @@ body.electron-mode .notification-container {
 
 .update-notification-card {
     width: min(380px, 90vw);
-    background: linear-gradient(135deg, rgba(22, 22, 24, 0.95), rgba(29, 29, 31, 0.86));
-    border: 1px solid rgba(255, 145, 77, 0.45);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     border-radius: 18px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(16px);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: var(--glass-backdrop);
     padding: 16px 16px 14px;
     color: var(--text-primary);
     animation: updateSlideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1);
     pointer-events: auto;
+}
+
+[data-theme="dark"] .update-notification-card {
+    background: linear-gradient(135deg, rgba(22, 22, 24, 0.95), rgba(29, 29, 31, 0.86));
+    border: 1px solid rgba(255, 145, 77, 0.45);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
 }
 
 @keyframes updateSlideIn {
@@ -3981,12 +3987,16 @@ body.electron-mode .notification-container {
 }
 
 .update-close {
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-secondary);
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    margin-left: 0;
     width: 28px;
     height: 28px;
     border-radius: 50%;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
     cursor: pointer;
     transition: all var(--transition-base);
     line-height: 1;
@@ -4100,7 +4110,7 @@ body.electron-mode .notification-container {
 
 .update-btn.primary {
     background: linear-gradient(135deg, #ffb26b, #ff914d);
-    color: #0f0f10;
+    color: #1a1d1f;
     box-shadow: 0 12px 32px rgba(255, 145, 77, 0.45);
 }
 
@@ -4110,12 +4120,26 @@ body.electron-mode .notification-container {
 }
 
 .update-btn.ghost {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-primary);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+.update-btn.ghost:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .update-btn.primary {
+    color: #0f0f10;
+}
+
+[data-theme="dark"] .update-btn.ghost {
     background: rgba(255, 255, 255, 0.06);
     color: #fff;
     border-color: rgba(255, 255, 255, 0.12);
 }
 
-.update-btn.ghost:hover {
+[data-theme="dark"] .update-btn.ghost:hover {
     background: rgba(255, 255, 255, 0.12);
 }
 
