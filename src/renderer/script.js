@@ -61,11 +61,11 @@
   let displayScale = 1;
   let logicalCanvasWidth = 0;
   let logicalCanvasHeight = 0;
-  const MAX_EFFECTIVE_PIXEL_RATIO = 3; // Limite pour éviter des canvases trop lourds en zoom extrême
+  const MAX_EFFECTIVE_PIXEL_RATIO = 4.5; // Cap doux pour le rendu live
 
   const getEffectivePixelRatio = () => {
-    const effective = pixelRatio * displayScale;
-    return Math.min(Math.max(effective, 1), MAX_EFFECTIVE_PIXEL_RATIO);
+    const effective = Math.max(pixelRatio * displayScale, 1);
+    return Math.min(effective, MAX_EFFECTIVE_PIXEL_RATIO);
   };
 
   // Fonctions utilitaires pour les calculs canvas
@@ -2115,7 +2115,9 @@ function initSearchableLists() {
     ctx.save();
     ctx.fillStyle = c.customColor || c.color;
     ctx.strokeStyle = "#0b0f14";
-    ctx.lineWidth = getScaledLineWidth(1.5);
+    // Trait extérieur adaptatif : plus fin sur les petits câbles
+    const baseStroke = Math.max(0.5, Math.min(r * 0.08, 1.8));
+    ctx.lineWidth = getScaledLineWidth(baseStroke);
     
     // Coordonnées entières pour éviter le flou
     const x = Math.round(c.x), y = Math.round(c.y);
