@@ -149,7 +149,6 @@
             <li><strong>Mode Sombre 🌙</strong> : Un bouton dans la barre de titre permet de basculer l'interface en mode sombre pour moins de fatigue visuelle</li>
             <li><strong>Réduire au minimum</strong> : Le bouton "Réduire au minimum" redimensionne automatiquement le contenant pour coller au plus près des objets placés (optimisation de tranchée)</li>
             <li><strong>Base de Données Personnalisée</strong> : Via le bouton ⚙️ (Settings), vous pouvez pointer vers un dossier réseau contenant vos propres fichiers cables.csv et fourreaux.csv pour que toute l'équipe partage les mêmes références</li>
-            <li><strong>Double-clic dans l'inventaire</strong> : Sélectionne automatiquement l'objet suivant à placer pour enchaîner rapidement</li>
             <li><strong>Cadenas de dimensions</strong> : Verrouillez une dimension (largeur ou hauteur) pour les redimensionnements automatiques</li>
           </ul>
         `
