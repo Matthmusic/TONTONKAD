@@ -183,6 +183,33 @@
   const updateBtnDownloadText = document.getElementById('update-btn-download-text');
   const updateBtnRestart = document.getElementById('update-btn-restart');
   const updateCloseBtn = document.getElementById('update-close-btn');
+  if (updateDescription) {
+    updateDescription.style.whiteSpace = 'pre-line';
+  }
+
+  // Nettoyer les release notes pour éviter l'affichage HTML brut
+  function normalizeReleaseNotes(info) {
+    if (!info || !info.releaseNotes) return '';
+
+    const raw = info.releaseNotes;
+    let text = '';
+
+    if (Array.isArray(raw)) {
+      text = raw.map(item => {
+        if (!item) return '';
+        const value = typeof item === 'string' ? item : (item.note || item.body || '');
+        const div = document.createElement('div');
+        div.innerHTML = value;
+        return (div.textContent || '').trim();
+      }).filter(Boolean).join('\n');
+    } else if (typeof raw === 'string') {
+      const div = document.createElement('div');
+      div.innerHTML = raw;
+      text = (div.textContent || '').trim();
+    }
+
+    return text || '';
+  }
 
   // Stocker les infos de mise à jour
   let updateInfo = null;
@@ -198,9 +225,9 @@
     updateInfo = info;
     updateVersionNumber.textContent = info.version;
 
-    if (info.releaseNotes) {
-      updateDescription.textContent = info.releaseNotes;
-    }
+    const releaseNotesText = normalizeReleaseNotes(info);
+    const finalNotes = releaseNotesText || 'Notes de version non disponibles.';
+    updateDescription.textContent = finalNotes;
 
     // Appliquer les styles manuellement via JS (le CSS ne fonctionne pas à cause du cache)
     const modalContent = updateModal.querySelector('.update-modal-content');

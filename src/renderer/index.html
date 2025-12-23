@@ -129,7 +129,11 @@
       <div class="modal-actions">
         <button class="btn-cancel" id="update-btn-later">Plus tard</button>
         <button class="btn-primary" id="update-btn-download">
-          <span>⚡</span>
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" x2="12" y1="3" y2="15"/>
+          </svg>
           <span id="update-btn-download-text">Télécharger maintenant</span>
         </button>
         <button class="btn-primary hidden" id="update-btn-restart">
@@ -461,7 +465,7 @@
             <div id="dimensionHeight" class="dimension-line vertical" style="display: none;">
               <span class="dimension-text"></span>
             </div>
-            
+
             <!-- Bouton de réduction automatique -->
             <div id="reduceButtonContainer" class="reduce-button-container" style="display: none;">
               <button id="reduceToMinimum" class="btn reduce-btn">
@@ -516,6 +520,18 @@
                 <rect x="15" y="15" width="6" height="6" stroke="#e5f0ff" stroke-width="2" fill="none"/>
               </svg>
               Grille (Ctrl+G)
+            </button>
+            <button id="toggleGridBtn" class="btn" aria-label="Afficher/Masquer la grille et activer le magnétisme - Raccourci: Maj+G">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Grille visuelle</title>
+                <line x1="0" y1="6" x2="24" y2="6" stroke="#e5f0ff" stroke-width="1.5"/>
+                <line x1="0" y1="12" x2="24" y2="12" stroke="#e5f0ff" stroke-width="1.5"/>
+                <line x1="0" y1="18" x2="24" y2="18" stroke="#e5f0ff" stroke-width="1.5"/>
+                <line x1="6" y1="0" x2="6" y2="24" stroke="#e5f0ff" stroke-width="1.5"/>
+                <line x1="12" y1="0" x2="12" y2="24" stroke="#e5f0ff" stroke-width="1.5"/>
+                <line x1="18" y1="0" x2="18" y2="24" stroke="#e5f0ff" stroke-width="1.5"/>
+              </svg>
+              Grille visuelle (Maj+G)
             </button>
             <button id="freezeBtn" class="btn" disabled aria-label="Figer l'objet sélectionné - Raccourci: G">Figer (G)</button>
           </div>

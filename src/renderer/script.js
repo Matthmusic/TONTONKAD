@@ -27,6 +27,20 @@
   const EXTERNAL_GAP = 30; // Écart extérieur souhaité (3 cm = 30 mm)
   const GRID_MARGIN = 20; // Marge depuis les bords en pixels
 
+  // Système de grille visuelle et magnétisme
+  let gridEnabled = false; // Grille activée ou non
+  const GRID_SPACING_MAIN = 50; // Espacement principal en mm (lignes épaisses) - mode fixe
+  const GRID_SPACING_SUB = 10;  // Espacement secondaire en mm (lignes fines)
+  let snapToGrid = false; // Magnétisme activé ou non
+
+  // Grille adaptative basée sur les fourreaux
+  let adaptiveGridEnabled = true; // Utiliser la grille adaptative par défaut
+  const FOURREAU_GAP = 30; // Espace libre entre les bords des fourreaux en mm
+  let gridOrigin = null; // Point d'origine de la grille (premier fourreau)
+  let gridSpacing = null; // Espacement calculé dynamiquement
+  let gridLocked = false; // Verrouille la grille après calcul pour éviter les recalculs
+  let gridFourreauxCount = 0; // Nombre de fourreaux au dernier calcul de grille
+
   // Zoom et historique
   let currentZoom = 100; // Zoom actuel en pourcentage
   const ZOOM_MIN = 25;
@@ -45,12 +59,27 @@
   let basePixelRatio = window.devicePixelRatio || 1;
   let pixelRatio = basePixelRatio;
   let displayScale = 1;
+  let logicalCanvasWidth = 0;
+  let logicalCanvasHeight = 0;
+  const MAX_EFFECTIVE_PIXEL_RATIO = 3; // Limite pour éviter des canvases trop lourds en zoom extrême
+
+  const getEffectivePixelRatio = () => {
+    const effective = pixelRatio * displayScale;
+    return Math.min(Math.max(effective, 1), MAX_EFFECTIVE_PIXEL_RATIO);
+  };
 
   // Fonctions utilitaires pour les calculs canvas
   function getLogicalCanvasDimensions() {
+    if (logicalCanvasWidth && logicalCanvasHeight) {
+      return {
+        width: logicalCanvasWidth,
+        height: logicalCanvasHeight
+      };
+    }
+    const effectiveRatio = Math.max(getEffectivePixelRatio(), 1);
     return {
-      width: canvas.width / pixelRatio,
-      height: canvas.height / pixelRatio
+      width: canvas.width / effectiveRatio,
+      height: canvas.height / effectiveRatio
     };
   }
 
@@ -75,11 +104,16 @@
     // Ajouter de l'espace pour les cotes
     const totalWidth = logicalWidth + TOTAL_CANVAS_MARGIN;
     const totalHeight = logicalHeight + TOTAL_CANVAS_MARGIN;
+    logicalCanvasWidth = totalWidth;
+    logicalCanvasHeight = totalHeight;
 
     // Adapter pixelRatio pour les petites boîtes afin d'éviter la pixelisation
     // Pour les boîtes < 500mm, augmenter la résolution pour maintenir une qualité minimale
-    const minDimension = Math.min(WORLD_W_MM, WORLD_H_MM);
-    if (minDimension < 500) {
+    const minDimension = Math.min(
+      Number.isFinite(WORLD_W_MM) ? WORLD_W_MM : Infinity,
+      Number.isFinite(WORLD_H_MM) ? WORLD_H_MM : Infinity
+    );
+    if (Number.isFinite(minDimension) && minDimension < 500) {
       // Augmenter progressivement le pixelRatio pour les petites dimensions
       // À 250mm : 2x, à 100mm : 3x, etc.
       const scaleFactor = Math.min(3, 500 / minDimension);
@@ -88,18 +122,33 @@
       pixelRatio = basePixelRatio;
     }
 
-    // Taille physique (pixels réels)
-    canvas.width = totalWidth * pixelRatio;
-    canvas.height = totalHeight * pixelRatio;
+    applyCanvasResolution();
+  }
 
-    // Taille d'affichage CSS (taille logique)
-    canvas.style.width = totalWidth + 'px';
-    canvas.style.height = totalHeight + 'px';
+  function applyCanvasResolution() {
+    if (!logicalCanvasWidth || !logicalCanvasHeight) return;
+
+    const effectivePixelRatio = getEffectivePixelRatio();
+
+    // Taille physique (pixels réels) ajustée au zoom d'affichage
+    canvas.width = logicalCanvasWidth * effectivePixelRatio;
+    canvas.height = logicalCanvasHeight * effectivePixelRatio;
+
+    // Taille d'affichage CSS (taille logique avec zoom)
+    canvas.style.width = `${logicalCanvasWidth * displayScale}px`;
+    canvas.style.height = `${logicalCanvasHeight * displayScale}px`;
 
     // Réinitialiser et appliquer la transformation pour la haute résolution avec offset
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, CANVAS_MARGIN * pixelRatio, CANVAS_MARGIN * pixelRatio);
+    ctx.setTransform(
+      effectivePixelRatio,
+      0,
+      0,
+      effectivePixelRatio,
+      CANVAS_MARGIN * effectivePixelRatio,
+      CANVAS_MARGIN * effectivePixelRatio
+    );
 
-    // Activation de l'antialiasing optimisé pour 300 DPI
+    // Activation de l'antialiasing optimisé
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
@@ -670,8 +719,7 @@ function initSearchableLists() {
       setupHighResCanvas(2 * pad, 2 * pad);
       canvas.classList.add("no-frame");
     }
-    fitCanvas();
-    redraw();
+    fitCanvas(true);
   }
 
   function computedDisplayScale() {
@@ -690,19 +738,16 @@ function initSearchableLists() {
     return out * .98
   }
 
-  function fitCanvas() {
+  function fitCanvas(forceRedraw = false) {
     displayScale = computedDisplayScale();
-    const { width: logicalW, height: logicalH } = getLogicalCanvasDimensions();
-    const finalW = logicalW * displayScale;
-    const finalH = logicalH * displayScale;
-    
-    canvas.style.width = finalW + "px";
-    canvas.style.height = finalH + "px";
-    
+    applyCanvasResolution();
+
     // Toujours garder overflow visible (pas de scroll)
     canvasWrap.style.overflow = "visible";
-    
-    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${(displayScale * 100).toFixed(0)}%)`;
+
+    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${currentZoom.toFixed(0)}%)`;
+
+    if (forceRedraw) redraw();
   }
 
   /* ====== Couleurs déterministes ====== */
@@ -872,8 +917,7 @@ function initSearchableLists() {
   /* ====== Système de zoom ====== */
   function setZoom(newZoom) {
     currentZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
-    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${currentZoom.toFixed(0)}%)`;
-    fitCanvas();
+    fitCanvas(true);
   }
 
   function zoomIn() {
@@ -915,6 +959,9 @@ function initSearchableLists() {
     // Restaurer les câbles
     cables.length = 0;
     cables.push(...previousState.cables.map(c => ({...c})));
+
+    // Déverrouiller la grille pour recalcul si nécessaire
+    gridLocked = false;
 
     // Mettre à jour l'affichage
     updateInventory();
@@ -1158,7 +1205,9 @@ function initSearchableLists() {
     const ro = spec.od * MM_TO_PX / 2, spot = findFreeSpot(x, y, ro, null);
     if (!spot) return false;
     saveStateToHistory(); // Sauver l'état avant modification
-    const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, idm: spec.id, color: colorForFourreau(type, code), customColor: null, label: '', children: [], vx: 0, vy: 0, dragging: false, frozen: false, _px: spot.x, _py: spot.y, type, code };
+    // Geler automatiquement si le snap est actif pour maintenir l'alignement sur la grille
+    const shouldFreeze = snapToGrid;
+    const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, idm: spec.id, color: colorForFourreau(type, code), customColor: null, label: '', children: [], vx: 0, vy: 0, dragging: false, frozen: shouldFreeze, _px: spot.x, _py: spot.y, type, code };
     fourreaux.push(obj);
     updateStats();
     updateInventory();
@@ -1176,7 +1225,9 @@ function initSearchableLists() {
     const spot = container ? findFreeSpotInFourreau(x, y, r, container, null, forcePlace) : findFreeSpot(x, y, r, null);
     if (!spot) return null;
     if (!silent) saveStateToHistory(); // Sauver l'état avant modification (sauf si silent)
-    const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, parent: container ? container.id : null, color: colorForCable(fam, code), customColor: null, label: '', fam, code, vx: 0, vy: 0, dragging: false, frozen: false, _px: spot.x, _py: spot.y };
+    // Geler automatiquement si le snap est actif pour maintenir l'alignement sur la grille
+    const shouldFreeze = snapToGrid && !container; // Ne geler que les câbles hors fourreaux
+    const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, parent: container ? container.id : null, color: colorForCable(fam, code), customColor: null, label: '', fam, code, vx: 0, vy: 0, dragging: false, frozen: shouldFreeze, _px: spot.x, _py: spot.y };
     cables.push(obj);
     if (container) container.children.push(obj.id);
 
@@ -1766,6 +1817,8 @@ function initSearchableLists() {
           }
           fourreaux.splice(i, 1);
           deletedCount++;
+          // Déverrouiller la grille quand un fourreau est supprimé
+          gridLocked = false;
         }
       } else {
         const i = cables.findIndex(o => o.id === sel.id);
@@ -1801,10 +1854,175 @@ function initSearchableLists() {
   }
 
   /* ====== Dessin sur le Canvas ====== */
-  function clear() { 
+  function clear() {
     const { width: w, height: h } = getLogicalCanvasDimensions();
     // Clear avec une zone plus large pour inclure les cotes
-    ctx.clearRect(-CANVAS_MARGIN, -CANVAS_MARGIN, w + TOTAL_CANVAS_MARGIN, h + TOTAL_CANVAS_MARGIN); 
+    ctx.clearRect(-CANVAS_MARGIN, -CANVAS_MARGIN, w + TOTAL_CANVAS_MARGIN, h + TOTAL_CANVAS_MARGIN);
+  }
+
+  /**
+   * Calcule l'origine et l'espacement de la grille adaptative basée sur les fourreaux
+   * La grille se verrouille après calcul et ne recalcule que si le nombre de fourreaux change
+   */
+  function calculateAdaptiveGrid() {
+    // Si la grille est verrouillée et le nombre de fourreaux n'a pas changé, ne rien faire
+    if (gridLocked && fourreaux.length === gridFourreauxCount && gridOrigin && gridSpacing) {
+      return;
+    }
+
+    if (fourreaux.length === 0) {
+      gridOrigin = null;
+      gridSpacing = null;
+      gridLocked = false;
+      gridFourreauxCount = 0;
+      return;
+    }
+
+    // Trouver le fourreau le plus proche du coin supérieur gauche (origine)
+    let closestFourreau = fourreaux[0];
+    let minDist = Math.hypot(closestFourreau.x, closestFourreau.y);
+
+    for (const f of fourreaux) {
+      const dist = Math.hypot(f.x, f.y);
+      if (dist < minDist) {
+        minDist = dist;
+        closestFourreau = f;
+      }
+    }
+
+    // L'origine de la grille est le centre du premier fourreau
+    gridOrigin = { x: closestFourreau.x, y: closestFourreau.y };
+
+    // Calculer l'espacement : diamètre du fourreau + gap (en pixels)
+    const fourreauRadiusMm = closestFourreau.od / 2;
+    const spacingMm = closestFourreau.od + FOURREAU_GAP; // Diamètre + espace libre
+    gridSpacing = spacingMm * MM_TO_PX; // Convertir en pixels
+
+    // Verrouiller la grille après le calcul
+    gridLocked = true;
+    gridFourreauxCount = fourreaux.length;
+  }
+
+  /**
+   * Dessine la grille visuelle sur le canvas
+   */
+  function drawGrid() {
+    if (!gridEnabled) return;
+
+    // Vérifier que les dimensions sont valides
+    if (!WORLD_W || !WORLD_H || WORLD_W <= 0 || WORLD_H <= 0) return;
+
+    // Calculer la grille adaptative si activée
+    if (adaptiveGridEnabled) {
+      calculateAdaptiveGrid();
+    }
+
+    ctx.save();
+
+    // Obtenir les dimensions en pixels
+    const widthPx = WORLD_W;
+    const heightPx = WORLD_H;
+
+    // Déterminer l'espacement et l'origine selon le mode
+    let spacingPx, originX, originY;
+
+    if (adaptiveGridEnabled && gridOrigin && gridSpacing) {
+      // Mode adaptatif : grille basée sur les fourreaux
+      spacingPx = gridSpacing;
+      originX = gridOrigin.x;
+      originY = gridOrigin.y;
+    } else {
+      // Mode fixe : grille régulière depuis le coin (0,0)
+      spacingPx = GRID_SPACING_MAIN * MM_TO_PX;
+      originX = 0;
+      originY = 0;
+    }
+
+    // Déterminer les couleurs selon le thème actif
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    const rootStyles = window.getComputedStyle(document.documentElement);
+    const gridColorVar = rootStyles.getPropertyValue('--grid-line-color').trim();
+    const colorMain = gridColorVar || (theme === 'dark'
+      ? 'rgba(255, 255, 255, 0.35)'
+      : 'rgba(0, 0, 0, 0.25)');
+
+    ctx.strokeStyle = colorMain;
+    ctx.lineWidth = theme === 'dark' ? 1.5 : 2;
+    ctx.beginPath();
+
+    // Lignes verticales
+    // Dessiner vers la droite depuis l'origine
+    for (let x = originX; x <= widthPx; x += spacingPx) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, heightPx);
+    }
+    // Dessiner vers la gauche depuis l'origine
+    for (let x = originX - spacingPx; x >= 0; x -= spacingPx) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, heightPx);
+    }
+
+    // Lignes horizontales
+    // Dessiner vers le bas depuis l'origine
+    for (let y = originY; y <= heightPx; y += spacingPx) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(widthPx, y);
+    }
+    // Dessiner vers le haut depuis l'origine
+    for (let y = originY - spacingPx; y >= 0; y -= spacingPx) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(widthPx, y);
+    }
+
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Aligne une coordonnée sur la grille (magnétisme) avec origine décalée
+   * @param {number} coord - Coordonnée en pixels
+   * @param {number} origin - Point d'origine de la grille en pixels
+   * @param {number} spacing - Espacement de la grille en pixels
+   * @returns {number} - Coordonnée alignée sur la grille
+   */
+  function snapToGridCoordWithOrigin(coord, origin, spacing) {
+    const offset = coord - origin;
+    const snapped = Math.round(offset / spacing) * spacing;
+    return origin + snapped;
+  }
+
+  /**
+   * Aligne un point (x, y) sur la grille si le magnétisme est activé
+   * @param {number} x - Coordonnée X en pixels
+   * @param {number} y - Coordonnée Y en pixels
+   * @returns {Object} - Point aligné {x, y}
+   */
+  function snapPointToGrid(x, y) {
+    if (!snapToGrid) return { x, y };
+
+    // Calculer la grille adaptative si nécessaire
+    if (adaptiveGridEnabled) {
+      calculateAdaptiveGrid();
+    }
+
+    let spacingPx, originX, originY;
+
+    if (adaptiveGridEnabled && gridOrigin && gridSpacing) {
+      // Mode adaptatif : utiliser l'origine et l'espacement calculés
+      spacingPx = gridSpacing;
+      originX = gridOrigin.x;
+      originY = gridOrigin.y;
+    } else {
+      // Mode fixe : grille régulière depuis (0,0)
+      spacingPx = GRID_SPACING_MAIN * MM_TO_PX;
+      originX = 0;
+      originY = 0;
+    }
+
+    return {
+      x: snapToGridCoordWithOrigin(x, originX, spacingPx),
+      y: snapToGridCoordWithOrigin(y, originY, spacingPx)
+    };
   }
 
   function drawBox() {
@@ -1907,33 +2125,62 @@ function initSearchableLists() {
     ctx.fill();
     ctx.stroke();
     
-    // Afficher la phase au centre si couleur custom
-    if (c.customColor) {
-      const phaseText = getPhaseFromColor(c.customColor);
-      if (phaseText) {
-        ctx.fillStyle = "#fff";
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = getScaledLineWidth(3);
-        const fontSize = Math.max(10, Math.min(r * 0.6, getScaledLineWidth(12))); // Taille adaptée au rayon
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        // Contour noir épais pour meilleure lisibilité
-        ctx.strokeText(phaseText, x, y);
-        ctx.fillText(phaseText, x, y);
-      }
-    }
-    
-    // Afficher le libellé si présent et si showInfo est activé
-    if (showInfo && c.label && c.label.trim()) {
+    const phaseText = c.customColor ? getPhaseFromColor(c.customColor) : null;
+    const cableLabel = showInfo && c.label && c.label.trim() ? c.label.trim() : '';
+    const maxLabelWidth = (r * 2) - getScaledLineWidth(6); // garder un léger padding interne
+
+    // Afficher la phase dans la moitié supérieure si disponible
+    if (phaseText) {
       ctx.fillStyle = "#fff";
       ctx.strokeStyle = "#000";
-      ctx.lineWidth = getScaledLineWidth(1.5);
-      ctx.font = `bold ${getScaledLineWidth(10)}px Arial`;
+      let phaseFont = Math.max(8, Math.min(r * 0.5, getScaledLineWidth(12)));
+      ctx.font = `bold ${phaseFont}px Arial`;
+      let metrics = ctx.measureText(phaseText);
+      if (metrics.width > maxLabelWidth) {
+        const scale = maxLabelWidth / metrics.width;
+        phaseFont = Math.max(7, phaseFont * scale);
+        ctx.font = `bold ${phaseFont}px Arial`;
+      }
+      // Garantir que la hauteur reste dans le disque
+      phaseFont = Math.min(phaseFont, (r * 0.9));
+      ctx.font = `bold ${phaseFont}px Arial`;
       ctx.textAlign = "center";
-      // Contour noir pour meilleure lisibilité
-      ctx.strokeText(c.label, x, y + r + getScaledLineWidth(15));
-      ctx.fillText(c.label, x, y + r + getScaledLineWidth(15));
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = Math.max(1, phaseFont * 0.18);
+      const halfPhaseH = phaseFont * 0.55;
+      const topPadding = Math.max(2, getScaledLineWidth(2));
+      const phaseYOffset = Math.min(r - halfPhaseH - topPadding, r * 0.35);
+      const phaseY = y - phaseYOffset;
+      ctx.strokeText(phaseText, x, phaseY);
+      ctx.fillText(phaseText, x, phaseY);
+    }
+    
+    // Afficher le libellé à l'intérieur du câble en s'assurant que ça tient
+    if (cableLabel) {
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = "#000";
+      let labelFont = Math.max(8, Math.min(r * 0.9, getScaledLineWidth(18)));
+      ctx.font = `bold ${labelFont}px Arial`;
+      let metrics = ctx.measureText(cableLabel);
+      if (metrics.width > maxLabelWidth) {
+        const scale = maxLabelWidth / metrics.width;
+        labelFont = Math.max(7, labelFont * scale);
+        ctx.font = `bold ${labelFont}px Arial`;
+      }
+      // Hauteur max pour rester dans le disque
+      const maxLabelHeight = (r * 2) - getScaledLineWidth(6);
+      labelFont = Math.min(labelFont, Math.max(6, maxLabelHeight));
+      ctx.font = `bold ${labelFont}px Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = Math.max(1, labelFont * 0.2);
+      const halfLabelH = labelFont * 0.55;
+      const bottomPadding = Math.max(2, getScaledLineWidth(2));
+      const maxOffset = r - halfLabelH - bottomPadding;
+      const desiredOffset = phaseText ? Math.min(maxOffset, r * 0.25) : 0;
+      const labelY = y + Math.max(0, desiredOffset);
+      ctx.strokeText(cableLabel, x, labelY);
+      ctx.fillText(cableLabel, x, labelY);
     }
     
     ctx.restore();
@@ -2154,6 +2401,7 @@ function initSearchableLists() {
     ctx.lineJoin = 'round';
 
     clear();
+    drawGrid(); // Dessiner la grille en premier (arrière-plan)
     drawBox();
     drawDimensions();
     drawMarquee(); // Dessiner le rectangle de sélection s'il est actif
@@ -2846,6 +3094,31 @@ function initSearchableLists() {
     showToast(showInfo ? 'Infos affichées' : 'Infos masquées');
   }
 
+  /**
+   * Toggle la visibilité de la grille et le magnétisme
+   */
+  function toggleGridVisibility() {
+    gridEnabled = !gridEnabled;
+    snapToGrid = gridEnabled; // Activer le magnétisme en même temps que la grille
+
+    const toggleGridBtn = document.getElementById('toggleGridBtn');
+    if (toggleGridBtn) {
+      toggleGridBtn.classList.toggle('btn-active', gridEnabled);
+    }
+
+    redraw();
+
+    if (gridEnabled) {
+      if (adaptiveGridEnabled) {
+        showToast(`Grille adaptative activée (gap ${FOURREAU_GAP}mm) - objets gelés auto`);
+      } else {
+        showToast(`Grille fixe activée (${GRID_SPACING_MAIN}mm) - objets gelés auto`);
+      }
+    } else {
+      showToast('Grille désactivée');
+    }
+  }
+
   // Système de notifications intégrées
   function showToast(msg, type = 'default') {
     // Détecter automatiquement le type si msg contient des emojis
@@ -3279,7 +3552,8 @@ function initSearchableLists() {
 
   function pruneOutside() {
     if (arrangeInProgress) return; // Ne pas supprimer durant l'arrangement en grille
-    
+
+    let fourreauxRemoved = false;
     for (let i = fourreaux.length - 1; i >= 0; i--) {
       const f = fourreaux[i], r = f.od * MM_TO_PX / 2;
       if (!isInsideBox(f.x, f.y, r)) {
@@ -3288,7 +3562,12 @@ function initSearchableLists() {
           if (j >= 0) cables.splice(j, 1);
         }
         fourreaux.splice(i, 1);
+        fourreauxRemoved = true;
       }
+    }
+    // Déverrouiller la grille si des fourreaux ont été supprimés
+    if (fourreauxRemoved) {
+      gridLocked = false;
     }
     for (let i = cables.length - 1; i >= 0; i--) {
       const c = cables[i], r = c.od * MM_TO_PX / 2;
@@ -3808,10 +4087,11 @@ function initSearchableLists() {
     // Créer un canvas temporaire haute résolution pour éviter la pixelisation
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
+    const effectivePixelRatio = getEffectivePixelRatio();
 
     // Dimensions du contenu utile (sans marges)
-    const contentWidth = canvas.width - (CANVAS_MARGIN * 2 * pixelRatio);
-    const contentHeight = canvas.height - (CANVAS_MARGIN * 2 * pixelRatio);
+    const contentWidth = canvas.width - (CANVAS_MARGIN * 2 * effectivePixelRatio);
+    const contentHeight = canvas.height - (CANVAS_MARGIN * 2 * effectivePixelRatio);
 
     // Multiplier par 2 pour améliorer la qualité d'export
     const exportScale = 2;
@@ -3825,7 +4105,7 @@ function initSearchableLists() {
     // Copier le contenu utile du canvas principal avec scaling
     tempCtx.drawImage(
       canvas,
-      CANVAS_MARGIN * pixelRatio, CANVAS_MARGIN * pixelRatio, // source x, y
+      CANVAS_MARGIN * effectivePixelRatio, CANVAS_MARGIN * effectivePixelRatio, // source x, y
       contentWidth, contentHeight, // source width, height
       0, 0, // destination x, y
       tempCanvas.width, tempCanvas.height // destination width, height (upscaled)
@@ -4742,8 +5022,8 @@ function initSearchableLists() {
     setupShapeDropdown();
 
     // 3. Attacher les écouteurs d'événements
-    addEventListener("resize", fitCanvas);
-    targetPxPerMmInput.addEventListener("input", fitCanvas);
+    addEventListener("resize", () => fitCanvas(true));
+    targetPxPerMmInput.addEventListener("input", () => fitCanvas(true));
 
     // Gestionnaire de zoom par molette (Ctrl+molette)
     canvas.addEventListener("wheel", (e) => {
@@ -4757,7 +5037,7 @@ function initSearchableLists() {
       }
     });
 
-    // Gestionnaire global pour Ctrl+Z et Ctrl+Suppr
+    // Gestionnaire global pour Ctrl+Z, Ctrl+Suppr et Maj+G
     document.addEventListener("keydown", (e) => {
       if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -4768,6 +5048,11 @@ function initSearchableLists() {
         saveStateToHistory();
         // Déclencher la fonction de vidage
         document.getElementById('clear').click();
+      } else if (e.shiftKey && (e.key === 'G' || e.key === 'g') && !e.ctrlKey) {
+        // Ne pas activer si on est dans un input
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        toggleGridVisibility();
       }
     });
     searchCable.addEventListener('input', updateInventory);
@@ -4777,10 +5062,12 @@ function initSearchableLists() {
     const toolEdit = document.getElementById('toolEdit');
     const toolInfo = document.getElementById('toolInfo');
     const gridArrange = document.getElementById('gridArrange');
+    const toggleGridBtn = document.getElementById('toggleGridBtn');
 
     if (toolEdit) toolEdit.addEventListener('click', openEditPopup);
     if (toolInfo) toolInfo.addEventListener('click', toggleShowInfo);
     if (gridArrange) gridArrange.addEventListener('click', arrangeConduitGrid);
+    if (toggleGridBtn) toggleGridBtn.addEventListener('click', toggleGridVisibility);
     if (freezeBtn) freezeBtn.addEventListener('click', toggleFreezeSelected);
     canvas.addEventListener('mousedown', e => {
       const p = canvasCoords(e);
@@ -4822,17 +5109,21 @@ function initSearchableLists() {
       }
       if (e.button === 1) { // Clic molette : placement
         e.preventDefault(); // Empêcher le comportement par défaut du clic molette
+
+        // Appliquer le magnétisme sur les coordonnées si activé
+        const snappedP = snapPointToGrid(p.x, p.y);
+
         if (activeTab === 'FOURREAU') {
           const v = selectedFourreau;
           if (!v) { showToast('Choisis un fourreau.'); return; }
           const [type, code] = v.split('|');
-          addFourreauAt(p.x, p.y, type, code) || showToast('Emplacement occupé ou hors boîte.');
+          addFourreauAt(snappedP.x, snappedP.y, type, code) || showToast('Emplacement occupé ou hors boîte.');
         } else {
           const v = selectedCable;
           if (!v) { showToast('Choisis un CÂBLE.'); return; }
           const [fam, code] = v.split('|');
-          const f = findFourreauUnder(p.x, p.y, null);
-          addCableAt(p.x, p.y, fam, code, f) || showToast('Impossible de poser le CÂBLE ici.');
+          const f = findFourreauUnder(snappedP.x, snappedP.y, null);
+          addCableAt(snappedP.x, snappedP.y, fam, code, f) || showToast('Impossible de poser le CÂBLE ici.');
         }
         return;
       }
@@ -4922,6 +5213,11 @@ function initSearchableLists() {
         fourreaux.length = 0;
         cables.length = 0;
         selected = null;
+        // Déverrouiller la grille pour reset
+        gridLocked = false;
+        gridOrigin = null;
+        gridSpacing = null;
+        gridFourreauxCount = 0;
         updateStats();
         updateInventory();
         updateSelectedInfo();
@@ -5656,6 +5952,9 @@ function initSearchableLists() {
           // Nettoyer l'état actuel
           fourreaux.length = 0;
           cables.length = 0;
+
+          // Déverrouiller la grille pour recalcul
+          gridLocked = false;
 
           // Restaurer le nextId
           if (projectData.nextId !== undefined) {
