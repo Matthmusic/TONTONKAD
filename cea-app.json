@@ -12,12 +12,12 @@
   },
   "resources": {
     "logo": {
-      "path": "build/icon.png",
-      "url": "https://raw.githubusercontent.com/Matthmusic/TONTONKAD/main/build/icon.png"
+      "path": "ico/TONTONKADB.ico",
+      "url": "https://raw.githubusercontent.com/Matthmusic/TONTONKAD/main/ico/TONTONKADB.ico"
     },
     "icon": {
-      "path": "build/icon.ico",
-      "url": "https://raw.githubusercontent.com/Matthmusic/TONTONKAD/main/build/icon.ico"
+      "path": "ico/TONTONKADB.ico",
+      "url": "https://raw.githubusercontent.com/Matthmusic/TONTONKAD/main/ico/TONTONKADB.ico"
     }
   },
   "detection": {
