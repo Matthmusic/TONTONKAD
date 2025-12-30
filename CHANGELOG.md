@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [2.4.6] - 2025-12-30
+
+### Ajouté
+- 📦 **Intégration CEA App Store** : Ajout du fichier `cea-app.json` pour permettre la découverte et l'installation via le CEA App Store
+- 🔍 **Métadonnées enrichies** : Description complète, tags de recherche, et informations de détection d'installation
+
+### Modifié
+- 📝 **Documentation** : Amélioration des métadonnées du projet pour une meilleure visibilité
+
 ## [2.0.0] - 2025-01-14
 
 ### Ajouté

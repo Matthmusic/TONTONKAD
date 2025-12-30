@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "app": {
+    "id": "tontonkad",
+    "name": "TONTONKAD",
+    "version": "2.4.6",
+    "description": {
+      "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
+      "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
+    }
+  },
+  "resources": {
+    "logo": {
+      "path": "build/icon.png",
+      "url": "https://raw.githubusercontent.com/Matthmusic/TONTONKAD/main/build/icon.png"
+    },
+    "icon": {
+      "path": "build/icon.ico",
+      "url": "https://raw.githubusercontent.com/Matthmusic/TONTONKAD/main/build/icon.ico"
+    }
+  },
+  "detection": {
+    "windows": {
+      "files": [
+        {
+          "path": "C:\\Program Files\\TONTONKAD\\TONTONKAD.exe",
+          "description": "Installation standard 64-bit"
+        }
+      ],
+      "directories": [
+        {
+          "path": "%APPDATA%\\tontonkad",
+          "description": "Dossier de données utilisateur"
+        },
+        {
+          "path": "%LOCALAPPDATA%\\tontonkad-updater",
+          "description": "Dossier de mise à jour automatique"
+        }
+      ],
+      "registry": [
+        {
+          "key": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TONTONKAD",
+          "description": "Clé d'installation Windows"
+        }
+      ]
+    },
+    "priority": "files"
+  },
+  "metadata": {
+    "author": {
+      "name": "Matthmusic",
+      "url": "https://github.com/Matthmusic"
+    },
+    "category": "Professionnel",
+    "tags": ["electrical", "engineering", "cables", "conduits", "design", "CAD", "dimensionnement", "génie électrique"],
+    "repository": {
+      "type": "github",
+      "url": "https://github.com/Matthmusic/TONTONKAD",
+      "branch": "main"
+    },
+    "license": "MIT",
+    "compatibility": {
+      "os": ["windows"],
+      "minVersion": "Windows 10"
+    }
+  },
+  "installation": {
+    "type": "installer",
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.4.6.exe"
+  },
+  "changelog": {
+    "2.4.6": {
+      "date": "2025-12-30",
+      "changes": [
+        "Ajout du fichier cea-app.json pour intégration au CEA App Store",
+        "Amélioration de la compatibilité avec le système de détection d'applications"
+      ]
+    },
+    "2.4.5": {
+      "date": "2025-01-14",
+      "changes": [
+        "Optimisation de la stabilité générale",
+        "Corrections de bugs mineurs"
+      ]
+    },
+    "2.0.0": {
+      "date": "2025-01-14",
+      "changes": [
+        "Version Electron - Application de bureau multi-plateforme",
+        "Système de fichiers natif pour sauvegarde et chargement de projets",
+        "Mises à jour automatiques via GitHub Releases",
+        "Menu natif avec raccourcis clavier système",
+        "CI/CD GitHub Actions pour builds automatiques",
+        "Assets locaux embarqués (Font Awesome)",
+        "Sécurité renforcée avec context isolation",
+        "Export amélioré avec dialogues natifs pour PDF et DXF"
+      ]
+    }
+  }
+}
