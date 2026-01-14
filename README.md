@@ -1,4 +1,4 @@
-# TONTONKAD v2
+# TONTONKAD v2.4.7
 
 Application de bureau (Electron) pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif.
 

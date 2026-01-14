@@ -21,7 +21,7 @@ function headerR12() {
   dxf += '0\nSECTION\n2\nHEADER\n';
   dxf += '9\n$ACADVER\n1\nAC1009\n';
   dxf += '9\n$INSUNITS\n70\n6\n';
-  dxf += '9\n$DIMTXSTY\n7\nARIAL\n';
+  dxf += '9\n$DIMTXSTY\n7\nSTANDARD\n';
   dxf += '9\n$DIMTXT\n40\n0.1\n';
   dxf += '0\nENDSEC\n';
   return dxf;
@@ -43,7 +43,7 @@ function tablesR12(layers) {
   dxf += '0\nENDTAB\n';
 
   dxf += '0\nTABLE\n2\nSTYLE\n70\n1\n';
-  dxf += '0\nSTYLE\n2\nARIAL\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n0.0\n3\narial.ttf\n4\n\n';
+  dxf += '0\nSTYLE\n2\nSTANDARD\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n0.0\n3\ntxt.shx\n4\n\n';
   dxf += '0\nENDTAB\n';
   dxf += '0\nENDSEC\n';
   return dxf;
@@ -80,7 +80,7 @@ function cableBlock(name, diameterMm, text) {
   dxf += '0\nCIRCLE\n8\n0\n';
   dxf += `10\n0.0\n20\n0.0\n40\n${r}\n`;
   if (text) {
-    dxf += '0\nTEXT\n8\n0\n7\nARIAL\n';
+    dxf += '0\nTEXT\n8\n0\n7\nSTANDARD\n';
     dxf += '10\n0.0\n20\n0.0\n30\n0.0\n40\n0.004\n';
     dxf += `1\n${text}\n50\n0.0\n72\n1\n73\n2\n`;
   }
@@ -211,7 +211,7 @@ writeDXF(
 
   // Horizontal aligned dimension
   entities += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
-  entities += `2\n${dimBlock}\n3\nARIAL\n`;
+  entities += `2\n${dimBlock}\n3\nSTANDARD\n`;
   entities += `10\n${(w / 2).toFixed(6)}\n20\n-0.10\n30\n0.0\n`;
   entities += '70\n0\n140\n0.1\n1\n<>\n';
   entities += `13\n0.0\n23\n0.0\n33\n0.0\n`;
@@ -221,7 +221,7 @@ writeDXF(
 
   // Vertical dimension
   entities += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
-  entities += `2\n${dimBlock}\n3\nARIAL\n`;
+  entities += `2\n${dimBlock}\n3\nSTANDARD\n`;
   entities += `10\n${(w + 0.10).toFixed(6)}\n20\n${(h / 2).toFixed(6)}\n30\n0.0\n`;
   entities += '70\n1\n140\n0.1\n1\n<>\n';
   entities += `13\n${w}\n23\n0.0\n33\n0.0\n`;
@@ -248,15 +248,15 @@ writeDXF(
   let y = 0.700;
 
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += `10\n${x.toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.02\n1\nINVENTAIRE\n7\nARIAL\n`;
+  entities += `10\n${x.toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.02\n1\nINVENTAIRE\n7\nSTANDARD\n`;
   y -= 0.03;
 
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += `10\n${x.toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.015\n1\nTYPE\n7\nARIAL\n`;
+  entities += `10\n${x.toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.015\n1\nTYPE\n7\nSTANDARD\n`;
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += `10\n${(x + 0.1).toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.015\n1\nCODE\n7\nARIAL\n`;
+  entities += `10\n${(x + 0.1).toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.015\n1\nCODE\n7\nSTANDARD\n`;
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += `10\n${(x + 0.2).toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.015\n1\nQTE\n7\nARIAL\n`;
+  entities += `10\n${(x + 0.2).toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.015\n1\nQTE\n7\nSTANDARD\n`;
   y -= 0.02;
 
   entities += '0\nLINE\n8\n_CEAI_INVENTAIRE\n';
@@ -264,11 +264,11 @@ writeDXF(
   y -= 0.02;
 
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += `10\n${x.toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.012\n1\nTPC\n7\nARIAL\n`;
+  entities += `10\n${x.toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.012\n1\nTPC\n7\nSTANDARD\n`;
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += `10\n${(x + 0.1).toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.012\n1\n50\n7\nARIAL\n`;
+  entities += `10\n${(x + 0.1).toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.012\n1\n50\n7\nSTANDARD\n`;
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += `10\n${(x + 0.2).toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.012\n1\n3\n7\nARIAL\n`;
+  entities += `10\n${(x + 0.2).toFixed(3)}\n20\n${y.toFixed(3)}\n40\n0.012\n1\n3\n7\nSTANDARD\n`;
 
   writeDXF(
     'r12_05_inventory_text_only.dxf',
@@ -285,11 +285,11 @@ writeDXF(
 (() => {
   let entities = '';
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += '10\n0.100\n20\n0.100\n40\n0.02\n1\nDiam %%c50/25 mm\n7\nARIAL\n';
+  entities += '10\n0.100\n20\n0.100\n40\n0.02\n1\nDiam %%c50/25 mm\n7\nSTANDARD\n';
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += '10\n0.100\n20\n0.060\n40\n0.02\n1\nAngle 45%%d\n7\nARIAL\n';
+  entities += '10\n0.100\n20\n0.060\n40\n0.02\n1\nAngle 45%%d\n7\nSTANDARD\n';
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += '10\n0.100\n20\n0.020\n40\n0.02\n1\nTol %%p0.5\n7\nARIAL\n';
+  entities += '10\n0.100\n20\n0.020\n40\n0.02\n1\nTol %%p0.5\n7\nSTANDARD\n';
 
   writeDXF(
     'r12_06_special_text_symbols.dxf',
@@ -336,7 +336,7 @@ writeDXF(
 
   // Legend text (no symbols)
   entities += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-  entities += '10\n0.050\n20\n0.550\n40\n0.02\n1\nMini stack: 1 fourreau + 1 cable\n7\nARIAL\n';
+  entities += '10\n0.050\n20\n0.550\n40\n0.02\n1\nMini stack: 1 fourreau + 1 cable\n7\nSTANDARD\n';
 
   writeDXF(
     'r12_07_full_minimal_stack.dxf',

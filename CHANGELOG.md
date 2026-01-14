@@ -1,9 +1,17 @@
 # Changelog
 
-Toutes les modifications notables de ce projet seront documentées dans ce fichier.
+Toutes les modifications notables de ce projet seront document?es dans ce fichier.
 
-Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
-et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
+Le format est bas? sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
+et ce projet adh?re ? [Semantic Versioning](https://semver.org/lang/fr/).
+
+## [2.4.7] - 2026-01-14
+
+### Ajout?
+- Option de cr?ation de dossier depuis la liste des dossiers dans la modale projets.
+
+### Modifi?
+- Mise ? jour des versions et m?tadonn?es associ?es ? la release.
 
 ## [2.4.6] - 2025-12-30
 

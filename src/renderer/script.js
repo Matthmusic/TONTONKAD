@@ -1,4 +1,4 @@
-(function() {
+(function () {
   "use strict";
 
   /* ====== Constantes & DOM ====== */
@@ -22,7 +22,7 @@
   const CANVAS_MARGIN = 40; // Marge pour les cotations
   const TOTAL_CANVAS_MARGIN = CANVAS_MARGIN * 2; // 80px total
   const DEFAULT_STROKE_WIDTH = -3; // Épaisseur de trait par défaut
-  
+
   // Constantes de grille
   const EXTERNAL_GAP = 30; // Écart extérieur souhaité (3 cm = 30 mm)
   const GRID_MARGIN = 20; // Marge depuis les bords en pixels
@@ -54,7 +54,7 @@
   // Éléments du DOM
   const canvas = document.getElementById("world");
   const ctx = canvas.getContext("2d");
-  
+
   // Variables pour la haute résolution - Optimisation adaptative
   let basePixelRatio = window.devicePixelRatio || 1;
   let pixelRatio = basePixelRatio;
@@ -98,7 +98,7 @@
       height: height - TOTAL_CANVAS_MARGIN
     };
   }
-  
+
   // Configuration canvas haute résolution
   function setupHighResCanvas(logicalWidth, logicalHeight) {
     // Ajouter de l'espace pour les cotes
@@ -156,7 +156,7 @@
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
   }
-  
+
   // Fonction pour obtenir les épaisseurs de ligne adaptées au zoom et à la résolution 300 DPI
   function getScaledLineWidth(baseWidth) {
     // À 300 DPI, ajuster les épaisseurs pour maintenir un rendu optimal
@@ -203,67 +203,67 @@
   let cheminCableInputs, cheminCableSelect;
 
   /* ====== Données de référence ====== */
-/* ====== Données de référence (chargées depuis des fichiers CSV) ====== */
-let FOURREAUX = [];
-let CABLES = [];
-let CHEMINS_CABLE = [];
+  /* ====== Données de référence (chargées depuis des fichiers CSV) ====== */
+  let FOURREAUX = [];
+  let CABLES = [];
+  let CHEMINS_CABLE = [];
 
-// Données de fallback intégrées (utilisées si les fichiers CSV ne peuvent pas être chargés)
-const FOURREAUX_FALLBACK = [
-  {type: "TPC", code: "40", od: 40, id: 30},
-  {type: "TPC", code: "50", od: 50, id: 37},
-  {type: "TPC", code: "63", od: 63, id: 47},
-  {type: "TPC", code: "75", od: 75, id: 56},
-  {type: "TPC", code: "90", od: 90, id: 67},
-  {type: "TPC", code: "110", od: 110, id: 82},
-  {type: "TPC", code: "125", od: 125, id: 94},
-  {type: "TPC", code: "160", od: 160, id: 120},
-  {type: "TPC", code: "200", od: 200, id: 150},
-  {type: "IRL", code: "16", od: 16, id: 13},
-  {type: "IRL", code: "20", od: 20, id: 16.9},
-  {type: "IRL", code: "25", od: 25, id: 21.4},
-  {type: "IRL", code: "32", od: 32, id: 27.8},
-  {type: "IRL", code: "40", od: 40, id: 35.4},
-  {type: "IRL", code: "50", od: 50, id: 44.3},
-  {type: "IRL", code: "63", od: 63, id: 57.3},
-  {type: "ICTA", code: "16", od: 16, id: 10.7},
-  {type: "ICTA", code: "20", od: 20, id: 14.1},
-  {type: "ICTA", code: "25", od: 25, id: 18.3},
-  {type: "ICTA", code: "32", od: 32, id: 24.3},
-  {type: "ICTA", code: "40", od: 40, id: 31.2},
-  {type: "ICTA", code: "50", od: 50, id: 39.6},
-  {type: "ICTA", code: "63", od: 63, id: 52.6}
-];
+  // Données de fallback intégrées (utilisées si les fichiers CSV ne peuvent pas être chargés)
+  const FOURREAUX_FALLBACK = [
+    { type: "TPC", code: "40", od: 40, id: 30 },
+    { type: "TPC", code: "50", od: 50, id: 37 },
+    { type: "TPC", code: "63", od: 63, id: 47 },
+    { type: "TPC", code: "75", od: 75, id: 56 },
+    { type: "TPC", code: "90", od: 90, id: 67 },
+    { type: "TPC", code: "110", od: 110, id: 82 },
+    { type: "TPC", code: "125", od: 125, id: 94 },
+    { type: "TPC", code: "160", od: 160, id: 120 },
+    { type: "TPC", code: "200", od: 200, id: 150 },
+    { type: "IRL", code: "16", od: 16, id: 13 },
+    { type: "IRL", code: "20", od: 20, id: 16.9 },
+    { type: "IRL", code: "25", od: 25, id: 21.4 },
+    { type: "IRL", code: "32", od: 32, id: 27.8 },
+    { type: "IRL", code: "40", od: 40, id: 35.4 },
+    { type: "IRL", code: "50", od: 50, id: 44.3 },
+    { type: "IRL", code: "63", od: 63, id: 57.3 },
+    { type: "ICTA", code: "16", od: 16, id: 10.7 },
+    { type: "ICTA", code: "20", od: 20, id: 14.1 },
+    { type: "ICTA", code: "25", od: 25, id: 18.3 },
+    { type: "ICTA", code: "32", od: 32, id: 24.3 },
+    { type: "ICTA", code: "40", od: 40, id: 31.2 },
+    { type: "ICTA", code: "50", od: 50, id: 39.6 },
+    { type: "ICTA", code: "63", od: 63, id: 52.6 }
+  ];
 
-const CABLES_FALLBACK = [
-  {fam: "U1000 R2V", code: "1x1,5", od: 6.4},
-  {fam: "U1000 R2V", code: "1x2,5", od: 6.8},
-  {fam: "U1000 R2V", code: "1x4", od: 7.2},
-  {fam: "U1000 R2V", code: "1x6", od: 8.2},
-  {fam: "U1000 R2V", code: "1x10", od: 9.2},
-  {fam: "U1000 R2V", code: "1x16", od: 10.5},
-  {fam: "U1000 R2V", code: "1x25", od: 12.5},
-  {fam: "U1000 R2V", code: "2x1,5", od: 10.5},
-  {fam: "U1000 R2V", code: "2x2,5", od: 11.5},
-  {fam: "U1000 R2V", code: "3x1,5", od: 11},
-  {fam: "U1000 R2V", code: "3x2,5", od: 12.5},
-  {fam: "U1000 R2V", code: "4x1,5", od: 12},
-  {fam: "U1000 R2V", code: "4x2,5", od: 13},
-  {fam: "U1000 R2V", code: "5x1,5", od: 13},
-  {fam: "U1000 R2V", code: "5x2,5", od: 14.5},
-  {fam: "H07RN-F", code: "2x1", od: 10},
-  {fam: "H07RN-F", code: "2x1.5", od: 11},
-  {fam: "H07RN-F", code: "3G1", od: 10.7},
-  {fam: "H07RN-F", code: "4G1", od: 12},
-  {fam: "H07RN-F", code: "5G1.5", od: 14.4}
-];
+  const CABLES_FALLBACK = [
+    { fam: "U1000 R2V", code: "1x1,5", od: 6.4 },
+    { fam: "U1000 R2V", code: "1x2,5", od: 6.8 },
+    { fam: "U1000 R2V", code: "1x4", od: 7.2 },
+    { fam: "U1000 R2V", code: "1x6", od: 8.2 },
+    { fam: "U1000 R2V", code: "1x10", od: 9.2 },
+    { fam: "U1000 R2V", code: "1x16", od: 10.5 },
+    { fam: "U1000 R2V", code: "1x25", od: 12.5 },
+    { fam: "U1000 R2V", code: "2x1,5", od: 10.5 },
+    { fam: "U1000 R2V", code: "2x2,5", od: 11.5 },
+    { fam: "U1000 R2V", code: "3x1,5", od: 11 },
+    { fam: "U1000 R2V", code: "3x2,5", od: 12.5 },
+    { fam: "U1000 R2V", code: "4x1,5", od: 12 },
+    { fam: "U1000 R2V", code: "4x2,5", od: 13 },
+    { fam: "U1000 R2V", code: "5x1,5", od: 13 },
+    { fam: "U1000 R2V", code: "5x2,5", od: 14.5 },
+    { fam: "H07RN-F", code: "2x1", od: 10 },
+    { fam: "H07RN-F", code: "2x1.5", od: 11 },
+    { fam: "H07RN-F", code: "3G1", od: 10.7 },
+    { fam: "H07RN-F", code: "4G1", od: 12 },
+    { fam: "H07RN-F", code: "5G1.5", od: 14.4 }
+  ];
 
-const CHEMINS_CABLE_FALLBACK = [
-  {nom: "Petit 100x50", largeur: 100, hauteur: 50},
-  {nom: "Moyen 200x75", largeur: 200, hauteur: 75},
-  {nom: "Large 300x100", largeur: 300, hauteur: 100},
-  {nom: "Très Large 400x100", largeur: 400, hauteur: 100}
-];
+  const CHEMINS_CABLE_FALLBACK = [
+    { nom: "Petit 100x50", largeur: 100, hauteur: 50 },
+    { nom: "Moyen 200x75", largeur: 200, hauteur: 75 },
+    { nom: "Large 300x100", largeur: 300, hauteur: 100 },
+    { nom: "Très Large 400x100", largeur: 400, hauteur: 100 }
+  ];
 
   /* ====== État de l'application ====== */
   let nextId = 1;
@@ -383,9 +383,9 @@ const CHEMINS_CABLE_FALLBACK = [
       if (FOURREAUX.length === 0 || CABLES.length === 0 || CHEMINS_CABLE.length === 0) {
         throw new Error('Les données CSV sont vides ou n\'ont pas pu être analysées.');
       }
-      
+
       // Données CSV chargées avec succès
-      
+
     } catch (error) {
       // Impossible de charger les fichiers CSV externes - utilisation des données intégrées
       console.error('Erreur lors du chargement des CSV:', error);
@@ -419,68 +419,68 @@ const CHEMINS_CABLE_FALLBACK = [
 
     // Function to render options
     function renderOptions(filter = '') {
-        dropdown.innerHTML = '';
-        const filterLower = filter.toLowerCase();
-        const groupedData = {};
+      dropdown.innerHTML = '';
+      const filterLower = filter.toLowerCase();
+      const groupedData = {};
 
-        // Group data
-        data.forEach(item => {
-            const group = item[groupBy];
-            if (!groupedData[group]) {
-                groupedData[group] = [];
-            }
-            groupedData[group].push(item);
-        });
-
-        let hasResults = false;
-        Object.keys(groupedData).sort().forEach(groupName => {
-            const items = groupedData[groupName];
-            const filteredItems = items.filter(item => 
-                optionText(item).toLowerCase().includes(filterLower) || 
-                groupName.toLowerCase().includes(filterLower)
-            );
-
-            if (filteredItems.length > 0) {
-                hasResults = true;
-                const groupEl = document.createElement('div');
-                groupEl.className = 'search-dropdown-group';
-                
-                const labelEl = document.createElement('div');
-                labelEl.className = 'search-dropdown-group-label';
-                labelEl.textContent = groupName;
-                groupEl.appendChild(labelEl);
-
-                filteredItems.forEach(item => {
-                    const optionEl = document.createElement('div');
-                    optionEl.className = 'search-dropdown-option';
-                    optionEl.dataset.value = optionValue(item);
-                    optionEl.textContent = optionText(item);
-
-                    optionEl.addEventListener('mousedown', (e) => {
-                        e.preventDefault();
-                        onSelect(optionValue(item), optionText(item));
-                        closeDropdown();
-                    });
-                    groupEl.appendChild(optionEl);
-                });
-                dropdown.appendChild(groupEl);
-            }
-        });
-
-        if (!hasResults) {
-            dropdown.innerHTML = '<div class="search-no-results">Aucun résultat</div>';
+      // Group data
+      data.forEach(item => {
+        const group = item[groupBy];
+        if (!groupedData[group]) {
+          groupedData[group] = [];
         }
+        groupedData[group].push(item);
+      });
+
+      let hasResults = false;
+      Object.keys(groupedData).sort().forEach(groupName => {
+        const items = groupedData[groupName];
+        const filteredItems = items.filter(item =>
+          optionText(item).toLowerCase().includes(filterLower) ||
+          groupName.toLowerCase().includes(filterLower)
+        );
+
+        if (filteredItems.length > 0) {
+          hasResults = true;
+          const groupEl = document.createElement('div');
+          groupEl.className = 'search-dropdown-group';
+
+          const labelEl = document.createElement('div');
+          labelEl.className = 'search-dropdown-group-label';
+          labelEl.textContent = groupName;
+          groupEl.appendChild(labelEl);
+
+          filteredItems.forEach(item => {
+            const optionEl = document.createElement('div');
+            optionEl.className = 'search-dropdown-option';
+            optionEl.dataset.value = optionValue(item);
+            optionEl.textContent = optionText(item);
+
+            optionEl.addEventListener('mousedown', (e) => {
+              e.preventDefault();
+              onSelect(optionValue(item), optionText(item));
+              closeDropdown();
+            });
+            groupEl.appendChild(optionEl);
+          });
+          dropdown.appendChild(groupEl);
+        }
+      });
+
+      if (!hasResults) {
+        dropdown.innerHTML = '<div class="search-no-results">Aucun résultat</div>';
+      }
     }
 
     function openDropdown() {
-        renderOptions(input.value);
-        dropdown.style.display = 'block';
-        container.classList.add('dropdown-open');
+      renderOptions(input.value);
+      dropdown.style.display = 'block';
+      container.classList.add('dropdown-open');
     }
 
     function closeDropdown() {
-        dropdown.style.display = 'none';
-        container.classList.remove('dropdown-open');
+      dropdown.style.display = 'none';
+      container.classList.remove('dropdown-open');
     }
 
     // Event Listeners
@@ -489,114 +489,114 @@ const CHEMINS_CABLE_FALLBACK = [
     input.addEventListener('click', openDropdown);
 
     document.addEventListener('click', (e) => {
-        if (!container.contains(e.target)) {
-            closeDropdown();
-        }
+      if (!container.contains(e.target)) {
+        closeDropdown();
+      }
     });
 
     // Set initial selection
     if (data.length > 0) {
-        const firstItem = data[0];
-        onSelect(optionValue(firstItem), optionText(firstItem));
+      const firstItem = data[0];
+      onSelect(optionValue(firstItem), optionText(firstItem));
     }
-}
+  }
 
-function initSearchableLists() {
+  function initSearchableLists() {
     // Initialiser la liste des fourreaux avec recherche
     const fourreauSearch = document.getElementById('fourreauSearch');
     const fourreauSelect = document.getElementById('fourreauSelect');
     let fourreauOptions = [];
 
     if (fourreauSelect && fourreauSearch && FOURREAUX) {
-        // Créer la liste complète des options avec recherche
-        FOURREAUX.forEach(f => {
-            fourreauOptions.push({
-                value: `${f.type}|${f.code}`,
-                text: `${f.type} ${f.code} — Øint ≥ ${f.id} mm`,
-                searchText: `${f.type} ${f.code} ${f.id}`.toLowerCase(),
-                group: f.type
+      // Créer la liste complète des options avec recherche
+      FOURREAUX.forEach(f => {
+        fourreauOptions.push({
+          value: `${f.type}|${f.code}`,
+          text: `${f.type} ${f.code} — Øint ≥ ${f.id} mm`,
+          searchText: `${f.type} ${f.code} ${f.id}`.toLowerCase(),
+          group: f.type
+        });
+      });
+
+      // Fonction pour filtrer et afficher les fourreaux
+      function filterFourreaux(searchTerm = '') {
+        const term = searchTerm.toLowerCase();
+        fourreauSelect.innerHTML = '';
+
+        const filteredOptions = fourreauOptions.filter(opt =>
+          opt.searchText.includes(term)
+        );
+
+        // Grouper les résultats filtrés
+        const groups = {};
+        filteredOptions.forEach(opt => {
+          if (!groups[opt.group]) {
+            groups[opt.group] = [];
+          }
+          groups[opt.group].push(opt);
+        });
+
+        // Créer les groupes
+        for (const [groupName, options] of Object.entries(groups)) {
+          const groupDiv = document.createElement('div');
+          groupDiv.className = 'searchable-group';
+
+          const groupLabel = document.createElement('div');
+          groupLabel.className = 'searchable-group-label';
+          groupLabel.textContent = groupName;
+          groupDiv.appendChild(groupLabel);
+
+          options.forEach(opt => {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'searchable-option';
+            optionDiv.dataset.value = opt.value;
+            optionDiv.textContent = opt.text;
+            optionDiv.addEventListener('click', function () {
+              selectedFourreau = opt.value;
+              fourreauSearch.value = opt.text;
+              hideFourreauList();
             });
-        });
+            groupDiv.appendChild(optionDiv);
+          });
 
-        // Fonction pour filtrer et afficher les fourreaux
-        function filterFourreaux(searchTerm = '') {
-            const term = searchTerm.toLowerCase();
-            fourreauSelect.innerHTML = '';
-
-            const filteredOptions = fourreauOptions.filter(opt =>
-                opt.searchText.includes(term)
-            );
-
-            // Grouper les résultats filtrés
-            const groups = {};
-            filteredOptions.forEach(opt => {
-                if (!groups[opt.group]) {
-                    groups[opt.group] = [];
-                }
-                groups[opt.group].push(opt);
-            });
-
-            // Créer les groupes
-            for (const [groupName, options] of Object.entries(groups)) {
-                const groupDiv = document.createElement('div');
-                groupDiv.className = 'searchable-group';
-
-                const groupLabel = document.createElement('div');
-                groupLabel.className = 'searchable-group-label';
-                groupLabel.textContent = groupName;
-                groupDiv.appendChild(groupLabel);
-
-                options.forEach(opt => {
-                    const optionDiv = document.createElement('div');
-                    optionDiv.className = 'searchable-option';
-                    optionDiv.dataset.value = opt.value;
-                    optionDiv.textContent = opt.text;
-                    optionDiv.addEventListener('click', function() {
-                        selectedFourreau = opt.value;
-                        fourreauSearch.value = opt.text;
-                        hideFourreauList();
-                    });
-                    groupDiv.appendChild(optionDiv);
-                });
-
-                fourreauSelect.appendChild(groupDiv);
-            }
+          fourreauSelect.appendChild(groupDiv);
         }
+      }
 
-        // Événement de recherche
-        fourreauSearch.addEventListener('input', function() {
-            filterFourreaux(this.value);
-            showFourreauList();
-        });
+      // Événement de recherche
+      fourreauSearch.addEventListener('input', function () {
+        filterFourreaux(this.value);
+        showFourreauList();
+      });
 
-        // Événements de focus/blur pour afficher/masquer la liste
-        fourreauSearch.addEventListener('focus', function() {
-            // Sélectionner tout le texte pour faciliter le remplacement
-            this.select();
-            // Afficher tous les fourreaux (filtre vide)
-            filterFourreaux('');
-            showFourreauList();
-        });
+      // Événements de focus/blur pour afficher/masquer la liste
+      fourreauSearch.addEventListener('focus', function () {
+        // Sélectionner tout le texte pour faciliter le remplacement
+        this.select();
+        // Afficher tous les fourreaux (filtre vide)
+        filterFourreaux('');
+        showFourreauList();
+      });
 
-        fourreauSearch.addEventListener('blur', function() {
-            // Délai pour permettre le clic sur la liste
-            setTimeout(() => hideFourreauList(), 150);
-        });
+      fourreauSearch.addEventListener('blur', function () {
+        // Délai pour permettre le clic sur la liste
+        setTimeout(() => hideFourreauList(), 150);
+      });
 
 
-        // Fonctions pour afficher/masquer la liste
-        function showFourreauList() {
-            fourreauSelect.classList.add('show');
-            fourreauSearch.setAttribute('aria-expanded', 'true');
-        }
+      // Fonctions pour afficher/masquer la liste
+      function showFourreauList() {
+        fourreauSelect.classList.add('show');
+        fourreauSearch.setAttribute('aria-expanded', 'true');
+      }
 
-        function hideFourreauList() {
-            fourreauSelect.classList.remove('show');
-            fourreauSearch.setAttribute('aria-expanded', 'false');
-        }
+      function hideFourreauList() {
+        fourreauSelect.classList.remove('show');
+        fourreauSearch.setAttribute('aria-expanded', 'false');
+      }
 
-        // Initialiser avec tous les fourreaux (mais masqué)
-        filterFourreaux();
+      // Initialiser avec tous les fourreaux (mais masqué)
+      filterFourreaux();
     }
 
     // Initialiser la liste des câbles avec recherche
@@ -605,96 +605,96 @@ function initSearchableLists() {
     let cableOptions = [];
 
     if (cableSelect && cableSearch && CABLES) {
-        // Créer la liste complète des options avec recherche
-        CABLES.forEach(c => {
-            cableOptions.push({
-                value: `${c.fam}|${c.code}`,
-                text: `${c.fam} – ${c.code} (Ø ${c.od} mm)`,
-                searchText: `${c.fam} ${c.code} ${c.od}`.toLowerCase(),
-                group: c.fam
+      // Créer la liste complète des options avec recherche
+      CABLES.forEach(c => {
+        cableOptions.push({
+          value: `${c.fam}|${c.code}`,
+          text: `${c.fam} – ${c.code} (Ø ${c.od} mm)`,
+          searchText: `${c.fam} ${c.code} ${c.od}`.toLowerCase(),
+          group: c.fam
+        });
+      });
+      console.debug('[DATA] Options de câbles préparées', cableOptions.length);
+
+      // Fonction pour filtrer et afficher les câbles
+      function filterCables(searchTerm = '') {
+        const term = searchTerm.toLowerCase();
+        cableSelect.innerHTML = '';
+
+        const filteredOptions = cableOptions.filter(opt =>
+          opt.searchText.includes(term)
+        );
+
+        // Grouper les résultats filtrés
+        const groups = {};
+        filteredOptions.forEach(opt => {
+          if (!groups[opt.group]) {
+            groups[opt.group] = [];
+          }
+          groups[opt.group].push(opt);
+        });
+
+        // Créer les groupes
+        for (const [groupName, options] of Object.entries(groups)) {
+          const groupDiv = document.createElement('div');
+          groupDiv.className = 'searchable-group';
+
+          const groupLabel = document.createElement('div');
+          groupLabel.className = 'searchable-group-label';
+          groupLabel.textContent = groupName;
+          groupDiv.appendChild(groupLabel);
+
+          options.forEach(opt => {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'searchable-option';
+            optionDiv.dataset.value = opt.value;
+            optionDiv.textContent = opt.text;
+            optionDiv.addEventListener('click', function () {
+              selectedCable = opt.value;
+              cableSearch.value = opt.text;
+              hideCableList();
             });
-        });
-        console.debug('[DATA] Options de câbles préparées', cableOptions.length);
+            groupDiv.appendChild(optionDiv);
+          });
 
-        // Fonction pour filtrer et afficher les câbles
-        function filterCables(searchTerm = '') {
-            const term = searchTerm.toLowerCase();
-            cableSelect.innerHTML = '';
-
-            const filteredOptions = cableOptions.filter(opt =>
-                opt.searchText.includes(term)
-            );
-
-            // Grouper les résultats filtrés
-            const groups = {};
-            filteredOptions.forEach(opt => {
-                if (!groups[opt.group]) {
-                    groups[opt.group] = [];
-                }
-                groups[opt.group].push(opt);
-            });
-
-            // Créer les groupes
-            for (const [groupName, options] of Object.entries(groups)) {
-                const groupDiv = document.createElement('div');
-                groupDiv.className = 'searchable-group';
-
-                const groupLabel = document.createElement('div');
-                groupLabel.className = 'searchable-group-label';
-                groupLabel.textContent = groupName;
-                groupDiv.appendChild(groupLabel);
-
-                options.forEach(opt => {
-                    const optionDiv = document.createElement('div');
-                    optionDiv.className = 'searchable-option';
-                    optionDiv.dataset.value = opt.value;
-                    optionDiv.textContent = opt.text;
-                    optionDiv.addEventListener('click', function() {
-                        selectedCable = opt.value;
-                        cableSearch.value = opt.text;
-                        hideCableList();
-                    });
-                    groupDiv.appendChild(optionDiv);
-                });
-
-                cableSelect.appendChild(groupDiv);
-            }
+          cableSelect.appendChild(groupDiv);
         }
+      }
 
-        // Événement de recherche
-        cableSearch.addEventListener('input', function() {
-            filterCables(this.value);
-            showCableList();
-        });
+      // Événement de recherche
+      cableSearch.addEventListener('input', function () {
+        filterCables(this.value);
+        showCableList();
+      });
 
-        // Événements de focus/blur pour afficher/masquer la liste
-        cableSearch.addEventListener('focus', function() {
-            // Sélectionner tout le texte pour faciliter le remplacement
-            this.select();
-            // Afficher tous les câbles (filtre vide)
-            filterCables('');
-            showCableList();
-        });
+      // Événements de focus/blur pour afficher/masquer la liste
+      cableSearch.addEventListener('focus', function () {
+        // Sélectionner tout le texte pour faciliter le remplacement
+        this.select();
+        // Afficher tous les câbles (filtre vide)
+        filterCables('');
+        showCableList();
+      });
 
-        cableSearch.addEventListener('blur', function() {
-            // Délai pour permettre le clic sur la liste
-            setTimeout(() => hideCableList(), 150);
-        });
+      cableSearch.addEventListener('blur', function () {
+        // Délai pour permettre le clic sur la liste
+        setTimeout(() => hideCableList(), 150);
+      });
 
 
-        // Fonctions pour afficher/masquer la liste
-        function showCableList() {
-            cableSelect.classList.add('show');
-            cableSearch.setAttribute('aria-expanded', 'true');
-        }
+      // Fonctions pour afficher/masquer la liste
+      function showCableList() {
+        cableSelect.classList.add('show');
+        cableSearch.setAttribute('aria-expanded', 'true');
+      }
 
-        function hideCableList() {
-            cableSelect.classList.remove('show');
-            cableSearch.setAttribute('aria-expanded', 'false');
-        }
+      function hideCableList() {
+        cableSelect.classList.remove('show');
+        cableSearch.setAttribute('aria-expanded', 'false');
+      }
 
-        // Initialiser avec tous les câbles (mais masqué)
-        filterCables();
+      // Initialiser avec tous les câbles (mais masqué)
+      filterCables();
     }
     if (CHEMINS_CABLE && CHEMINS_CABLE.length > 0 && cheminCableSelect) {
       cheminCableSelect.innerHTML = '';
@@ -705,7 +705,7 @@ function initSearchableLists() {
         cheminCableSelect.appendChild(option);
       });
     }
-}
+  }
   /* ====== Monde & Canvas ====== */
   function setCanvasSize() {
     if (SHAPE === "rect" || SHAPE === "chemin_de_cable") {
@@ -767,73 +767,73 @@ function initSearchableLists() {
     if (!COL_FOURREAU.has(k)) COL_FOURREAU.set(k, `hsl(${(hashHue(k) + 160) % 360} 68% 56%)`);
     return COL_FOURREAU.get(k);
   };
-  
+
   // Table complète des couleurs AutoCAD (256 couleurs ACI)
   const AUTOCAD_COLORS = [
-    {aci:0,hex:'#000000',rgb:[0,0,0]},{aci:1,hex:'#FF0000',rgb:[255,0,0]},{aci:2,hex:'#FFFF00',rgb:[255,255,0]},{aci:3,hex:'#00FF00',rgb:[0,255,0]},
-    {aci:4,hex:'#00FFFF',rgb:[0,255,255]},{aci:5,hex:'#0000FF',rgb:[0,0,255]},{aci:6,hex:'#FF00FF',rgb:[255,0,255]},{aci:7,hex:'#FFFFFF',rgb:[255,255,255]},
-    {aci:8,hex:'#414141',rgb:[65,65,65]},{aci:9,hex:'#808080',rgb:[128,128,128]},{aci:10,hex:'#FF0000',rgb:[255,0,0]},{aci:11,hex:'#FFAAAA',rgb:[255,170,170]},
-    {aci:12,hex:'#BD0000',rgb:[189,0,0]},{aci:13,hex:'#BD7E7E',rgb:[189,126,126]},{aci:14,hex:'#810000',rgb:[129,0,0]},{aci:15,hex:'#815656',rgb:[129,86,86]},
-    {aci:16,hex:'#680000',rgb:[104,0,0]},{aci:17,hex:'#684545',rgb:[104,69,69]},{aci:18,hex:'#4F0000',rgb:[79,0,0]},{aci:19,hex:'#4F3535',rgb:[79,53,53]},
-    {aci:20,hex:'#FF3F00',rgb:[255,63,0]},{aci:21,hex:'#FFBFAA',rgb:[255,191,170]},{aci:22,hex:'#BD2E00',rgb:[189,46,0]},{aci:23,hex:'#BD8D7E',rgb:[189,141,126]},
-    {aci:24,hex:'#811F00',rgb:[129,31,0]},{aci:25,hex:'#816056',rgb:[129,96,86]},{aci:26,hex:'#681900',rgb:[104,25,0]},{aci:27,hex:'#684E45',rgb:[104,78,69]},
-    {aci:28,hex:'#4F1300',rgb:[79,19,0]},{aci:29,hex:'#4F3B35',rgb:[79,59,53]},{aci:30,hex:'#FF7F00',rgb:[255,127,0]},{aci:31,hex:'#FFD4AA',rgb:[255,212,170]},
-    {aci:32,hex:'#BD5E00',rgb:[189,94,0]},{aci:33,hex:'#BD9D7E',rgb:[189,157,126]},{aci:34,hex:'#814000',rgb:[129,64,0]},{aci:35,hex:'#816B56',rgb:[129,107,86]},
-    {aci:36,hex:'#683400',rgb:[104,52,0]},{aci:37,hex:'#685645',rgb:[104,86,69]},{aci:38,hex:'#4F2700',rgb:[79,39,0]},{aci:39,hex:'#4F4235',rgb:[79,66,53]},
-    {aci:40,hex:'#FFBF00',rgb:[255,191,0]},{aci:41,hex:'#FFEAAA',rgb:[255,234,170]},{aci:42,hex:'#BD8D00',rgb:[189,141,0]},{aci:43,hex:'#BDAD7E',rgb:[189,173,126]},
-    {aci:44,hex:'#816000',rgb:[129,96,0]},{aci:45,hex:'#817656',rgb:[129,118,86]},{aci:46,hex:'#684E00',rgb:[104,78,0]},{aci:47,hex:'#685F45',rgb:[104,95,69]},
-    {aci:48,hex:'#4F3B00',rgb:[79,59,0]},{aci:49,hex:'#4F4935',rgb:[79,73,53]},{aci:50,hex:'#FFFF00',rgb:[255,255,0]},{aci:51,hex:'#FFFFAA',rgb:[255,255,170]},
-    {aci:52,hex:'#BDBD00',rgb:[189,189,0]},{aci:53,hex:'#BDBD7E',rgb:[189,189,126]},{aci:54,hex:'#818100',rgb:[129,129,0]},{aci:55,hex:'#818156',rgb:[129,129,86]},
-    {aci:56,hex:'#686800',rgb:[104,104,0]},{aci:57,hex:'#686845',rgb:[104,104,69]},{aci:58,hex:'#4F4F00',rgb:[79,79,0]},{aci:59,hex:'#4F4F35',rgb:[79,79,53]},
-    {aci:60,hex:'#BFFF00',rgb:[191,255,0]},{aci:61,hex:'#EAFFAA',rgb:[234,255,170]},{aci:62,hex:'#8DBD00',rgb:[141,189,0]},{aci:63,hex:'#ADBD7E',rgb:[173,189,126]},
-    {aci:64,hex:'#608100',rgb:[96,129,0]},{aci:65,hex:'#768156',rgb:[118,129,86]},{aci:66,hex:'#4E6800',rgb:[78,104,0]},{aci:67,hex:'#5F6845',rgb:[95,104,69]},
-    {aci:68,hex:'#3B4F00',rgb:[59,79,0]},{aci:69,hex:'#494F35',rgb:[73,79,53]},{aci:70,hex:'#7FFF00',rgb:[127,255,0]},{aci:71,hex:'#D4FFAA',rgb:[212,255,170]},
-    {aci:72,hex:'#5EBD00',rgb:[94,189,0]},{aci:73,hex:'#9DBD7E',rgb:[157,189,126]},{aci:74,hex:'#408100',rgb:[64,129,0]},{aci:75,hex:'#6B8156',rgb:[107,129,86]},
-    {aci:76,hex:'#346800',rgb:[52,104,0]},{aci:77,hex:'#566845',rgb:[86,104,69]},{aci:78,hex:'#274F00',rgb:[39,79,0]},{aci:79,hex:'#424F35',rgb:[66,79,53]},
-    {aci:80,hex:'#3FFF00',rgb:[63,255,0]},{aci:81,hex:'#BFFFAA',rgb:[191,255,170]},{aci:82,hex:'#2EBD00',rgb:[46,189,0]},{aci:83,hex:'#8DBD7E',rgb:[141,189,126]},
-    {aci:84,hex:'#1F8100',rgb:[31,129,0]},{aci:85,hex:'#608156',rgb:[96,129,86]},{aci:86,hex:'#196800',rgb:[25,104,0]},{aci:87,hex:'#4E6845',rgb:[78,104,69]},
-    {aci:88,hex:'#134F00',rgb:[19,79,0]},{aci:89,hex:'#3B4F35',rgb:[59,79,53]},{aci:90,hex:'#00FF00',rgb:[0,255,0]},{aci:91,hex:'#AAFFAA',rgb:[170,255,170]},
-    {aci:92,hex:'#00BD00',rgb:[0,189,0]},{aci:93,hex:'#7EBD7E',rgb:[126,189,126]},{aci:94,hex:'#008100',rgb:[0,129,0]},{aci:95,hex:'#568156',rgb:[86,129,86]},
-    {aci:96,hex:'#006800',rgb:[0,104,0]},{aci:97,hex:'#456845',rgb:[69,104,69]},{aci:98,hex:'#004F00',rgb:[0,79,0]},{aci:99,hex:'#354F35',rgb:[53,79,53]},
-    {aci:100,hex:'#00FF3F',rgb:[0,255,63]},{aci:101,hex:'#AAFFBF',rgb:[170,255,191]},{aci:102,hex:'#00BD2E',rgb:[0,189,46]},{aci:103,hex:'#7EBD8D',rgb:[126,189,141]},
-    {aci:104,hex:'#00811F',rgb:[0,129,31]},{aci:105,hex:'#568160',rgb:[86,129,96]},{aci:106,hex:'#006819',rgb:[0,104,25]},{aci:107,hex:'#45684E',rgb:[69,104,78]},
-    {aci:108,hex:'#004F13',rgb:[0,79,19]},{aci:109,hex:'#354F3B',rgb:[53,79,59]},{aci:110,hex:'#00FF7F',rgb:[0,255,127]},{aci:111,hex:'#AAFFD4',rgb:[170,255,212]},
-    {aci:112,hex:'#00BD5E',rgb:[0,189,94]},{aci:113,hex:'#7EBD9D',rgb:[126,189,157]},{aci:114,hex:'#008140',rgb:[0,129,64]},{aci:115,hex:'#56816B',rgb:[86,129,107]},
-    {aci:116,hex:'#006834',rgb:[0,104,52]},{aci:117,hex:'#456856',rgb:[69,104,86]},{aci:118,hex:'#004F27',rgb:[0,79,39]},{aci:119,hex:'#354F42',rgb:[53,79,66]},
-    {aci:120,hex:'#00FFBF',rgb:[0,255,191]},{aci:121,hex:'#AAFFEA',rgb:[170,255,234]},{aci:122,hex:'#00BD8D',rgb:[0,189,141]},{aci:123,hex:'#7EBDAD',rgb:[126,189,173]},
-    {aci:124,hex:'#008160',rgb:[0,129,96]},{aci:125,hex:'#568176',rgb:[86,129,118]},{aci:126,hex:'#00684E',rgb:[0,104,78]},{aci:127,hex:'#45685F',rgb:[69,104,95]},
-    {aci:128,hex:'#004F3B',rgb:[0,79,59]},{aci:129,hex:'#354F49',rgb:[53,79,73]},{aci:130,hex:'#00FFFF',rgb:[0,255,255]},{aci:131,hex:'#AAFFFF',rgb:[170,255,255]},
-    {aci:132,hex:'#00BDBD',rgb:[0,189,189]},{aci:133,hex:'#7EBDBD',rgb:[126,189,189]},{aci:134,hex:'#008181',rgb:[0,129,129]},{aci:135,hex:'#568181',rgb:[86,129,129]},
-    {aci:136,hex:'#006868',rgb:[0,104,104]},{aci:137,hex:'#456868',rgb:[69,104,104]},{aci:138,hex:'#004F4F',rgb:[0,79,79]},{aci:139,hex:'#354F4F',rgb:[53,79,79]},
-    {aci:140,hex:'#00BFFF',rgb:[0,191,255]},{aci:141,hex:'#AAEAFF',rgb:[170,234,255]},{aci:142,hex:'#008DBD',rgb:[0,141,189]},{aci:143,hex:'#7EADBD',rgb:[126,173,189]},
-    {aci:144,hex:'#006081',rgb:[0,96,129]},{aci:145,hex:'#567681',rgb:[86,118,129]},{aci:146,hex:'#004E68',rgb:[0,78,104]},{aci:147,hex:'#455F68',rgb:[69,95,104]},
-    {aci:148,hex:'#003B4F',rgb:[0,59,79]},{aci:149,hex:'#35494F',rgb:[53,73,79]},{aci:150,hex:'#007FFF',rgb:[0,127,255]},{aci:151,hex:'#AAD4FF',rgb:[170,212,255]},
-    {aci:152,hex:'#005EBD',rgb:[0,94,189]},{aci:153,hex:'#7E9DBD',rgb:[126,157,189]},{aci:154,hex:'#004081',rgb:[0,64,129]},{aci:155,hex:'#566B81',rgb:[86,107,129]},
-    {aci:156,hex:'#003468',rgb:[0,52,104]},{aci:157,hex:'#455668',rgb:[69,86,104]},{aci:158,hex:'#00274F',rgb:[0,39,79]},{aci:159,hex:'#35424F',rgb:[53,66,79]},
-    {aci:160,hex:'#003FFF',rgb:[0,63,255]},{aci:161,hex:'#AABFFF',rgb:[170,191,255]},{aci:162,hex:'#002EBD',rgb:[0,46,189]},{aci:163,hex:'#7E8DBD',rgb:[126,141,189]},
-    {aci:164,hex:'#001F81',rgb:[0,31,129]},{aci:165,hex:'#566081',rgb:[86,96,129]},{aci:166,hex:'#001968',rgb:[0,25,104]},{aci:167,hex:'#454E68',rgb:[69,78,104]},
-    {aci:168,hex:'#00134F',rgb:[0,19,79]},{aci:169,hex:'#353B4F',rgb:[53,59,79]},{aci:170,hex:'#0000FF',rgb:[0,0,255]},{aci:171,hex:'#AAAAFF',rgb:[170,170,255]},
-    {aci:172,hex:'#0000BD',rgb:[0,0,189]},{aci:173,hex:'#7E7EBD',rgb:[126,126,189]},{aci:174,hex:'#000081',rgb:[0,0,129]},{aci:175,hex:'#565681',rgb:[86,86,129]},
-    {aci:176,hex:'#000068',rgb:[0,0,104]},{aci:177,hex:'#454568',rgb:[69,69,104]},{aci:178,hex:'#00004F',rgb:[0,0,79]},{aci:179,hex:'#35354F',rgb:[53,53,79]},
-    {aci:180,hex:'#3F00FF',rgb:[63,0,255]},{aci:181,hex:'#BFAAFF',rgb:[191,170,255]},{aci:182,hex:'#2E00BD',rgb:[46,0,189]},{aci:183,hex:'#8D7EBD',rgb:[141,126,189]},
-    {aci:184,hex:'#1F0081',rgb:[31,0,129]},{aci:185,hex:'#605681',rgb:[96,86,129]},{aci:186,hex:'#190068',rgb:[25,0,104]},{aci:187,hex:'#4E4568',rgb:[78,69,104]},
-    {aci:188,hex:'#13004F',rgb:[19,0,79]},{aci:189,hex:'#3B354F',rgb:[59,53,79]},{aci:190,hex:'#7F00FF',rgb:[127,0,255]},{aci:191,hex:'#D4AAFF',rgb:[212,170,255]},
-    {aci:192,hex:'#5E00BD',rgb:[94,0,189]},{aci:193,hex:'#9D7EBD',rgb:[157,126,189]},{aci:194,hex:'#400081',rgb:[64,0,129]},{aci:195,hex:'#6B5681',rgb:[107,86,129]},
-    {aci:196,hex:'#340068',rgb:[52,0,104]},{aci:197,hex:'#564568',rgb:[86,69,104]},{aci:198,hex:'#27004F',rgb:[39,0,79]},{aci:199,hex:'#42354F',rgb:[66,53,79]},
-    {aci:200,hex:'#BF00FF',rgb:[191,0,255]},{aci:201,hex:'#EAAAFF',rgb:[234,170,255]},{aci:202,hex:'#8D00BD',rgb:[141,0,189]},{aci:203,hex:'#AD7EBD',rgb:[173,126,189]},
-    {aci:204,hex:'#600081',rgb:[96,0,129]},{aci:205,hex:'#765681',rgb:[118,86,129]},{aci:206,hex:'#4E0068',rgb:[78,0,104]},{aci:207,hex:'#5F4568',rgb:[95,69,104]},
-    {aci:208,hex:'#3B004F',rgb:[59,0,79]},{aci:209,hex:'#49354F',rgb:[73,53,79]},{aci:210,hex:'#FF00FF',rgb:[255,0,255]},{aci:211,hex:'#FFAAFF',rgb:[255,170,255]},
-    {aci:212,hex:'#BD00BD',rgb:[189,0,189]},{aci:213,hex:'#BD7EBD',rgb:[189,126,189]},{aci:214,hex:'#810081',rgb:[129,0,129]},{aci:215,hex:'#815681',rgb:[129,86,129]},
-    {aci:216,hex:'#680068',rgb:[104,0,104]},{aci:217,hex:'#684568',rgb:[104,69,104]},{aci:218,hex:'#4F004F',rgb:[79,0,79]},{aci:219,hex:'#4F354F',rgb:[79,53,79]},
-    {aci:220,hex:'#FF00BF',rgb:[255,0,191]},{aci:221,hex:'#FFAAEA',rgb:[255,170,234]},{aci:222,hex:'#BD008D',rgb:[189,0,141]},{aci:223,hex:'#BD7EAD',rgb:[189,126,173]},
-    {aci:224,hex:'#810060',rgb:[129,0,96]},{aci:225,hex:'#815676',rgb:[129,86,118]},{aci:226,hex:'#68004E',rgb:[104,0,78]},{aci:227,hex:'#68455F',rgb:[104,69,95]},
-    {aci:228,hex:'#4F003B',rgb:[79,0,59]},{aci:229,hex:'#4F3549',rgb:[79,53,73]},{aci:230,hex:'#FF007F',rgb:[255,0,127]},{aci:231,hex:'#FFAAD4',rgb:[255,170,212]},
-    {aci:232,hex:'#BD005E',rgb:[189,0,94]},{aci:233,hex:'#BD7E9D',rgb:[189,126,157]},{aci:234,hex:'#810040',rgb:[129,0,64]},{aci:235,hex:'#81566B',rgb:[129,86,107]},
-    {aci:236,hex:'#680034',rgb:[104,0,52]},{aci:237,hex:'#684556',rgb:[104,69,86]},{aci:238,hex:'#4F0027',rgb:[79,0,39]},{aci:239,hex:'#4F3542',rgb:[79,53,66]},
-    {aci:240,hex:'#FF003F',rgb:[255,0,63]},{aci:241,hex:'#FFAABF',rgb:[255,170,191]},{aci:242,hex:'#BD002E',rgb:[189,0,46]},{aci:243,hex:'#BD7E8D',rgb:[189,126,141]},
-    {aci:244,hex:'#81001F',rgb:[129,0,31]},{aci:245,hex:'#815660',rgb:[129,86,96]},{aci:246,hex:'#680019',rgb:[104,0,25]},{aci:247,hex:'#68454E',rgb:[104,69,78]},
-    {aci:248,hex:'#4F0013',rgb:[79,0,19]},{aci:249,hex:'#4F353B',rgb:[79,53,59]},{aci:250,hex:'#333333',rgb:[51,51,51]},{aci:251,hex:'#505050',rgb:[80,80,80]},
-    {aci:252,hex:'#696969',rgb:[105,105,105]},{aci:253,hex:'#828282',rgb:[130,130,130]},{aci:254,hex:'#BEBEBE',rgb:[190,190,190]},{aci:255,hex:'#FFFFFF',rgb:[255,255,255]}
+    { aci: 0, hex: '#000000', rgb: [0, 0, 0] }, { aci: 1, hex: '#FF0000', rgb: [255, 0, 0] }, { aci: 2, hex: '#FFFF00', rgb: [255, 255, 0] }, { aci: 3, hex: '#00FF00', rgb: [0, 255, 0] },
+    { aci: 4, hex: '#00FFFF', rgb: [0, 255, 255] }, { aci: 5, hex: '#0000FF', rgb: [0, 0, 255] }, { aci: 6, hex: '#FF00FF', rgb: [255, 0, 255] }, { aci: 7, hex: '#FFFFFF', rgb: [255, 255, 255] },
+    { aci: 8, hex: '#414141', rgb: [65, 65, 65] }, { aci: 9, hex: '#808080', rgb: [128, 128, 128] }, { aci: 10, hex: '#FF0000', rgb: [255, 0, 0] }, { aci: 11, hex: '#FFAAAA', rgb: [255, 170, 170] },
+    { aci: 12, hex: '#BD0000', rgb: [189, 0, 0] }, { aci: 13, hex: '#BD7E7E', rgb: [189, 126, 126] }, { aci: 14, hex: '#810000', rgb: [129, 0, 0] }, { aci: 15, hex: '#815656', rgb: [129, 86, 86] },
+    { aci: 16, hex: '#680000', rgb: [104, 0, 0] }, { aci: 17, hex: '#684545', rgb: [104, 69, 69] }, { aci: 18, hex: '#4F0000', rgb: [79, 0, 0] }, { aci: 19, hex: '#4F3535', rgb: [79, 53, 53] },
+    { aci: 20, hex: '#FF3F00', rgb: [255, 63, 0] }, { aci: 21, hex: '#FFBFAA', rgb: [255, 191, 170] }, { aci: 22, hex: '#BD2E00', rgb: [189, 46, 0] }, { aci: 23, hex: '#BD8D7E', rgb: [189, 141, 126] },
+    { aci: 24, hex: '#811F00', rgb: [129, 31, 0] }, { aci: 25, hex: '#816056', rgb: [129, 96, 86] }, { aci: 26, hex: '#681900', rgb: [104, 25, 0] }, { aci: 27, hex: '#684E45', rgb: [104, 78, 69] },
+    { aci: 28, hex: '#4F1300', rgb: [79, 19, 0] }, { aci: 29, hex: '#4F3B35', rgb: [79, 59, 53] }, { aci: 30, hex: '#FF7F00', rgb: [255, 127, 0] }, { aci: 31, hex: '#FFD4AA', rgb: [255, 212, 170] },
+    { aci: 32, hex: '#BD5E00', rgb: [189, 94, 0] }, { aci: 33, hex: '#BD9D7E', rgb: [189, 157, 126] }, { aci: 34, hex: '#814000', rgb: [129, 64, 0] }, { aci: 35, hex: '#816B56', rgb: [129, 107, 86] },
+    { aci: 36, hex: '#683400', rgb: [104, 52, 0] }, { aci: 37, hex: '#685645', rgb: [104, 86, 69] }, { aci: 38, hex: '#4F2700', rgb: [79, 39, 0] }, { aci: 39, hex: '#4F4235', rgb: [79, 66, 53] },
+    { aci: 40, hex: '#FFBF00', rgb: [255, 191, 0] }, { aci: 41, hex: '#FFEAAA', rgb: [255, 234, 170] }, { aci: 42, hex: '#BD8D00', rgb: [189, 141, 0] }, { aci: 43, hex: '#BDAD7E', rgb: [189, 173, 126] },
+    { aci: 44, hex: '#816000', rgb: [129, 96, 0] }, { aci: 45, hex: '#817656', rgb: [129, 118, 86] }, { aci: 46, hex: '#684E00', rgb: [104, 78, 0] }, { aci: 47, hex: '#685F45', rgb: [104, 95, 69] },
+    { aci: 48, hex: '#4F3B00', rgb: [79, 59, 0] }, { aci: 49, hex: '#4F4935', rgb: [79, 73, 53] }, { aci: 50, hex: '#FFFF00', rgb: [255, 255, 0] }, { aci: 51, hex: '#FFFFAA', rgb: [255, 255, 170] },
+    { aci: 52, hex: '#BDBD00', rgb: [189, 189, 0] }, { aci: 53, hex: '#BDBD7E', rgb: [189, 189, 126] }, { aci: 54, hex: '#818100', rgb: [129, 129, 0] }, { aci: 55, hex: '#818156', rgb: [129, 129, 86] },
+    { aci: 56, hex: '#686800', rgb: [104, 104, 0] }, { aci: 57, hex: '#686845', rgb: [104, 104, 69] }, { aci: 58, hex: '#4F4F00', rgb: [79, 79, 0] }, { aci: 59, hex: '#4F4F35', rgb: [79, 79, 53] },
+    { aci: 60, hex: '#BFFF00', rgb: [191, 255, 0] }, { aci: 61, hex: '#EAFFAA', rgb: [234, 255, 170] }, { aci: 62, hex: '#8DBD00', rgb: [141, 189, 0] }, { aci: 63, hex: '#ADBD7E', rgb: [173, 189, 126] },
+    { aci: 64, hex: '#608100', rgb: [96, 129, 0] }, { aci: 65, hex: '#768156', rgb: [118, 129, 86] }, { aci: 66, hex: '#4E6800', rgb: [78, 104, 0] }, { aci: 67, hex: '#5F6845', rgb: [95, 104, 69] },
+    { aci: 68, hex: '#3B4F00', rgb: [59, 79, 0] }, { aci: 69, hex: '#494F35', rgb: [73, 79, 53] }, { aci: 70, hex: '#7FFF00', rgb: [127, 255, 0] }, { aci: 71, hex: '#D4FFAA', rgb: [212, 255, 170] },
+    { aci: 72, hex: '#5EBD00', rgb: [94, 189, 0] }, { aci: 73, hex: '#9DBD7E', rgb: [157, 189, 126] }, { aci: 74, hex: '#408100', rgb: [64, 129, 0] }, { aci: 75, hex: '#6B8156', rgb: [107, 129, 86] },
+    { aci: 76, hex: '#346800', rgb: [52, 104, 0] }, { aci: 77, hex: '#566845', rgb: [86, 104, 69] }, { aci: 78, hex: '#274F00', rgb: [39, 79, 0] }, { aci: 79, hex: '#424F35', rgb: [66, 79, 53] },
+    { aci: 80, hex: '#3FFF00', rgb: [63, 255, 0] }, { aci: 81, hex: '#BFFFAA', rgb: [191, 255, 170] }, { aci: 82, hex: '#2EBD00', rgb: [46, 189, 0] }, { aci: 83, hex: '#8DBD7E', rgb: [141, 189, 126] },
+    { aci: 84, hex: '#1F8100', rgb: [31, 129, 0] }, { aci: 85, hex: '#608156', rgb: [96, 129, 86] }, { aci: 86, hex: '#196800', rgb: [25, 104, 0] }, { aci: 87, hex: '#4E6845', rgb: [78, 104, 69] },
+    { aci: 88, hex: '#134F00', rgb: [19, 79, 0] }, { aci: 89, hex: '#3B4F35', rgb: [59, 79, 53] }, { aci: 90, hex: '#00FF00', rgb: [0, 255, 0] }, { aci: 91, hex: '#AAFFAA', rgb: [170, 255, 170] },
+    { aci: 92, hex: '#00BD00', rgb: [0, 189, 0] }, { aci: 93, hex: '#7EBD7E', rgb: [126, 189, 126] }, { aci: 94, hex: '#008100', rgb: [0, 129, 0] }, { aci: 95, hex: '#568156', rgb: [86, 129, 86] },
+    { aci: 96, hex: '#006800', rgb: [0, 104, 0] }, { aci: 97, hex: '#456845', rgb: [69, 104, 69] }, { aci: 98, hex: '#004F00', rgb: [0, 79, 0] }, { aci: 99, hex: '#354F35', rgb: [53, 79, 53] },
+    { aci: 100, hex: '#00FF3F', rgb: [0, 255, 63] }, { aci: 101, hex: '#AAFFBF', rgb: [170, 255, 191] }, { aci: 102, hex: '#00BD2E', rgb: [0, 189, 46] }, { aci: 103, hex: '#7EBD8D', rgb: [126, 189, 141] },
+    { aci: 104, hex: '#00811F', rgb: [0, 129, 31] }, { aci: 105, hex: '#568160', rgb: [86, 129, 96] }, { aci: 106, hex: '#006819', rgb: [0, 104, 25] }, { aci: 107, hex: '#45684E', rgb: [69, 104, 78] },
+    { aci: 108, hex: '#004F13', rgb: [0, 79, 19] }, { aci: 109, hex: '#354F3B', rgb: [53, 79, 59] }, { aci: 110, hex: '#00FF7F', rgb: [0, 255, 127] }, { aci: 111, hex: '#AAFFD4', rgb: [170, 255, 212] },
+    { aci: 112, hex: '#00BD5E', rgb: [0, 189, 94] }, { aci: 113, hex: '#7EBD9D', rgb: [126, 189, 157] }, { aci: 114, hex: '#008140', rgb: [0, 129, 64] }, { aci: 115, hex: '#56816B', rgb: [86, 129, 107] },
+    { aci: 116, hex: '#006834', rgb: [0, 104, 52] }, { aci: 117, hex: '#456856', rgb: [69, 104, 86] }, { aci: 118, hex: '#004F27', rgb: [0, 79, 39] }, { aci: 119, hex: '#354F42', rgb: [53, 79, 66] },
+    { aci: 120, hex: '#00FFBF', rgb: [0, 255, 191] }, { aci: 121, hex: '#AAFFEA', rgb: [170, 255, 234] }, { aci: 122, hex: '#00BD8D', rgb: [0, 189, 141] }, { aci: 123, hex: '#7EBDAD', rgb: [126, 189, 173] },
+    { aci: 124, hex: '#008160', rgb: [0, 129, 96] }, { aci: 125, hex: '#568176', rgb: [86, 129, 118] }, { aci: 126, hex: '#00684E', rgb: [0, 104, 78] }, { aci: 127, hex: '#45685F', rgb: [69, 104, 95] },
+    { aci: 128, hex: '#004F3B', rgb: [0, 79, 59] }, { aci: 129, hex: '#354F49', rgb: [53, 79, 73] }, { aci: 130, hex: '#00FFFF', rgb: [0, 255, 255] }, { aci: 131, hex: '#AAFFFF', rgb: [170, 255, 255] },
+    { aci: 132, hex: '#00BDBD', rgb: [0, 189, 189] }, { aci: 133, hex: '#7EBDBD', rgb: [126, 189, 189] }, { aci: 134, hex: '#008181', rgb: [0, 129, 129] }, { aci: 135, hex: '#568181', rgb: [86, 129, 129] },
+    { aci: 136, hex: '#006868', rgb: [0, 104, 104] }, { aci: 137, hex: '#456868', rgb: [69, 104, 104] }, { aci: 138, hex: '#004F4F', rgb: [0, 79, 79] }, { aci: 139, hex: '#354F4F', rgb: [53, 79, 79] },
+    { aci: 140, hex: '#00BFFF', rgb: [0, 191, 255] }, { aci: 141, hex: '#AAEAFF', rgb: [170, 234, 255] }, { aci: 142, hex: '#008DBD', rgb: [0, 141, 189] }, { aci: 143, hex: '#7EADBD', rgb: [126, 173, 189] },
+    { aci: 144, hex: '#006081', rgb: [0, 96, 129] }, { aci: 145, hex: '#567681', rgb: [86, 118, 129] }, { aci: 146, hex: '#004E68', rgb: [0, 78, 104] }, { aci: 147, hex: '#455F68', rgb: [69, 95, 104] },
+    { aci: 148, hex: '#003B4F', rgb: [0, 59, 79] }, { aci: 149, hex: '#35494F', rgb: [53, 73, 79] }, { aci: 150, hex: '#007FFF', rgb: [0, 127, 255] }, { aci: 151, hex: '#AAD4FF', rgb: [170, 212, 255] },
+    { aci: 152, hex: '#005EBD', rgb: [0, 94, 189] }, { aci: 153, hex: '#7E9DBD', rgb: [126, 157, 189] }, { aci: 154, hex: '#004081', rgb: [0, 64, 129] }, { aci: 155, hex: '#566B81', rgb: [86, 107, 129] },
+    { aci: 156, hex: '#003468', rgb: [0, 52, 104] }, { aci: 157, hex: '#455668', rgb: [69, 86, 104] }, { aci: 158, hex: '#00274F', rgb: [0, 39, 79] }, { aci: 159, hex: '#35424F', rgb: [53, 66, 79] },
+    { aci: 160, hex: '#003FFF', rgb: [0, 63, 255] }, { aci: 161, hex: '#AABFFF', rgb: [170, 191, 255] }, { aci: 162, hex: '#002EBD', rgb: [0, 46, 189] }, { aci: 163, hex: '#7E8DBD', rgb: [126, 141, 189] },
+    { aci: 164, hex: '#001F81', rgb: [0, 31, 129] }, { aci: 165, hex: '#566081', rgb: [86, 96, 129] }, { aci: 166, hex: '#001968', rgb: [0, 25, 104] }, { aci: 167, hex: '#454E68', rgb: [69, 78, 104] },
+    { aci: 168, hex: '#00134F', rgb: [0, 19, 79] }, { aci: 169, hex: '#353B4F', rgb: [53, 59, 79] }, { aci: 170, hex: '#0000FF', rgb: [0, 0, 255] }, { aci: 171, hex: '#AAAAFF', rgb: [170, 170, 255] },
+    { aci: 172, hex: '#0000BD', rgb: [0, 0, 189] }, { aci: 173, hex: '#7E7EBD', rgb: [126, 126, 189] }, { aci: 174, hex: '#000081', rgb: [0, 0, 129] }, { aci: 175, hex: '#565681', rgb: [86, 86, 129] },
+    { aci: 176, hex: '#000068', rgb: [0, 0, 104] }, { aci: 177, hex: '#454568', rgb: [69, 69, 104] }, { aci: 178, hex: '#00004F', rgb: [0, 0, 79] }, { aci: 179, hex: '#35354F', rgb: [53, 53, 79] },
+    { aci: 180, hex: '#3F00FF', rgb: [63, 0, 255] }, { aci: 181, hex: '#BFAAFF', rgb: [191, 170, 255] }, { aci: 182, hex: '#2E00BD', rgb: [46, 0, 189] }, { aci: 183, hex: '#8D7EBD', rgb: [141, 126, 189] },
+    { aci: 184, hex: '#1F0081', rgb: [31, 0, 129] }, { aci: 185, hex: '#605681', rgb: [96, 86, 129] }, { aci: 186, hex: '#190068', rgb: [25, 0, 104] }, { aci: 187, hex: '#4E4568', rgb: [78, 69, 104] },
+    { aci: 188, hex: '#13004F', rgb: [19, 0, 79] }, { aci: 189, hex: '#3B354F', rgb: [59, 53, 79] }, { aci: 190, hex: '#7F00FF', rgb: [127, 0, 255] }, { aci: 191, hex: '#D4AAFF', rgb: [212, 170, 255] },
+    { aci: 192, hex: '#5E00BD', rgb: [94, 0, 189] }, { aci: 193, hex: '#9D7EBD', rgb: [157, 126, 189] }, { aci: 194, hex: '#400081', rgb: [64, 0, 129] }, { aci: 195, hex: '#6B5681', rgb: [107, 86, 129] },
+    { aci: 196, hex: '#340068', rgb: [52, 0, 104] }, { aci: 197, hex: '#564568', rgb: [86, 69, 104] }, { aci: 198, hex: '#27004F', rgb: [39, 0, 79] }, { aci: 199, hex: '#42354F', rgb: [66, 53, 79] },
+    { aci: 200, hex: '#BF00FF', rgb: [191, 0, 255] }, { aci: 201, hex: '#EAAAFF', rgb: [234, 170, 255] }, { aci: 202, hex: '#8D00BD', rgb: [141, 0, 189] }, { aci: 203, hex: '#AD7EBD', rgb: [173, 126, 189] },
+    { aci: 204, hex: '#600081', rgb: [96, 0, 129] }, { aci: 205, hex: '#765681', rgb: [118, 86, 129] }, { aci: 206, hex: '#4E0068', rgb: [78, 0, 104] }, { aci: 207, hex: '#5F4568', rgb: [95, 69, 104] },
+    { aci: 208, hex: '#3B004F', rgb: [59, 0, 79] }, { aci: 209, hex: '#49354F', rgb: [73, 53, 79] }, { aci: 210, hex: '#FF00FF', rgb: [255, 0, 255] }, { aci: 211, hex: '#FFAAFF', rgb: [255, 170, 255] },
+    { aci: 212, hex: '#BD00BD', rgb: [189, 0, 189] }, { aci: 213, hex: '#BD7EBD', rgb: [189, 126, 189] }, { aci: 214, hex: '#810081', rgb: [129, 0, 129] }, { aci: 215, hex: '#815681', rgb: [129, 86, 129] },
+    { aci: 216, hex: '#680068', rgb: [104, 0, 104] }, { aci: 217, hex: '#684568', rgb: [104, 69, 104] }, { aci: 218, hex: '#4F004F', rgb: [79, 0, 79] }, { aci: 219, hex: '#4F354F', rgb: [79, 53, 79] },
+    { aci: 220, hex: '#FF00BF', rgb: [255, 0, 191] }, { aci: 221, hex: '#FFAAEA', rgb: [255, 170, 234] }, { aci: 222, hex: '#BD008D', rgb: [189, 0, 141] }, { aci: 223, hex: '#BD7EAD', rgb: [189, 126, 173] },
+    { aci: 224, hex: '#810060', rgb: [129, 0, 96] }, { aci: 225, hex: '#815676', rgb: [129, 86, 118] }, { aci: 226, hex: '#68004E', rgb: [104, 0, 78] }, { aci: 227, hex: '#68455F', rgb: [104, 69, 95] },
+    { aci: 228, hex: '#4F003B', rgb: [79, 0, 59] }, { aci: 229, hex: '#4F3549', rgb: [79, 53, 73] }, { aci: 230, hex: '#FF007F', rgb: [255, 0, 127] }, { aci: 231, hex: '#FFAAD4', rgb: [255, 170, 212] },
+    { aci: 232, hex: '#BD005E', rgb: [189, 0, 94] }, { aci: 233, hex: '#BD7E9D', rgb: [189, 126, 157] }, { aci: 234, hex: '#810040', rgb: [129, 0, 64] }, { aci: 235, hex: '#81566B', rgb: [129, 86, 107] },
+    { aci: 236, hex: '#680034', rgb: [104, 0, 52] }, { aci: 237, hex: '#684556', rgb: [104, 69, 86] }, { aci: 238, hex: '#4F0027', rgb: [79, 0, 39] }, { aci: 239, hex: '#4F3542', rgb: [79, 53, 66] },
+    { aci: 240, hex: '#FF003F', rgb: [255, 0, 63] }, { aci: 241, hex: '#FFAABF', rgb: [255, 170, 191] }, { aci: 242, hex: '#BD002E', rgb: [189, 0, 46] }, { aci: 243, hex: '#BD7E8D', rgb: [189, 126, 141] },
+    { aci: 244, hex: '#81001F', rgb: [129, 0, 31] }, { aci: 245, hex: '#815660', rgb: [129, 86, 96] }, { aci: 246, hex: '#680019', rgb: [104, 0, 25] }, { aci: 247, hex: '#68454E', rgb: [104, 69, 78] },
+    { aci: 248, hex: '#4F0013', rgb: [79, 0, 19] }, { aci: 249, hex: '#4F353B', rgb: [79, 53, 59] }, { aci: 250, hex: '#333333', rgb: [51, 51, 51] }, { aci: 251, hex: '#505050', rgb: [80, 80, 80] },
+    { aci: 252, hex: '#696969', rgb: [105, 105, 105] }, { aci: 253, hex: '#828282', rgb: [130, 130, 130] }, { aci: 254, hex: '#BEBEBE', rgb: [190, 190, 190] }, { aci: 255, hex: '#FFFFFF', rgb: [255, 255, 255] }
   ];
 
   // Système centralisé de gestion des couleurs avec phases électriques
@@ -877,37 +877,37 @@ function initSearchableLists() {
     n: COLOR_SYSTEM.getByACI(5).hex,    // Bleu
     pe: COLOR_SYSTEM.getByACI(3).hex    // Vert
   };
-  
+
   const withAlpha = (hsl, a) => hsl.includes("/") ? hsl : hsl.replace(")", ` / ${a})`);
-  
+
   // Convertir HSL en format hex pour les inputs color
   const hslToHex = (hslString) => {
     if (hslString.startsWith('#')) return hslString;
-    
+
     // Extraire h, s, l de "hsl(180 72% 52%)" ou "hsl(180, 72%, 52%)"
     const match = hslString.match(/hsl\((\d+)(?:,?\s*)(\d+)%(?:,?\s*)(\d+)%\)/);
     if (!match) return '#ff0000';
-    
+
     const h = parseInt(match[1]) / 360;
     const s = parseInt(match[2]) / 100;
     const l = parseInt(match[3]) / 100;
-    
+
     const hue2rgb = (p, q, t) => {
       if (t < 0) t += 1;
       if (t > 1) t -= 1;
-      if (t < 1/6) return p + (q - p) * 6 * t;
-      if (t < 1/2) return q;
-      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
       return p;
     };
-    
+
     const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
     const p = 2 * l - q;
-    
-    const r = Math.round(hue2rgb(p, q, h + 1/3) * 255);
+
+    const r = Math.round(hue2rgb(p, q, h + 1 / 3) * 255);
     const g = Math.round(hue2rgb(p, q, h) * 255);
-    const b = Math.round(hue2rgb(p, q, h - 1/3) * 255);
-    
+    const b = Math.round(hue2rgb(p, q, h - 1 / 3) * 255);
+
     return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
   };
 
@@ -931,8 +931,8 @@ function initSearchableLists() {
   /* ====== Système d'historique pour Ctrl+Z ====== */
   function saveStateToHistory() {
     const state = {
-      fourreaux: fourreaux.map(f => ({...f, children: [...f.children]})),
-      cables: cables.map(c => ({...c})),
+      fourreaux: fourreaux.map(f => ({ ...f, children: [...f.children] })),
+      cables: cables.map(c => ({ ...c })),
       timestamp: Date.now()
     };
 
@@ -954,11 +954,11 @@ function initSearchableLists() {
 
     // Restaurer les fourreaux
     fourreaux.length = 0;
-    fourreaux.push(...previousState.fourreaux.map(f => ({...f, children: [...f.children]})));
+    fourreaux.push(...previousState.fourreaux.map(f => ({ ...f, children: [...f.children] })));
 
     // Restaurer les câbles
     cables.length = 0;
-    cables.push(...previousState.cables.map(c => ({...c})));
+    cables.push(...previousState.cables.map(c => ({ ...c })));
 
     // Déverrouiller la grille pour recalcul si nécessaire
     gridLocked = false;
@@ -1401,7 +1401,7 @@ function initSearchableLists() {
         optimalRows = Math.ceil(totalFourreaux / optimalCols);
       }
     }
-    
+
     // === MÊME ALGORITHME DE PLACEMENT que Ctrl+G ===
     const grid = Array(optimalRows).fill(null).map(() => Array(optimalCols).fill(null));
     const rowHeights = new Array(optimalRows).fill(0);
@@ -1431,7 +1431,7 @@ function initSearchableLists() {
     // Ajouter les marges du conteneur
     const totalWidthMM = totalGridWidth + 2 * CONTAINER_MARGIN_MM;
     const totalHeightMM = totalGridHeight + 2 * CONTAINER_MARGIN_MM;
-    
+
     // Respecter les verrous dans les dimensions finales
     const finalWidth = lockWidth ? currentWidth : Math.ceil(totalWidthMM / 10) * 10;
     const finalHeight = lockHeight ? currentHeight : Math.ceil(totalHeightMM / 10) * 10;
@@ -1462,32 +1462,32 @@ function initSearchableLists() {
 
     const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
     const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
-    
+
     // Vérifier les verrous
     const lockWidth = document.getElementById('lockWidth')?.checked;
     const lockHeight = document.getElementById('lockHeight')?.checked;
-    
+
     // Si tout est verrouillé, pas de redimensionnement possible
     if (lockWidth && lockHeight) {
       hideReduceButton();
       return;
     }
-    
+
     // Calculer la différence seulement pour les dimensions non verrouillées
     let hasSignificantChange = false;
-    
+
     if (!lockWidth) {
       const widthDiff = Math.abs(currentWidth - minDims.width);
       const widthChange = widthDiff / currentWidth;
       if (widthChange > 0.05) hasSignificantChange = true;
     }
-    
+
     if (!lockHeight) {
       const heightDiff = Math.abs(currentHeight - minDims.height);
       const heightChange = heightDiff / currentHeight;
       if (heightChange > 0.05) hasSignificantChange = true;
     }
-    
+
     if (hasSignificantChange) {
       showReduceButton(minDims);
     } else {
@@ -1498,22 +1498,22 @@ function initSearchableLists() {
   function showReduceButton(minDims) {
     const container = document.getElementById('reduceButtonContainer');
     const button = document.getElementById('reduceToMinimum');
-    
+
     if (container && button) {
       const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
       const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
-      
+
       // Vérifier les verrous
       const lockWidth = document.getElementById('lockWidth')?.checked;
       const lockHeight = document.getElementById('lockHeight')?.checked;
-      
+
       // Ajuster les dimensions proposées selon les verrous
       const proposedWidth = lockWidth ? currentWidth : minDims.width;
       const proposedHeight = lockHeight ? currentHeight : minDims.height;
-      
+
       const needsEnlarge = proposedWidth > currentWidth || proposedHeight > currentHeight;
       const needsReduce = proposedWidth < currentWidth || proposedHeight < currentHeight;
-      
+
       // Créer le texte du bouton en tenant compte des verrous
       let buttonText = '';
       if (lockWidth && lockHeight) {
@@ -1533,7 +1533,7 @@ function initSearchableLists() {
           buttonText = `Redimensionner (${proposedWidth}×${proposedHeight}mm)`;
         }
       }
-      
+
       button.textContent = buttonText;
       button.setAttribute('data-width', proposedWidth);
       button.setAttribute('data-height', proposedHeight);
@@ -1558,7 +1558,7 @@ function initSearchableLists() {
 
     const lockWidth = document.getElementById('lockWidth')?.checked;
     const lockHeight = document.getElementById('lockHeight')?.checked;
-    
+
     if (SHAPE === 'rect') {
       if (!lockWidth) {
         boxWInput.value = width;
@@ -1570,10 +1570,10 @@ function initSearchableLists() {
       const diameter = Math.max(width, height);
       boxDInput.value = diameter;
     }
-    
+
     applyDimensions();
     hideReduceButton();
-    
+
     showToast(`Boîte ajustée à ${width} x ${height} mm`);
   }
 
@@ -1789,7 +1789,7 @@ function initSearchableLists() {
       showToast('Rien à coller - copiez d\'abord un élément (Ctrl+C)');
       return;
     }
-    
+
     pasteMode = true;
     canvas.style.cursor = 'crosshair';
     const type = clipboard.type === 'fourreau' ? 'fourreau' : 'câble';
@@ -1833,7 +1833,7 @@ function initSearchableLists() {
         }
       }
     };
-    
+
     // Supprimer la sélection multiple ou simple
     if (selectedMultiple.length > 0) {
       selectedMultiple.forEach(deleteObject);
@@ -1846,7 +1846,7 @@ function initSearchableLists() {
         showToast('Élément supprimé');
       }
     }
-    
+
     updateStats();
     updateInventory();
     updateSelectedInfo();
@@ -2110,7 +2110,7 @@ function initSearchableLists() {
     // Assurer que l'objet a les nouvelles propriétés
     if (c.customColor === undefined) c.customColor = null;
     if (c.label === undefined) c.label = '';
-    
+
     const r = c.od * MM_TO_PX / 2;
     ctx.save();
     ctx.fillStyle = c.customColor || c.color;
@@ -2118,15 +2118,15 @@ function initSearchableLists() {
     // Trait extérieur adaptatif : plus fin sur les petits câbles
     const baseStroke = Math.max(0.5, Math.min(r * 0.08, 1.8));
     ctx.lineWidth = getScaledLineWidth(baseStroke);
-    
+
     // Coordonnées entières pour éviter le flou
     const x = Math.round(c.x), y = Math.round(c.y);
-    
+
     ctx.beginPath();
     ctx.arc(x, y, r, 0, 2 * Math.PI);
     ctx.fill();
     ctx.stroke();
-    
+
     const phaseText = c.customColor ? getPhaseFromColor(c.customColor) : null;
     const cableLabel = showInfo && c.label && c.label.trim() ? c.label.trim() : '';
     const maxLabelWidth = (r * 2) - getScaledLineWidth(6); // garder un léger padding interne
@@ -2156,7 +2156,7 @@ function initSearchableLists() {
       ctx.strokeText(phaseText, x, phaseY);
       ctx.fillText(phaseText, x, phaseY);
     }
-    
+
     // Afficher le libellé à l'intérieur du câble en s'assurant que ça tient
     if (cableLabel) {
       ctx.fillStyle = "#fff";
@@ -2184,7 +2184,7 @@ function initSearchableLists() {
       ctx.strokeText(cableLabel, x, labelY);
       ctx.fillText(cableLabel, x, labelY);
     }
-    
+
     ctx.restore();
   }
 
@@ -2192,7 +2192,7 @@ function initSearchableLists() {
     ctx.save();
     ctx.setLineDash([6, 4]);
     ctx.lineWidth = getScaledLineWidth(2);
-    
+
     // Dessiner la sélection simple
     if (selected) {
       ctx.strokeStyle = "#fbbf24";
@@ -2212,7 +2212,7 @@ function initSearchableLists() {
         }
       }
     }
-    
+
     // Dessiner la sélection multiple
     if (selectedMultiple.length > 0) {
       ctx.strokeStyle = "#10b981"; // Vert pour la sélection multiple
@@ -2234,7 +2234,7 @@ function initSearchableLists() {
         }
       });
     }
-    
+
     ctx.restore();
   }
 
@@ -2265,7 +2265,7 @@ function initSearchableLists() {
   // Fonction pour gérer la sélection multiple
   function handleMultipleSelection(pick) {
     const existingIndex = selectedMultiple.findIndex(sel => sel.type === pick.type && sel.id === pick.id);
-    
+
     if (existingIndex >= 0) {
       // Déjà sélectionné -> le désélectionner
       selectedMultiple.splice(existingIndex, 1);
@@ -2299,12 +2299,12 @@ function initSearchableLists() {
     const arrowY = y2 - size * Math.sin(angle - Math.PI / 6);
     const arrowX2 = x2 - size * Math.cos(angle + Math.PI / 6);
     const arrowY2 = y2 - size * Math.sin(angle + Math.PI / 6);
-    
+
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
-    
+
     // Pointe de la flèche
     ctx.beginPath();
     ctx.moveTo(x2, y2);
@@ -2330,14 +2330,14 @@ function initSearchableLists() {
     ctx.font = "14px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    
+
     const offset = 5; // Distance des cotes par rapport à la boîte
-    
+
     // Cote horizontale (largeur) - en dessous
     const y_dim = WORLD_H + offset;
     drawArrow(0, y_dim, WORLD_W, y_dim, 6);
     drawArrow(WORLD_W, y_dim, 0, y_dim, 6);
-    
+
     // Lignes d'attache verticales
     ctx.beginPath();
     ctx.moveTo(0, WORLD_H + 10);
@@ -2345,7 +2345,7 @@ function initSearchableLists() {
     ctx.moveTo(WORLD_W, WORLD_H + 10);
     ctx.lineTo(WORLD_W, WORLD_H + offset + 10);
     ctx.stroke();
-    
+
     // Texte largeur avec fond
     const textW = `${WORLD_W_MM.toFixed(0)} mm`;
     const metricsW = ctx.measureText(textW);
@@ -2354,17 +2354,17 @@ function initSearchableLists() {
 
     // Fond semi-transparent
     ctx.fillStyle = bgColor;
-    ctx.fillRect(WORLD_W / 2 - bgWidthW/2, y_dim + 20 - bgHeightW/2, bgWidthW, bgHeightW);
+    ctx.fillRect(WORLD_W / 2 - bgWidthW / 2, y_dim + 20 - bgHeightW / 2, bgWidthW, bgHeightW);
 
     // Texte
     ctx.fillStyle = dimensionColor;
     ctx.fillText(textW, WORLD_W / 2, y_dim + 20);
-    
+
     // Cote verticale (hauteur) - à gauche
     const x_dim = -offset;
     drawArrow(x_dim, 0, x_dim, WORLD_H, 6);
     drawArrow(x_dim, WORLD_H, x_dim, 0, 6);
-    
+
     // Lignes d'attache horizontales
     ctx.beginPath();
     ctx.moveTo(-10, 0);
@@ -2372,7 +2372,7 @@ function initSearchableLists() {
     ctx.moveTo(-10, WORLD_H);
     ctx.lineTo(-offset - 10, WORLD_H);
     ctx.stroke();
-    
+
     // Texte hauteur (rotated) avec fond
     const textH = `${WORLD_H_MM.toFixed(0)} mm`;
     const metricsH = ctx.measureText(textH);
@@ -2385,13 +2385,13 @@ function initSearchableLists() {
 
     // Fond semi-transparent
     ctx.fillStyle = bgColor;
-    ctx.fillRect(-bgWidthH/2, -bgHeightH/2, bgWidthH, bgHeightH);
+    ctx.fillRect(-bgWidthH / 2, -bgHeightH / 2, bgWidthH, bgHeightH);
 
     // Texte
     ctx.fillStyle = dimensionColor;
     ctx.fillText(textH, 0, 0);
     ctx.restore();
-    
+
     ctx.restore();
   }
 
@@ -2430,7 +2430,7 @@ function initSearchableLists() {
     // Nettoyer le nom de famille et code pour AutoCAD
     const cleanFam = cable.fam.replace(/[\s\/\-\.\,\(\)]/g, '_');
     const cleanCode = cable.code.replace(/[\s\/\-\.\,\(\)]/g, '_');
-    
+
     // Déterminer la phase
     let phase = 'STANDARD';
     if (cable.customColor) {
@@ -2445,7 +2445,7 @@ function initSearchableLists() {
         phase = 'CUSTOM';
       }
     }
-    
+
     return `_CEAI_CABLE_${cleanFam}_${cleanCode}_${phase}`;
   }
 
@@ -2457,7 +2457,7 @@ function initSearchableLists() {
       : name;
   }
 
-  function generateDXF(acadVer = 'AC1009') {
+  function generateDXF(acadVer = 'AC1009', textStyle = null) {
     // Filtrer les entités pour éviter toute coordonnée ou diamètre invalide
     const fourreauxValid = fourreaux.filter(f =>
       Number.isFinite(f.x) && Number.isFinite(f.y) &&
@@ -2514,6 +2514,8 @@ function initSearchableLists() {
       { name: '_CEAI_INVENTAIRE', color: 7 }
     ];
 
+    const isR12 = acadVer === 'AC1009';
+    const textStyleName = textStyle || (isR12 ? 'STANDARD' : 'ARIAL');
     let dxf = '';
 
     // HEADER minimal (par défaut R12 AC1009, peut être AC1024 pour AutoCAD 2010+)
@@ -2528,45 +2530,96 @@ function initSearchableLists() {
     }
 
     // Style de texte pour les cotes et hauteur par défaut
-    dxf += '9\n$DIMTXSTY\n7\nARIAL\n';
+    dxf += `9\n$DIMTXSTY\n7\n${textStyleName}\n`;
     dxf += '9\n$DIMTXT\n40\n0.1\n';
     dxf += '0\nENDSEC\n';
 
     // TABLES : LTYPE + LAYER + STYLE (+ VPORT si AC1032)
     dxf += '0\nSECTION\n2\nTABLES\n';
     if (acadVer !== 'AC1009') {
-      dxf += '0\nTABLE\n2\nVPORT\n70\n1\n';
-      dxf += '0\nVPORT\n2\n*ACTIVE\n70\n0\n10\n0.0\n20\n0.0\n11\n1.0\n21\n1.0\n12\n0.0\n22\n0.0\n13\n1.0\n23\n1.0\n40\n1.0\n41\n1.0\n42\n50.0\n43\n0.0\n44\n0.0\n50\n0.0\n51\n0.0\n71\n0\n72\n1000\n73\n1\n74\n3\n75\n0\n76\n0\n77\n0\n78\n0\n';
+      dxf += '0\nTABLE\n2\nVPORT\n5\n8\n330\n0\n100\nAcDbSymbolTable\n70\n1\n';
+      dxf += '0\nVPORT\n5\n10\n330\n8\n100\nAcDbSymbolTableRecord\n100\nAcDbViewportTableRecord\n2\n*ACTIVE\n70\n0\n10\n0.0\n20\n0.0\n11\n1.0\n21\n1.0\n12\n0.0\n22\n0.0\n13\n1.0\n23\n1.0\n40\n1.0\n41\n1.0\n42\n50.0\n43\n0.0\n44\n0.0\n50\n0.0\n51\n0.0\n71\n0\n72\n1000\n73\n1\n74\n3\n75\n0\n76\n0\n77\n0\n78\n0\n';
       dxf += '0\nENDTAB\n';
     }
-    dxf += '0\nTABLE\n2\nLTYPE\n70\n1\n';
-    dxf += '0\nLTYPE\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0.0\n';
-    dxf += '0\nENDTAB\n';
-    dxf += `0\nTABLE\n2\nLAYER\n70\n${layers.length}\n`;
-    layers.forEach(l => {
-      dxf += '0\nLAYER\n70\n0\n';
-      dxf += `2\n${l.name}\n62\n${l.color ?? 7}\n6\nCONTINUOUS\n`;
-    });
-    dxf += '0\nENDTAB\n';
-    dxf += '0\nTABLE\n2\nSTYLE\n70\n1\n';
-    dxf += '0\nSTYLE\n2\nARIAL\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n0.0\n3\narial.ttf\n4\n\n';
-    dxf += '0\nENDTAB\n';
-    if (acadVer !== 'AC1009') {
-      // Table DIMSTYLE pour versions modernes (requis par AutoCAD 2000+)
+    // Table LTYPE
+    if (isR12) {
+      dxf += '0\nTABLE\n2\nLTYPE\n70\n1\n';
+      dxf += '0\nLTYPE\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0.0\n';
+      dxf += '0\nENDTAB\n';
+    } else {
+      dxf += '0\nTABLE\n2\nLTYPE\n5\n5\n330\n0\n100\nAcDbSymbolTable\n70\n1\n';
+      dxf += '0\nLTYPE\n5\n14\n330\n5\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0.0\n';
+      dxf += '0\nENDTAB\n';
+    }
+
+    // Table LAYER
+    if (isR12) {
+      dxf += `0\nTABLE\n2\nLAYER\n70\n${layers.length}\n`;
+      layers.forEach(l => {
+        dxf += '0\nLAYER\n70\n0\n';
+        dxf += `2\n${l.name}\n62\n${l.color ?? 7}\n6\nCONTINUOUS\n`;
+      });
+      dxf += '0\nENDTAB\n';
+    } else {
+      dxf += `0\nTABLE\n2\nLAYER\n5\n2\n330\n0\n100\nAcDbSymbolTable\n70\n${layers.length}\n`;
+      let layerHandle = 20;
+      layers.forEach(l => {
+        dxf += `0\nLAYER\n5\n${layerHandle.toString(16).toUpperCase()}\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n`;
+        dxf += `2\n${l.name}\n70\n0\n62\n${l.color ?? 7}\n6\nCONTINUOUS\n`;
+        layerHandle++;
+      });
+      dxf += '0\nENDTAB\n';
+    }
+
+    // Table STYLE
+    if (isR12) {
+      dxf += '0\nTABLE\n2\nSTYLE\n70\n1\n';
+      if (textStyleName === 'ARIAL') {
+        dxf += '0\nSTYLE\n2\nARIAL\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n0.2\n3\narial.ttf\n4\n\n';
+      } else {
+        dxf += '0\nSTYLE\n2\nSTANDARD\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n0.2\n3\ntxt.shx\n4\n\n';
+      }
+      dxf += '0\nENDTAB\n';
+    } else {
+      dxf += '0\nTABLE\n2\nSTYLE\n5\n3\n330\n0\n100\nAcDbSymbolTable\n70\n2\n';
+      dxf += '0\nSTYLE\n5\n11\n330\n3\n100\nAcDbSymbolTableRecord\n100\nAcDbTextStyleTableRecord\n2\nSTANDARD\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n0.2\n3\ntxt.shx\n4\n\n';
+      dxf += '0\nSTYLE\n5\n12\n330\n3\n100\nAcDbSymbolTableRecord\n100\nAcDbTextStyleTableRecord\n2\nARIAL\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n0.2\n3\narial.ttf\n4\n\n';
+      dxf += '0\nENDTAB\n';
+    }
+
+    // Table DIMSTYLE
+    if (isR12) {
       dxf += '0\nTABLE\n2\nDIMSTYLE\n70\n1\n';
       dxf += '0\nDIMSTYLE\n2\nSTANDARD\n70\n0\n';
+      dxf += `3\n${textStyleName}\n4\n\n5\nA\n6\n\n7\n\n40\n1.0\n41\n0.18\n42\n0.0625\n43\n0.38\n44\n0.18\n45\n0.0\n46\n0.0\n47\n0.0\n48\n0.0\n140\n0.1\n141\n0.09\n142\n0.0\n143\n25.4\n144\n1.0\n145\n0.0\n146\n1.0\n147\n0.09\n170\n0\n171\n2\n172\n0\n173\n0\n174\n0\n175\n0\n176\n0\n177\n0\n178\n0\n71\n0\n72\n0\n73\n1\n74\n1\n75\n0\n76\n0\n77\n0\n78\n0\n`;
+      dxf += '0\nENDTAB\n';
+    } else {
+      dxf += '0\nTABLE\n2\nDIMSTYLE\n5\n27\n330\n0\n100\nAcDbSymbolTable\n70\n1\n100\nAcDbDimStyleTable\n71\n0\n';
+      dxf += '0\nDIMSTYLE\n105\n28\n330\n27\n100\nAcDbSymbolTableRecord\n100\nAcDbDimStyleTableRecord\n2\nSTANDARD\n70\n0\n';
+      dxf += `3\n${textStyleName}\n4\n\n140\n0.1\n`;
       dxf += '0\nENDTAB\n';
     }
-    if (acadVer !== 'AC1009') {
+
+    // Table APPID
+    if (isR12) {
       dxf += '0\nTABLE\n2\nAPPID\n70\n1\n';
       dxf += '0\nAPPID\n2\nACAD\n70\n0\n';
       dxf += '0\nENDTAB\n';
+    } else {
+      dxf += '0\nTABLE\n2\nAPPID\n5\n9\n330\n0\n100\nAcDbSymbolTable\n70\n1\n';
+      dxf += '0\nAPPID\n5\n13\n330\n9\n100\nAcDbSymbolTableRecord\n100\nAcDbRegAppTableRecord\n2\nACAD\n70\n0\n';
+      dxf += '0\nENDTAB\n';
+    }
+
+    if (acadVer !== 'AC1009') {
       const blockRecordNames = ['*MODEL_SPACE', '*PAPER_SPACE', ...fourreauTypes.map(t => `_CEAI_FOURREAU_${t}`), ...Array.from(cableLayerTypes)];
-      dxf += `0\nTABLE\n2\nBLOCK_RECORD\n70\n${blockRecordNames.length}\n`;
+      dxf += `0\nTABLE\n2\nBLOCK_RECORD\n5\n1\n330\n0\n100\nAcDbSymbolTable\n70\n${blockRecordNames.length}\n`;
+      let blockHandle = 0x1F; // Start at handle 1F
       blockRecordNames.forEach(name => {
-        dxf += '0\nBLOCK_RECORD\n';
+        dxf += `0\nBLOCK_RECORD\n5\n${blockHandle.toString(16).toUpperCase()}\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbBlockTableRecord\n`;
         dxf += `2\n${name}\n`;
         dxf += '70\n0\n';
+        blockHandle++;
       });
       dxf += '0\nENDTAB\n';
     }
@@ -2580,8 +2633,15 @@ function initSearchableLists() {
       dxf += '0\nBLOCK\n5\n1F\n100\nAcDbEntity\n8\n0\n100\nAcDbBlockBegin\n2\n*MODEL_SPACE\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*MODEL_SPACE\n1\n\n0\nENDBLK\n5\n20\n100\nAcDbEntity\n8\n0\n100\nAcDbBlockEnd\n';
       dxf += '0\nBLOCK\n5\n1B\n100\nAcDbEntity\n67\n1\n8\n0\n100\nAcDbBlockBegin\n2\n*PAPER_SPACE\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*PAPER_SPACE\n1\n\n0\nENDBLK\n5\n1C\n100\nAcDbEntity\n67\n1\n8\n0\n100\nAcDbBlockEnd\n';
     } else {
-      dxf += '0\nBLOCK\n8\n0\n2\n*MODEL_SPACE\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*MODEL_SPACE\n1\n\n0\nENDBLK\n5\n0\n8\n0\n';
-      dxf += '0\nBLOCK\n8\n0\n2\n*PAPER_SPACE\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*PAPER_SPACE\n1\n\n0\nENDBLK\n5\n0\n8\n0\n';
+      // Pour R12 (AC1009), les blocs *MODEL_SPACE et *PAPER_SPACE ne sont PAS définis
+      // AutoCAD génère automatiquement les blocs - les définir cause des erreurs
+    }
+
+    // Bloc de dimension anonyme *D (requis pour les DIMENSION en R12)
+    if (isR12) {
+      dxf += '0\nBLOCK\n8\n0\n';
+      dxf += '2\n*D\n70\n1\n10\n0.0\n20\n0.0\n30\n0.0\n3\n*D\n1\n\n';
+      dxf += '0\nENDBLK\n8\n0\n';
     }
 
     // Fourreaux (double cercle)
@@ -2600,7 +2660,7 @@ function initSearchableLists() {
         dxf += '0\nCIRCLE\n8\n0\n';
         dxf += `10\n0.0\n20\n0.0\n40\n${innerRadius}\n`;
       }
-      dxf += '0\nENDBLK\n5\n0\n8\n0\n';
+      dxf += '0\nENDBLK\n8\n0\n';
     });
 
     // Câbles (cercle simple)
@@ -2619,13 +2679,13 @@ function initSearchableLists() {
       dxf += `10\n0.0\n20\n0.0\n40\n${radius}\n`;
       if (textToShow) {
         dxf += '0\nTEXT\n8\n0\n';
-        dxf += '7\nARIAL\n';
+        dxf += `7\n${textStyleName}\n`;
         dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
         dxf += '40\n0.004\n';
         dxf += `1\n${textToShow}\n`;
         dxf += '50\n0.0\n72\n1\n73\n2\n';
       }
-      dxf += '0\nENDBLK\n5\n0\n8\n0\n';
+      dxf += '0\nENDBLK\n8\n0\n';
     });
 
     dxf += '0\nENDSEC\n';
@@ -2653,7 +2713,7 @@ function initSearchableLists() {
     }
 
     // Cotes simples (lignes + texte)
-    const allowDims = acadVer === 'AC1009'; // pour AC1032 on évite les DIMENSION R12 qui peuvent faire planter AutoCAD
+    const allowDims = isR12; // pour AC1032 on évite les DIMENSION R12 qui peuvent faire planter AutoCAD
 
     if (SHAPE === 'rect' || SHAPE === 'chemin_de_cable') {
       const w = (WORLD_W_MM / 1000).toFixed(6);
@@ -2663,10 +2723,11 @@ function initSearchableLists() {
       // Cote horizontale (type aligné)
       if (allowDims) {
         dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
-        dxf += `2\n${dimBlock}\n3\nARIAL\n`;
+        dxf += `2\n${dimBlock}\n3\nSTANDARD\n`;
         dxf += `10\n${(parseFloat(w) / 2).toFixed(6)}\n20\n-0.10\n30\n0.0\n`; // point texte
+        dxf += `11\n${(parseFloat(w) / 2).toFixed(6)}\n21\n-0.10\n31\n0.0\n`; // point d'insertion texte (requis en R12)
         dxf += '70\n0\n'; // alignée
-        dxf += '140\n0.1\n'; // texte 0.1
+        // Code 140 retiré car réservé au DIMSTYLE // texte 0.1
         dxf += '1\n<>\n';
         dxf += `13\n0.0\n23\n0.0\n33\n0.0\n`;
         dxf += `14\n${w}\n24\n0.0\n34\n0.0\n`;
@@ -2677,10 +2738,11 @@ function initSearchableLists() {
       // Cote verticale (type verticale)
       if (allowDims) {
         dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
-        dxf += `2\n${dimBlock}\n3\nARIAL\n`;
+        dxf += `2\n${dimBlock}\n3\nSTANDARD\n`;
         dxf += `10\n${(parseFloat(w) + 0.10).toFixed(6)}\n20\n${(parseFloat(h) / 2).toFixed(6)}\n30\n0.0\n`; // point texte
+        dxf += `11\n${(parseFloat(w) + 0.10).toFixed(6)}\n21\n${(parseFloat(h) / 2).toFixed(6)}\n31\n0.0\n`; // point d'insertion texte (requis en R12)
         dxf += '70\n1\n'; // verticale
-        dxf += '140\n0.1\n';
+        // Code 140 retiré car réservé au DIMSTYLE
         dxf += '1\n<>\n';
         dxf += `13\n${w}\n23\n0.0\n33\n0.0\n`;
         dxf += `14\n${w}\n24\n${h}\n34\n0.0\n`;
@@ -2694,10 +2756,11 @@ function initSearchableLists() {
       const dimBlock = '*D';
       if (allowDims) {
         dxf += '0\nDIMENSION\n8\n_CEAI_INVENTAIRE\n';
-        dxf += `2\n${dimBlock}\n3\nARIAL\n`;
+        dxf += `2\n${dimBlock}\n3\nSTANDARD\n`;
         dxf += `10\n${center}\n20\n${center}\n30\n0.0\n`;
+        dxf += `11\n${center}\n21\n${center}\n31\n0.0\n`; // point d'insertion texte (requis en R12)
         dxf += '70\n3\n'; // diamètre
-        dxf += '140\n0.1\n';
+        // Code 140 retiré car réservé au DIMSTYLE
         dxf += '1\n<>\n';
         dxf += `15\n0.0\n25\n${center}\n35\n0.0\n`;
         dxf += `16\n${d}\n26\n${center}\n36\n0.0\n`;
@@ -2741,15 +2804,15 @@ function initSearchableLists() {
 
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
     dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.02\n1\nINVENTAIRE\n`;
-    dxf += '7\nARIAL\n';
+    dxf += `7\n${textStyleName}\n`;
     yPos -= 0.03;
 
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-    dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nTYPE\n7\nARIAL\n`;
+    dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nTYPE\n7\n${textStyleName}\n`;
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-    dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nCODE\n7\nARIAL\n`;
+    dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nCODE\n7\n${textStyleName}\n`;
     dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-    dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nQTE\n7\nARIAL\n`;
+    dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.015\n1\nQTE\n7\n${textStyleName}\n`;
     yPos -= 0.02;
 
     dxf += '0\nLINE\n8\n_CEAI_INVENTAIRE\n';
@@ -2759,21 +2822,21 @@ function initSearchableLists() {
     for (const [key, count] of Object.entries(inventaire.fc)) {
       const [type, code] = key.split('|');
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-      dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${type}\n7\nARIAL\n`;
+      dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${type}\n7\n${textStyleName}\n`;
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-      dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${code}\n7\nARIAL\n`;
+      dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${code}\n7\n${textStyleName}\n`;
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-      dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${count}\n7\nARIAL\n`;
+      dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${count}\n7\n${textStyleName}\n`;
       yPos -= 0.018;
     }
     for (const [key, count] of Object.entries(inventaire.cc)) {
       const [fam, code] = key.split('|');
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-      dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${fam}\n7\nARIAL\n`;
+      dxf += `10\n${tableauX.toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${fam}\n7\n${textStyleName}\n`;
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-      dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${code}\n7\nARIAL\n`;
+      dxf += `10\n${(tableauX + 0.1).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${code}\n7\n${textStyleName}\n`;
       dxf += '0\nTEXT\n8\n_CEAI_INVENTAIRE\n';
-      dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${count}\n7\nARIAL\n`;
+      dxf += `10\n${(tableauX + 0.2).toFixed(3)}\n20\n${yPos.toFixed(3)}\n40\n0.012\n1\n${count}\n7\n${textStyleName}\n`;
       yPos -= 0.018;
     }
 
@@ -2790,24 +2853,28 @@ function initSearchableLists() {
     dxf += '0\nEOF\n';
     return dxf;
   }
-  
+
   async function exportDXF() {
-    // Export DXF R12 (compatible ZWCAD)
-    const dxfContent = generateDXF('AC1009');
+    // Export DXF R12 (compatible AutoCAD avec police STANDARD)
+    const dxfContent = generateDXF('AC1009', 'STANDARD');
 
     const wM = (WORLD_W_MM / 1000).toFixed(1);
     const hM = (WORLD_H_MM / 1000).toFixed(1);
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
-    const fileName = `tontonkad_${wM}x${hM}m_${date}_${time}.dxf`;
+    const fileName = `tontonkad_autocad_${wM}x${hM}m_${date}_${time}.dxf`;
 
     // Mode Electron : utiliser l'API exportFile avec dialogue de sauvegarde
     if (window.electronAPI && window.electronAPI.exportFile) {
       try {
         const result = await window.electronAPI.exportFile('dxf', dxfContent, fileName);
         if (result.success) {
-          showToast(`Export DXF terminé : ${result.path}`);
+          showToast(`Export DXF (AutoCAD) terminé ! Fichier enregistré dans : ${result.path} (Cliquer ici pour ouvrir le dossier)`, 'success', 15000, () => {
+            if (window.electronAPI && window.electronAPI.showItemInFolder) {
+              window.electronAPI.showItemInFolder(result.path);
+            }
+          });
         } else {
           showToast('Export DXF annulé');
         }
@@ -2826,7 +2893,50 @@ function initSearchableLists() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast('Export DXF terminé !');
+      showToast('Export DXF (AutoCAD) terminé !', 'success', 10000);
+    }
+  }
+
+  async function exportDXF_ZWCAD() {
+    // Export DXF R12 (compatible ZWCAD avec police ARIAL)
+    const dxfContent = generateDXF('AC1009', 'ARIAL');
+
+    const wM = (WORLD_W_MM / 1000).toFixed(1);
+    const hM = (WORLD_H_MM / 1000).toFixed(1);
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
+    const fileName = `tontonkad_zwcad_${wM}x${hM}m_${date}_${time}.dxf`;
+
+    // Mode Electron : utiliser l'API exportFile avec dialogue de sauvegarde
+    if (window.electronAPI && window.electronAPI.exportFile) {
+      try {
+        const result = await window.electronAPI.exportFile('dxf', dxfContent, fileName);
+        if (result.success) {
+          showToast(`Export DXF (ZWCAD) terminé ! Fichier enregistré dans : ${result.path} (Cliquer ici pour ouvrir le dossier)`, 'success', 15000, () => {
+            if (window.electronAPI && window.electronAPI.showItemInFolder) {
+              window.electronAPI.showItemInFolder(result.path);
+            }
+          });
+        } else {
+          showToast('Export DXF annulé');
+        }
+      } catch (error) {
+        console.error('Erreur export DXF ZWCAD:', error);
+        showToast('Erreur lors de l\'export DXF ZWCAD');
+      }
+    } else {
+      // Mode Web : utiliser Blob avec charset UTF-8 (sans BOM)
+      const blob = new Blob([dxfContent], { type: 'application/dxf;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Export DXF (ZWCAD) terminé !', 'success', 10000);
     }
   }
 
@@ -2944,7 +3054,7 @@ function initSearchableLists() {
       }
       return;
     }
-    
+
     if (!selected) {
       selInfo.classList.add('muted');
       selInfo.innerHTML = '<em>Aucun objet sélectionné.</em>';
@@ -3029,22 +3139,22 @@ function initSearchableLists() {
   function toggleFreezeSelected() {
     let frozenCount = 0;
     let unfrozenCount = 0;
-    
+
     // Fonction pour basculer le gel d'un élément
     const toggleFreeze = (sel) => {
       let o = null;
       if (sel.type === 'fourreau') o = fourreaux.find(x => x.id === sel.id);
       else o = cables.find(x => x.id === sel.id);
       if (!o) return;
-      
+
       o.frozen = !o.frozen;
       o.vx = 0;
       o.vy = 0;
-      
+
       if (o.frozen) frozenCount++;
       else unfrozenCount++;
     };
-    
+
     // Appliquer à la sélection multiple ou simple
     if (selectedMultiple.length > 0) {
       selectedMultiple.forEach(toggleFreeze);
@@ -3055,7 +3165,7 @@ function initSearchableLists() {
     } else {
       return;
     }
-    
+
     updateSelectedInfo();
     redraw();
   }
@@ -3065,10 +3175,10 @@ function initSearchableLists() {
     const allElements = [...fourreaux, ...cables];
     const frozenCount = allElements.filter(obj => obj.frozen).length;
     const unfrozenCount = allElements.length - frozenCount;
-    
+
     // Décider si on gèle tout ou on dégèle tout
     const shouldFreeze = unfrozenCount >= frozenCount;
-    
+
     let changedCount = 0;
     allElements.forEach(obj => {
       if (obj.frozen !== shouldFreeze) {
@@ -3078,7 +3188,7 @@ function initSearchableLists() {
         changedCount++;
       }
     });
-    
+
     if (changedCount > 0) {
       showToast(shouldFreeze ? `${changedCount} éléments figés` : `${changedCount} éléments dégelés`);
       updateSelectedInfo();
@@ -3122,7 +3232,7 @@ function initSearchableLists() {
   }
 
   // Système de notifications intégrées
-  function showToast(msg, type = 'default') {
+  function showToast(msg, type = 'default', duration = 3000, onClick = null) {
     // Détecter automatiquement le type si msg contient des emojis
     if (!type || type === 'default') {
       if (msg.includes('✅') || msg.toLowerCase().includes('succès') || msg.toLowerCase().includes('terminé')) {
@@ -3166,8 +3276,11 @@ function initSearchableLists() {
     // Ajouter au conteneur
     notificationContainer.appendChild(notification);
 
-    // Fermer au clic
+    // Fermer au clic et exécuter l'action si fournie
     notification.addEventListener('click', () => {
+      if (typeof onClick === 'function') {
+        onClick();
+      }
       notification.classList.add('removing');
       setTimeout(() => notification.remove(), 300);
     });
@@ -3178,7 +3291,8 @@ function initSearchableLists() {
         notification.classList.add('removing');
         setTimeout(() => notification.remove(), 300);
       }
-    }, 3000);
+    }, duration);
+
   }
 
   // Fonction de confirmation personnalisée
@@ -3329,7 +3443,7 @@ function initSearchableLists() {
     addEventListener('mousemove', onMove);
     addEventListener('mouseup', onUp);
   }
-  
+
   // Logique pour la sélection par rectangle (marquee)
   function startMarqueeSelection(e) {
     isMarqueeSelecting = true;
@@ -3746,13 +3860,13 @@ function initSearchableLists() {
   /* ====== Effet de scroll pour le panel ====== */
   function initPanelScrollEffect() {
     if (!panel) return;
-    
+
     function updateScrollEffect() {
       const scrollTop = panel.scrollTop;
       const scrollHeight = panel.scrollHeight;
       const clientHeight = panel.clientHeight;
       const scrollBottom = scrollHeight - scrollTop - clientHeight;
-      
+
       // Si on est à moins de 5px du bas, cacher le fade
       if (scrollBottom <= 5) {
         panel.classList.add('scrolled-to-bottom');
@@ -3760,7 +3874,7 @@ function initSearchableLists() {
         panel.classList.remove('scrolled-to-bottom');
       }
     }
-    
+
     panel.addEventListener('scroll', updateScrollEffect);
     // Vérification initiale
     updateScrollEffect();
@@ -3917,7 +4031,7 @@ function initSearchableLists() {
     previewImg.src = imageSrc;
   }
 
-  window.removeDynamicImage = function() {
+  window.removeDynamicImage = function () {
     selectedImageBase64 = null;
     const placeholder = document.getElementById('dynamicImagePlaceholder');
     const preview = document.getElementById('dynamicImagePreview');
@@ -3937,7 +4051,7 @@ function initSearchableLists() {
   }
 
   // Nouvelles fonctions pour la modal dynamique
-  window.closeDynamicPdfModal = function() {
+  window.closeDynamicPdfModal = function () {
     const modal = document.getElementById('tontonkadPdfExportModal');
     if (modal) {
       modal.remove();
@@ -3946,7 +4060,7 @@ function initSearchableLists() {
     selectedImageBase64 = null;
   }
 
-  window.generateDynamicPDF = async function() {
+  window.generateDynamicPDF = async function () {
     try {
       // Récupérer les valeurs des champs dynamiques
       const formData = {
@@ -4303,7 +4417,7 @@ function initSearchableLists() {
       // Description si fournie
       if (formData.description) {
         pdf.setFontSize(10);
-        pdf.text(formData.description, margin, margin + 35, {maxWidth: contentWidth - 70});
+        pdf.text(formData.description, margin, margin + 35, { maxWidth: contentWidth - 70 });
       }
 
       // Image du canvas au centre
@@ -4452,7 +4566,7 @@ function initSearchableLists() {
         pdf.setFontSize(8);
         pdf.setFont('helvetica', 'italic');
         pdf.setTextColor(100, 100, 100);
-        const dateStr = new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+        const dateStr = new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
         pdf.text(`Généré par TontonKAD le ${dateStr}`, col1X, statsLineY);
         pdf.setTextColor(0, 0, 0);
 
@@ -4948,8 +5062,8 @@ function initSearchableLists() {
 
       // Sauvegarder le PDF avec horodatage
       const now = new Date();
-      const dateStr = now.toISOString().slice(0,10); // YYYY-MM-DD
-      const timeStr = now.toTimeString().slice(0,8).replace(/:/g, '-'); // HH-MM-SS
+      const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+      const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-MM-SS
       const fileName = `${formData.projectName.replace(/[^a-z0-9]/gi, '_')}_${dateStr}_${timeStr}.pdf`;
       logPdf('saving file', fileName);
       try {
@@ -4962,7 +5076,7 @@ function initSearchableLists() {
       // Reset de l'image sélectionnée pour éviter le cache
       selectedImageBase64 = null;
 
-      showToast('Export PDF terminé !');
+      showToast('Export PDF terminé !', 'success', 10000);
       closePdfExportModal();
 
       console.timeEnd('[PDF] total');
@@ -5168,6 +5282,7 @@ function initSearchableLists() {
     const pdfDescription = document.getElementById('pdfDescription');
     const pdfDescriptionCounter = document.getElementById('pdfDescriptionCounter');
     const exportDXFBtn = document.getElementById('exportDXF');
+    const exportDXF_ZWCADBtn = document.getElementById('exportDXF_ZWCAD');
     const clearBtn = document.getElementById('clear');
     const reduceToMinimumBtn = document.getElementById('reduceToMinimum');
 
@@ -5210,6 +5325,7 @@ function initSearchableLists() {
     window.closePdfExportModal = closePdfExportModal;
 
     if (exportDXFBtn) exportDXFBtn.addEventListener('click', exportDXF);
+    if (exportDXF_ZWCADBtn) exportDXF_ZWCADBtn.addEventListener('click', exportDXF_ZWCAD);
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
         fourreaux.length = 0;
@@ -5230,16 +5346,16 @@ function initSearchableLists() {
 
     // Event listener pour le bouton de réduction
     if (reduceToMinimumBtn) reduceToMinimumBtn.addEventListener('click', reduceToMinimum);
-    
+
     // Fonction utilitaire pour gérer les changements de couleur des câbles
     function handleCableColorChange(obj, selectedPhase, colorInputValue) {
       // Vérifier si une couleur personnalisée a été définie
       const defaultColor = colorForCable(obj.fam, obj.code);
       const currentColor = colorInputValue;
-      
+
       // Priorité : couleur personnalisée > couleur du conducteur > couleur par défaut
-      if (currentColor !== hslToHex(defaultColor) && 
-          (!selectedPhase || selectedPhase === 'none' || currentColor !== PHASE_COLORS[selectedPhase])) {
+      if (currentColor !== hslToHex(defaultColor) &&
+        (!selectedPhase || selectedPhase === 'none' || currentColor !== PHASE_COLORS[selectedPhase])) {
         // L'utilisateur a choisi une couleur personnalisée différente
         obj.customColor = currentColor;
       } else if (selectedPhase && selectedPhase !== 'none') {
@@ -5250,12 +5366,12 @@ function initSearchableLists() {
         obj.customColor = null;
       }
     }
-    
+
     // Créer la grille de couleurs AutoCAD
     function createColorGrid() {
       const colorGrid = document.getElementById('colorGrid');
       colorGrid.innerHTML = ''; // Vider la grille existante
-      
+
       AUTOCAD_COLORS.forEach((colorData, index) => {
         const swatch = document.createElement('div');
         swatch.className = 'color-swatch';
@@ -5263,31 +5379,31 @@ function initSearchableLists() {
         swatch.title = `ACI ${colorData.aci} - ${colorData.hex}`;
         swatch.dataset.aci = colorData.aci;
         swatch.dataset.hex = colorData.hex;
-        
+
         swatch.addEventListener('click', () => {
           // Appliquer cette couleur à la sélection
           const colorInput = document.getElementById('editColor');
           colorInput.value = colorData.hex;
-          
+
           // Marquer comme sélectionné visuellement
           document.querySelectorAll('.color-swatch.selected').forEach(s => s.classList.remove('selected'));
           swatch.classList.add('selected');
-          
+
           // Déclencher l'événement de changement de couleur
           colorInput.dispatchEvent(new Event('change'));
-          
+
           // Fermer le dropdown après sélection
           closeColorDropdown();
         });
-        
+
         colorGrid.appendChild(swatch);
       });
     }
-    
+
     // Mettre à jour la grille selon la couleur actuelle
     function updateColorGridSelection(currentHex) {
       document.querySelectorAll('.color-swatch.selected').forEach(s => s.classList.remove('selected'));
-      
+
       if (currentHex) {
         const matchingSwatch = document.querySelector(`.color-swatch[data-hex="${currentHex.toUpperCase()}"]`);
         if (matchingSwatch) {
@@ -5323,7 +5439,7 @@ function initSearchableLists() {
     function toggleColorDropdown() {
       const dropdown = document.getElementById('colorDropdown');
       const btn = document.getElementById('autocadColorBtn');
-      
+
       if (dropdown.classList.contains('show')) {
         closeColorDropdown();
       } else {
@@ -5334,7 +5450,7 @@ function initSearchableLists() {
     function openColorDropdown() {
       const dropdown = document.getElementById('colorDropdown');
       const btn = document.getElementById('autocadColorBtn');
-      
+
       dropdown.classList.add('show');
       btn.classList.add('active');
     }
@@ -5342,7 +5458,7 @@ function initSearchableLists() {
     function closeColorDropdown() {
       const dropdown = document.getElementById('colorDropdown');
       const btn = document.getElementById('autocadColorBtn');
-      
+
       dropdown.classList.remove('show');
       btn.classList.remove('active');
     }
@@ -5379,7 +5495,7 @@ function initSearchableLists() {
       const colorInput = document.getElementById('editColor');
       const phaseSection = document.getElementById('cablePhaseSection');
       const fourreauFillSection = document.getElementById('fourreauFillSection');
-      
+
       // Mettre à jour le titre du popup pour indiquer la sélection multiple
       const popupTitle = popup.querySelector('h3');
       if (isMultiple) {
@@ -5391,10 +5507,10 @@ function initSearchableLists() {
         popupTitle.textContent = `Éditer le ${type}`;
         labelInput.placeholder = 'Libellé';
       }
-      
+
       // Remplir les champs avec les valeurs actuelles (du premier élément si multiple)
       labelInput.value = isMultiple ? '' : (obj.label || '');
-      
+
       // Déterminer la couleur à afficher selon la priorité
       let displayColor;
       const currentType = isMultiple ? selectedMultiple[0].type : selected.type;
@@ -5412,10 +5528,10 @@ function initSearchableLists() {
           displayColor = obj.color || defaultColor;
         }
       }
-      
+
       // Convertir en hex pour l'input color
       colorInput.value = hslToHex(displayColor);
-      
+
       // Afficher ou cacher la section des conducteurs selon le type d'objet
       if (currentType === 'cable') {
         phaseSection.style.display = 'block';
@@ -5435,7 +5551,7 @@ function initSearchableLists() {
         fourreauFillSection.style.display = 'block';
         populateUnipolarCableSelect();
       }
-      
+
       popup.style.display = 'flex';
 
       // Positionner la popup aux coordonnées du clic si fournies
@@ -5478,7 +5594,7 @@ function initSearchableLists() {
 
       setTimeout(() => labelInput.focus(), 100);
     }
-    
+
     function closeEditPopup() {
       // Fermer le dropdown des couleurs s'il est ouvert
       closeColorDropdown();
@@ -5551,7 +5667,7 @@ function initSearchableLists() {
             optionDiv.setAttribute('data-value', opt.value);
             optionDiv.textContent = opt.text;
 
-            optionDiv.addEventListener('mousedown', function(e) {
+            optionDiv.addEventListener('mousedown', function (e) {
               e.preventDefault();
               fillCableSearch.value = this.textContent;
               fillCableSearch.dataset.selectedValue = this.getAttribute('data-value');
@@ -5566,13 +5682,13 @@ function initSearchableLists() {
       }
 
       // Événement de recherche
-      fillCableSearch.addEventListener('input', function() {
+      fillCableSearch.addEventListener('input', function () {
         filterFillCables(this.value);
         showFillCableList();
       });
 
       // Événements de focus/blur pour afficher/masquer la liste
-      fillCableSearch.addEventListener('focus', function() {
+      fillCableSearch.addEventListener('focus', function () {
         // Sélectionner tout le texte pour faciliter le remplacement
         this.select();
         // Afficher tous les câbles (filtre vide)
@@ -5580,7 +5696,7 @@ function initSearchableLists() {
         showFillCableList();
       });
 
-      fillCableSearch.addEventListener('blur', function() {
+      fillCableSearch.addEventListener('blur', function () {
         // Délai pour permettre le clic sur la liste
         setTimeout(() => hideFillCableList(), 150);
       });
@@ -5676,32 +5792,32 @@ function initSearchableLists() {
       updateInventory();
       updateSelectedInfo();
     }
-    
+
     function saveEdit() {
       // Vérifier qu'il y a une sélection
       if (!selected && selectedMultiple.length === 0) {
         closeEditPopup();
         return;
       }
-      
+
       const labelInput = document.getElementById('editLabel');
       const colorInput = document.getElementById('editColor');
-      
+
       // Fonction pour appliquer les modifications à un objet
       const applyChangesToObject = (obj, type) => {
         // Sauvegarder le libellé (seulement si pas vide en mode multiple)
         if (selectedMultiple.length === 0 || labelInput.value.trim()) {
           obj.label = labelInput.value;
         }
-        
+
         // Si c'est un câble, gérer le conducteur sélectionné
         if (type === 'cable') {
           // Trouver quel bouton radio est sélectionné
           const selectedRadio = document.querySelector('input[name="cablePhase"]:checked');
           const selectedPhase = selectedRadio ? selectedRadio.dataset.phase : 'none';
-          
+
           obj.selectedPhase = selectedPhase;
-          
+
           // Gestion des couleurs pour les câbles
           handleCableColorChange(obj, selectedPhase, colorInput.value);
         } else {
@@ -5709,11 +5825,11 @@ function initSearchableLists() {
           obj.customColor = colorInput.value !== obj.color ? colorInput.value : null;
         }
       };
-      
+
       // Appliquer à tous les objets sélectionnés
       if (selectedMultiple.length > 0) {
         selectedMultiple.forEach(sel => {
-          const obj = sel.type === 'fourreau' 
+          const obj = sel.type === 'fourreau'
             ? fourreaux.find(f => f.id === sel.id)
             : cables.find(c => c.id === sel.id);
           if (obj) {
@@ -5722,14 +5838,14 @@ function initSearchableLists() {
         });
         showToast(`${selectedMultiple.length} éléments modifiés`);
       } else {
-        const obj = selected.type === 'fourreau' 
+        const obj = selected.type === 'fourreau'
           ? fourreaux.find(f => f.id === selected.id)
           : cables.find(c => c.id === selected.id);
         if (obj) {
           applyChangesToObject(obj, selected.type);
         }
       }
-      
+
       closeEditPopup();
       redraw();
       updateSelectedInfo();
@@ -5758,11 +5874,11 @@ function initSearchableLists() {
 
     document.getElementById('resetColor').addEventListener('click', () => {
       if (!selected) return;
-      const obj = selected.type === 'fourreau' 
+      const obj = selected.type === 'fourreau'
         ? fourreaux.find(f => f.id === selected.id)
         : cables.find(c => c.id === selected.id);
       if (obj) {
-        const defaultColor = selected.type === 'fourreau' 
+        const defaultColor = selected.type === 'fourreau'
           ? colorForFourreau(obj.type, obj.code)
           : colorForCable(obj.fam, obj.code);
         document.getElementById('editColor').value = hslToHex(obj.color || defaultColor);
@@ -5778,7 +5894,7 @@ function initSearchableLists() {
     // Événement pour le bouton des couleurs AutoCAD
     document.getElementById('autocadColorBtn').addEventListener('click', (e) => {
       e.stopPropagation();
-      
+
       // Créer la grille si elle n'existe pas encore
       const colorGrid = document.getElementById('colorGrid');
       if (!colorGrid.children.length) {
@@ -5787,7 +5903,7 @@ function initSearchableLists() {
         const currentColor = document.getElementById('editColor').value;
         updateColorGridSelection(currentColor);
       }
-      
+
       toggleColorDropdown();
     });
 
@@ -5795,9 +5911,9 @@ function initSearchableLists() {
     document.addEventListener('click', (e) => {
       const dropdown = document.getElementById('colorDropdown');
       const btn = document.getElementById('autocadColorBtn');
-      
-      if (dropdown && dropdown.classList.contains('show') && 
-          !dropdown.contains(e.target) && !btn.contains(e.target)) {
+
+      if (dropdown && dropdown.classList.contains('show') &&
+        !dropdown.contains(e.target) && !btn.contains(e.target)) {
         closeColorDropdown();
       }
     });
@@ -5808,11 +5924,11 @@ function initSearchableLists() {
       if (radioButton) {
         radioButton.addEventListener('change', () => {
           if (!selected || selected.type !== 'cable') return;
-          
+
           const colorInput = document.getElementById('editColor');
           const obj = cables.find(c => c.id === selected.id);
           if (!obj) return;
-          
+
           // Proposer la couleur du conducteur mais permettre de la modifier
           if (phase === 'none') {
             // Si aucune couleur personnalisée n'existe, proposer la couleur par défaut
@@ -6404,7 +6520,7 @@ function initSearchableLists() {
     initPanelScrollEffect();
     // Initialiser le bouton Infos comme actif
     document.getElementById('toolInfo').classList.add('btn-active');
-    
+
     // Initialiser les verrous de dimensions
     setupDimensionLocks();
 
@@ -6421,7 +6537,7 @@ function initSearchableLists() {
     setupTooltipPositioning();
   }
 
-function setupTooltipPositioning() {
+  function setupTooltipPositioning() {
     // Créer un seul élément tooltip réutilisable
     const tooltip = document.createElement('div');
     tooltip.className = 'custom-tooltip';
@@ -6471,16 +6587,16 @@ function setupTooltipPositioning() {
       if (btn === currentBtn) hideTooltip();
     });
   }
-  
+
   /* ====== Gestion des verrous de dimensions ====== */
   function setupDimensionLocks() {
     const lockWidth = document.getElementById('lockWidth');
     const lockHeight = document.getElementById('lockHeight');
     const boxW = document.getElementById('boxW');
     const boxH = document.getElementById('boxH');
-    
+
     if (lockWidth && boxW) {
-      lockWidth.addEventListener('change', function() {
+      lockWidth.addEventListener('change', function () {
         boxW.disabled = this.checked;
         if (this.checked) {
           // Sauvegarder la valeur actuelle si on verrouille
@@ -6500,7 +6616,7 @@ function setupTooltipPositioning() {
     }
 
     if (lockHeight && boxH) {
-      lockHeight.addEventListener('change', function() {
+      lockHeight.addEventListener('change', function () {
         boxH.disabled = this.checked;
         if (this.checked) {
           // Sauvegarder la valeur actuelle si on verrouille
@@ -6522,7 +6638,7 @@ function setupTooltipPositioning() {
     // Rendre les icônes de cadenas cliquables
     const lockIcons = document.querySelectorAll('.lock-icon');
     lockIcons.forEach(icon => {
-      icon.addEventListener('click', function(e) {
+      icon.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
 
@@ -6571,62 +6687,64 @@ function setupTooltipPositioning() {
     }
   }
   function initThemeSwitcher() {
-      const themeSwitcher = document.getElementById('theme-switcher');
-      const html = document.documentElement;
+    const themeSwitcher = document.getElementById('theme-switcher');
+    const html = document.documentElement;
 
-      // Appliquer le thème sauvegardé au chargement
-      const savedTheme = localStorage.getItem('tontonkad-theme') || 'light';
-      html.setAttribute('data-theme', savedTheme);
-      updateLogo(savedTheme);
+    // Appliquer le thème sauvegardé au chargement
+    const savedTheme = localStorage.getItem('tontonkad-theme') || 'light';
+    html.setAttribute('data-theme', savedTheme);
+    updateLogo(savedTheme);
 
-      // Notifier Electron du thème au chargement
-      if (window.electronAPI && window.electronAPI.setTheme) {
-        window.electronAPI.setTheme(savedTheme);
-      }
+    // Notifier Electron du thème au chargement
+    if (window.electronAPI && window.electronAPI.setTheme) {
+      window.electronAPI.setTheme(savedTheme);
+    }
 
-      if (themeSwitcher) {
-        // Fonction toggle
-        const toggleTheme = () => {
-          const currentTheme = html.getAttribute('data-theme');
-          const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    if (themeSwitcher) {
+      // Fonction toggle
+      const toggleTheme = () => {
+        const currentTheme = html.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
-          html.setAttribute('data-theme', newTheme);
-          localStorage.setItem('tontonkad-theme', newTheme);
+        html.setAttribute('data-theme', newTheme);
+        localStorage.setItem('tontonkad-theme', newTheme);
 
-          // Mettre à jour le logo
-          updateLogo(newTheme);
+        // Mettre à jour le logo
+        updateLogo(newTheme);
 
-          // Notifier Electron du changement de thème
-          if (window.electronAPI && window.electronAPI.setTheme) {
-            window.electronAPI.setTheme(newTheme);
-          }
+        // Notifier Electron du changement de thème
+        if (window.electronAPI && window.electronAPI.setTheme) {
+          window.electronAPI.setTheme(newTheme);
+        }
 
-          // Afficher le toast APRÈS avoir changé le thème
-          showToast(`Thème ${newTheme === 'dark' ? 'sombre' : 'clair'} activé`);
+        // Afficher le toast APRÈS avoir changé le thème
+        showToast(`Thème ${newTheme === 'dark' ? 'sombre' : 'clair'} activé`);
 
-          // Redessiner pour que les couleurs du canvas (si elles dépendent des variables) soient mises à jour
-          redraw();
-        };
+        // Redessiner pour que les couleurs du canvas (si elles dépendent des variables) soient mises à jour
+        redraw();
+      };
 
-        // Gestionnaires d'événements
-        themeSwitcher.addEventListener('click', toggleTheme);
-        themeSwitcher.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            toggleTheme();
-          }
-        });
-      }
-
-      // Mettre à jour l'icône du sélecteur de thème en fonction du thème actuel
-      const observer = new MutationObserver(() => {
-        // Pas besoin de faire quoi que ce soit ici, le CSS gère l'affichage des icônes
+      // Gestionnaires d'événements
+      themeSwitcher.addEventListener('click', toggleTheme);
+      themeSwitcher.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleTheme();
+        }
       });
-      observer.observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+    }
+
+    // Mettre à jour l'icône du sélecteur de thème en fonction du thème actuel
+    const observer = new MutationObserver(() => {
+      // Pas besoin de faire quoi que ce soit ici, le CSS gère l'affichage des icônes
+    });
+    observer.observe(html, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
 
   /* ====== Interface de Gestion des Projets ====== */
+  const NEW_FOLDER_OPTION_VALUE = '__new_folder__';
+
   class ProjectUI {
     constructor() {
       this.modal = document.getElementById('projectModal');
@@ -6687,6 +6805,18 @@ function setupTooltipPositioning() {
       this.toggleFolderCreation.addEventListener('click', () => {
         this.toggleFolderCreationField();
       });
+
+      if (this.projectFolder) {
+        this.projectFolder.addEventListener('change', () => {
+          if (this.projectFolder.value === NEW_FOLDER_OPTION_VALUE) {
+            const fallbackSelection = this.projectFolder.dataset.lastSelection || '';
+            this.projectFolder.value = fallbackSelection;
+            this.showFolderCreationField();
+            return;
+          }
+          this.projectFolder.dataset.lastSelection = this.projectFolder.value;
+        });
+      }
 
       // Bouton restaurer auto-save
       this.restoreAutoSave.addEventListener('click', () => {
@@ -7014,6 +7144,10 @@ function setupTooltipPositioning() {
       if (window.projectManager.createFolder(name)) {
         this.hideFolderCreationField();
         this.refreshUI();
+        if (this.projectFolder) {
+          this.projectFolder.value = name;
+          this.projectFolder.dataset.lastSelection = name;
+        }
       }
     }
 
@@ -7089,13 +7223,22 @@ function setupTooltipPositioning() {
 
       const data = window.projectManager.getAllProjects();
       const folderNames = Object.keys(data.folders);
+      const previousSelection = this.projectFolder.dataset.lastSelection || this.projectFolder.value || '';
+      const safeSelection = previousSelection === NEW_FOLDER_OPTION_VALUE ? '' : previousSelection;
 
       this.projectFolder.innerHTML = `
         <option value="">🏠 Racine (sans dossier)</option>
         ${folderNames.map(name =>
-          `<option value="${name}">📁 ${name}</option>`
-        ).join('')}
+        `<option value="${name}">📁 ${name}</option>`
+      ).join('')}
+        <option value="${NEW_FOLDER_OPTION_VALUE}">➕ Nouveau dossier...</option>
       `;
+      if (safeSelection && !folderNames.includes(safeSelection)) {
+        this.projectFolder.value = '';
+      } else {
+        this.projectFolder.value = safeSelection;
+      }
+      this.projectFolder.dataset.lastSelection = this.projectFolder.value;
     }
 
     renderProjectsList() {
@@ -7193,8 +7336,8 @@ function setupTooltipPositioning() {
                 <span>📅 ${this.formatDate(lastModified)}</span>
                 <span>📦 ${totalObjects} objets</span>
                 <span>📏 ${project.container?.shape === 'rect' ?
-                  `${project.container.width}×${project.container.height}mm` :
-                  `⌀${project.container?.diameter || '?'}mm`}</span>
+            `${project.container.width}×${project.container.height}mm` :
+            `⌀${project.container?.diameter || '?'}mm`}</span>
               </div>
             </div>
             <div class="project-actions">

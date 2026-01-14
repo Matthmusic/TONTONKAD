@@ -513,6 +513,25 @@ ipcMain.handle('open-data-folder', async () => {
   }
 });
 
+// Ouvrir un chemin spécifique ou montrer un fichier dans son dossier
+ipcMain.handle('show-item-in-folder', async (event, fullPath) => {
+  try {
+    shell.showItemInFolder(fullPath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-path', async (event, fullPath) => {
+  try {
+    await shell.openPath(fullPath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // Obtenir la configuration actuelle
 ipcMain.handle('get-config', async () => {
   return {

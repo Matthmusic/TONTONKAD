@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Charger les données CSV
   loadCSV: (filename) => ipcRenderer.invoke('load-csv', filename),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
+  showItemInFolder: (path) => ipcRenderer.invoke('show-item-in-folder', path),
+  openPath: (path) => ipcRenderer.invoke('open-path', path),
 
   // Configuration de la base de données
   getConfig: () => ipcRenderer.invoke('get-config'),
