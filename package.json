@@ -40,7 +40,8 @@
     "files": [
       "src/**/*",
       "data/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "ico/**/*"
     ],
     "extraResources": [
       {
@@ -70,7 +71,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "TONTONKAD"
+      "shortcutName": "TONTONKAD",
+      "installerSidebar": "installerSidebar.bmp"
     },
     "mac": {
       "target": [
