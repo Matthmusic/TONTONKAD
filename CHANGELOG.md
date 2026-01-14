@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet seront document?es dans ce fichie
 Le format est bas? sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adh?re ? [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [2.4.8] - 2026-01-14
+
+### Ajoute
+- Inclusion des assets ico dans le build.
+- Ajout d'une sidebar personnalisee pour l'installeur.
+
+### Modifie
+- Mise a jour des versions et metadonnees associees a la release.
+
 ## [2.4.7] - 2026-01-14
 
 ### Ajout?
