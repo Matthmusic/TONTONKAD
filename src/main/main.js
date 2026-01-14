@@ -183,6 +183,12 @@ function createWindow() {
       const backgroundColor = theme === 'dark' ? '#12121c' : '#f0f2f5';
       mainWindow.setBackgroundColor(backgroundColor);
     });
+
+    if (!isDev) {
+      setTimeout(() => {
+        checkForUpdates();
+      }, 1000);
+    }
   });
 
   // DevTools en mode développement
@@ -196,12 +202,6 @@ function createWindow() {
   // Initialiser l'auto-updater (seulement en production)
   initAutoUpdater();
 
-  // Vérifier les mises à jour (seulement en production)
-  if (!isDev) {
-    setTimeout(() => {
-      checkForUpdates();
-    }, 3000);
-  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -370,12 +370,24 @@ function createMenu() {
 
 // Auto-updater
 function checkForUpdates(manual = false) {
+  if (!autoUpdater) {
+    if (manual) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'Erreur de mise a jour',
+        message: 'Auto-updater non initialise',
+        detail: 'Impossible de verifier les mises a jour.'
+      });
+    }
+    return;
+  }
+
   autoUpdater.checkForUpdates().catch(err => {
     if (manual) {
       dialog.showMessageBox(mainWindow, {
         type: 'error',
-        title: 'Erreur de mise à jour',
-        message: 'Impossible de vérifier les mises à jour',
+        title: 'Erreur de mise a jour',
+        message: 'Impossible de verifier les mises a jour',
         detail: err.message
       });
     }

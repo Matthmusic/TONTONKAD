@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet seront document?es dans ce fichie
 Le format est bas? sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adh?re ? [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [2.4.9] - 2026-01-14
+
+### Ajoute
+- Conversion du BMP sidebar en format compatible NSIS.
+- Verification des mises a jour apres chargement du renderer.
+
+### Modifie
+- Mise a jour des versions et metadonnees associees a la release.
+
 ## [2.4.8] - 2026-01-14
 
 ### Ajoute
