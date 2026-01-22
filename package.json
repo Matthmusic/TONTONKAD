@@ -1,6 +1,6 @@
 {
   "name": "tontonkad",
-  "version": "2.4.9",
+  "version": "2.4.10",
   "description": "TONTONKAD - Dimensionnement de chemins de câbles et fourreaux",
   "main": "src/main/main.js",
   "author": "TONTONKAD Team",
@@ -12,7 +12,10 @@
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
-    "release": "electron-builder --publish always"
+    "release": "electron-builder --publish always",
+    "bmad:refresh": "bmad-method install -f -i codex",
+    "bmad:list": "bmad-method list:agents",
+    "bmad:validate": "bmad-method validate"
   },
   "keywords": [
     "electrical",
@@ -28,7 +31,8 @@
   },
   "dependencies": {
     "dxf-writer": "^1.18.4",
-    "electron-updater": "^6.6.2"
+    "electron-updater": "^6.6.2",
+    "interactjs": "^1.10.27"
   },
   "build": {
     "appId": "com.tontonkad.app",
