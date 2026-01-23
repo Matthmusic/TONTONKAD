@@ -529,7 +529,7 @@
                   <rect x="3" y="15" width="6" height="6" stroke="currentColor" stroke-width="2" fill="none"/>
                   <rect x="15" y="15" width="6" height="6" stroke="currentColor" stroke-width="2" fill="none"/>
                 </svg>
-                <span class="btn-label">Grille 3cm</span>
+                <span class="btn-label">Grille</span>
               </button>
               <button id="toggleGridBtn" class="cmd-btn cmd-btn-secondary" aria-label="Afficher/Masquer la grille et activer le magnétisme - Raccourci: Maj+G">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -546,6 +546,19 @@
                 <span class="btn-label">Figer</span>
                 <span class="btn-shortcut">G</span>
               </button>
+            </div>
+
+            <!-- Gap réglable -->
+            <div class="gap-control-container">
+              <label for="gapSlider" class="gap-label">
+                <span class="gap-icon">↔️</span>
+                <span>Écart fourreaux: <strong id="gapValue">30</strong>mm</span>
+              </label>
+              <input type="range" id="gapSlider" min="15" max="50" value="30" step="1" class="gap-slider" aria-label="Régler l'écart entre fourreaux (15-50mm)">
+              <div class="gap-range-labels">
+                <span>15mm</span>
+                <span>50mm</span>
+              </div>
             </div>
           </div>
 
@@ -643,10 +656,14 @@
   <div id="notification-container" class="notification-container"></div>
 
   <!-- Scripts de l'application -->
+  <!-- interact.js pour resize handles -->
+  <script src="../../node_modules/interactjs/dist/interact.min.js"></script>
+
   <script src="theme-manager.js" defer></script>
   <script src="titlebar.js" defer></script>
   <script src="settings-modal.js" defer></script>
   <script src="manual.js" defer></script>
+  <script src="canvas-resize-handler.js"></script>
   <script src="script.js" defer></script>
   <script src="dimension-button-handler.js" defer></script>
   <script src="electron-integration.js" defer></script>

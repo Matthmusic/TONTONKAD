@@ -19,8 +19,8 @@
   const PHYSICS_ITERATIONS = 8; // Plus d'itérations = plus de précision, moins de chevauchement
 
   // Constantes d'affichage
-  const CANVAS_MARGIN = 40; // Marge pour les cotations
-  const TOTAL_CANVAS_MARGIN = CANVAS_MARGIN * 2; // 80px total
+  const CANVAS_MARGIN = 100; // Marge pour les cotations et poignées de redimensionnement
+  const TOTAL_CANVAS_MARGIN = CANVAS_MARGIN * 2; // 200px total
   const DEFAULT_STROKE_WIDTH = -3; // Épaisseur de trait par défaut
 
   // Constantes de grille
@@ -35,11 +35,21 @@
 
   // Grille adaptative basée sur les fourreaux
   let adaptiveGridEnabled = true; // Utiliser la grille adaptative par défaut
-  const FOURREAU_GAP = 30; // Espace libre entre les bords des fourreaux en mm
+  let FOURREAU_GAP = 30; // Espace libre entre les bords des fourreaux en mm (réglable 15-50mm)
   let gridOrigin = null; // Point d'origine de la grille (premier fourreau)
   let gridSpacing = null; // Espacement calculé dynamiquement
   let gridLocked = false; // Verrouille la grille après calcul pour éviter les recalculs
   let gridFourreauxCount = 0; // Nombre de fourreaux au dernier calcul de grille
+  let lastGridCells = []; // Stocke les cellules de la grille après placement automatique
+  let snapPreviewPoint = null; // Point de snap preview {x, y, timestamp} pour animation clignotante
+  let draggedObject = null; // Objet en cours de drag pour affichage halo preview
+  let virtualSlots = []; // Emplacements virtuels disponibles pour placement {x, y, diameter, available}
+  let pendingFourreauType = null; // Type de fourreau en attente de placement {type, code, od}
+  let pendingSlotClick = null; // Slot virtuel cliqué en attente de relâchement souris
+  let previewFourreau = null; // Aperçu visuel du fourreau avant placement {x, y, type, code, od}
+  let pendingMiddleClick = null; // Données du clic molette en attente {x, y, type, code, od, isCable, cableFam}
+
+  // Poignées de redimensionnement - SUPPRIMÉ (remplacé par interact.js)
 
   // Zoom et historique
   let currentZoom = 100; // Zoom actuel en pourcentage
@@ -59,6 +69,7 @@
   let basePixelRatio = window.devicePixelRatio || 1;
   let pixelRatio = basePixelRatio;
   let displayScale = 1;
+  let canvasOffsetPx = { x: 0, y: 0 };
   let logicalCanvasWidth = 0;
   let logicalCanvasHeight = 0;
   const MAX_EFFECTIVE_PIXEL_RATIO = 4.5; // Cap doux pour le rendu live
@@ -144,8 +155,8 @@
       0,
       0,
       effectivePixelRatio,
-      CANVAS_MARGIN * effectivePixelRatio,
-      CANVAS_MARGIN * effectivePixelRatio
+      (CANVAS_MARGIN + canvasOffsetPx.x) * effectivePixelRatio,
+      (CANVAS_MARGIN + canvasOffsetPx.y) * effectivePixelRatio
     );
 
     // Activation de l'antialiasing optimisé
@@ -302,6 +313,10 @@
     window.WORLD_W_MM = WORLD_W_MM;
     window.WORLD_H_MM = WORLD_H_MM;
     window.WORLD_D_MM = WORLD_D_MM;
+    window.WORLD_W = WORLD_W;
+    window.WORLD_H = WORLD_H;
+    window.WORLD_R = WORLD_R;
+    window.MM_TO_PX = MM_TO_PX;
   }
 
   syncDimensionState();
@@ -555,6 +570,19 @@
               selectedFourreau = opt.value;
               fourreauSearch.value = opt.text;
               hideFourreauList();
+
+              // Activer le mode placement guidé si la grille est active
+              if (gridEnabled && selectedFourreau) {
+                const [type, code] = selectedFourreau.split('|');
+                activateVirtualPlacement(type, code);
+
+                // NOUVEAU : Recalcul dynamique des cellules virtuelles
+                const spec = FOURREAUX.find(f => f.type === type && f.code === code);
+                if (spec) {
+                  generateVirtualSlots(spec.od);
+                  redraw();
+                }
+              }
             });
             groupDiv.appendChild(optionDiv);
           });
@@ -719,6 +747,7 @@
       setupHighResCanvas(2 * pad, 2 * pad);
       canvas.classList.add("no-frame");
     }
+    syncDimensionState();
     fitCanvas(true);
   }
 
@@ -749,6 +778,12 @@
 
     if (forceRedraw) redraw();
   }
+
+  function adjustCanvasOffset(dx, dy) {
+    canvasOffsetPx.x += dx;
+    canvasOffsetPx.y += dy;
+  }
+  window.adjustCanvasOffset = adjustCanvasOffset;
 
   /* ====== Couleurs déterministes ====== */
   const COL_CABLE = new Map, COL_FOURREAU = new Map;
@@ -960,8 +995,25 @@
     cables.length = 0;
     cables.push(...previousState.cables.map(c => ({ ...c })));
 
-    // Déverrouiller la grille pour recalcul si nécessaire
-    gridLocked = false;
+    // Réinitialiser complètement la grille adaptative pour recalcul
+    if (gridEnabled) {
+      lastGridCells = [];
+      gridOrigin = null;
+      gridSpacing = null;
+      gridLocked = false;
+
+      if (selectedFourreau) {
+        const [selType, selCode] = selectedFourreau.split('|');
+        const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
+        if (selSpec) {
+          generateVirtualSlots(selSpec.od);
+          console.log('[UNDO] Grille recalculée après restauration');
+        }
+      } else {
+        // Si aucun fourreau sélectionné, vider les slots virtuels
+        virtualSlots = [];
+      }
+    }
 
     // Mettre à jour l'affichage
     updateInventory();
@@ -993,15 +1045,20 @@
 
   /* ====== Logique de Placement ====== */
   function isInsideBox(x, y, r) {
+    // Marge de sécurité de 50mm (5cm) en mode grille
+    const safetyMarginPx = gridEnabled ? 50 * MM_TO_PX : 0;
+
     if (SHAPE === "rect") {
-      return x - r >= 0 && x + r <= WORLD_W && y - r >= 0 && y + r <= WORLD_H;
+      return x - r >= safetyMarginPx && x + r <= WORLD_W - safetyMarginPx &&
+             y - r >= safetyMarginPx && y + r <= WORLD_H - safetyMarginPx;
     }
     if (SHAPE === "chemin_de_cable") {
       // Pas de limite en haut pour permettre aux objets de déborder
-      return x - r >= 0 && x + r <= WORLD_W && y + r <= WORLD_H;
+      return x - r >= safetyMarginPx && x + r <= WORLD_W - safetyMarginPx &&
+             y + r <= WORLD_H - safetyMarginPx;
     }
     const { x: cx, y: cy } = getCanvasCenter();
-    return Math.hypot(x - cx, y - cy) + r <= WORLD_R;
+    return Math.hypot(x - cx, y - cy) + r <= WORLD_R - safetyMarginPx;
   }
 
   function collidesWithFourreau(x, y, r, ignoreId) {
@@ -1096,7 +1153,7 @@
     const numItems = items.length;
 
     if (numItems === 0) {
-      return { fits: true, placements: [], grid: { cols: 0, rows: 0 } };
+      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
     }
 
     const sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
@@ -1161,6 +1218,7 @@
       const startY = (container.height - totalHeight) / 2;
 
       const placements = [];
+      const cells = []; // Stockage des cellules pour affichage visuel
       let currentY = startY;
       for (let r = 0; r < bestGrid.rows; r++) {
         let currentX = startX;
@@ -1172,13 +1230,19 @@
               x: currentX + colWidths[c] / 2,
               y: currentY + rowHeights[r] / 2,
             });
+            cells.push({
+              x: currentX,
+              y: currentY,
+              width: colWidths[c],
+              height: rowHeights[r]
+            });
           }
           currentX += colWidths[c];
         }
         currentY += rowHeights[r];
       }
 
-      return { fits: true, placements, grid: { cols: bestGrid.cols, rows: bestGrid.rows } };
+      return { fits: true, placements, grid: { cols: bestGrid.cols, rows: bestGrid.rows }, cells };
     } else {
       // Aucune grille ne rentre, calculer la taille suggérée
       const aspectRatio = container.width / container.height;
@@ -1194,6 +1258,7 @@
           height: Math.ceil((totalHeight + 2 * margin) / 10) * 10,
         },
         grid: { cols, rows },
+        cells: []
       };
     }
   }
@@ -1209,6 +1274,22 @@
     const shouldFreeze = snapToGrid;
     const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, idm: spec.id, color: colorForFourreau(type, code), customColor: null, label: '', children: [], vx: 0, vy: 0, dragging: false, frozen: shouldFreeze, _px: spot.x, _py: spot.y, type, code };
     fourreaux.push(obj);
+
+    // Expansion automatique de la grille autour du fourreau placé
+    if (gridEnabled) {
+      const cellSize = spec.od + FOURREAU_GAP;
+      expandAdjacentCells(obj, cellSize);
+
+      // NOUVEAU : Recalcul dynamique des cellules virtuelles après placement
+      if (selectedFourreau) {
+        const [selType, selCode] = selectedFourreau.split('|');
+        const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
+        if (selSpec) {
+          generateVirtualSlots(selSpec.od);
+        }
+      }
+    }
+
     updateStats();
     updateInventory();
     redraw();
@@ -1243,6 +1324,561 @@
 
 
   /* ====== Grille virtuelle adaptative pour multitubulaires (VRD/BTP) ====== */
+
+  /**
+   * Calcule les dimensions de cellule optimisées (rectangulaires) pour un fourreau
+   * @param {Object} item - {id, diameter}
+   * @param {number} gap - Écart en mm
+   * @returns {Object} - {width, height, canStack}
+   */
+  function calculateCellDimensions(item, gap) {
+    const diameter = item.diameter;
+    return {
+      width: diameter + gap,
+      height: diameter + gap,
+      canStack: true
+    };
+  }
+
+  /**
+   * Vérifie si 2 petits fourreaux peuvent être empilés verticalement
+   * @param {Object} small1 - Premier petit {id, diameter}
+   * @param {Object} small2 - Deuxième petit {id, diameter}
+   * @param {Object} adjacentLarge - Gros adjacent {id, diameter}
+   * @param {number} gap - Écart en mm
+   * @returns {Object} - {canStack: boolean, stackedHeight?: number}
+   */
+  function canStackTwoSmall(small1, small2, adjacentLarge, gap) {
+    const stackedHeight = small1.diameter + small2.diameter + gap;
+    const largeHeight = adjacentLarge.diameter;
+
+    if (stackedHeight <= largeHeight + gap) {
+      return { canStack: true, stackedHeight };
+    }
+    return { canStack: false };
+  }
+
+  /**
+   * Stratégie PYRAMID: Placement hiérarchique (gros en bas, petits autour)
+   * Logique: Gros fourreau(x) en bas au centre, remplissage symétrique autour
+   * @param {Array} items - Fourreaux avec {id, diameter}
+   * @param {Object} container - {width, height}
+   * @param {Object} options - {margin, gap}
+   * @param {Object} analysis - Résultat de analyzeConduitMix
+   * @returns {Object} - Résultat placement
+   */
+  /**
+   * Stratégie SMART PYRAMID: Placement pyramidal intelligent par rangées optimisées
+   * Remplit chaque rangée en fonction de la largeur disponible (pas séquentiel)
+   * Exemple: 2×Ø63 peuvent tenir dans la largeur d'1×Ø200
+   * @param {Array} items - Fourreaux avec {id, diameter}
+   * @param {Object} container - {width, height}
+   * @param {Object} options - {margin, gap}
+   * @returns {Object} - Résultat placement
+   */
+  function placeSmartPyramid(items, container, options) {
+    const { margin = 0, gap = 0 } = options || {};
+
+    if (items.length === 0) {
+      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
+    }
+
+    // Trier par taille décroissante (gros en premier)
+    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
+    const availableWidth = container.width - 2 * margin;
+    const availableHeight = container.height - 2 * margin;
+
+    const placements = [];
+    const cells = [];
+    const rows = []; // Stockage des rangées construites
+
+    let remainingItems = [...sorted];
+    let currentY = container.height - margin;
+
+    // Construire les rangées de bas en haut
+    while (remainingItems.length > 0) {
+      const row = { items: [], width: 0, height: 0 };
+      let rowX = margin;
+
+      // Remplir la rangée avec les items qui rentrent dans la largeur disponible
+      let i = 0;
+      while (i < remainingItems.length) {
+        const item = remainingItems[i];
+        const itemWidth = item.diameter + gap;
+
+        // Vérifier si l'item rentre dans la largeur restante de la rangée
+        if (row.width + itemWidth <= availableWidth + gap) {
+          row.items.push(item);
+          row.width += itemWidth;
+          row.height = Math.max(row.height, item.diameter + gap);
+          remainingItems.splice(i, 1); // Retirer de la liste
+        } else {
+          i++; // Passer au suivant
+        }
+      }
+
+      // Si la rangée est vide (aucun item ne rentre), on arrête
+      if (row.items.length === 0) break;
+
+      // Calculer la position Y de cette rangée (on monte)
+      currentY -= row.height;
+
+      // Si on dépasse en hauteur, cette rangée ne rentre pas
+      if (currentY < margin) {
+        // Replacer les items dans remainingItems
+        remainingItems.push(...row.items);
+        break;
+      }
+
+      // Centrer la rangée horizontalement
+      const rowStartX = margin + (availableWidth - row.width + gap) / 2;
+
+      // Placer les items de cette rangée
+      let xPos = rowStartX;
+      for (const item of row.items) {
+        const cellSize = item.diameter + gap;
+        placements.push({
+          id: item.id,
+          x: xPos + item.diameter / 2,
+          y: currentY + row.height / 2
+        });
+        cells.push({
+          x: xPos,
+          y: currentY,
+          width: cellSize,
+          height: row.height
+        });
+        xPos += cellSize;
+      }
+
+      rows.push(row);
+    }
+
+    // Vérifier si tous les items ont été placés
+    if (remainingItems.length > 0) {
+      // Calculer les dimensions nécessaires
+      const neededHeight = rows.reduce((sum, r) => sum + r.height, 0) + 2 * margin +
+                           remainingItems.reduce((sum, item) => sum + item.diameter + gap, 0);
+
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols: 0, rows: rows.length },
+        cells: [],
+        suggestedContainer: {
+          width: container.width,
+          height: Math.ceil(neededHeight)
+        }
+      };
+    }
+
+    return {
+      fits: true,
+      placements,
+      grid: {
+        cols: Math.max(...rows.map(r => r.items.length)),
+        rows: rows.length
+      },
+      cells
+    };
+  }
+
+  function placePyramid(items, container, options, analysis) {
+    const { margin = 0, gap = 0 } = options || {};
+    const { stats } = analysis;
+
+    if (items.length === 0) {
+      return { fits: true, placements: [], grid: { cols: 0, rows: 0 } };
+    }
+
+    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
+    const largestDiameter = stats.maxDiameter;
+    const largestCount = stats.diameterCounts[largestDiameter];
+
+    const largeItems = sorted.slice(0, largestCount);
+    const smallItems = sorted.slice(largestCount);
+
+    const placements = [];
+    const cells = []; // Stockage des cellules pour affichage visuel
+
+    // Phase 1: Placer le(s) gros EN BAS au centre (métier VRD: gros en bas, gravité)
+    const baseY = container.height - margin - largestDiameter / 2 - gap / 2;
+    const largeCellSize = largestDiameter + gap;
+
+    if (largestCount === 1) {
+      const x = container.width / 2;
+      placements.push({
+        id: largeItems[0].id,
+        x: x,
+        y: baseY
+      });
+      cells.push({
+        x: x - largeCellSize / 2,
+        y: baseY - largeCellSize / 2,
+        width: largeCellSize,
+        height: largeCellSize
+      });
+    } else {
+      const baseWidth = largestCount * (largestDiameter + gap);
+      const baseStartX = (container.width - baseWidth) / 2 + (largestDiameter + gap) / 2;
+      for (let i = 0; i < largestCount; i++) {
+        const x = baseStartX + i * (largestDiameter + gap);
+        placements.push({
+          id: largeItems[i].id,
+          x: x,
+          y: baseY
+        });
+        cells.push({
+          x: x - largeCellSize / 2,
+          y: baseY - largeCellSize / 2,
+          width: largeCellSize,
+          height: largeCellSize
+        });
+      }
+    }
+
+    // Phase 2: Placer petits AU-DESSUS en grille
+    if (smallItems.length > 0) {
+      const maxSmallDiameter = Math.max(...smallItems.map(s => s.diameter));
+      const smallCellSize = maxSmallDiameter + gap;
+
+      const numCols = Math.max(largestCount, Math.ceil(Math.sqrt(smallItems.length)));
+      const numRows = Math.ceil(smallItems.length / numCols);
+
+      const gridWidth = numCols * smallCellSize;
+      const gridStartX = (container.width - gridWidth) / 2 + smallCellSize / 2;
+      const gridStartY = baseY - largestDiameter / 2 - gap - smallCellSize / 2;
+
+      let smallIndex = 0;
+      // Remplir du bas vers le haut (r décroissant signifie Y décroissant = monter)
+      for (let r = numRows - 1; r >= 0; r--) {
+        for (let c = 0; c < numCols; c++) {
+          if (smallIndex < smallItems.length) {
+            const x = gridStartX + c * smallCellSize;
+            const y = gridStartY - r * smallCellSize;
+            placements.push({
+              id: smallItems[smallIndex].id,
+              x: x,
+              y: y
+            });
+            cells.push({
+              x: x - smallCellSize / 2,
+              y: y - smallCellSize / 2,
+              width: smallCellSize,
+              height: smallCellSize
+            });
+            smallIndex++;
+          }
+        }
+      }
+    }
+
+    // Vérifier si tout rentre
+    const maxY = Math.max(...placements.map(p => p.y)) + Math.max(...sorted.map(s => s.diameter)) / 2 + gap / 2;
+    const maxX = Math.max(...placements.map(p => p.x)) + Math.max(...sorted.map(s => s.diameter)) / 2 + gap / 2;
+
+    if (maxY > container.height || maxX > container.width) {
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols: 0, rows: 0 },
+        cells: [],
+        suggestedContainer: {
+          width: Math.ceil(maxX + margin),
+          height: Math.ceil(maxY + margin)
+        }
+      };
+    }
+
+    return {
+      fits: true,
+      placements,
+      grid: { cols: largestCount, rows: Math.ceil(smallItems.length / Math.max(1, largestCount)) + 1 },
+      cells // Retourner les cellules pour affichage
+    };
+  }
+
+  /**
+   * Score un layout selon critères de qualité
+   * @param {Object} layout - Résultat de placement
+   * @param {Object} container - {width, height}
+   * @param {Array} items - Items originaux
+   * @returns {number} - Score (plus haut = meilleur)
+   */
+  function scoreLayout(layout, container, items) {
+    if (!layout.fits || !layout.placements || layout.placements.length === 0) {
+      return -1000;
+    }
+
+    const { placements } = layout;
+
+    // Critère 1: Compacité (40%) - Minimiser espace utilisé
+    const usedWidth = Math.max(...placements.map(p => p.x)) - Math.min(...placements.map(p => p.x));
+    const usedHeight = Math.max(...placements.map(p => p.y)) - Math.min(...placements.map(p => p.y));
+    const usedArea = usedWidth * usedHeight;
+    const containerArea = container.width * container.height;
+    const compacityScore = (1 - usedArea / containerArea) * 40;
+
+    // Critère 2: Symétrie (30%) - Layouts équilibrés
+    const centerX = container.width / 2;
+    const avgDistanceFromCenter = placements.reduce((sum, p) => sum + Math.abs(p.x - centerX), 0) / placements.length;
+    const maxDistancePossible = container.width / 2;
+    const symmetryScore = (1 - avgDistanceFromCenter / maxDistancePossible) * 30;
+
+    // Critère 3: Alignement (30%) - Grilles bien formées
+    const cols = layout.grid?.cols || 1;
+    const rows = layout.grid?.rows || 1;
+    const ratio = cols / rows;
+    const idealRatio = 1.5; // Rectangle large > haut (métier VRD)
+    const alignmentScore = (1 - Math.abs(ratio - idealRatio) / idealRatio) * 30;
+
+    return compacityScore + symmetryScore + alignmentScore;
+  }
+
+  /**
+   * Stratégie COMPLEX: Génération multi-variantes avec scoring
+   * Génère 3 variantes et retourne la meilleure
+   * @param {Array} items - Fourreaux avec {id, diameter}
+   * @param {Object} container - {width, height}
+   * @param {Object} options - {margin, gap}
+   * @param {Object} analysis - Résultat de analyzeConduitMix
+   * @returns {Object} - Résultat placement (meilleure variante)
+   */
+  function placeComplex(items, container, options, analysis) {
+    const variants = [];
+
+    // Variante 1: Smart Pyramid (NOUVEAU - placement pyramidal intelligent)
+    const variant1 = placeSmartPyramid(items, container, options);
+    variants.push({
+      layout: variant1,
+      name: 'SmartPyramid',
+      score: scoreLayout(variant1, container, items)
+    });
+
+    // Variante 2: Standard (tri taille décroissante)
+    const variant2 = calculateGridPlacement(items, container, options);
+    variants.push({
+      layout: variant2,
+      name: 'Standard',
+      score: scoreLayout(variant2, container, items)
+    });
+
+    // Variante 3: Compact rectangulaire (forcer ratio largeur > hauteur)
+    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
+    const variant3 = calculateGridPlacement(sorted, container, options);
+    variants.push({
+      layout: variant3,
+      name: 'Compact',
+      score: scoreLayout(variant3, container, items)
+    });
+
+    // Variante 4: Clustering (grouper tailles similaires)
+    const grouped = [...items].sort((a, b) => {
+      const diffA = Math.abs(a.diameter - analysis.stats.maxDiameter);
+      const diffB = Math.abs(b.diameter - analysis.stats.maxDiameter);
+      return diffA - diffB;
+    });
+    const variant4 = calculateGridPlacement(grouped, container, options);
+    variants.push({
+      layout: variant4,
+      name: 'Clustering',
+      score: scoreLayout(variant4, container, items)
+    });
+
+    // Trier par score décroissant
+    variants.sort((a, b) => b.score - a.score);
+
+    const best = variants[0];
+    console.log(`[COMPLEX] Variantes:`, variants.map(v => `${v.name}=${v.score.toFixed(1)}`).join(', '));
+    console.log(`[COMPLEX] Meilleure: ${best.name} (${best.score.toFixed(2)})`);
+
+    return best.layout;
+  }
+
+  /**
+   * Stratégie UNIFORM: Placement rectangulaire pour fourreaux identiques
+   * Optimisé pour rapidité (tous même diamètre = calculs simplifiés)
+   * @param {Array} items - Fourreaux avec {id, diameter}
+   * @param {Object} container - {width, height}
+   * @param {Object} options - {margin, gap}
+   * @returns {Object} - Résultat placement
+   */
+  function placeUniform(items, container, options) {
+    const { margin = 0, gap = 0 } = options || {};
+    const numItems = items.length;
+
+    if (numItems === 0) {
+      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
+    }
+
+    // Tous identiques => diamètre unique
+    const diameter = items[0].diameter;
+    const cellSize = diameter + gap;
+
+    const availableWidth = container.width - 2 * margin;
+    const availableHeight = container.height - 2 * margin;
+
+    // Calculer grille optimale (préférence largeur > hauteur)
+    const aspectRatio = availableWidth / availableHeight;
+    let bestCols = Math.ceil(Math.sqrt(numItems * aspectRatio));
+    let bestRows = Math.ceil(numItems / bestCols);
+
+    // Vérifier si ça rentre
+    const totalWidth = bestCols * cellSize;
+    const totalHeight = bestRows * cellSize;
+
+    if (totalWidth > availableWidth || totalHeight > availableHeight) {
+      // Ne rentre pas => retourner taille suggérée
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols: bestCols, rows: bestRows },
+        suggestedContainer: {
+          width: totalWidth + 2 * margin,
+          height: totalHeight + 2 * margin
+        }
+      };
+    }
+
+    // Optimisation: chercher grille plus large si possible (3×3 vs 2×5 pour 9 items)
+    let validGrids = [];
+    for (let cols = 1; cols <= numItems; cols++) {
+      const rows = Math.ceil(numItems / cols);
+      const w = cols * cellSize;
+      const h = rows * cellSize;
+      if (w <= availableWidth && h <= availableHeight) {
+        validGrids.push({ cols, rows, ratio: cols / rows, w, h });
+      }
+    }
+
+    if (validGrids.length > 0) {
+      // Privilégier grille la plus carrée (ratio proche de 1) pour uniformité
+      validGrids.sort((a, b) => {
+        const diffA = Math.abs(a.ratio - 1);
+        const diffB = Math.abs(b.ratio - 1);
+        return diffA - diffB;
+      });
+      const best = validGrids[0];
+      bestCols = best.cols;
+      bestRows = best.rows;
+    }
+
+    // Placements centrés
+    const gridWidth = bestCols * cellSize;
+    const gridHeight = bestRows * cellSize;
+    const startX = (container.width - gridWidth) / 2 + cellSize / 2;
+    const startY = (container.height - gridHeight) / 2 + cellSize / 2;
+
+    const placements = [];
+    const cells = []; // Stockage des cellules pour affichage visuel
+    let itemIndex = 0;
+
+    // Remplissage bas→haut (r décroissant)
+    for (let r = bestRows - 1; r >= 0; r--) {
+      for (let c = 0; c < bestCols; c++) {
+        if (itemIndex < numItems) {
+          const cellX = startX + c * cellSize;
+          const cellY = startY + r * cellSize;
+
+          placements.push({
+            id: items[itemIndex].id,
+            x: cellX,
+            y: cellY
+          });
+
+          // Enregistrer la cellule (coordonnées coin haut-gauche + dimensions)
+          cells.push({
+            x: cellX - cellSize / 2,
+            y: cellY - cellSize / 2,
+            width: cellSize,
+            height: cellSize
+          });
+
+          itemIndex++;
+        }
+      }
+    }
+
+    return {
+      fits: true,
+      placements,
+      grid: { cols: bestCols, rows: bestRows },
+      cells // Retourner les cellules pour affichage
+    };
+  }
+
+  /**
+   * Analyse le mix de fourreaux et détermine la stratégie de placement optimale
+   * @param {Array} fourreaux - Tableau des fourreaux à analyser
+   * @returns {Object} - { type: 'UNIFORM'|'PYRAMID'|'COMPLEX', strategy: string, stats: Object }
+   */
+  function analyzeConduitMix(fourreaux) {
+    if (!fourreaux || fourreaux.length === 0) {
+      return { type: 'EMPTY', strategy: 'none', stats: {} };
+    }
+
+    // Extraire et analyser les diamètres
+    const diameters = fourreaux.map(f => f.od).sort((a, b) => b - a);
+    const uniqueDiameters = [...new Set(diameters)];
+    const maxDiameter = diameters[0];
+    const minDiameter = diameters[diameters.length - 1];
+    const totalCount = fourreaux.length;
+
+    // Compter occurrences de chaque diamètre
+    const diameterCounts = {};
+    diameters.forEach(d => {
+      diameterCounts[d] = (diameterCounts[d] || 0) + 1;
+    });
+
+    // Calculer le nombre de fourreaux du plus gros diamètre
+    const maxDiameterCount = diameterCounts[maxDiameter];
+
+    // Stats pour debug/logging
+    const stats = {
+      total: totalCount,
+      uniqueDiameters: uniqueDiameters.length,
+      maxDiameter,
+      minDiameter,
+      ratio: maxDiameter / minDiameter,
+      diameterCounts
+    };
+
+    // CLASSIFICATION
+
+    // CAS A: UNIFORM - Tous les fourreaux ont le même diamètre
+    if (uniqueDiameters.length === 1) {
+      return {
+        type: 'UNIFORM',
+        strategy: 'rectangular',
+        stats,
+        description: `${totalCount} fourreaux identiques Ø${maxDiameter}mm`
+      };
+    }
+
+    // CAS B: PYRAMID - Un seul gros fourreau (ou très peu) + plusieurs moyens/petits
+    // Condition: 1 seul gros OU gros représente <20% du total
+    const isOneLarge = maxDiameterCount === 1;
+    const isFewLarge = maxDiameterCount <= Math.max(1, Math.floor(totalCount * 0.2));
+    const hasSignificantSizeDifference = stats.ratio >= 2.0; // Gros au moins 2× plus grand que petits
+
+    if ((isOneLarge || isFewLarge) && hasSignificantSizeDifference && uniqueDiameters.length <= 4) {
+      return {
+        type: 'PYRAMID',
+        strategy: 'hierarchical',
+        stats,
+        description: `${maxDiameterCount}×Ø${maxDiameter}mm + ${totalCount - maxDiameterCount} plus petits`
+      };
+    }
+
+    // CAS C: COMPLEX - Mix complexe de plusieurs tailles
+    return {
+      type: 'COMPLEX',
+      strategy: 'multi-variant',
+      stats,
+      description: `Mix complexe: ${uniqueDiameters.length} diamètres différents`
+    };
+  }
+
   function arrangeConduitGridOptimized() {
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à disposer en grille');
@@ -1258,14 +1894,35 @@
       return;
     }
 
+    // Analyser le mix de fourreaux pour déterminer la stratégie
+    const analysis = analyzeConduitMix(fourreaux);
+    console.log('[GRID] Analyse:', analysis.type, '-', analysis.description);
+
     const itemsToPlace = fourreaux.map(f => ({ id: f.id, diameter: f.od }));
     const container = {
       width: (shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value)),
       height: (shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value))
     };
-    const options = { margin: 20, gap: 30 }; // 20mm margin, 30mm gap
+    const options = { margin: 20, gap: FOURREAU_GAP }; // Utiliser le gap réglable
 
-    const result = calculateGridPlacement(itemsToPlace, container, options);
+    // Router vers la stratégie appropriée selon l'analyse
+    let result;
+    switch (analysis.type) {
+      case 'UNIFORM':
+        result = placeUniform(itemsToPlace, container, options);
+        break;
+      case 'PYRAMID':
+        // Utiliser le placement pyramidal intelligent pour les mix de tailles
+        result = placeSmartPyramid(itemsToPlace, container, options);
+        break;
+      case 'COMPLEX':
+        // placeComplex teste déjà plusieurs variantes dont SmartPyramid
+        result = placeComplex(itemsToPlace, container, options, analysis);
+        break;
+      default:
+        // Fallback sur le placement pyramidal intelligent
+        result = placeSmartPyramid(itemsToPlace, container, options);
+    }
 
     if (result.fits) {
       result.placements.forEach(p => {
@@ -1278,6 +1935,14 @@
           fourreau.vy = 0;
         }
       });
+
+      // Stocker les cellules pour affichage visuel (convertir en pixels)
+      lastGridCells = (result.cells || []).map(cell => ({
+        x: cell.x * MM_TO_PX,
+        y: cell.y * MM_TO_PX,
+        width: cell.width * MM_TO_PX,
+        height: cell.height * MM_TO_PX
+      }));
 
       showToast(`✅ ${fourreaux.length} fourreaux placés en grille ${result.grid.cols}x${result.grid.rows} (Ctrl+X pour dégeler)`);
     } else {
@@ -1323,11 +1988,11 @@
   let dimensionsCache = { count: -1, result: null };
 
   // Fonction pour calculer les dimensions minimales nécessaires
-  function calculateMinimumDimensions() {
+  function calculateMinimumDimensions(force = false) {
     if (fourreaux.length === 0) return null;
 
     // Utiliser le cache si le nombre de fourreaux n'a pas changé
-    if (dimensionsCache.count === fourreaux.length && dimensionsCache.result) {
+    if (!force && dimensionsCache.count === fourreaux.length && dimensionsCache.result) {
       return dimensionsCache.result;
     }
 
@@ -1402,35 +2067,30 @@
       }
     }
 
-    // === MÊME ALGORITHME DE PLACEMENT que Ctrl+G ===
-    const grid = Array(optimalRows).fill(null).map(() => Array(optimalCols).fill(null));
-    const rowHeights = new Array(optimalRows).fill(0);
-    const colWidths = new Array(optimalCols).fill(0);
+    // === CALCULER LES DIMENSIONS BASÉES SUR LES POSITIONS ACTUELLES ===
+    // (Utilisé après Ctrl+G pour trouver la boîte minimale qui contient tous les fourreaux)
 
-    // Placement séquentiel dans la grille (depuis le bas - multitubulaire)
-    let fourreauIndex = 0;
-    for (let row = optimalRows - 1; row >= 0; row--) {
-      for (let col = 0; col < optimalCols && fourreauIndex < totalFourreaux; col++) {
-        const item = sortedFourreaux[fourreauIndex];
+    let maxX = -Infinity, maxY = -Infinity;
+    let minX = Infinity, minY = Infinity;
 
-        // Placer dans la grille virtuelle
-        grid[row][col] = item;
+    // Parcourir tous les fourreaux et trouver l'enveloppe minimale
+    for (const f of sortedFourreaux) {
+      const fourreau = f.fourreau;
+      const radiusMM = f.diameter / 2;
 
-        // Ajustement dimensionnel : plus gros tube de la ligne/colonne
-        rowHeights[row] = Math.max(rowHeights[row], item.height);
-        colWidths[col] = Math.max(colWidths[col], item.width);
+      // Convertir les positions de pixels en mm
+      const xMM = fourreau.x / MM_TO_PX;
+      const yMM = fourreau.y / MM_TO_PX;
 
-        fourreauIndex++;
-      }
+      maxX = Math.max(maxX, xMM + radiusMM);
+      maxY = Math.max(maxY, yMM + radiusMM);
+      minX = Math.min(minX, xMM - radiusMM);
+      minY = Math.min(minY, yMM - radiusMM);
     }
 
-    // Calculer les dimensions totales (MÊME MÉTHODE que Ctrl+G)
-    const totalGridWidth = colWidths.reduce((sum, w) => sum + w, 0);
-    const totalGridHeight = rowHeights.reduce((sum, h) => sum + h, 0);
-
-    // Ajouter les marges du conteneur
-    const totalWidthMM = totalGridWidth + 2 * CONTAINER_MARGIN_MM;
-    const totalHeightMM = totalGridHeight + 2 * CONTAINER_MARGIN_MM;
+    // Calculer les dimensions avec une marge de sécurité
+    let totalWidthMM = (maxX - minX) + 2 * CONTAINER_MARGIN_MM;
+    let totalHeightMM = (maxY - minY) + 2 * CONTAINER_MARGIN_MM;
 
     // Respecter les verrous dans les dimensions finales
     const finalWidth = lockWidth ? currentWidth : Math.ceil(totalWidthMM / 10) * 10;
@@ -1446,6 +2106,75 @@
 
     return result;
   }
+
+  function getResizeMinimumDimensions() {
+    return calculateMinimumDimensions(true);
+  }
+  window.getResizeMinimumDimensions = getResizeMinimumDimensions;
+
+  function fitContentsToBox(targetW, targetH) {
+    if (SHAPE !== 'rect' && SHAPE !== 'chemin_de_cable') return true;
+
+    const margin = 20;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let hasObjects = false;
+
+    const updateBounds = (xMm, yMm, radiusMm) => {
+      minX = Math.min(minX, xMm - radiusMm);
+      minY = Math.min(minY, yMm - radiusMm);
+      maxX = Math.max(maxX, xMm + radiusMm);
+      maxY = Math.max(maxY, yMm + radiusMm);
+      hasObjects = true;
+    };
+
+    for (const f of fourreaux) {
+      updateBounds(f.x / MM_TO_PX, f.y / MM_TO_PX, f.od / 2);
+    }
+    for (const c of cables) {
+      if (c.parent) continue;
+      updateBounds(c.x / MM_TO_PX, c.y / MM_TO_PX, c.od / 2);
+    }
+
+    if (!hasObjects) return true;
+
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    const maxWidth = targetW - (2 * margin);
+    const maxHeight = targetH - (2 * margin);
+
+    if (spanX > maxWidth || spanY > maxHeight) return false;
+
+    let shiftX = 0;
+    let shiftY = 0;
+
+    if (minX < margin) shiftX = margin - minX;
+    else if (maxX > targetW - margin) shiftX = -(maxX - (targetW - margin));
+
+    if (minY < margin) shiftY = margin - minY;
+    else if (maxY > targetH - margin) shiftY = -(maxY - (targetH - margin));
+
+    if (!shiftX && !shiftY) return true;
+
+    const dxPx = shiftX * MM_TO_PX;
+    const dyPx = shiftY * MM_TO_PX;
+
+    for (const f of fourreaux) {
+      f.x += dxPx;
+      f.y += dyPx;
+    }
+    for (const c of cables) {
+      c.x += dxPx;
+      c.y += dyPx;
+    }
+
+    gridLocked = false;
+    gridOrigin = null;
+    gridSpacing = null;
+    lastGridCells = [];
+
+    return true;
+  }
+  window.fitContentsToBox = fitContentsToBox;
 
   // Vérifier s'il est possible de redimensionner la boîte
   function checkForPossibleReduction() {
@@ -1559,6 +2288,8 @@
     const lockWidth = document.getElementById('lockWidth')?.checked;
     const lockHeight = document.getElementById('lockHeight')?.checked;
 
+    // Redimensionner la boîte aux dimensions optimales UNIQUEMENT
+    // (Ne PAS replacer les fourreaux pour éviter d'en perdre)
     if (SHAPE === 'rect') {
       if (!lockWidth) {
         boxWInput.value = width;
@@ -1574,7 +2305,7 @@
     applyDimensions();
     hideReduceButton();
 
-    showToast(`Boîte ajustée à ${width} x ${height} mm`);
+    showToast(`Boîte ajustée à ${width} x ${height} mm. Utilisez Ctrl+G pour replacer les fourreaux.`);
   }
 
   // Fonctions de copier-coller
@@ -1805,6 +2536,7 @@
     if (!selected && selectedMultiple.length === 0) return;
     saveStateToHistory(); // Sauver l'état avant suppression
     let deletedCount = 0;
+    let deletedFourreauxCount = 0;
 
     // Fonction pour supprimer un élément
     const deleteObject = (sel) => {
@@ -1817,6 +2549,7 @@
           }
           fourreaux.splice(i, 1);
           deletedCount++;
+          deletedFourreauxCount++;
           // Déverrouiller la grille quand un fourreau est supprimé
           gridLocked = false;
         }
@@ -1847,6 +2580,42 @@
       }
     }
 
+    // NOUVEAU : Recalculer ou vider la grille après suppression de fourreau(x)
+    if (gridEnabled && deletedFourreauxCount > 0) {
+      if (fourreaux.length > 0) {
+        // Il reste des fourreaux : réinitialiser la grille adaptative pour qu'elle se recalcule
+        lastGridCells = [];
+        gridOrigin = null;
+        gridSpacing = null;
+        gridLocked = false;
+
+        if (selectedFourreau) {
+          // Un fourreau est sélectionné : recalculer les cellules virtuelles
+          const [selType, selCode] = selectedFourreau.split('|');
+          const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
+          if (selSpec) {
+            generateVirtualSlots(selSpec.od);
+            console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille recalculée pour ${fourreaux.length} fourreau(x) restant(s)`);
+          }
+        } else if (virtualSlots.length > 0 || pendingFourreauType) {
+          // Pas de sélection mais des cellules virtuelles étaient affichées : les vider
+          virtualSlots = [];
+          pendingFourreauType = null;
+          console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), cellules virtuelles vidées`);
+        }
+      } else {
+        // Plus de fourreaux : réinitialiser complètement la grille
+        virtualSlots = [];
+        lastGridCells = [];
+        gridOrigin = null;
+        gridSpacing = null;
+        gridLocked = false;
+        gridFourreauxCount = 0;
+        deactivateVirtualPlacement();
+        console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille complètement réinitialisée`);
+      }
+    }
+
     updateStats();
     updateInventory();
     updateSelectedInfo();
@@ -1857,7 +2626,7 @@
   function clear() {
     const { width: w, height: h } = getLogicalCanvasDimensions();
     // Clear avec une zone plus large pour inclure les cotes
-    ctx.clearRect(-CANVAS_MARGIN, -CANVAS_MARGIN, w + TOTAL_CANVAS_MARGIN, h + TOTAL_CANVAS_MARGIN);
+    ctx.clearRect(-CANVAS_MARGIN - canvasOffsetPx.x, -CANVAS_MARGIN - canvasOffsetPx.y, w + TOTAL_CANVAS_MARGIN, h + TOTAL_CANVAS_MARGIN);
   }
 
   /**
@@ -1875,6 +2644,7 @@
       gridSpacing = null;
       gridLocked = false;
       gridFourreauxCount = 0;
+      lastGridCells = []; // Effacer les cellules
       return;
     }
 
@@ -1904,6 +2674,437 @@
   }
 
   /**
+   * Génère des cellules intelligentes basées sur les positions actuelles des fourreaux
+   * Utilisé pour créer une grille adaptative même sans placement automatique
+   */
+  function generateCellsFromCurrentLayout() {
+    if (fourreaux.length === 0) {
+      lastGridCells = [];
+      return;
+    }
+
+    const cells = [];
+
+    // Pour chaque fourreau, créer une cellule centrée sur lui
+    fourreaux.forEach(fourreau => {
+      const radiusMm = fourreau.od / 2;
+      const cellSizeMm = fourreau.od + FOURREAU_GAP; // Diamètre + gap
+      const cellSizePx = cellSizeMm * MM_TO_PX;
+
+      // Cellule centrée sur le fourreau
+      cells.push({
+        x: fourreau.x - cellSizePx / 2,
+        y: fourreau.y - cellSizePx / 2,
+        width: cellSizePx,
+        height: cellSizePx,
+        fourreauId: fourreau.id
+      });
+    });
+
+    // Détecter les alignements pour optimiser les cellules
+    // Trier par Y puis X pour détecter les lignes
+    const sortedByY = [...cells].sort((a, b) => {
+      const centerAY = a.y + a.height / 2;
+      const centerBY = b.y + b.height / 2;
+      if (Math.abs(centerAY - centerBY) < 20) { // Tolérance 20px pour même ligne
+        return (a.x + a.width / 2) - (b.x + b.width / 2);
+      }
+      return centerAY - centerBY;
+    });
+
+    // Regrouper en lignes horizontales
+    const rows = [];
+    let currentRow = [];
+    let lastY = null;
+
+    sortedByY.forEach(cell => {
+      const centerY = cell.y + cell.height / 2;
+
+      if (lastY === null || Math.abs(centerY - lastY) < 20) {
+        currentRow.push(cell);
+        lastY = centerY;
+      } else {
+        if (currentRow.length > 0) rows.push(currentRow);
+        currentRow = [cell];
+        lastY = centerY;
+      }
+    });
+    if (currentRow.length > 0) rows.push(currentRow);
+
+    // Ajuster les cellules pour créer une grille cohérente
+    const optimizedCells = [];
+
+    rows.forEach(row => {
+      // Trouver la hauteur max de la ligne
+      const maxHeight = Math.max(...row.map(c => c.height));
+      const avgY = row.reduce((sum, c) => sum + (c.y + c.height / 2), 0) / row.length;
+
+      row.forEach(cell => {
+        optimizedCells.push({
+          x: cell.x,
+          y: avgY - maxHeight / 2,
+          width: cell.width,
+          height: maxHeight
+        });
+      });
+    });
+
+    lastGridCells = optimizedCells;
+    console.log(`[GRID] Généré ${optimizedCells.length} cellules depuis layout actuel`);
+  }
+
+  /**
+   * Génère des cellules adjacentes autour d'un fourreau nouvellement placé
+   * Crée 8 cellules virtuelles (N, S, E, W, NE, NW, SE, SW)
+   * @param {Object} fourreau - Fourreau de référence
+   * @param {number} cellSize - Taille de la cellule (diamètre + gap)
+   */
+  function expandAdjacentCells(fourreau, cellSize) {
+    if (!gridEnabled) return;
+
+    const cellSizePx = cellSize * MM_TO_PX;
+
+    // 8 directions : N, S, E, W, NE, NW, SE, SW
+    const directions = [
+      { dx: 0, dy: -1, name: 'N' },   // Nord (haut)
+      { dx: 0, dy: 1, name: 'S' },    // Sud (bas)
+      { dx: 1, dy: 0, name: 'E' },    // Est (droite)
+      { dx: -1, dy: 0, name: 'W' },   // Ouest (gauche)
+      { dx: 1, dy: -1, name: 'NE' },  // Nord-Est
+      { dx: -1, dy: -1, name: 'NW' }, // Nord-Ouest
+      { dx: 1, dy: 1, name: 'SE' },   // Sud-Est
+      { dx: -1, dy: 1, name: 'SW' }   // Sud-Ouest
+    ];
+
+    const newCells = [];
+
+    directions.forEach(dir => {
+      const newX = fourreau.x + dir.dx * cellSizePx;
+      const newY = fourreau.y + dir.dy * cellSizePx;
+
+      // Vérifier si cette position est dans les limites du conteneur
+      if (newX < cellSizePx / 2 || newX > WORLD_W - cellSizePx / 2) return;
+      if (newY < cellSizePx / 2 || newY > WORLD_H - cellSizePx / 2) return;
+
+      // Vérifier si une cellule existe déjà à cet endroit
+      const cellExists = lastGridCells.some(cell => {
+        const centerX = cell.x + cell.width / 2;
+        const centerY = cell.y + cell.height / 2;
+        const distance = Math.hypot(newX - centerX, newY - centerY);
+        return distance < cellSizePx / 4; // Tolérance 25% de la taille
+      });
+
+      if (!cellExists) {
+        // Créer une nouvelle cellule adjacente
+        newCells.push({
+          x: newX - cellSizePx / 2,
+          y: newY - cellSizePx / 2,
+          width: cellSizePx,
+          height: cellSizePx,
+          virtual: true, // Marquer comme cellule virtuelle générée
+          direction: dir.name
+        });
+      }
+    });
+
+    // Ajouter les nouvelles cellules à la grille
+    lastGridCells.push(...newCells);
+
+    console.log(`[EXPANSION] Ajouté ${newCells.length} cellules adjacentes autour du fourreau ${fourreau.id}`);
+  }
+
+  /**
+   * Génère des emplacements virtuels disponibles pour placement
+   * NOUVELLE APPROCHE DYNAMIQUE : Génère des cellules autour de CHAQUE fourreau placé
+   * Algorithme adaptatif selon brainstorming-session-results.md
+   * @param {number} fourreauDiameter - Diamètre du fourreau à placer en mm
+   * @param {number} excludeFourreauId - ID du fourreau à exclure (pour le drag)
+   */
+  function generateVirtualSlots(fourreauDiameter, excludeFourreauId = null) {
+    virtualSlots = [];
+
+    if (!gridEnabled) {
+      return; // Grille désactivée
+    }
+
+    // Si aucun fourreau placé, pas de cellules virtuelles à générer
+    if (fourreaux.length === 0) {
+      console.log('[VIRTUAL SLOTS] Aucun fourreau placé, aucune cellule virtuelle générée');
+      return;
+    }
+
+    const selectedOd = fourreauDiameter; // Diamètre du fourreau sélectionné en mm
+    const gapMm = FOURREAU_GAP; // Gap en mm
+
+    // 8 directions : N, S, E, W, NE, NW, SE, SW
+    const directions = [
+      { dx: 0, dy: -1, name: 'N' },   // Nord (haut)
+      { dx: 0, dy: 1, name: 'S' },    // Sud (bas)
+      { dx: 1, dy: 0, name: 'E' },    // Est (droite)
+      { dx: -1, dy: 0, name: 'W' },   // Ouest (gauche)
+      { dx: 1, dy: -1, name: 'NE' },  // Nord-Est
+      { dx: -1, dy: -1, name: 'NW' }, // Nord-Ouest
+      { dx: 1, dy: 1, name: 'SE' },   // Sud-Est
+      { dx: -1, dy: 1, name: 'SW' }   // Sud-Ouest
+    ];
+
+    // Pour chaque fourreau placé, générer des cellules candidates dans les 8 directions
+    fourreaux.forEach(fourreau => {
+      // Ignorer le fourreau exclu (celui en cours de drag)
+      if (excludeFourreauId !== null && fourreau.id === excludeFourreauId) {
+        return;
+      }
+
+      const sourceOd = fourreau.od; // Diamètre du fourreau source en mm
+
+      directions.forEach(dir => {
+        // Calcul de la distance entre les centres
+        // distance = rayon_source + rayon_sélectionné + gap
+        const distanceMm = (sourceOd / 2) + (selectedOd / 2) + gapMm;
+        const distancePx = distanceMm * MM_TO_PX;
+
+        // Position candidate
+        const candidateX = fourreau.x + dir.dx * distancePx;
+        const candidateY = fourreau.y + dir.dy * distancePx;
+
+        // Test 1 : Vérifier limites du conteneur avec marge de sécurité de 50mm
+        const radiusPx = (selectedOd / 2) * MM_TO_PX;
+        const safetyMarginPx = 50 * MM_TO_PX; // 5cm de marge
+        if (candidateX - radiusPx < safetyMarginPx || candidateX + radiusPx > WORLD_W - safetyMarginPx) return;
+        if (candidateY - radiusPx < safetyMarginPx || candidateY + radiusPx > WORLD_H - safetyMarginPx) return;
+
+        // Test 2 : Vérifier collision avec autres fourreaux (sauf celui exclu)
+        const hasCollision = fourreaux.some(otherFourreau => {
+          // Ignorer le fourreau exclu dans les tests de collision
+          if (excludeFourreauId !== null && otherFourreau.id === excludeFourreauId) {
+            return false;
+          }
+
+          const dx = candidateX - otherFourreau.x;
+          const dy = candidateY - otherFourreau.y;
+          const distance = Math.hypot(dx, dy);
+          const minDistance = ((selectedOd / 2) + (otherFourreau.od / 2) + gapMm) * MM_TO_PX;
+          return distance < minDistance;
+        });
+
+        if (!hasCollision) {
+          // Cellule valide, l'ajouter aux slots virtuels
+          virtualSlots.push({
+            x: candidateX,
+            y: candidateY,
+            diameter: selectedOd,
+            cellWidth: (selectedOd + gapMm) * MM_TO_PX,
+            cellHeight: (selectedOd + gapMm) * MM_TO_PX,
+            available: true,
+            sourceId: fourreau.id,
+            direction: dir.name
+          });
+        }
+      });
+    });
+
+    console.log(`[VIRTUAL SLOTS DYNAMIQUE] Généré ${virtualSlots.length} emplacements pour Ø${selectedOd}mm autour de ${fourreaux.length} fourreaux`);
+  }
+
+  /**
+   * Dessine les emplacements virtuels disponibles
+   */
+  function drawVirtualSlots() {
+    if (virtualSlots.length === 0 || !pendingFourreauType) return;
+
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    ctx.save();
+
+    virtualSlots.forEach((slot, index) => {
+      const radius = (slot.diameter * MM_TO_PX) / 2;
+
+      if (slot.available) {
+        // Emplacement disponible : cercle vert pointillé + pulsation
+        const pulsePhase = (Date.now() % 1500) / 1500;
+        const opacity = 0.3 + Math.sin(pulsePhase * Math.PI * 2) * 0.2;
+
+        // Cercle de fond semi-transparent
+        ctx.fillStyle = theme === 'dark'
+          ? `rgba(50, 200, 100, ${opacity * 0.15})`
+          : `rgba(50, 180, 80, ${opacity * 0.1})`;
+        ctx.beginPath();
+        ctx.arc(slot.x, slot.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Contour pointillé vert
+        ctx.strokeStyle = theme === 'dark'
+          ? `rgba(50, 200, 100, ${opacity})`
+          : `rgba(50, 180, 80, ${opacity})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(slot.x, slot.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Croix centrale pour marquer le centre
+        const crossSize = 8;
+        ctx.strokeStyle = theme === 'dark'
+          ? `rgba(50, 200, 100, ${opacity + 0.3})`
+          : `rgba(50, 180, 80, ${opacity + 0.3})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(slot.x - crossSize, slot.y);
+        ctx.lineTo(slot.x + crossSize, slot.y);
+        ctx.moveTo(slot.x, slot.y - crossSize);
+        ctx.lineTo(slot.x, slot.y + crossSize);
+        ctx.stroke();
+
+      } else {
+        // Emplacement trop petit : cercle rouge pointillé
+        ctx.strokeStyle = theme === 'dark'
+          ? 'rgba(200, 50, 50, 0.3)'
+          : 'rgba(180, 40, 40, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(slot.x, slot.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
+
+    ctx.restore();
+  }
+
+  /**
+   * Dessine l'aperçu du fourreau pendant qu'on maintient le clic
+   */
+  function drawPreviewFourreau() {
+    if (!previewFourreau) return;
+
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    const radius = (previewFourreau.od * MM_TO_PX) / 2;
+
+    ctx.save();
+
+    // Cercle de fond avec forte opacité pour l'aperçu
+    ctx.fillStyle = theme === 'dark'
+      ? 'rgba(100, 220, 255, 0.4)'
+      : 'rgba(50, 150, 255, 0.3)';
+    ctx.beginPath();
+    ctx.arc(previewFourreau.x, previewFourreau.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Contour solide bleu pour l'aperçu
+    ctx.strokeStyle = theme === 'dark'
+      ? 'rgba(100, 220, 255, 0.9)'
+      : 'rgba(50, 150, 255, 0.8)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(previewFourreau.x, previewFourreau.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Label avec type et code
+    ctx.fillStyle = theme === 'dark' ? '#fff' : '#000';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = `${previewFourreau.type} ${previewFourreau.code}`;
+    ctx.fillText(label, previewFourreau.x, previewFourreau.y);
+
+    ctx.restore();
+  }
+
+  /**
+   * Trouve l'emplacement virtuel le plus proche d'un point
+   * @returns {Object|null} - Slot trouvé ou null
+   */
+  function findVirtualSlotAt(x, y) {
+    if (virtualSlots.length === 0) return null;
+
+    for (const slot of virtualSlots) {
+      if (!slot.available) continue; // Ignorer les emplacements trop petits
+
+      const radius = (slot.diameter * MM_TO_PX) / 2;
+      const distance = Math.hypot(x - slot.x, y - slot.y);
+
+      if (distance <= radius) {
+        return slot;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Active le mode placement avec emplacements virtuels
+   * @param {string} type - Type de fourreau
+   * @param {string} code - Code du fourreau
+   */
+  function activateVirtualPlacement(type, code) {
+    const spec = FOURREAUX.find(f => f.type === type && f.code === code);
+    if (!spec) return;
+
+    pendingFourreauType = { type, code, od: spec.od };
+    generateVirtualSlots(spec.od);
+
+    // Déclencher une animation continue pour les emplacements pulsants
+    const animateSlots = () => {
+      if (pendingFourreauType) {
+        redraw();
+        requestAnimationFrame(animateSlots);
+      }
+    };
+    animateSlots();
+
+    console.log(`[VIRTUAL PLACEMENT] Activé pour ${type} ${code} (Ø${spec.od}mm)`);
+  }
+
+  /**
+   * Désactive le mode placement virtuel
+   */
+  function deactivateVirtualPlacement() {
+    pendingFourreauType = null;
+    virtualSlots = [];
+    redraw();
+  }
+
+  /**
+   * Dessine la zone de sécurité (marge de 5cm) en mode grille
+   */
+  function drawSafetyMargin() {
+    if (!gridEnabled) return;
+
+    const marginPx = 50 * MM_TO_PX; // 5cm
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+
+    ctx.save();
+    ctx.strokeStyle = theme === 'dark'
+      ? 'rgba(255, 100, 100, 0.4)'
+      : 'rgba(200, 50, 50, 0.3)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 5]);
+
+    if (SHAPE === "rect") {
+      // Rectangle de la zone de sécurité
+      ctx.strokeRect(marginPx, marginPx, WORLD_W - 2 * marginPx, WORLD_H - 2 * marginPx);
+    } else if (SHAPE === "chemin_de_cable") {
+      // Lignes de sécurité pour chemin de câble (pas de limite en haut)
+      ctx.beginPath();
+      ctx.moveTo(marginPx, 0);
+      ctx.lineTo(marginPx, WORLD_H - marginPx);
+      ctx.lineTo(WORLD_W - marginPx, WORLD_H - marginPx);
+      ctx.lineTo(WORLD_W - marginPx, 0);
+      ctx.stroke();
+    } else {
+      // Cercle de sécurité pour forme circulaire
+      const { x: cx, y: cy } = getCanvasCenter();
+      ctx.beginPath();
+      ctx.arc(cx, cy, WORLD_R - marginPx, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  /**
    * Dessine la grille visuelle sur le canvas
    */
   function drawGrid() {
@@ -1912,8 +3113,14 @@
     // Vérifier que les dimensions sont valides
     if (!WORLD_W || !WORLD_H || WORLD_W <= 0 || WORLD_H <= 0) return;
 
-    // Calculer la grille adaptative si activée
-    if (adaptiveGridEnabled) {
+    // Générer des cellules intelligentes si on n'en a pas encore
+    // (par exemple après placement manuel des fourreaux)
+    if ((!lastGridCells || lastGridCells.length === 0) && fourreaux.length > 0) {
+      generateCellsFromCurrentLayout();
+    }
+
+    // Calculer la grille adaptative si activée (fallback pour grille uniforme)
+    if (adaptiveGridEnabled && (!lastGridCells || lastGridCells.length === 0)) {
       calculateAdaptiveGrid();
     }
 
@@ -1950,31 +3157,81 @@
     ctx.lineWidth = theme === 'dark' ? 1.5 : 2;
     ctx.beginPath();
 
-    // Lignes verticales
-    // Dessiner vers la droite depuis l'origine
-    for (let x = originX; x <= widthPx; x += spacingPx) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, heightPx);
-    }
-    // Dessiner vers la gauche depuis l'origine
-    for (let x = originX - spacingPx; x >= 0; x -= spacingPx) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, heightPx);
-    }
+    // Si on a des cellules de placement, dessiner une grille adaptée
+    if (lastGridCells && lastGridCells.length > 0) {
+      // Extraire toutes les positions X et Y uniques des cellules
+      const xPositions = new Set();
+      const yPositions = new Set();
 
-    // Lignes horizontales
-    // Dessiner vers le bas depuis l'origine
-    for (let y = originY; y <= heightPx; y += spacingPx) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(widthPx, y);
-    }
-    // Dessiner vers le haut depuis l'origine
-    for (let y = originY - spacingPx; y >= 0; y -= spacingPx) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(widthPx, y);
+      lastGridCells.forEach(cell => {
+        xPositions.add(cell.x);
+        xPositions.add(cell.x + cell.width);
+        yPositions.add(cell.y);
+        yPositions.add(cell.y + cell.height);
+      });
+
+      // Trier les positions
+      const sortedX = Array.from(xPositions).sort((a, b) => a - b);
+      const sortedY = Array.from(yPositions).sort((a, b) => a - b);
+
+      // Dessiner les lignes verticales
+      sortedX.forEach(x => {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, heightPx);
+      });
+
+      // Dessiner les lignes horizontales
+      sortedY.forEach(y => {
+        ctx.moveTo(0, y);
+        ctx.lineTo(widthPx, y);
+      });
+    } else {
+      // Grille uniforme standard (ancien comportement)
+      // Lignes verticales
+      // Dessiner vers la droite depuis l'origine
+      for (let x = originX; x <= widthPx; x += spacingPx) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, heightPx);
+      }
+      // Dessiner vers la gauche depuis l'origine
+      for (let x = originX - spacingPx; x >= 0; x -= spacingPx) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, heightPx);
+      }
+
+      // Lignes horizontales
+      // Dessiner vers le bas depuis l'origine
+      for (let y = originY; y <= heightPx; y += spacingPx) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(widthPx, y);
+      }
+      // Dessiner vers le haut depuis l'origine
+      for (let y = originY - spacingPx; y >= 0; y -= spacingPx) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(widthPx, y);
+      }
     }
 
     ctx.stroke();
+
+    // Afficher les cellules de grille si disponibles (après placement automatique)
+    if (lastGridCells && lastGridCells.length > 0) {
+      ctx.fillStyle = theme === 'dark'
+        ? 'rgba(255, 145, 77, 0.08)'
+        : 'rgba(255, 145, 77, 0.05)';
+      ctx.strokeStyle = theme === 'dark'
+        ? 'rgba(255, 145, 77, 0.25)'
+        : 'rgba(255, 145, 77, 0.2)';
+      ctx.lineWidth = 1;
+
+      lastGridCells.forEach(cell => {
+        // Remplir la cellule
+        ctx.fillRect(cell.x, cell.y, cell.width, cell.height);
+        // Contour de la cellule
+        ctx.strokeRect(cell.x, cell.y, cell.width, cell.height);
+      });
+    }
+
     ctx.restore();
   }
 
@@ -2000,6 +3257,40 @@
   function snapPointToGrid(x, y) {
     if (!snapToGrid) return { x, y };
 
+    // Si on a des cellules de placement, snapper au centre de la cellule la plus proche NON OCCUPÉE
+    if (lastGridCells && lastGridCells.length > 0) {
+      let closestCell = null;
+      let minDistance = Infinity;
+
+      lastGridCells.forEach(cell => {
+        const centerX = cell.x + cell.width / 2;
+        const centerY = cell.y + cell.height / 2;
+
+        // Vérifier si un fourreau occupe déjà cette cellule
+        // (mais exclure l'objet en cours de drag)
+        const occupied = fourreaux.some(f => {
+          // Ignorer le fourreau en cours de drag
+          if (draggedObject && f.id === draggedObject.id) return false;
+
+          const distance = Math.hypot(f.x - centerX, f.y - centerY);
+          return distance < (f.od * MM_TO_PX / 2 + 10); // Tolérance 10px
+        });
+
+        // Ignorer les cellules occupées
+        if (occupied) return;
+
+        const distance = Math.hypot(x - centerX, y - centerY);
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestCell = { x: centerX, y: centerY };
+        }
+      });
+
+      return closestCell || { x, y };
+    }
+
+    // Sinon, utiliser la grille uniforme standard
     // Calculer la grille adaptative si nécessaire
     if (adaptiveGridEnabled) {
       calculateAdaptiveGrid();
@@ -2238,6 +3529,45 @@
     ctx.restore();
   }
 
+  function drawResizePreview() {
+    const preview = window.resizePreview;
+    if (!preview) return;
+    if (SHAPE !== "rect" && SHAPE !== "chemin_de_cable") return;
+
+    const previewW = preview.widthMm * MM_TO_PX;
+    const previewH = preview.heightMm * MM_TO_PX;
+    let x = 0;
+    let y = 0;
+
+    if (preview.side === "left") {
+      x = WORLD_W - previewW;
+    } else if (preview.side === "top") {
+      y = WORLD_H - previewH;
+    }
+
+    ctx.save();
+    ctx.setLineDash([10, 8]);
+    ctx.strokeStyle = preview.blocked ? "#ef4444" : "#f59e0b";
+    ctx.lineWidth = getScaledLineWidth(2);
+    ctx.strokeRect(x, y, previewW, previewH);
+
+    const label = `${preview.widthMm} x ${preview.heightMm} mm`;
+    const pad = 4;
+    const fontSize = 12;
+    ctx.font = `bold ${fontSize}px 'JetBrains Mono', monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const labelX = x + previewW / 2;
+    const labelY = y + previewH / 2;
+    const labelW = ctx.measureText(label).width + pad * 2;
+    const labelH = fontSize + pad * 2;
+    ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
+    ctx.fillRect(labelX - labelW / 2, labelY - labelH / 2, labelW, labelH);
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillText(label, labelX, labelY);
+    ctx.restore();
+  }
+
   // Fonction pour dessiner le rectangle de sélection (marquee)
   function drawMarquee() {
     if (!isMarqueeSelecting) return;
@@ -2395,6 +3725,68 @@
     ctx.restore();
   }
 
+  // drawResizeHandle SUPPRIMÉ - remplacé par interact.js
+
+  /**
+   * Dessine le halo de preview et le point clignotant lors du drag avec snap
+   */
+  function drawSnapPreview() {
+    if (!snapPreviewPoint || !draggedObject) return;
+
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    const now = Date.now();
+    const elapsed = now - snapPreviewPoint.timestamp;
+
+    ctx.save();
+
+    // 1. Halo semi-transparent autour du point de snap
+    const haloRadius = draggedObject.od ? (draggedObject.od * MM_TO_PX / 2) : 20;
+    const gradient = ctx.createRadialGradient(
+      snapPreviewPoint.x, snapPreviewPoint.y, 0,
+      snapPreviewPoint.x, snapPreviewPoint.y, haloRadius * 1.5
+    );
+
+    if (theme === 'dark') {
+      gradient.addColorStop(0, 'rgba(255, 145, 77, 0.3)');
+      gradient.addColorStop(0.7, 'rgba(255, 145, 77, 0.15)');
+      gradient.addColorStop(1, 'rgba(255, 145, 77, 0)');
+    } else {
+      gradient.addColorStop(0, 'rgba(255, 145, 77, 0.25)');
+      gradient.addColorStop(0.7, 'rgba(255, 145, 77, 0.1)');
+      gradient.addColorStop(1, 'rgba(255, 145, 77, 0)');
+    }
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(snapPreviewPoint.x, snapPreviewPoint.y, haloRadius * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Point clignotant à l'intersection (animation pulsante)
+    const pulsePhase = (elapsed % 800) / 800; // Cycle de 800ms
+    const opacity = 0.4 + Math.sin(pulsePhase * Math.PI * 2) * 0.4; // Oscillation 0.0 à 0.8
+    const pointSize = 4 + Math.sin(pulsePhase * Math.PI * 2) * 2; // Taille 2 à 6
+
+    ctx.fillStyle = theme === 'dark'
+      ? `rgba(255, 145, 77, ${opacity})`
+      : `rgba(255, 120, 50, ${opacity})`;
+
+    ctx.beginPath();
+    ctx.arc(snapPreviewPoint.x, snapPreviewPoint.y, pointSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Cercle de contour pour marquer l'intersection
+    ctx.strokeStyle = theme === 'dark'
+      ? 'rgba(255, 145, 77, 0.6)'
+      : 'rgba(255, 120, 50, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(snapPreviewPoint.x, snapPreviewPoint.y, haloRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+
   function redraw() {
     // S'assurer que l'antialiasing et les optimisations sont activés à chaque frame
     ctx.imageSmoothingEnabled = true;
@@ -2404,14 +3796,25 @@
 
     clear();
     drawGrid(); // Dessiner la grille en premier (arrière-plan)
+    drawSafetyMargin(); // Dessiner la zone de sécurité (marge 5cm)
+    drawVirtualSlots(); // Dessiner les emplacements virtuels disponibles
     drawBox();
     drawDimensions();
+
     drawMarquee(); // Dessiner le rectangle de sélection s'il est actif
     for (let i = 0; i < fourreaux.length; i++) {
       drawFourreau(fourreaux[i], i + 1); // Passer le numéro (index + 1)
     }
     for (const c of cables) drawCable(c);
+    drawPreviewFourreau(); // Dessiner l'aperçu du fourreau pendant le clic
+    drawSnapPreview(); // Dessiner le halo et point de snap avant la sélection
     drawSelection();
+    drawResizePreview();
+
+    // Dessiner les poignées de resize EN DERNIER pour qu'elles soient au-dessus de tout
+    if (typeof window.drawResizeHandles === 'function') {
+      window.drawResizeHandles(ctx, WORLD_W, WORLD_H);
+    }
   }
 
   /* ====== Export DXF ====== */
@@ -3024,6 +4427,18 @@
       // Basculer vers l'onglet FOURREAU
       setTab('FOURREAU');
 
+      // Activer le mode placement guidé si la grille est active
+      if (gridEnabled) {
+        activateVirtualPlacement(type, code);
+
+        // NOUVEAU : Recalcul dynamique des cellules virtuelles
+        const spec = FOURREAUX.find(f => f.type === type && f.code === code);
+        if (spec) {
+          generateVirtualSlots(spec.od);
+          redraw();
+        }
+      }
+
       // Ne pas sélectionner d'objet existant, juste déselectionner
       selected = null;
       selectedMultiple = [];
@@ -3394,7 +4809,22 @@
     const sx = logicalW / r.width;
     const sy = logicalH / r.height;
     // Soustraire l'offset de marge ajouté pour les cotes
-    return { x: (e.clientX - r.left) * sx - CANVAS_MARGIN, y: (e.clientY - r.top) * sy - CANVAS_MARGIN }
+    const result = {
+      x: (e.clientX - r.left) * sx - CANVAS_MARGIN - canvasOffsetPx.x,
+      y: (e.clientY - r.top) * sy - CANVAS_MARGIN - canvasOffsetPx.y
+    };
+    // Debug log temporaire
+    if (window._debugCanvasCoords) {
+      console.log('📍 canvasCoords:', {
+        client: { x: e.clientX, y: e.clientY },
+        rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+        logical: { w: logicalW, h: logicalH },
+        scale: { sx, sy },
+        margin: CANVAS_MARGIN,
+        result
+      });
+    }
+    return result;
   }
 
   function pickAt(x, y) {
@@ -3410,14 +4840,57 @@
   }
 
   function startDrag(obj, sel) {
+    // NE PAS effacer lastGridCells ici pour permettre le snap sur la grille existante
+    // lastGridCells = []; // RETIRÉ : gardé pour le snap pendant drag
+
+    // Stocker l'objet en cours de drag pour le halo preview
+    draggedObject = obj;
+
+    // NOUVEAU : Si on déplace un fourreau, recalculer les positions disponibles en excluant celui-ci
+    if (gridEnabled && sel.type === 'fourreau') {
+      const fourreau = fourreaux.find(f => f.id === sel.id);
+      if (fourreau) {
+        // Recalculer avec le fourreau en cours de déplacement exclu
+        generateVirtualSlots(fourreau.od, fourreau.id);
+        console.log('[DRAG] Cellules virtuelles générées pour déplacement de fourreau', fourreau.id);
+      }
+    }
+
+    // Animation continue pour le point clignotant
+    let animationFrameId = null;
+    const animate = () => {
+      if (draggedObject) {
+        redraw();
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+    animate();
+
     function onMove(ev) {
       const p = canvasCoords(ev);
+
+      // Calculer le point de snap si la grille est activée
+      if (gridEnabled && snapToGrid) {
+        const snapped = snapPointToGrid(p.x, p.y);
+        snapPreviewPoint = {
+          x: snapped.x,
+          y: snapped.y,
+          timestamp: Date.now()
+        };
+      } else {
+        snapPreviewPoint = null;
+      }
+
       if (sel.type === 'fourreau') {
         const f = fourreaux.find(o => o.id === sel.id);
         if (!f) return;
         const dx = p.x - f.x;
         const dy = p.y - f.y;
-        f.x = p.x; f.y = p.y; f._px = p.x; f._py = p.y;
+
+        // Snap en temps réel si activé
+        const targetPos = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : p;
+        f.x = targetPos.x; f.y = targetPos.y; f._px = targetPos.x; f._py = targetPos.y;
+
         // Déplacer les enfants avec le TPC (seulement si pas gelés)
         for (const id of f.children) {
           const child = cables.find(k => k.id === id);
@@ -3429,16 +4902,46 @@
       } else {
         const c = cables.find(o => o.id === sel.id);
         if (!c) return;
-        c.x = p.x; c.y = p.y; c._px = p.x; c._py = p.y;
+
+        // Snap en temps réel si activé
+        const targetPos = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : p;
+        c.x = targetPos.x; c.y = targetPos.y; c._px = targetPos.x; c._py = targetPos.y;
       }
-      redraw();
+      // Le redraw est géré par l'animation continue
     }
+
     function onUp() {
       const o = selected ? selected.type === 'fourreau' ? fourreaux.find(o => o.id === selected.id) : cables.find(o => o.id === selected.id) : null;
       if (o) o.dragging = false;
+
+      // Regénérer les cellules si la grille est activée et qu'un fourreau a été déplacé
+      if (gridEnabled && sel.type === 'fourreau') {
+        generateCellsFromCurrentLayout();
+
+        // NOUVEAU : Recalcul dynamique des cellules virtuelles après déplacement
+        if (selectedFourreau) {
+          const [selType, selCode] = selectedFourreau.split('|');
+          const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
+          if (selSpec) {
+            generateVirtualSlots(selSpec.od);
+          }
+        }
+      }
+
+      // Nettoyer les variables de preview
+      draggedObject = null;
+      snapPreviewPoint = null;
+
+      // Arrêter l'animation
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+
       updateSelectedInfo();
       removeEventListener('mousemove', onMove);
       removeEventListener('mouseup', onUp);
+      redraw(); // Redessiner pour effacer le halo
     }
     addEventListener('mousemove', onMove);
     addEventListener('mouseup', onUp);
@@ -3623,20 +5126,31 @@
     updateShapeDropdownDisplay();
   }
 
-  function applyDimensions() {
+  function roundToStep(value, step) {
+    if (!Number.isFinite(value)) return value;
+    return Math.round(value / step) * step;
+  }
+
+  function applyDimensions(options = {}) {
     // Vérifier si les fourreaux sont déjà en grille (tous gelés)
     const wasInGrid = fourreaux.length > 0 && fourreaux.every(f => f.frozen);
+    const autoArrange = options.autoArrange === true;
+    const fitContents = options.fitContents === true;
+
+    canvasOffsetPx.x = 0;
+    canvasOffsetPx.y = 0;
 
     SHAPE = shapeSel.value;
     if (SHAPE === 'rect') {
       const lockWidth = document.getElementById('lockWidth')?.checked;
       const lockHeight = document.getElementById('lockHeight')?.checked;
+      const step = 5;
 
       if (!lockWidth) {
-        WORLD_W_MM = parseFloat(boxWInput.value);
+        WORLD_W_MM = roundToStep(parseFloat(boxWInput.value), step);
       }
       if (!lockHeight) {
-        WORLD_H_MM = parseFloat(boxHInput.value);
+        WORLD_H_MM = roundToStep(parseFloat(boxHInput.value), step);
       }
 
       // Mettre à jour les inputs avec les valeurs actuelles (au cas où verrouillées)
@@ -3645,26 +5159,31 @@
 
     } else if (SHAPE === 'chemin_de_cable') {
       const [w, h] = cheminCableSelect.value.split('|').map(parseFloat);
-      WORLD_W_MM = w || 0;
-      WORLD_H_MM = h || 0;
+      WORLD_W_MM = roundToStep(w || 0, 5);
+      WORLD_H_MM = roundToStep(h || 0, 5);
     } else {
-      WORLD_D_MM = parseFloat(boxDInput.value);
+      WORLD_D_MM = roundToStep(parseFloat(boxDInput.value), 5);
     }
     syncDimensionState();
+    if (fitContents && typeof window.fitContentsToBox === 'function') {
+      window.fitContentsToBox(WORLD_W_MM, WORLD_H_MM);
+    }
     pruneOutside();
     setCanvasSize();
     updateStats();
     updateInventory();
     updateSelectedInfo();
 
-    // Si les fourreaux étaient en grille, réappliquer la grille automatiquement
-    if (wasInGrid && fourreaux.length > 0) {
+    // Si demandé, réappliquer la grille automatiquement
+    if (autoArrange && wasInGrid && fourreaux.length > 0) {
       // Petite pause pour laisser le canvas se redimensionner
       setTimeout(() => {
         arrangeConduitGrid();
       }, 120);
     }
   }
+
+  window.applyDimensions = applyDimensions;
 
   function pruneOutside() {
     if (arrangeInProgress) return; // Ne pas supprimer durant l'arrangement en grille
@@ -5179,20 +6698,77 @@
     const toolInfo = document.getElementById('toolInfo');
     const gridArrange = document.getElementById('gridArrange');
     const toggleGridBtn = document.getElementById('toggleGridBtn');
+    const gapSlider = document.getElementById('gapSlider');
+    const gapValue = document.getElementById('gapValue');
 
     if (toolEdit) toolEdit.addEventListener('click', openEditPopup);
     if (toolInfo) toolInfo.addEventListener('click', toggleShowInfo);
     if (gridArrange) gridArrange.addEventListener('click', arrangeConduitGrid);
     if (toggleGridBtn) toggleGridBtn.addEventListener('click', toggleGridVisibility);
     if (freezeBtn) freezeBtn.addEventListener('click', toggleFreezeSelected);
+
+    // Event listener pour le slider de gap
+    if (gapSlider && gapValue) {
+      gapSlider.addEventListener('input', (e) => {
+        const newGap = parseInt(e.target.value, 10);
+        FOURREAU_GAP = newGap;
+        gapValue.textContent = newGap;
+
+        // Déverrouiller la grille pour recalcul avec le nouveau gap
+        gridLocked = false;
+        gridOrigin = null;
+        gridSpacing = null;
+        lastGridCells = []; // Effacer les cellules
+
+        // Redessiner pour mettre à jour la grille visuelle si activée
+        if (gridEnabled) {
+          redraw();
+        }
+      });
+
+      // Toast uniquement au relâchement du slider
+      gapSlider.addEventListener('change', (e) => {
+        const newGap = parseInt(e.target.value, 10);
+        showToast(`Écart ajusté à ${newGap}mm`, 'default', 1500);
+      });
+    }
     canvas.addEventListener('mousedown', e => {
       const p = canvasCoords(e);
       if (e.button === 0) { // Clic gauche : sélection + glisser-déposer
+        // Vérifier si on clique sur une poignée de resize en priorité
+        if (typeof window.handleResizeMouseDown === 'function') {
+          const resizeStarted = window.handleResizeMouseDown(p.x, p.y);
+          if (resizeStarted) {
+            return; // Le resize est en cours, on ne fait rien d'autre
+          }
+        }
+
         // Gérer le mode collage en priorité
         if (pasteMode) {
           pasteAtPosition(p.x, p.y);
           deactivatePasteMode();
           return;
+        }
+
+        // Vérifier si on clique sur un emplacement virtuel
+        if (pendingFourreauType) {
+          const slot = findVirtualSlotAt(p.x, p.y);
+          if (slot && slot.available) {
+            // Stocker le slot cliqué pour placement au relâchement
+            pendingSlotClick = slot;
+            // Créer l'aperçu visuel
+            previewFourreau = {
+              x: slot.x,
+              y: slot.y,
+              type: pendingFourreauType.type,
+              code: pendingFourreauType.code,
+              od: pendingFourreauType.od
+            };
+            redraw();
+            return;
+          }
+          // Clic en dehors des emplacements = désactiver le mode
+          deactivateVirtualPlacement();
         }
 
         const pick = pickAt(p.x, p.y);
@@ -5223,23 +6799,77 @@
         redraw();
         return;
       }
-      if (e.button === 1) { // Clic molette : placement
+      if (e.button === 1) { // Clic molette : placement avec aperçu
         e.preventDefault(); // Empêcher le comportement par défaut du clic molette
-
-        // Appliquer le magnétisme sur les coordonnées si activé
-        const snappedP = snapPointToGrid(p.x, p.y);
 
         if (activeTab === 'FOURREAU') {
           const v = selectedFourreau;
           if (!v) { showToast('Choisis un fourreau.'); return; }
           const [type, code] = v.split('|');
-          addFourreauAt(snappedP.x, snappedP.y, type, code) || showToast('Emplacement occupé ou hors boîte.');
+          const spec = FOURREAUX.find(f => f.type === type && f.code === code);
+          if (spec) {
+            // Si on a des cellules virtuelles disponibles, utiliser le même comportement que clic gauche
+            if (pendingFourreauType && virtualSlots.length > 0) {
+              const slot = findVirtualSlotAt(p.x, p.y);
+              if (slot && slot.available) {
+                // Utiliser le slot virtuel comme pour le clic gauche
+                pendingSlotClick = slot;
+                previewFourreau = {
+                  x: slot.x,
+                  y: slot.y,
+                  type: type,
+                  code: code,
+                  od: spec.od
+                };
+                redraw();
+                return;
+              }
+            }
+
+            // Sinon, placement libre avec snap to grid
+            const snappedP = snapPointToGrid(p.x, p.y);
+            pendingMiddleClick = {
+              x: snappedP.x,
+              y: snappedP.y,
+              type: type,
+              code: code,
+              od: spec.od,
+              isCable: false
+            };
+            previewFourreau = {
+              x: snappedP.x,
+              y: snappedP.y,
+              type: type,
+              code: code,
+              od: spec.od
+            };
+            redraw();
+          }
         } else {
           const v = selectedCable;
           if (!v) { showToast('Choisis un CÂBLE.'); return; }
           const [fam, code] = v.split('|');
-          const f = findFourreauUnder(snappedP.x, snappedP.y, null);
-          addCableAt(snappedP.x, snappedP.y, fam, code, f) || showToast('Impossible de poser le CÂBLE ici.');
+          const spec = CABLES.find(c => c.fam === fam && c.code === code);
+          if (spec) {
+            // Placement libre avec snap to grid pour les câbles
+            const snappedP = snapPointToGrid(p.x, p.y);
+            pendingMiddleClick = {
+              x: snappedP.x,
+              y: snappedP.y,
+              fam: fam,
+              code: code,
+              od: spec.od,
+              isCable: true
+            };
+            previewFourreau = {
+              x: snappedP.x,
+              y: snappedP.y,
+              type: fam,
+              code: code,
+              od: spec.od
+            };
+            redraw();
+          }
         }
         return;
       }
@@ -5257,6 +6887,139 @@
         return;
       }
     });
+
+    // Gestionnaire mousemove pour mettre à jour l'aperçu pendant le clic
+    canvas.addEventListener('mousemove', e => {
+      const p = canvasCoords(e);
+
+      // Gérer le resize (en cours ou hover)
+      if (typeof window.handleResizeMouseMove === 'function') {
+        window.handleResizeMouseMove(p.x, p.y);
+        if (typeof window.isResizing === 'function' && window.isResizing()) {
+          return; // Si on est en train de resizer, on ne fait rien d'autre
+        }
+      }
+
+      // Si on maintient un clic sur une cellule virtuelle
+      if (pendingSlotClick && previewFourreau) {
+        const slot = findVirtualSlotAt(p.x, p.y);
+
+        if (slot && slot.available) {
+          // Mettre à jour la position de l'aperçu
+          previewFourreau.x = slot.x;
+          previewFourreau.y = slot.y;
+          redraw();
+        }
+      }
+
+      // Si on maintient un clic molette
+      if (pendingMiddleClick && previewFourreau) {
+        const snappedP = snapPointToGrid(p.x, p.y);
+
+        // Mettre à jour la position de l'aperçu
+        pendingMiddleClick.x = snappedP.x;
+        pendingMiddleClick.y = snappedP.y;
+        previewFourreau.x = snappedP.x;
+        previewFourreau.y = snappedP.y;
+        redraw();
+      }
+    });
+
+    // Gestionnaire mouseup pour placer le fourreau/câble au relâchement
+    canvas.addEventListener('mouseup', e => {
+      // Gérer la fin du resize
+      if (typeof window.handleResizeMouseUp === 'function') {
+        window.handleResizeMouseUp();
+      }
+
+      // Gestion du clic gauche sur cellule virtuelle
+      if (pendingSlotClick) {
+        const p = canvasCoords(e);
+        const slot = findVirtualSlotAt(p.x, p.y);
+
+        // Vérifier qu'on relâche sur le même slot (ou un slot valide proche)
+        if (slot && slot.available && pendingFourreauType) {
+          // Placer le fourreau à cet emplacement
+          const result = addFourreauAt(slot.x, slot.y, pendingFourreauType.type, pendingFourreauType.code);
+          if (result) {
+            showToast(`✅ Fourreau ${pendingFourreauType.type} placé`);
+            // Regénérer les emplacements après placement
+            generateVirtualSlots(pendingFourreauType.od);
+          } else {
+            showToast('❌ Placement impossible', 'error');
+          }
+        }
+
+        // Réinitialiser le slot et l'aperçu
+        pendingSlotClick = null;
+        previewFourreau = null;
+        redraw();
+      }
+
+      // Gestion du clic molette
+      if (pendingMiddleClick && e.button === 1) {
+        if (pendingMiddleClick.isCable) {
+          // Placer un câble
+          const f = findFourreauUnder(pendingMiddleClick.x, pendingMiddleClick.y, null);
+          const result = addCableAt(pendingMiddleClick.x, pendingMiddleClick.y, pendingMiddleClick.fam, pendingMiddleClick.code, f);
+          if (result) {
+            showToast(`✅ Câble ${pendingMiddleClick.fam} ${pendingMiddleClick.code} placé`);
+          } else {
+            showToast('❌ Impossible de poser le CÂBLE ici.', 'error');
+          }
+        } else {
+          // Placer un fourreau
+          const result = addFourreauAt(pendingMiddleClick.x, pendingMiddleClick.y, pendingMiddleClick.type, pendingMiddleClick.code);
+          if (result) {
+            showToast(`✅ Fourreau ${pendingMiddleClick.type} ${pendingMiddleClick.code} placé`);
+            // Regénérer les emplacements si grille activée
+            if (gridEnabled && selectedFourreau) {
+              const [selType, selCode] = selectedFourreau.split('|');
+              const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
+              if (selSpec) {
+                generateVirtualSlots(selSpec.od);
+              }
+            }
+          } else {
+            showToast('❌ Emplacement occupé ou hors boîte.', 'error');
+          }
+        }
+
+        // Réinitialiser l'aperçu et le clic molette
+        pendingMiddleClick = null;
+        previewFourreau = null;
+        redraw();
+      }
+    });
+
+    // NOUVEAU : Double-clic sur fourreau/câble pour le sélectionner dans l'inventaire
+    canvas.addEventListener('dblclick', e => {
+      const p = canvasCoords(e);
+      const pick = pickAt(p.x, p.y);
+
+      if (pick) {
+        if (pick.type === 'fourreau') {
+          // Trouver le fourreau
+          const fourreau = fourreaux.find(f => f.id === pick.id);
+          if (fourreau) {
+            const key = `${fourreau.type}|${fourreau.code}`;
+            // Utiliser la même logique que le clic dans l'inventaire
+            selectFromGroup('f', key, true);
+            showToast(`📦 Fourreau ${fourreau.type} ${fourreau.code} sélectionné`);
+          }
+        } else if (pick.type === 'cable') {
+          // Trouver le câble
+          const cable = cables.find(c => c.id === pick.id);
+          if (cable) {
+            const key = `${cable.fam}|${cable.code}`;
+            // Utiliser la même logique que le clic dans l'inventaire
+            selectFromGroup('c', key, true);
+            showToast(`🔌 Câble ${cable.fam} ${cable.code} sélectionné`);
+          }
+        }
+      }
+    });
+
     tabFOURREAU.addEventListener('click', () => setTab('FOURREAU'));
     tabCABLE.addEventListener('click', () => setTab('CÂBLE'));
     shapeSel.addEventListener('change', handleShapeSelectorChange);
@@ -5336,6 +7099,7 @@
         gridOrigin = null;
         gridSpacing = null;
         gridFourreauxCount = 0;
+        lastGridCells = []; // Effacer les cellules
         updateStats();
         updateInventory();
         updateSelectedInfo();
@@ -6523,6 +8287,16 @@
 
     // Initialiser les verrous de dimensions
     setupDimensionLocks();
+
+    // NOUVEAU : Initialiser la grille dynamique si des fourreaux sont déjà placés
+    if (gridEnabled && fourreaux.length > 0 && selectedFourreau) {
+      const [type, code] = selectedFourreau.split('|');
+      const spec = FOURREAUX.find(f => f.type === type && f.code === code);
+      if (spec) {
+        generateVirtualSlots(spec.od);
+        console.log('[INIT] Grille dynamique initialisée avec', fourreaux.length, 'fourreaux');
+      }
+    }
 
     requestAnimationFrame(tick);
 
