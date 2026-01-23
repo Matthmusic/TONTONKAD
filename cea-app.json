@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.4.10",
+    "version": "2.4.11",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,18 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.4.10.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.4.11.exe"
   },
   "changelog": {
+    "2.4.11": {
+      "date": "2026-01-23",
+      "changes": [
+        "Ajout d'un contrôle d'écart réglable pour les fourreaux (15-50mm)",
+        "Ajout de poignées de redimensionnement du canvas avec feedback visuel",
+        "Amélioration du contrôle de la grille",
+        "Nouveau module canvas-resize-handler.js pour le redimensionnement de l'espace de travail"
+      ]
+    },
     "2.4.10": {
       "date": "2026-01-22",
       "changes": [
