@@ -10,7 +10,7 @@
 - **Priorité** : P0 (Critique)
 - **Sprint** : 1.2
 - **Estimation** : 4 jours
-- **Statut** : 📋 À faire
+- **Statut** : ✅ Ready for Review
 - **Assigné à** : Non assigné
 - **Créé le** : 2026-01-27
 - **Dépend de** : [STORY-001](story-001-fondations-moteur-placement.md)
