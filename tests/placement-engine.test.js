@@ -8,7 +8,8 @@ const {
   PlacementConfiguration,
   FourreauSorter,
   ConfigurationGenerator,
-  MultiObjectiveScorer
+  MultiObjectiveScorer,
+  PlacementOrchestrator
 } = require('../src/renderer/placement-engine.js');
 
 describe('PLACEMENT_CONFIG', () => {
@@ -1274,6 +1275,300 @@ describe('MultiObjectiveScorer', () => {
       const score2 = scorer.evaluate(config);
 
       expect(score1).toBe(score2);
+    });
+  });
+});
+
+describe('PlacementOrchestrator', () => {
+  let orchestrator;
+
+  beforeEach(() => {
+    orchestrator = new PlacementOrchestrator();
+  });
+
+  describe('constructor', () => {
+    test('creates generator and scorer instances', () => {
+      expect(orchestrator.generator).toBeDefined();
+      expect(orchestrator.scorer).toBeDefined();
+      expect(orchestrator.generator).toBeInstanceOf(ConfigurationGenerator);
+      expect(orchestrator.scorer).toBeInstanceOf(MultiObjectiveScorer);
+    });
+
+    test('initializes mlModule to null (Phase 2)', () => {
+      expect(orchestrator.mlModule).toBeNull();
+    });
+  });
+
+  describe('computeBestPlacement', () => {
+    test('returns best configuration for simple case', () => {
+      const fourreaux = [
+        {diameter: 110, quantity: 4, type: 'Ø110'}
+      ];
+
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux);
+
+      expect(bestConfig).toBeDefined();
+      expect(bestConfig.placedFourreaux).toHaveLength(4);
+      expect(bestConfig.score).toBeDefined();
+      expect(bestConfig.score).toBeGreaterThan(0);
+      expect(bestConfig.scoreDetails).toBeDefined();
+    });
+
+    test('selects configuration with highest score', () => {
+      const fourreaux = [
+        {diameter: 200, quantity: 2},
+        {diameter: 110, quantity: 4},
+        {diameter: 63, quantity: 4}
+      ];
+
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux);
+
+      // Générer manuellement toutes les configs pour comparaison
+      const allConfigs = orchestrator.generator.generateConfigurations(fourreaux);
+      allConfigs.forEach(cfg => orchestrator.scorer.evaluate(cfg));
+
+      const maxScore = Math.max(...allConfigs.map(c => c.score));
+
+      expect(bestConfig.score).toBe(maxScore);
+    });
+
+    test('respects locked width constraint', () => {
+      const fourreaux = [
+        {diameter: 110, quantity: 5}
+      ];
+
+      const constraints = {
+        lockedAxis: 'width',
+        boxWidth: 500
+      };
+
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux, constraints);
+
+      expect(bestConfig.width).toBeLessThanOrEqual(500);
+    });
+
+    test('respects locked height constraint', () => {
+      const fourreaux = [
+        {diameter: 110, quantity: 5}
+      ];
+
+      const constraints = {
+        lockedAxis: 'height',
+        boxHeight: 500
+      };
+
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux, constraints);
+
+      expect(bestConfig.height).toBeLessThanOrEqual(500);
+    });
+
+    test('applies autoResize when option enabled', () => {
+      const fourreaux = [
+        {diameter: 110, quantity: 2}
+      ];
+
+      const bestConfig = orchestrator.computeBestPlacement(
+        fourreaux,
+        {},
+        {autoResize: true}
+      );
+
+      // Avec autoResize, dimensions doivent être minimales
+      const maxX = Math.max(...bestConfig.placedFourreaux.map(f =>
+        f.x + bestConfig.calculateCellSize(f.diameter)
+      ));
+      const maxY = Math.max(...bestConfig.placedFourreaux.map(f =>
+        f.y + bestConfig.calculateCellSize(f.diameter)
+      ));
+
+      const margin = PLACEMENT_CONFIG.litDePose;
+
+      expect(bestConfig.width).toBeCloseTo(maxX + margin, 0);
+      expect(bestConfig.height).toBeCloseTo(maxY + margin, 0);
+    });
+
+    test('throws error when no fourreaux provided', () => {
+      expect(() => {
+        orchestrator.computeBestPlacement([]);
+      }).toThrow('Aucun fourreau à placer');
+    });
+
+    test('throws error when impossible constraints', () => {
+      const fourreaux = Array.from({length: 100}, (_, i) => ({
+        diameter: 200,
+        quantity: 1,
+        id: `f${i}`
+      }));
+
+      const constraints = {
+        lockedAxis: 'width',
+        boxWidth: 300
+      };
+
+      expect(() => {
+        orchestrator.computeBestPlacement(fourreaux, constraints);
+      }).toThrow('Impossible de générer des configurations valides');
+    });
+
+    test('handles mixed diameter fourreaux', () => {
+      const fourreaux = [
+        {diameter: 200, quantity: 1},
+        {diameter: 160, quantity: 2},
+        {diameter: 110, quantity: 3},
+        {diameter: 90, quantity: 2},
+        {diameter: 63, quantity: 4}
+      ];
+
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux);
+
+      const expectedTotal = fourreaux.reduce((sum, f) => sum + f.quantity, 0);
+      expect(bestConfig.placedFourreaux).toHaveLength(expectedTotal);
+      expect(bestConfig.score).toBeGreaterThan(0.3); // Score raisonnable
+    });
+  });
+
+  describe('optimizeDimensions', () => {
+    test('reduces dimensions to minimum needed', () => {
+      const config = new PlacementConfiguration(1000, 1000);
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 140, y: 0, id: 'f2'});
+
+      orchestrator.optimizeDimensions(config);
+
+      // Dimensions devraient être réduites
+      expect(config.width).toBeLessThan(500);
+      expect(config.height).toBeLessThan(500);
+
+      // Vérifier dimensions exactes avec marge
+      const cellSize = 140; // 110 + 30
+      const margin = PLACEMENT_CONFIG.litDePose;
+
+      expect(config.width).toBeCloseTo(cellSize * 2 + margin, 0);
+      expect(config.height).toBeCloseTo(cellSize + margin, 0);
+    });
+
+    test('handles empty configuration', () => {
+      const config = new PlacementConfiguration(1000, 1000);
+
+      orchestrator.optimizeDimensions(config);
+
+      // Dimensions ne changent pas si config vide
+      expect(config.width).toBe(1000);
+      expect(config.height).toBe(1000);
+    });
+
+    test('calculates correct bounding box for complex layout', () => {
+      const config = new PlacementConfiguration(2000, 2000);
+      config.addFourreau({diameter: 200, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 230, y: 0, id: 'f2'});
+      config.addFourreau({diameter: 63, x: 370, y: 0, id: 'f3'});
+      config.addFourreau({diameter: 110, x: 115, y: 230, id: 'f4'});
+
+      orchestrator.optimizeDimensions(config);
+
+      // Vérifier que toutes les positions + cellSizes sont dans les nouvelles dimensions
+      for (const f of config.placedFourreaux) {
+        const cellSize = config.calculateCellSize(f.diameter);
+        expect(f.x + cellSize).toBeLessThanOrEqual(config.width);
+        expect(f.y + cellSize).toBeLessThanOrEqual(config.height);
+      }
+
+      // Dimensions doivent être beaucoup plus petites que 2000x2000
+      expect(config.width).toBeLessThan(1000);
+      expect(config.height).toBeLessThan(1000);
+    });
+  });
+
+  describe('Integration tests', () => {
+    test('complete workflow: generate, score, select best', () => {
+      const fourreaux = [
+        {diameter: 110, quantity: 6, type: 'Ø110'}
+      ];
+
+      const startTime = Date.now();
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux);
+      const endTime = Date.now();
+
+      // Vérifier résultat
+      expect(bestConfig.placedFourreaux).toHaveLength(6);
+      expect(bestConfig.score).toBeGreaterThan(0.5);
+      expect(bestConfig.scoreDetails.stability).toBe(1.0); // Tous stables
+
+      // Vérifier performance (<100ms pour 6 fourreaux)
+      expect(endTime - startTime).toBeLessThan(100);
+    });
+
+    test('autoResize produces more compact result', () => {
+      const fourreaux = [
+        {diameter: 110, quantity: 4}
+      ];
+
+      const configNoResize = orchestrator.computeBestPlacement(
+        fourreaux,
+        {},
+        {autoResize: false}
+      );
+
+      const configWithResize = orchestrator.computeBestPlacement(
+        fourreaux,
+        {},
+        {autoResize: true}
+      );
+
+      const areaNoResize = configNoResize.width * configNoResize.height;
+      const areaWithResize = configWithResize.width * configWithResize.height;
+
+      // autoResize devrait réduire la surface
+      expect(areaWithResize).toBeLessThanOrEqual(areaNoResize);
+    });
+
+    test('handles extreme case: 50 fourreaux in <100ms', () => {
+      const fourreaux = Array.from({length: 50}, (_, i) => ({
+        diameter: [63, 90, 110][i % 3],
+        quantity: 1,
+        id: `f${i}`
+      }));
+
+      const startTime = Date.now();
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux);
+      const endTime = Date.now();
+
+      expect(bestConfig.placedFourreaux).toHaveLength(50);
+      expect(endTime - startTime).toBeLessThan(100);
+    });
+
+    test('locked axis constraint is properly enforced', () => {
+      const fourreaux = [
+        {diameter: 110, quantity: 8}
+      ];
+
+      const constraints = {
+        lockedAxis: 'width',
+        boxWidth: 600
+      };
+
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux, constraints);
+
+      // Width ne doit jamais dépasser la contrainte
+      expect(bestConfig.width).toBeLessThanOrEqual(600);
+      expect(bestConfig.placedFourreaux).toHaveLength(8);
+    });
+
+    test('score is better than random placement', () => {
+      const fourreaux = [
+        {diameter: 110, quantity: 6}
+      ];
+
+      const bestConfig = orchestrator.computeBestPlacement(fourreaux);
+
+      // Score devrait être élevé (>0.6 pour cas simple)
+      expect(bestConfig.score).toBeGreaterThan(0.6);
+
+      // Symétrie devrait être bonne
+      expect(bestConfig.scoreDetails.symmetry).toBeGreaterThan(0.5);
+
+      // Stabilité devrait être parfaite
+      expect(bestConfig.scoreDetails.stability).toBe(1.0);
     });
   });
 });

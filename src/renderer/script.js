@@ -1133,13 +1133,104 @@
   }
 
   /* ====== Fonctions d'arrangement en grille ====== */
-  // Fonction principale d'arrangement - utilise la nouvelle méthode avec fallback
+  // Fonction principale d'arrangement - utilise le nouveau moteur intelligent
   function arrangeConduitGrid() {
-    arrangeConduitGridOptimized();
+    // Utiliser le nouveau moteur de placement optimisé
+    arrangeConduitGridNew();
   }
 
   // Rendre la fonction accessible globalement
   window.arrangeConduitGrid = arrangeConduitGrid;
+
+  /**
+   * Nouveau système de placement utilisant PlacementOrchestrator
+   * Génère 5 configurations, sélectionne la meilleure selon multi-objectif scoring
+   */
+  function arrangeConduitGridNew() {
+    if (fourreaux.length === 0) {
+      showToast('Aucun fourreau à disposer en grille');
+      return;
+    }
+
+    const shape = shapeSel.value;
+    if (shape === 'chemin_de_cable') {
+      showToast('Grille non supportée pour les chemins de câbles');
+      return;
+    }
+
+    try {
+      // Créer orchestrateur
+      const orchestrator = new window.PlacementOrchestrator();
+
+      // Préparer les fourreaux pour le moteur
+      const fourreauxInput = fourreaux.map(f => {
+        const spec = FOURREAUX.find(s => s.type === f.type && s.code === f.code);
+        return {
+          diameter: f.od || (spec ? spec.od : 40),
+          quantity: 1,
+          type: f.type,
+          id: f.id
+        };
+      });
+
+      // Contraintes actuelles
+      const lockWidth = document.getElementById('lockWidth')?.checked;
+      const lockHeight = document.getElementById('lockHeight')?.checked;
+      const boxWidth = shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value);
+      const boxHeight = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
+
+      const constraints = {};
+      if (lockWidth && lockHeight) {
+        // Les deux axes verrouillés : impossible si trop de fourreaux
+        constraints.boxWidth = boxWidth;
+        constraints.boxHeight = boxHeight;
+        constraints.lockedAxis = null; // Tenter quand même
+      } else if (lockWidth) {
+        constraints.lockedAxis = 'width';
+        constraints.boxWidth = boxWidth;
+      } else if (lockHeight) {
+        constraints.lockedAxis = 'height';
+        constraints.boxHeight = boxHeight;
+      }
+
+      // Calculer meilleur placement (sans auto-resize)
+      const bestConfig = orchestrator.computeBestPlacement(
+        fourreauxInput,
+        constraints,
+        {autoResize: false}
+      );
+
+      // Appliquer le placement au canvas
+      bestConfig.placedFourreaux.forEach(pf => {
+        const fourreau = fourreaux.find(f => f.id === pf.id);
+        if (fourreau) {
+          fourreau.x = pf.x * MM_TO_PX;
+          fourreau.y = pf.y * MM_TO_PX;
+          fourreau.frozen = true;
+          fourreau.vx = 0;
+          fourreau.vy = 0;
+        }
+      });
+
+      // Effacer les cellules de grille (pas de grille visuelle avec nouveau système)
+      lastGridCells = [];
+
+      // Afficher score et feedback
+      const scorePercent = (bestConfig.score * 100).toFixed(0);
+      showToast(`✅ ${fourreaux.length} fourreaux placés (Score: ${scorePercent}%) - Ctrl+X pour dégeler`);
+
+      updateStats();
+      redraw();
+
+    } catch (error) {
+      console.error('[arrangeConduitGridNew] Erreur:', error);
+      showToast(`❌ Erreur: ${error.message}`);
+
+      // Fallback sur ancien système si échec
+      console.warn('[arrangeConduitGridNew] Fallback sur ancien système');
+      arrangeConduitGridOptimized();
+    }
+  }
 
   /**
    * Calcule le placement optimal en grille pour un ensemble d'items dans un conteneur.
@@ -2278,34 +2369,101 @@
   }
 
   function reduceToMinimum() {
-    const button = document.getElementById('reduceToMinimum');
-    if (!button) return;
+    // Utiliser le nouveau moteur intelligent
+    reduceToMinimumNew();
+  }
 
-    const width = parseFloat(button.getAttribute('data-width'));
-    const height = parseFloat(button.getAttribute('data-height'));
-    if (isNaN(width) || isNaN(height)) return;
-
-    const lockWidth = document.getElementById('lockWidth')?.checked;
-    const lockHeight = document.getElementById('lockHeight')?.checked;
-
-    // Redimensionner la boîte aux dimensions optimales UNIQUEMENT
-    // (Ne PAS replacer les fourreaux pour éviter d'en perdre)
-    if (SHAPE === 'rect') {
-      if (!lockWidth) {
-        boxWInput.value = width;
-      }
-      if (!lockHeight) {
-        boxHInput.value = height;
-      }
-    } else if (SHAPE === 'circ') {
-      const diameter = Math.max(width, height);
-      boxDInput.value = diameter;
+  /**
+   * Nouveau système de réduction utilisant PlacementOrchestrator
+   * Génère placement optimal ET réduit dimensions au minimum
+   */
+  function reduceToMinimumNew() {
+    if (fourreaux.length === 0) {
+      showToast('Aucun fourreau à réduire');
+      return;
     }
 
-    applyDimensions();
-    hideReduceButton();
+    const shape = shapeSel.value;
+    if (shape === 'chemin_de_cable') {
+      showToast('Réduction non supportée pour les chemins de câbles');
+      return;
+    }
 
-    showToast(`Boîte ajustée à ${width} x ${height} mm. Utilisez Ctrl+G pour replacer les fourreaux.`);
+    try {
+      // Créer orchestrateur
+      const orchestrator = new window.PlacementOrchestrator();
+
+      // Préparer les fourreaux pour le moteur
+      const fourreauxInput = fourreaux.map(f => {
+        const spec = FOURREAUX.find(s => s.type === f.type && s.code === f.code);
+        return {
+          diameter: f.od || (spec ? spec.od : 40),
+          quantity: 1,
+          type: f.type,
+          id: f.id
+        };
+      });
+
+      // Contraintes (respecter axes verrouillés)
+      const lockWidth = document.getElementById('lockWidth')?.checked;
+      const lockHeight = document.getElementById('lockHeight')?.checked;
+      const boxWidth = shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value);
+      const boxHeight = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
+
+      const constraints = {};
+      if (lockWidth) {
+        constraints.lockedAxis = 'width';
+        constraints.boxWidth = boxWidth;
+      } else if (lockHeight) {
+        constraints.lockedAxis = 'height';
+        constraints.boxHeight = boxHeight;
+      }
+
+      // Calculer meilleur placement AVEC auto-resize
+      const bestConfig = orchestrator.computeBestPlacement(
+        fourreauxInput,
+        constraints,
+        {autoResize: true}
+      );
+
+      // Appliquer le placement au canvas
+      bestConfig.placedFourreaux.forEach(pf => {
+        const fourreau = fourreaux.find(f => f.id === pf.id);
+        if (fourreau) {
+          fourreau.x = pf.x * MM_TO_PX;
+          fourreau.y = pf.y * MM_TO_PX;
+          fourreau.frozen = true;
+          fourreau.vx = 0;
+          fourreau.vy = 0;
+        }
+      });
+
+      // Mettre à jour les dimensions de la boîte
+      const newWidth = Math.ceil(bestConfig.width);
+      const newHeight = Math.ceil(bestConfig.height);
+
+      if (shape === 'rect') {
+        if (!lockWidth) boxWInput.value = newWidth;
+        if (!lockHeight) boxHInput.value = newHeight;
+      } else if (shape === 'circ') {
+        const newDiameter = Math.max(newWidth, newHeight);
+        boxDInput.value = newDiameter;
+      }
+
+      applyDimensions();
+      hideReduceButton();
+
+      // Afficher score et feedback
+      const scorePercent = (bestConfig.score * 100).toFixed(0);
+      showToast(`✅ Boîte réduite à ${newWidth}×${newHeight}mm (Score: ${scorePercent}%)`);
+
+      updateStats();
+      redraw();
+
+    } catch (error) {
+      console.error('[reduceToMinimumNew] Erreur:', error);
+      showToast(`❌ Erreur: ${error.message}`);
+    }
   }
 
   // Fonctions de copier-coller
@@ -3534,8 +3692,23 @@
     if (!preview) return;
     if (SHAPE !== "rect" && SHAPE !== "chemin_de_cable") return;
 
-    const previewW = preview.widthMm * MM_TO_PX;
-    const previewH = preview.heightMm * MM_TO_PX;
+    // Marge visuelle de sécurité : 50mm de chaque côté quand bloqué
+    const VISUAL_MARGIN_MM = 50;
+    const visualMarginPx = VISUAL_MARGIN_MM * MM_TO_PX;
+
+    let previewW = preview.widthMm * MM_TO_PX;
+    let previewH = preview.heightMm * MM_TO_PX;
+
+    // Si bloqué, ajouter la marge visuelle pour montrer l'espace de sécurité
+    if (preview.blocked) {
+      if (preview.side === "left" || preview.side === "right") {
+        previewW += 2 * visualMarginPx;
+      }
+      if (preview.side === "top" || preview.side === "bottom") {
+        previewH += 2 * visualMarginPx;
+      }
+    }
+
     let x = 0;
     let y = 0;
 

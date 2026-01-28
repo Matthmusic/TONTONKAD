@@ -912,14 +912,145 @@ class MultiObjectiveScorer {
   }
 }
 
+/**
+ * Orchestrateur de placement - coordonne génération et scoring
+ * Point d'entrée principal pour calculer le meilleur placement
+ */
+class PlacementOrchestrator {
+  /**
+   * Crée un orchestrateur avec generator et scorer
+   */
+  constructor() {
+    this.generator = new ConfigurationGenerator();
+    this.scorer = new MultiObjectiveScorer();
+    this.mlModule = null; // Phase 2 uniquement
+  }
+
+  /**
+   * Calcule le meilleur placement pour une liste de fourreaux
+   * @param {Array} fourreaux - Liste fourreaux à placer [{diameter, quantity, type, ...}]
+   * @param {Object} constraints - {lockedAxis: 'width'|'height'|null, boxWidth, boxHeight}
+   * @param {Object} options - {autoResize: boolean}
+   * @returns {PlacementConfiguration} Meilleure configuration
+   */
+  computeBestPlacement(fourreaux, constraints = {}, options = {}) {
+    // Validation entrée
+    if (!fourreaux || fourreaux.length === 0) {
+      throw new Error('Aucun fourreau à placer');
+    }
+
+    // Adapter constraints pour le format attendu par le generator
+    const generatorConstraints = {};
+    if (constraints.lockedAxis) {
+      generatorConstraints.lockedAxis = constraints.lockedAxis;
+      if (constraints.lockedAxis === 'width' && constraints.boxWidth) {
+        generatorConstraints.lockedValue = constraints.boxWidth;
+      } else if (constraints.lockedAxis === 'height' && constraints.boxHeight) {
+        generatorConstraints.lockedValue = constraints.boxHeight;
+      }
+    }
+
+    // Génère N configurations candidates
+    const configs = this.generator.generateConfigurations(
+      fourreaux,
+      generatorConstraints
+    );
+
+    if (configs.length === 0) {
+      throw new Error('Impossible de générer des configurations valides');
+    }
+
+    // Score chaque config et trie par score décroissant
+    const scored = configs.map(cfg => ({
+      config: cfg,
+      score: this.scorer.evaluate(cfg)
+    }));
+
+    scored.sort((a, b) => b.score - a.score);
+
+    // Retourne la meilleure
+    const bestConfig = scored[0].config;
+
+    // Si autoResize activé : ajuster dimensions au minimum
+    if (options.autoResize) {
+      this.optimizeDimensions(bestConfig);
+    }
+
+    // Log pour analytics (optionnel)
+    console.log('[PlacementOrchestrator] Best config:', {
+      score: bestConfig.score,
+      scoreDetails: bestConfig.scoreDetails,
+      dimensions: {width: bestConfig.width, height: bestConfig.height},
+      strategy: this._identifyStrategy(bestConfig),
+      alternativesCount: configs.length
+    });
+
+    return bestConfig;
+  }
+
+  /**
+   * Optimise dimensions de la config (réduit au minimum)
+   * @param {PlacementConfiguration} config
+   */
+  optimizeDimensions(config) {
+    if (config.placedFourreaux.length === 0) return;
+
+    // Calculer bounding box réelle des fourreaux placés
+    let maxX = 0;
+    let maxY = 0;
+
+    for (const f of config.placedFourreaux) {
+      const cellSize = config.calculateCellSize(f.diameter);
+      maxX = Math.max(maxX, f.x + cellSize);
+      maxY = Math.max(maxY, f.y + cellSize);
+    }
+
+    // Ajouter marges (lit de pose 40mm)
+    const margin = PLACEMENT_CONFIG.litDePose;
+    config.width = maxX + margin;
+    config.height = maxY + margin;
+  }
+
+  /**
+   * Identifie la stratégie utilisée par une config (heuristique)
+   * @param {PlacementConfiguration} config
+   * @returns {string} Nom de la stratégie probable
+   * @private
+   */
+  _identifyStrategy(config) {
+    if (config.placedFourreaux.length === 0) return 'empty';
+
+    const ratio = config.width / config.height;
+    const symmetryScore = config.scoreDetails?.symmetry || 0;
+
+    // Heuristiques simples
+    if (symmetryScore > 0.8) return 'centeredSymmetric';
+    if (ratio < 0.6) return 'minWidth';
+    if (ratio > 1.67) return 'minHeight';
+    if (ratio >= 0.8 && ratio <= 1.25) return 'squareShape';
+    return 'bottomLeft';
+  }
+}
+
 // Export pour utilisation dans d'autres modules
 if (typeof module !== 'undefined' && module.exports) {
+  // Export Node.js (pour Jest)
   module.exports = {
     PLACEMENT_CONFIG,
     calculateCellSize,
     PlacementConfiguration,
     FourreauSorter,
     ConfigurationGenerator,
-    MultiObjectiveScorer
+    MultiObjectiveScorer,
+    PlacementOrchestrator
   };
+} else if (typeof window !== 'undefined') {
+  // Export navigateur (pour script.js)
+  window.PLACEMENT_CONFIG = PLACEMENT_CONFIG;
+  window.calculateCellSize = calculateCellSize;
+  window.PlacementConfiguration = PlacementConfiguration;
+  window.FourreauSorter = FourreauSorter;
+  window.ConfigurationGenerator = ConfigurationGenerator;
+  window.MultiObjectiveScorer = MultiObjectiveScorer;
+  window.PlacementOrchestrator = PlacementOrchestrator;
 }
