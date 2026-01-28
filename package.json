@@ -13,6 +13,9 @@
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
     "release": "electron-builder --publish always",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "bmad:refresh": "bmad-method install -f -i codex",
     "bmad:list": "bmad-method list:agents",
     "bmad:validate": "bmad-method validate"
@@ -26,8 +29,10 @@
     "CAD"
   ],
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "electron": "^39.2.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "jest": "^30.2.0"
   },
   "dependencies": {
     "dxf-writer": "^1.18.4",
