@@ -661,6 +661,257 @@ class ConfigurationGenerator {
   }
 }
 
+/**
+ * Classe de scoring multi-objectif
+ * Évalue configurations selon 4 critères pondérés
+ */
+class MultiObjectiveScorer {
+  /**
+   * Crée un scorer avec pondérations configurables
+   * @param {Object} weights - Pondérations {surface, symmetry, stability, shape}
+   */
+  constructor(weights = {}) {
+    this.weights = {
+      surface: weights.surface !== undefined ? weights.surface : 0.40,
+      symmetry: weights.symmetry !== undefined ? weights.symmetry : 0.25,
+      stability: weights.stability !== undefined ? weights.stability : 0.20,
+      shape: weights.shape !== undefined ? weights.shape : 0.15
+    };
+  }
+
+  /**
+   * Évalue une configuration et retourne score composite
+   * @param {PlacementConfiguration} config - Configuration à évaluer
+   * @returns {number} Score entre 0-1 (1 = meilleur)
+   */
+  evaluate(config) {
+    const scores = {
+      surface: this.scoreSurface(config),
+      symmetry: this.scoreSymmetry(config),
+      stability: this.scoreStability(config),
+      shape: this.scoreSquareness(config)
+    };
+
+    // Score composite pondéré
+    const totalScore = (
+      scores.surface * this.weights.surface +
+      scores.symmetry * this.weights.symmetry +
+      scores.stability * this.weights.stability +
+      scores.shape * this.weights.shape
+    );
+
+    // Stocker détails pour debug/analytics
+    config.scoreDetails = scores;
+    config.score = totalScore;
+
+    return totalScore;
+  }
+
+  /**
+   * Évalue compacité (minimise surface totale)
+   * @param {PlacementConfiguration} config
+   * @returns {number} Score 0-1 (1 = parfaitement compact)
+   */
+  scoreSurface(config) {
+    if (config.placedFourreaux.length === 0) {
+      return 1.0; // Config vide = parfait
+    }
+
+    // Surface minimale théorique = somme des aires de cellules
+    const minTheoreticalArea = config.placedFourreaux.reduce((sum, f) => {
+      const cellSize = config.calculateCellSize(f.diameter);
+      return sum + Math.pow(cellSize, 2);
+    }, 0);
+
+    // Surface réelle utilisée
+    const actualArea = config.width * config.height;
+
+    // Score : ratio surface théorique / surface réelle
+    // 1.0 = parfaitement compact, 0.5 = 50% gaspillage
+    const efficiency = minTheoreticalArea / actualArea;
+
+    // Normaliser et clamper entre 0-1
+    return Math.min(1.0, Math.max(0.0, efficiency));
+  }
+
+  /**
+   * Évalue symétrie sur axe Y vertical
+   * @param {PlacementConfiguration} config
+   * @returns {number} Score 0-1 (1 = symétrie parfaite)
+   */
+  scoreSymmetry(config) {
+    if (config.placedFourreaux.length === 0) {
+      return 1.0; // Config vide = symétrique
+    }
+
+    const centerX = config.width / 2;
+    let symmetryMatches = 0;
+    const totalFourreaux = config.placedFourreaux.length;
+    const checked = new Set();
+
+    for (const f of config.placedFourreaux) {
+      if (checked.has(f.id)) continue;
+
+      const cellSize = config.calculateCellSize(f.diameter);
+
+      // Position symétrique attendue sur axe Y
+      const expectedSymX = config.width - f.x - cellSize;
+
+      // Chercher fourreau symétrique
+      const symmetric = config.placedFourreaux.find(s =>
+        !checked.has(s.id) &&
+        s.id !== f.id &&
+        s.diameter === f.diameter &&
+        Math.abs(s.x - expectedSymX) < 20 && // Tolérance 20mm
+        Math.abs(s.y - f.y) < 20
+      );
+
+      if (symmetric) {
+        symmetryMatches += 2; // Compter les 2 fourreaux
+        checked.add(f.id);
+        checked.add(symmetric.id);
+      } else {
+        // Vérifier si fourreau centré (symétrique avec lui-même)
+        const fCenterX = f.x + cellSize / 2;
+        if (Math.abs(fCenterX - centerX) < 20) {
+          symmetryMatches += 1;
+          checked.add(f.id);
+        }
+      }
+    }
+
+    // Score = ratio fourreaux symétriques / total
+    return symmetryMatches / totalFourreaux;
+  }
+
+  /**
+   * Vérifie règle des 2 appuis minimum (stabilité physique)
+   * @param {PlacementConfiguration} config
+   * @returns {number} Score 0-1 (1 = tous stables)
+   */
+  scoreStability(config) {
+    if (config.placedFourreaux.length === 0) {
+      return 1.0; // Config vide = stable
+    }
+
+    let unstableCount = 0;
+
+    for (const f of config.placedFourreaux) {
+      const supports = this.countSupports(f, config);
+      if (supports < 2) {
+        unstableCount += 1;
+      }
+    }
+
+    // Score = ratio fourreaux stables / total
+    const stableCount = config.placedFourreaux.length - unstableCount;
+    return stableCount / config.placedFourreaux.length;
+  }
+
+  /**
+   * Compte le nombre de supports pour un fourreau
+   * @param {Object} fourreau
+   * @param {PlacementConfiguration} config
+   * @returns {number} Nombre de supports (0-2+)
+   * @private
+   */
+  countSupports(fourreau, config) {
+    // Si au sol (y = 0 ou proche) : support parfait
+    if (fourreau.y <= 5) return 2;
+
+    // Compter fourreaux en dessous avec overlap horizontal
+    let supportCount = 0;
+    const cellSize = config.calculateCellSize(fourreau.diameter);
+
+    for (const other of config.placedFourreaux) {
+      if (other.id === fourreau.id) continue;
+
+      // Fourreau doit être en dessous
+      const otherCellSize = config.calculateCellSize(other.diameter);
+      const otherTop = other.y + otherCellSize;
+
+      // Vérifier si "other" est juste en dessous de "fourreau"
+      if (Math.abs(otherTop - fourreau.y) <= 5) { // Tolérance 5mm
+        // Vérifier overlap horizontal
+        if (this.hasHorizontalOverlap(fourreau, other, config)) {
+          supportCount++;
+          if (supportCount >= 2) break; // Max 2 suffisent
+        }
+      }
+    }
+
+    return supportCount;
+  }
+
+  /**
+   * Vérifie si deux fourreaux ont un overlap horizontal
+   * @param {Object} f1
+   * @param {Object} f2
+   * @param {PlacementConfiguration} config
+   * @returns {boolean} true si overlap existe
+   * @private
+   */
+  hasHorizontalOverlap(f1, f2, config) {
+    const f1CellSize = config.calculateCellSize(f1.diameter);
+    const f2CellSize = config.calculateCellSize(f2.diameter);
+
+    const f1Right = f1.x + f1CellSize;
+    const f2Right = f2.x + f2CellSize;
+
+    // Il y a overlap si les intervalles [f1.x, f1Right] et [f2.x, f2Right] se chevauchent
+    return !(f1Right <= f2.x || f2Right <= f1.x);
+  }
+
+  /**
+   * Favorise forme carrée (ratio width:height proche de 1)
+   * @param {PlacementConfiguration} config
+   * @returns {number} Score 0-1 (1 = carré parfait)
+   */
+  scoreSquareness(config) {
+    if (config.width === 0 || config.height === 0) {
+      return 0.0; // Config invalide
+    }
+
+    // Ratio du plus petit sur le plus grand
+    const ratio = Math.min(config.width, config.height) /
+                  Math.max(config.width, config.height);
+
+    // ratio = 1.0 → carré parfait (score 1.0)
+    // ratio = 0.5 → rectangle 2:1 (score 0.5)
+    // ratio = 0.2 → très étalé (score 0.2)
+    return ratio;
+  }
+
+  /**
+   * Compare deux configurations et retourne la meilleure
+   * @param {PlacementConfiguration} config1
+   * @param {PlacementConfiguration} config2
+   * @returns {PlacementConfiguration} Meilleure config
+   */
+  static compareBest(config1, config2) {
+    const scorer = new MultiObjectiveScorer();
+    const score1 = scorer.evaluate(config1);
+    const score2 = scorer.evaluate(config2);
+
+    return score1 >= score2 ? config1 : config2;
+  }
+
+  /**
+   * Trie un tableau de configs par score décroissant
+   * @param {Array<PlacementConfiguration>} configs
+   * @returns {Array<PlacementConfiguration>} Configs triées (meilleure en premier)
+   */
+  static rankConfigurations(configs) {
+    const scorer = new MultiObjectiveScorer();
+
+    // Évaluer toutes les configs
+    configs.forEach(cfg => scorer.evaluate(cfg));
+
+    // Trier par score décroissant
+    return configs.sort((a, b) => b.score - a.score);
+  }
+}
+
 // Export pour utilisation dans d'autres modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -668,6 +919,7 @@ if (typeof module !== 'undefined' && module.exports) {
     calculateCellSize,
     PlacementConfiguration,
     FourreauSorter,
-    ConfigurationGenerator
+    ConfigurationGenerator,
+    MultiObjectiveScorer
   };
 }

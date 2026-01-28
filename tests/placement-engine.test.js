@@ -7,7 +7,8 @@ const {
   calculateCellSize,
   PlacementConfiguration,
   FourreauSorter,
-  ConfigurationGenerator
+  ConfigurationGenerator,
+  MultiObjectiveScorer
 } = require('../src/renderer/placement-engine.js');
 
 describe('PLACEMENT_CONFIG', () => {
@@ -861,6 +862,418 @@ describe('ConfigurationGenerator', () => {
       configs.forEach(config => {
         expect(config.placedFourreaux).toHaveLength(0);
       });
+    });
+  });
+});
+
+describe('MultiObjectiveScorer', () => {
+  let scorer;
+
+  beforeEach(() => {
+    scorer = new MultiObjectiveScorer();
+  });
+
+  describe('constructor', () => {
+    test('uses default weights when none provided', () => {
+      const defaultScorer = new MultiObjectiveScorer();
+
+      expect(defaultScorer.weights.surface).toBe(0.40);
+      expect(defaultScorer.weights.symmetry).toBe(0.25);
+      expect(defaultScorer.weights.stability).toBe(0.20);
+      expect(defaultScorer.weights.shape).toBe(0.15);
+    });
+
+    test('accepts custom weights', () => {
+      const customScorer = new MultiObjectiveScorer({
+        surface: 0.50,
+        symmetry: 0.20,
+        stability: 0.20,
+        shape: 0.10
+      });
+
+      expect(customScorer.weights.surface).toBe(0.50);
+      expect(customScorer.weights.symmetry).toBe(0.20);
+      expect(customScorer.weights.stability).toBe(0.20);
+      expect(customScorer.weights.shape).toBe(0.10);
+    });
+
+    test('allows zero weights', () => {
+      const zeroScorer = new MultiObjectiveScorer({
+        surface: 1.0,
+        symmetry: 0.0,
+        stability: 0.0,
+        shape: 0.0
+      });
+
+      expect(zeroScorer.weights.surface).toBe(1.0);
+      expect(zeroScorer.weights.symmetry).toBe(0.0);
+    });
+  });
+
+  describe('scoreSurface', () => {
+    test('returns 1.0 for perfectly compact configuration', () => {
+      const config = new PlacementConfiguration(230, 230);
+      config.addFourreau({diameter: 200, x: 0, y: 0, id: 'f1'});
+
+      const score = scorer.scoreSurface(config);
+
+      expect(score).toBeCloseTo(1.0, 2);
+    });
+
+    test('penalizes wasted space proportionally', () => {
+      const config = new PlacementConfiguration(460, 230);
+      config.addFourreau({diameter: 200, x: 0, y: 0, id: 'f1'});
+
+      const score = scorer.scoreSurface(config);
+
+      expect(score).toBeCloseTo(0.5, 1);
+    });
+
+    test('handles multiple fourreaux', () => {
+      const config = new PlacementConfiguration(460, 230);
+      config.addFourreau({diameter: 200, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 200, x: 230, y: 0, id: 'f2'});
+
+      const score = scorer.scoreSurface(config);
+
+      expect(score).toBeCloseTo(1.0, 1);
+    });
+
+    test('returns 1.0 for empty configuration', () => {
+      const config = new PlacementConfiguration(1000, 1000);
+
+      const score = scorer.scoreSurface(config);
+
+      expect(score).toBe(1.0);
+    });
+  });
+
+  describe('scoreSymmetry', () => {
+    test('returns 1.0 for perfectly symmetric pairs', () => {
+      const config = new PlacementConfiguration(390, 140);
+
+      config.addFourreau({diameter: 110, x: 40, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 210, y: 0, id: 'f2'});
+
+      const score = scorer.scoreSymmetry(config);
+
+      expect(score).toBe(1.0);
+    });
+
+    test('detects centered fourreaux', () => {
+      const config = new PlacementConfiguration(230, 230);
+      const centerX = config.width / 2;
+      const cellSize = 140;
+
+      config.addFourreau({diameter: 110, x: centerX - cellSize / 2, y: 0, id: 'f1'});
+
+      const score = scorer.scoreSymmetry(config);
+
+      expect(score).toBe(1.0);
+    });
+
+    test('returns partial score for mixed symmetric/asymmetric', () => {
+      const config = new PlacementConfiguration(800, 300);
+
+      config.addFourreau({diameter: 110, x: 100, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 560, y: 0, id: 'f2'});
+      config.addFourreau({diameter: 110, x: 0, y: 140, id: 'f3'});
+      config.addFourreau({diameter: 110, x: 140, y: 140, id: 'f4'});
+
+      const score = scorer.scoreSymmetry(config);
+
+      expect(score).toBeCloseTo(0.5, 1);
+    });
+
+    test('returns 0.0 for completely asymmetric configuration', () => {
+      const config = new PlacementConfiguration(1000, 300);
+
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 140, y: 0, id: 'f2'});
+      config.addFourreau({diameter: 110, x: 280, y: 0, id: 'f3'});
+
+      const score = scorer.scoreSymmetry(config);
+
+      expect(score).toBeLessThan(0.3);
+    });
+
+    test('returns 1.0 for empty configuration', () => {
+      const config = new PlacementConfiguration(1000, 1000);
+
+      const score = scorer.scoreSymmetry(config);
+
+      expect(score).toBe(1.0);
+    });
+  });
+
+  describe('scoreStability', () => {
+    test('returns 1.0 when all fourreaux at ground level', () => {
+      const config = new PlacementConfiguration(500, 300);
+
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 140, y: 0, id: 'f2'});
+      config.addFourreau({diameter: 110, x: 280, y: 0, id: 'f3'});
+
+      const score = scorer.scoreStability(config);
+
+      expect(score).toBe(1.0);
+    });
+
+    test('returns 1.0 for two-level configuration with proper support', () => {
+      const config = new PlacementConfiguration(500, 300);
+      const cellSize = 140;
+
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 140, y: 0, id: 'f2'});
+      config.addFourreau({diameter: 110, x: 70, y: cellSize, id: 'f3'});
+
+      const score = scorer.scoreStability(config);
+
+      expect(score).toBe(1.0);
+    });
+
+    test('penalizes unsupported fourreaux', () => {
+      const config = new PlacementConfiguration(1000, 1000);
+
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 500, y: 500, id: 'f2'});
+
+      const score = scorer.scoreStability(config);
+
+      expect(score).toBe(0.5);
+    });
+
+    test('counts horizontal overlap correctly', () => {
+      const config = new PlacementConfiguration(500, 300);
+      const cellSize = 140;
+
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 50, y: cellSize, id: 'f2'});
+
+      const score = scorer.scoreStability(config);
+
+      expect(score).toBeGreaterThanOrEqual(0.5);
+    });
+
+    test('returns 1.0 for empty configuration', () => {
+      const config = new PlacementConfiguration(1000, 1000);
+
+      const score = scorer.scoreStability(config);
+
+      expect(score).toBe(1.0);
+    });
+  });
+
+  describe('scoreSquareness', () => {
+    test('returns 1.0 for perfect square', () => {
+      const config = new PlacementConfiguration(1000, 1000);
+
+      const score = scorer.scoreSquareness(config);
+
+      expect(score).toBe(1.0);
+    });
+
+    test('returns ratio for rectangles', () => {
+      const config1 = new PlacementConfiguration(1000, 800);
+      const score1 = scorer.scoreSquareness(config1);
+      expect(score1).toBe(0.8);
+
+      const config2 = new PlacementConfiguration(1000, 500);
+      const score2 = scorer.scoreSquareness(config2);
+      expect(score2).toBe(0.5);
+
+      const config3 = new PlacementConfiguration(1000, 200);
+      const score3 = scorer.scoreSquareness(config3);
+      expect(score3).toBe(0.2);
+    });
+
+    test('handles inverted dimensions correctly', () => {
+      const config1 = new PlacementConfiguration(1000, 800);
+      const config2 = new PlacementConfiguration(800, 1000);
+
+      const score1 = scorer.scoreSquareness(config1);
+      const score2 = scorer.scoreSquareness(config2);
+
+      expect(score1).toBe(score2);
+    });
+
+    test('returns 0.0 for invalid dimensions', () => {
+      const config = new PlacementConfiguration(1000, 0);
+
+      const score = scorer.scoreSquareness(config);
+
+      expect(score).toBe(0.0);
+    });
+  });
+
+  describe('evaluate', () => {
+    test('returns score between 0 and 1', () => {
+      const config = new PlacementConfiguration(500, 500);
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const score = scorer.evaluate(config);
+
+      expect(score).toBeGreaterThanOrEqual(0.0);
+      expect(score).toBeLessThanOrEqual(1.0);
+    });
+
+    test('calculates weighted composite score correctly', () => {
+      const config = new PlacementConfiguration(500, 500);
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const score = scorer.evaluate(config);
+
+      expect(config.scoreDetails).toBeDefined();
+      expect(config.scoreDetails.surface).toBeDefined();
+      expect(config.scoreDetails.symmetry).toBeDefined();
+      expect(config.scoreDetails.stability).toBeDefined();
+      expect(config.scoreDetails.shape).toBeDefined();
+
+      expect(config.score).toBe(score);
+
+      const expectedScore = (
+        config.scoreDetails.surface * 0.40 +
+        config.scoreDetails.symmetry * 0.25 +
+        config.scoreDetails.stability * 0.20 +
+        config.scoreDetails.shape * 0.15
+      );
+
+      expect(score).toBeCloseTo(expectedScore, 5);
+    });
+
+    test('uses custom weights correctly', () => {
+      const customScorer = new MultiObjectiveScorer({
+        surface: 1.0,
+        symmetry: 0.0,
+        stability: 0.0,
+        shape: 0.0
+      });
+
+      const config = new PlacementConfiguration(500, 500);
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const score = customScorer.evaluate(config);
+
+      expect(score).toBeCloseTo(config.scoreDetails.surface, 5);
+    });
+
+    test('stores all score details in config', () => {
+      const config = new PlacementConfiguration(500, 500);
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      scorer.evaluate(config);
+
+      expect(config.score).toBeDefined();
+      expect(config.scoreDetails).toBeDefined();
+      expect(typeof config.scoreDetails.surface).toBe('number');
+      expect(typeof config.scoreDetails.symmetry).toBe('number');
+      expect(typeof config.scoreDetails.stability).toBe('number');
+      expect(typeof config.scoreDetails.shape).toBe('number');
+    });
+  });
+
+  describe('compareBest', () => {
+    test('returns config with higher score', () => {
+      const config1 = new PlacementConfiguration(500, 500);
+      config1.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const config2 = new PlacementConfiguration(1000, 1000);
+      config2.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const best = MultiObjectiveScorer.compareBest(config1, config2);
+
+      expect(best).toBe(config1);
+    });
+
+    test('handles equal scores', () => {
+      const config1 = new PlacementConfiguration(500, 500);
+      config1.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const config2 = new PlacementConfiguration(500, 500);
+      config2.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const best = MultiObjectiveScorer.compareBest(config1, config2);
+
+      expect(best).toBe(config1);
+    });
+  });
+
+  describe('rankConfigurations', () => {
+    test('sorts configurations by score descending', () => {
+      const configs = [
+        new PlacementConfiguration(1000, 1000),
+        new PlacementConfiguration(500, 500),
+        new PlacementConfiguration(300, 300)
+      ];
+
+      configs[0].addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      configs[1].addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      configs[2].addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const ranked = MultiObjectiveScorer.rankConfigurations(configs);
+
+      expect(ranked[0].score).toBeDefined();
+      expect(ranked[1].score).toBeDefined();
+      expect(ranked[2].score).toBeDefined();
+
+      expect(ranked[0].score).toBeGreaterThanOrEqual(ranked[1].score);
+      expect(ranked[1].score).toBeGreaterThanOrEqual(ranked[2].score);
+    });
+
+    test('handles empty array', () => {
+      const ranked = MultiObjectiveScorer.rankConfigurations([]);
+
+      expect(ranked).toEqual([]);
+    });
+
+    test('handles single configuration', () => {
+      const config = new PlacementConfiguration(500, 500);
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const ranked = MultiObjectiveScorer.rankConfigurations([config]);
+
+      expect(ranked).toHaveLength(1);
+      expect(ranked[0].score).toBeDefined();
+    });
+  });
+
+  describe('Integration tests', () => {
+    test('evaluates excellent configuration with high scores', () => {
+      const config = new PlacementConfiguration(390, 140);
+
+      // All fourreaux at ground level for perfect stability
+      config.addFourreau({diameter: 110, x: 40, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 210, y: 0, id: 'f2'});
+
+      const score = scorer.evaluate(config);
+
+      expect(score).toBeGreaterThan(0.7);
+      expect(config.scoreDetails.surface).toBeGreaterThan(0.6);
+      expect(config.scoreDetails.symmetry).toBe(1.0);
+      expect(config.scoreDetails.stability).toBe(1.0);
+    });
+
+    test('penalizes poor configuration appropriately', () => {
+      const config = new PlacementConfiguration(2000, 500);
+
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+      config.addFourreau({diameter: 110, x: 500, y: 0, id: 'f2'});
+
+      const score = scorer.evaluate(config);
+
+      expect(score).toBeLessThan(0.6);
+      expect(config.scoreDetails.surface).toBeLessThan(0.5);
+      expect(config.scoreDetails.shape).toBeLessThan(0.3);
+    });
+
+    test('score is deterministic for same configuration', () => {
+      const config = new PlacementConfiguration(500, 500);
+      config.addFourreau({diameter: 110, x: 0, y: 0, id: 'f1'});
+
+      const score1 = scorer.evaluate(config);
+      const score2 = scorer.evaluate(config);
+
+      expect(score1).toBe(score2);
     });
   });
 });
