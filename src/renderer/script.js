@@ -1149,14 +1149,18 @@
    * @returns {Object} - Résultat du placement.
    */
   function calculateGridPlacement(items, container, options) {
-    const { margin = 0, gap = 0 } = options || {};
+    const { margin = 0, gap = 0, sort = 'desc' } = options || {};
     const numItems = items.length;
 
     if (numItems === 0) {
       return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
     }
 
-    const sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
+    // L'ordre de tri est contrôlable pour permettre des variantes réellement distinctes.
+    let sortedItems;
+    if (sort === 'asc') sortedItems = [...items].sort((a, b) => a.diameter - b.diameter);
+    else if (sort === 'none') sortedItems = [...items];
+    else sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
 
     const availableWidth = container.width - 2 * margin;
     const availableHeight = container.height - 2 * margin;
@@ -1326,48 +1330,6 @@
   /* ====== Grille virtuelle adaptative pour multitubulaires (VRD/BTP) ====== */
 
   /**
-   * Calcule les dimensions de cellule optimisées (rectangulaires) pour un fourreau
-   * @param {Object} item - {id, diameter}
-   * @param {number} gap - Écart en mm
-   * @returns {Object} - {width, height, canStack}
-   */
-  function calculateCellDimensions(item, gap) {
-    const diameter = item.diameter;
-    return {
-      width: diameter + gap,
-      height: diameter + gap,
-      canStack: true
-    };
-  }
-
-  /**
-   * Vérifie si 2 petits fourreaux peuvent être empilés verticalement
-   * @param {Object} small1 - Premier petit {id, diameter}
-   * @param {Object} small2 - Deuxième petit {id, diameter}
-   * @param {Object} adjacentLarge - Gros adjacent {id, diameter}
-   * @param {number} gap - Écart en mm
-   * @returns {Object} - {canStack: boolean, stackedHeight?: number}
-   */
-  function canStackTwoSmall(small1, small2, adjacentLarge, gap) {
-    const stackedHeight = small1.diameter + small2.diameter + gap;
-    const largeHeight = adjacentLarge.diameter;
-
-    if (stackedHeight <= largeHeight + gap) {
-      return { canStack: true, stackedHeight };
-    }
-    return { canStack: false };
-  }
-
-  /**
-   * Stratégie PYRAMID: Placement hiérarchique (gros en bas, petits autour)
-   * Logique: Gros fourreau(x) en bas au centre, remplissage symétrique autour
-   * @param {Array} items - Fourreaux avec {id, diameter}
-   * @param {Object} container - {width, height}
-   * @param {Object} options - {margin, gap}
-   * @param {Object} analysis - Résultat de analyzeConduitMix
-   * @returns {Object} - Résultat placement
-   */
-  /**
    * Stratégie SMART PYRAMID: Placement pyramidal intelligent par rangées optimisées
    * Remplit chaque rangée en fonction de la largeur disponible (pas séquentiel)
    * Exemple: 2×Ø63 peuvent tenir dans la largeur d'1×Ø200
@@ -1483,121 +1445,6 @@
     };
   }
 
-  function placePyramid(items, container, options, analysis) {
-    const { margin = 0, gap = 0 } = options || {};
-    const { stats } = analysis;
-
-    if (items.length === 0) {
-      return { fits: true, placements: [], grid: { cols: 0, rows: 0 } };
-    }
-
-    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
-    const largestDiameter = stats.maxDiameter;
-    const largestCount = stats.diameterCounts[largestDiameter];
-
-    const largeItems = sorted.slice(0, largestCount);
-    const smallItems = sorted.slice(largestCount);
-
-    const placements = [];
-    const cells = []; // Stockage des cellules pour affichage visuel
-
-    // Phase 1: Placer le(s) gros EN BAS au centre (métier VRD: gros en bas, gravité)
-    const baseY = container.height - margin - largestDiameter / 2 - gap / 2;
-    const largeCellSize = largestDiameter + gap;
-
-    if (largestCount === 1) {
-      const x = container.width / 2;
-      placements.push({
-        id: largeItems[0].id,
-        x: x,
-        y: baseY
-      });
-      cells.push({
-        x: x - largeCellSize / 2,
-        y: baseY - largeCellSize / 2,
-        width: largeCellSize,
-        height: largeCellSize
-      });
-    } else {
-      const baseWidth = largestCount * (largestDiameter + gap);
-      const baseStartX = (container.width - baseWidth) / 2 + (largestDiameter + gap) / 2;
-      for (let i = 0; i < largestCount; i++) {
-        const x = baseStartX + i * (largestDiameter + gap);
-        placements.push({
-          id: largeItems[i].id,
-          x: x,
-          y: baseY
-        });
-        cells.push({
-          x: x - largeCellSize / 2,
-          y: baseY - largeCellSize / 2,
-          width: largeCellSize,
-          height: largeCellSize
-        });
-      }
-    }
-
-    // Phase 2: Placer petits AU-DESSUS en grille
-    if (smallItems.length > 0) {
-      const maxSmallDiameter = Math.max(...smallItems.map(s => s.diameter));
-      const smallCellSize = maxSmallDiameter + gap;
-
-      const numCols = Math.max(largestCount, Math.ceil(Math.sqrt(smallItems.length)));
-      const numRows = Math.ceil(smallItems.length / numCols);
-
-      const gridWidth = numCols * smallCellSize;
-      const gridStartX = (container.width - gridWidth) / 2 + smallCellSize / 2;
-      const gridStartY = baseY - largestDiameter / 2 - gap - smallCellSize / 2;
-
-      let smallIndex = 0;
-      // Remplir du bas vers le haut (r décroissant signifie Y décroissant = monter)
-      for (let r = numRows - 1; r >= 0; r--) {
-        for (let c = 0; c < numCols; c++) {
-          if (smallIndex < smallItems.length) {
-            const x = gridStartX + c * smallCellSize;
-            const y = gridStartY - r * smallCellSize;
-            placements.push({
-              id: smallItems[smallIndex].id,
-              x: x,
-              y: y
-            });
-            cells.push({
-              x: x - smallCellSize / 2,
-              y: y - smallCellSize / 2,
-              width: smallCellSize,
-              height: smallCellSize
-            });
-            smallIndex++;
-          }
-        }
-      }
-    }
-
-    // Vérifier si tout rentre
-    const maxY = Math.max(...placements.map(p => p.y)) + Math.max(...sorted.map(s => s.diameter)) / 2 + gap / 2;
-    const maxX = Math.max(...placements.map(p => p.x)) + Math.max(...sorted.map(s => s.diameter)) / 2 + gap / 2;
-
-    if (maxY > container.height || maxX > container.width) {
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols: 0, rows: 0 },
-        cells: [],
-        suggestedContainer: {
-          width: Math.ceil(maxX + margin),
-          height: Math.ceil(maxY + margin)
-        }
-      };
-    }
-
-    return {
-      fits: true,
-      placements,
-      grid: { cols: largestCount, rows: Math.ceil(smallItems.length / Math.max(1, largestCount)) + 1 },
-      cells // Retourner les cellules pour affichage
-    };
-  }
-
   /**
    * Score un layout selon critères de qualité
    * @param {Object} layout - Résultat de placement
@@ -1612,25 +1459,40 @@
 
     const { placements } = layout;
 
-    // Critère 1: Compacité (40%) - Minimiser espace utilisé
-    const usedWidth = Math.max(...placements.map(p => p.x)) - Math.min(...placements.map(p => p.x));
-    const usedHeight = Math.max(...placements.map(p => p.y)) - Math.min(...placements.map(p => p.y));
-    const usedArea = usedWidth * usedHeight;
-    const containerArea = container.width * container.height;
-    const compacityScore = (1 - usedArea / containerArea) * 40;
+    // Rayon par id (les placements ne portent que {id, x, y})
+    const radiusById = new Map(items.map(it => [it.id, it.diameter / 2]));
+    const radiusOf = p => radiusById.get(p.id) || 0;
 
-    // Critère 2: Symétrie (30%) - Layouts équilibrés
+    // Critère 1: Compacité (40%) - densité de packing réelle
+    // On calcule l'enveloppe avec les BORDS des cercles (pas seulement les centres),
+    // puis la densité = aire des cercles / aire de l'enveloppe. Indépendant de la
+    // taille du conteneur : un layout tassé dans un coin n'est plus avantagé à tort.
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let circlesArea = 0;
+    for (const p of placements) {
+      const r = radiusOf(p);
+      minX = Math.min(minX, p.x - r);
+      maxX = Math.max(maxX, p.x + r);
+      minY = Math.min(minY, p.y - r);
+      maxY = Math.max(maxY, p.y + r);
+      circlesArea += Math.PI * r * r;
+    }
+    const envArea = (maxX - minX) * (maxY - minY);
+    const packingDensity = envArea > 0 ? circlesArea / envArea : 0;
+    const compacityScore = Math.min(1, packingDensity) * 40;
+
+    // Critère 2: Symétrie (30%) - Layouts équilibrés autour de l'axe vertical
     const centerX = container.width / 2;
     const avgDistanceFromCenter = placements.reduce((sum, p) => sum + Math.abs(p.x - centerX), 0) / placements.length;
     const maxDistancePossible = container.width / 2;
-    const symmetryScore = (1 - avgDistanceFromCenter / maxDistancePossible) * 30;
+    const symmetryScore = (1 - Math.min(1, avgDistanceFromCenter / maxDistancePossible)) * 30;
 
     // Critère 3: Alignement (30%) - Grilles bien formées
     const cols = layout.grid?.cols || 1;
     const rows = layout.grid?.rows || 1;
     const ratio = cols / rows;
     const idealRatio = 1.5; // Rectangle large > haut (métier VRD)
-    const alignmentScore = (1 - Math.abs(ratio - idealRatio) / idealRatio) * 30;
+    const alignmentScore = (1 - Math.min(1, Math.abs(ratio - idealRatio) / idealRatio)) * 30;
 
     return compacityScore + symmetryScore + alignmentScore;
   }
@@ -1644,10 +1506,10 @@
    * @param {Object} analysis - Résultat de analyzeConduitMix
    * @returns {Object} - Résultat placement (meilleure variante)
    */
-  function placeComplex(items, container, options, analysis) {
+  function placeComplex(items, container, options) {
     const variants = [];
 
-    // Variante 1: Smart Pyramid (NOUVEAU - placement pyramidal intelligent)
+    // Variante 1: Smart Pyramid (placement pyramidal par rangées, gros en bas)
     const variant1 = placeSmartPyramid(items, container, options);
     variants.push({
       layout: variant1,
@@ -1655,33 +1517,27 @@
       score: scoreLayout(variant1, container, items)
     });
 
-    // Variante 2: Standard (tri taille décroissante)
-    const variant2 = calculateGridPlacement(items, container, options);
+    // Variante 2: Grille, gros fourreaux d'abord
+    const variant2 = calculateGridPlacement(items, container, { ...options, sort: 'desc' });
     variants.push({
       layout: variant2,
-      name: 'Standard',
+      name: 'GridDesc',
       score: scoreLayout(variant2, container, items)
     });
 
-    // Variante 3: Compact rectangulaire (forcer ratio largeur > hauteur)
-    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
-    const variant3 = calculateGridPlacement(sorted, container, options);
+    // Variante 3: Grille, petits fourreaux d'abord (remplissage inverse)
+    const variant3 = calculateGridPlacement(items, container, { ...options, sort: 'asc' });
     variants.push({
       layout: variant3,
-      name: 'Compact',
+      name: 'GridAsc',
       score: scoreLayout(variant3, container, items)
     });
 
-    // Variante 4: Clustering (grouper tailles similaires)
-    const grouped = [...items].sort((a, b) => {
-      const diffA = Math.abs(a.diameter - analysis.stats.maxDiameter);
-      const diffB = Math.abs(b.diameter - analysis.stats.maxDiameter);
-      return diffA - diffB;
-    });
-    const variant4 = calculateGridPlacement(grouped, container, options);
+    // Variante 4: Packing hexagonal (quinconce, plus dense pour cercles)
+    const variant4 = placeHexagonal(items, container, options);
     variants.push({
       layout: variant4,
-      name: 'Clustering',
+      name: 'Hexagonal',
       score: scoreLayout(variant4, container, items)
     });
 
@@ -1718,29 +1574,9 @@
     const availableWidth = container.width - 2 * margin;
     const availableHeight = container.height - 2 * margin;
 
-    // Calculer grille optimale (préférence largeur > hauteur)
-    const aspectRatio = availableWidth / availableHeight;
-    let bestCols = Math.ceil(Math.sqrt(numItems * aspectRatio));
-    let bestRows = Math.ceil(numItems / bestCols);
-
-    // Vérifier si ça rentre
-    const totalWidth = bestCols * cellSize;
-    const totalHeight = bestRows * cellSize;
-
-    if (totalWidth > availableWidth || totalHeight > availableHeight) {
-      // Ne rentre pas => retourner taille suggérée
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols: bestCols, rows: bestRows },
-        suggestedContainer: {
-          width: totalWidth + 2 * margin,
-          height: totalHeight + 2 * margin
-        }
-      };
-    }
-
-    // Optimisation: chercher grille plus large si possible (3×3 vs 2×5 pour 9 items)
+    // Chercher TOUTES les grilles qui rentrent dans la boîte actuelle, AVANT de
+    // décider si ça rentre : une grille avec un autre nombre de colonnes peut
+    // tenir même si l'heuristique sqrt dépasse (évite les faux "ne rentre pas").
     let validGrids = [];
     for (let cols = 1; cols <= numItems; cols++) {
       const rows = Math.ceil(numItems / cols);
@@ -1751,16 +1587,26 @@
       }
     }
 
+    let bestCols, bestRows;
     if (validGrids.length > 0) {
       // Privilégier grille la plus carrée (ratio proche de 1) pour uniformité
-      validGrids.sort((a, b) => {
-        const diffA = Math.abs(a.ratio - 1);
-        const diffB = Math.abs(b.ratio - 1);
-        return diffA - diffB;
-      });
-      const best = validGrids[0];
-      bestCols = best.cols;
-      bestRows = best.rows;
+      validGrids.sort((a, b) => Math.abs(a.ratio - 1) - Math.abs(b.ratio - 1));
+      bestCols = validGrids[0].cols;
+      bestRows = validGrids[0].rows;
+    } else {
+      // Aucune grille ne rentre => suggérer une taille (préférence largeur > hauteur)
+      const aspectRatio = availableWidth / availableHeight;
+      bestCols = Math.max(1, Math.ceil(Math.sqrt(numItems * aspectRatio)));
+      bestRows = Math.ceil(numItems / bestCols);
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols: bestCols, rows: bestRows },
+        suggestedContainer: {
+          width: bestCols * cellSize + 2 * margin,
+          height: bestRows * cellSize + 2 * margin
+        }
+      };
     }
 
     // Placements centrés
@@ -1804,6 +1650,94 @@
       placements,
       grid: { cols: bestCols, rows: bestRows },
       cells // Retourner les cellules pour affichage
+    };
+  }
+
+  /**
+   * Stratégie HEXAGONAL: packing en quinconce (nid d'abeille) pour cercles.
+   * Les rangées impaires sont décalées de cellSize/2 et le pas vertical vaut
+   * cellSize·√3/2, ce qui loge plus de fourreaux ronds qu'une grille carrée à
+   * boîte égale. Le décalage d'une demi-cellule garantit l'absence de collision
+   * (distance centre-à-centre = cellSize entre rangées adjacentes).
+   * Le pas (cellSize) est basé sur le PLUS GROS diamètre pour rester valide en mix.
+   * @param {Array} items - Fourreaux avec {id, diameter}
+   * @param {Object} container - {width, height}
+   * @param {Object} options - {margin, gap}
+   * @returns {Object} - Résultat placement (même contrat que les autres stratégies)
+   */
+  function placeHexagonal(items, container, options) {
+    const { margin = 0, gap = 0 } = options || {};
+    const numItems = items.length;
+
+    if (numItems === 0) {
+      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
+    }
+
+    const maxDiameter = Math.max(...items.map(it => it.diameter));
+    const cellSize = maxDiameter + gap;
+    const vPitch = cellSize * Math.sqrt(3) / 2;
+
+    const availableWidth = container.width - 2 * margin;
+    const availableHeight = container.height - 2 * margin;
+
+    // Capacité des rangées alignées (paires) et décalées (impaires)
+    const cols = Math.max(1, Math.floor(availableWidth / cellSize));
+    const colsOffset = (cols * cellSize + cellSize / 2 <= availableWidth) ? cols : Math.max(1, cols - 1);
+
+    // Répartir les items en rangées (bas -> haut) en alternant les capacités
+    const rowCaps = [];
+    let remaining = numItems;
+    let rIndex = 0;
+    while (remaining > 0) {
+      const cap = (rIndex % 2 === 0) ? cols : colsOffset;
+      const take = Math.min(cap, remaining);
+      rowCaps.push(take);
+      remaining -= take;
+      rIndex++;
+    }
+    const numRows = rowCaps.length;
+
+    // Vérifier la hauteur disponible
+    const verticalExtent = (numRows - 1) * vPitch + cellSize;
+    if (verticalExtent > availableHeight) {
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols, rows: numRows },
+        suggestedContainer: {
+          width: Math.ceil(container.width),
+          height: Math.ceil(verticalExtent + 2 * margin)
+        }
+      };
+    }
+
+    // Centrer le bloc horizontalement (rangées décalées comprises)
+    const blockWidth = Math.max(cols * cellSize, colsOffset * cellSize + cellSize / 2);
+    const firstColCenter = (container.width - blockWidth) / 2 + cellSize / 2;
+    const bottomY = container.height - margin - cellSize / 2;
+
+    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
+    const placements = [];
+    const cells = [];
+    let itemIndex = 0;
+
+    for (let r = 0; r < numRows && itemIndex < numItems; r++) {
+      const cap = rowCaps[r];
+      const offset = (r % 2 === 0) ? 0 : cellSize / 2;
+      const rowY = bottomY - r * vPitch;
+      for (let c = 0; c < cap && itemIndex < numItems; c++) {
+        const cx = firstColCenter + offset + c * cellSize;
+        placements.push({ id: sorted[itemIndex].id, x: cx, y: rowY });
+        cells.push({ x: cx - cellSize / 2, y: rowY - cellSize / 2, width: cellSize, height: cellSize });
+        itemIndex++;
+      }
+    }
+
+    return {
+      fits: true,
+      placements,
+      grid: { cols, rows: numRows },
+      cells
     };
   }
 
@@ -1908,16 +1842,23 @@
     // Router vers la stratégie appropriée selon l'analyse
     let result;
     switch (analysis.type) {
-      case 'UNIFORM':
-        result = placeUniform(itemsToPlace, container, options);
+      case 'UNIFORM': {
+        // Comparer grille carrée et packing hexagonal, garder le meilleur.
+        // scoreLayout renvoie -1000 pour un layout qui ne rentre pas, donc ce
+        // comparatif sélectionne automatiquement celui qui rentre s'il y en a un ;
+        // si aucun ne rentre, on garde placeUniform pour son suggestedContainer.
+        const uni = placeUniform(itemsToPlace, container, options);
+        const hex = placeHexagonal(itemsToPlace, container, options);
+        result = scoreLayout(hex, container, itemsToPlace) > scoreLayout(uni, container, itemsToPlace) ? hex : uni;
         break;
+      }
       case 'PYRAMID':
         // Utiliser le placement pyramidal intelligent pour les mix de tailles
         result = placeSmartPyramid(itemsToPlace, container, options);
         break;
       case 'COMPLEX':
-        // placeComplex teste déjà plusieurs variantes dont SmartPyramid
-        result = placeComplex(itemsToPlace, container, options, analysis);
+        // placeComplex teste plusieurs variantes distinctes (pyramide, grilles, hexagonal)
+        result = placeComplex(itemsToPlace, container, options);
         break;
       default:
         // Fallback sur le placement pyramidal intelligent
@@ -1997,7 +1938,6 @@
     }
 
     // === SYNCHRONISATION AVEC arrangeConduitGridOptimized ===
-    const MARGIN_MM = 30;  // Espacement entre fourreaux (30mm requis)
     const CONTAINER_MARGIN_MM = 20; // Marge depuis les bords du conteneur
 
     // Vérifier les verrous
@@ -2006,65 +1946,18 @@
     const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
     const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
 
-    // Modélisation : Chaque tube représenté par son encombrement carré/rectangulaire
+    // Données minimales : on n'a besoin que du diamètre par fourreau.
     function getFourreauData(fourreau) {
       const spec = FOURREAUX.find(s => s.type === fourreau.type && s.code === fourreau.code);
       const diameter = spec ? spec.od : 40;
-      return {
-        fourreau,
-        diameter,
-        encombrement: diameter + MARGIN_MM, // Encombrement = taille + marge
-        width: diameter + MARGIN_MM,
-        height: diameter + MARGIN_MM
-      };
+      return { fourreau, diameter };
     }
 
-    // Trier par ordre décroissant de taille (comme Ctrl+G)
-    const sortedFourreaux = [...fourreaux]
-      .map(getFourreauData)
-      .sort((a, b) => b.diameter - a.diameter);
+    const sortedFourreaux = fourreaux.map(getFourreauData);
 
-    // Calculer la grille optimale avec la MÊME LOGIQUE que Ctrl+G
-    let optimalCols, optimalRows;
-    const totalFourreaux = sortedFourreaux.length;
-    const availableWidth = currentWidth - 2 * CONTAINER_MARGIN_MM;
-    const availableHeight = currentHeight - 2 * CONTAINER_MARGIN_MM;
-    const aspectRatio = availableWidth / availableHeight;
-
+    // Les deux dimensions verrouillées = pas de redimensionnement possible
     if (lockWidth && lockHeight) {
-      // Les deux dimensions verrouillées = pas de redimensionnement possible
       return null;
-    } else if (lockHeight) {
-      // Hauteur verrouillée : calculer combien de lignes on peut avoir
-      const avgEncombrement = sortedFourreaux.reduce((sum, f) => sum + f.height, 0) / totalFourreaux;
-      const maxRows = Math.floor(availableHeight / avgEncombrement);
-      optimalRows = Math.min(maxRows, totalFourreaux);
-      optimalCols = Math.ceil(totalFourreaux / optimalRows);
-    } else if (lockWidth) {
-      // Largeur verrouillée : calculer combien de colonnes on peut avoir
-      const avgEncombrement = sortedFourreaux.reduce((sum, f) => sum + f.width, 0) / totalFourreaux;
-      const maxCols = Math.floor(availableWidth / avgEncombrement);
-      optimalCols = Math.min(maxCols, totalFourreaux);
-      optimalRows = Math.ceil(totalFourreaux / optimalCols);
-    } else {
-      // MÊME LOGIQUE que Ctrl+G : privilégier horizontal
-      optimalCols = Math.ceil(Math.sqrt(totalFourreaux * aspectRatio * 1.5)); // Facteur 1.5 pour favoriser horizontal
-      optimalRows = Math.ceil(totalFourreaux / optimalCols);
-
-      // Optimiser pour éviter les lignes avec trop peu de fourreaux
-      if (totalFourreaux > 2) {
-        const lastRowItems = totalFourreaux % optimalCols;
-        if (lastRowItems > 0 && lastRowItems < optimalCols * 0.3) {
-          optimalCols = Math.max(1, optimalCols - 1);
-          optimalRows = Math.ceil(totalFourreaux / optimalCols);
-        }
-      }
-
-      // Forcer un minimum horizontal si possible
-      if (totalFourreaux >= 4 && optimalRows > optimalCols) {
-        optimalCols = Math.ceil(totalFourreaux / 2); // Maximum 2 lignes si possible
-        optimalRows = Math.ceil(totalFourreaux / optimalCols);
-      }
     }
 
     // === CALCULER LES DIMENSIONS BASÉES SUR LES POSITIONS ACTUELLES ===
