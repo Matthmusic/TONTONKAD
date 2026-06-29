@@ -91,6 +91,15 @@ describe('packer — solve libre', () => {
     pkg.solve(big, { lock: null });
     expect(Date.now() - t0).toBeLessThan(100);
   });
+  test('gravité : le plus gros fourreau est posé en bas (y = margin)', () => {
+    const mix = [
+      { id: 's1', d: 40 }, { id: 'big', d: 160 },
+      { id: 's2', d: 40 }, { id: 's3', d: 40 },
+    ];
+    const L = pkg.solve(mix, { lock: null });
+    const biggest = L.items.reduce((a, b) => (b.d > a.d ? b : a));
+    expect(biggest.y).toBe(pkg.GEO.margin);
+  });
 });
 
 describe('packer — variants', () => {

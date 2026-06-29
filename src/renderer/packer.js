@@ -25,8 +25,8 @@
     const cw = bin.width, ch = bin.height;
     const placed = bin.rects.map(r => ({
       id: r.data.id, d: r.data.d,
-      x: r.x,                  // maxrects : origine haut-gauche, y vers le bas
-      y: ch - r.y - r.height,  // flip vers Y-up
+      x: r.x,     // maxrects place les gros en premier près de l'origine
+      y: r.y,     // origine = bas-gauche (Y-up) → gros fourreaux posés en bas (gravité)
     }));
     return { cw, ch, placed };
   }
