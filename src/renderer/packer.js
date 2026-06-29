@@ -69,8 +69,15 @@
     return best;
   }
 
-  // Stub temporaire — remplacé en Task 5
-  function solveFree(list) { throw new Error('not implemented'); }
+  function solveFree(list) {
+    const all = candidateWidths(list)
+      .map(iw => { const p = packAt(list, iw); return p ? toLayout(p, 'compact', null, null) : null; })
+      .filter(Boolean);
+    if (!all.length) return emptyLayout();
+    const tranchee = all.filter(L => L.w >= L.h);
+    const pool = tranchee.length ? tranchee : all;
+    return pool.reduce((best, L) => (L.fill > best.fill ? L : best));
+  }
 
   function solve(tubes, opts) {
     const list = sortTubes(tubes);

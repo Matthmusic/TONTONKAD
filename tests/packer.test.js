@@ -73,3 +73,22 @@ describe('packer — solve verrouillé', () => {
     expect(L.tag).toBe('empty');
   });
 });
+
+describe('packer — solve libre', () => {
+  const tubes = Array.from({ length: 12 }, (_, i) => ({ id: 't' + i, d: i % 3 === 0 ? 125 : 63 }));
+  test('tranchée : largeur >= hauteur', () => {
+    const L = pkg.solve(tubes, { lock: null });
+    expect(L.w).toBeGreaterThanOrEqual(L.h);
+  });
+  test('déterministe : deux appels identiques', () => {
+    const A = pkg.solve(tubes, { lock: null });
+    const B = pkg.solve(tubes, { lock: null });
+    expect(JSON.stringify(A)).toBe(JSON.stringify(B));
+  });
+  test('performance : 50 tubes < 100 ms', () => {
+    const big = Array.from({ length: 50 }, (_, i) => ({ id: 'x' + i, d: [63, 90, 125][i % 3] }));
+    const t0 = Date.now();
+    pkg.solve(big, { lock: null });
+    expect(Date.now() - t0).toBeLessThan(100);
+  });
+});
