@@ -88,7 +88,32 @@
     return solveFree(list); // implémenté en Task 5
   }
 
-  function variants(tubes, opts) { throw new Error('not implemented'); }
+  function variants(tubes, opts) {
+    const list = sortTubes(tubes);
+    if (list.length === 0) return [];
+    if (opts && opts.lock) return [solve(tubes, opts)];
+
+    const all = candidateWidths(list)
+      .map(iw => { const p = packAt(list, iw); return p ? toLayout(p, '', null, null) : null; })
+      .filter(Boolean);
+    if (!all.length) return [];
+
+    const pickMax = (arr, f) => arr.reduce((b, L) => (f(L) > f(b) ? L : b));
+    const pickMin = (arr, f) => arr.reduce((b, L) => (f(L) < f(b) ? L : b));
+
+    const out = [];
+    out.push({ ...pickMax(all, L => L.fill), tag: 'compact' });
+    const tr = all.filter(L => L.w >= L.h);
+    if (tr.length) out.push({ ...pickMin(tr, L => Math.abs(L.ratio - 1.4)), tag: 'tranchee' });
+    out.push({ ...pickMin(all, L => Math.abs(L.ratio - 4 / 3)), tag: 'rect43' });
+
+    const seen = new Set();
+    return out.filter(L => {
+      const k = `${Math.round(L.w)}x${Math.round(L.h)}`;
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+  }
 
   const api = { GEO, cell, solve, variants, __test: { sortTubes, packAt, toLayout, candidateWidths } };
   if (typeof module !== 'undefined' && module.exports) {

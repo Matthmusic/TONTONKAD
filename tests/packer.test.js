@@ -92,3 +92,22 @@ describe('packer — solve libre', () => {
     expect(Date.now() - t0).toBeLessThan(100);
   });
 });
+
+describe('packer — variants', () => {
+  const tubes = Array.from({ length: 10 }, (_, i) => ({ id: 'v' + i, d: [125, 63, 90][i % 3] }));
+  test('≤ 3 variantes, taguées, dédupliquées, valides', () => {
+    const vs = pkg.variants(tubes, { lock: null });
+    expect(vs.length).toBeGreaterThanOrEqual(1);
+    expect(vs.length).toBeLessThanOrEqual(3);
+    const tags = vs.map(v => v.tag);
+    expect(new Set(tags).size).toBe(tags.length);          // tags uniques
+    const keys = vs.map(v => `${Math.round(v.w)}x${Math.round(v.h)}`);
+    expect(new Set(keys).size).toBe(keys.length);          // dimensions uniques (dédup)
+    for (const v of vs) expect(v.items).toHaveLength(10);
+  });
+  test('mode verrouillé → 1 variante', () => {
+    const vs = pkg.variants(tubes, { w: 700, lock: 'w' });
+    expect(vs).toHaveLength(1);
+    expect(vs[0].w).toBe(700);
+  });
+});
