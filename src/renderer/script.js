@@ -1272,10 +1272,11 @@
       const boxWidth = shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value);
       const boxHeight = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
 
-      // Axe verrouillé pour le packer. Défaut historique : ranger dans la largeur.
-      const optsPacker = (lockHeight && !lockWidth)
-        ? { lock: 'h', h: boxHeight }
-        : { lock: 'w', w: boxWidth };
+      // Axe verrouillé pour le packer. Si rien n'est verrouillé → mode libre
+      // (nappe "tranchée" large) et la boîte s'adapte ; sinon on respecte l'axe.
+      const optsPacker = lockWidth  ? { lock: 'w', w: boxWidth }
+                       : lockHeight ? { lock: 'h', h: boxHeight }
+                       : { lock: null };
 
       const bestConfig = window.solve(tubes, optsPacker);
 
