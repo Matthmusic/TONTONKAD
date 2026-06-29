@@ -288,6 +288,11 @@
   const cables = [];
   let selected = null;
   let selectedMultiple = []; // Pour la sélection multiple
+  // Mode déplacement groupe type AutoCAD (touche D) : D → clic point de base → suivi curseur → clic dépose
+  let moveMode = null;        // null | 'armed' | 'moving'
+  let moveBase = null;        // point de base {x,y} en px canvas
+  let moveTargets = [];       // [{ f, x0, y0, children:[{c,x0,y0}] }]
+  let moveOnMouseMove = null; // handler mousemove attaché pendant le suivi
   let clipboard = null; // Pour stocker l'élément copié
   let pasteMode = false; // Mode collage actif
   let mode = "place";
@@ -4484,8 +4489,11 @@
     let bestH = null, bestHDist = OSNAP_ALIGN_TOLERANCE;
     let bestV = null, bestVDist = OSNAP_ALIGN_TOLERANCE;
 
+    // ignoreId : un id unique OU un Set d'ids (pour exclure tout un groupe déplacé)
+    const skip = ignoreId instanceof Set ? (id) => ignoreId.has(id) : (id) => id === ignoreId;
+
     for (const f of fourreaux) {
-      if (f.id === ignoreId) continue;
+      if (skip(f.id)) continue;
       const r = f.od * MM_TO_PX / 2;
 
       const candidates = [
@@ -6319,6 +6327,114 @@
       if (d <= ro && d >= ri) return { type: 'fourreau', id: f.id }
     }
     return null;
+  }
+
+  // ─── Mode déplacement groupe (touche D, type AutoCAD MOVE) ──────────────────
+  // D arme le mode → 1er clic = point de base (osnap) → le groupe suit le curseur
+  // sans bouton maintenu → clic gauche dépose et sort du mode (Échap annule).
+
+  function getSelectedFourreaux() {
+    const sels = selectedMultiple.length > 0
+      ? selectedMultiple
+      : (selected ? [selected] : []);
+    const result = [];
+    for (const s of sels) {
+      if (s.type !== 'fourreau') continue;
+      const f = fourreaux.find(o => o.id === s.id);
+      if (f) result.push(f);
+    }
+    return result;
+  }
+
+  function armMoveMode() {
+    if (moveMode) cancelMoveMode();
+    const targets = getSelectedFourreaux();
+    if (targets.length === 0) {
+      showToast('Sélectionnez d\'abord des fourreaux à déplacer (D)');
+      return;
+    }
+    moveMode = 'armed';
+    canvas.style.cursor = 'crosshair';
+    showToast(`Déplacement de ${targets.length} fourreau(x) : cliquez le point de base (Échap pour annuler)`, 'default', 2500);
+  }
+
+  // Snappe un point : grille puis osnap (H/V). ignoreIds = Set d'ids exclus de l'osnap.
+  function snapMovePoint(p, ignoreIds) {
+    let pt = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : { x: p.x, y: p.y };
+    if (osnapEnabled) {
+      const al = getOsnapAlignments(p.x, p.y, ignoreIds);
+      const v = al.find(a => a.axis === 'v');
+      const h = al.find(a => a.axis === 'h');
+      if (v) pt.x = v.snapX;
+      if (h) pt.y = h.snapY;
+    }
+    return pt;
+  }
+
+  function beginMove(p) {
+    const targets = getSelectedFourreaux();
+    if (targets.length === 0) { cancelMoveMode(); return; }
+    saveStateToHistory(); // pour Ctrl+Z
+    moveBase = snapMovePoint(p, null); // osnap libre pour accrocher le point de base
+    moveTargets = targets.map(f => ({
+      f, x0: f.x, y0: f.y,
+      children: cables.filter(c => c.parent === f.id).map(c => ({ c, x0: c.x, y0: c.y })),
+    }));
+    moveMode = 'moving';
+    canvas.style.cursor = 'move';
+    moveOnMouseMove = (ev) => updateMovePreview(canvasCoords(ev));
+    canvas.addEventListener('mousemove', moveOnMouseMove);
+    redraw();
+  }
+
+  function moveDelta(p) {
+    const ignore = new Set(moveTargets.map(t => t.f.id));
+    let pt = snapMovePoint(p, ignore);
+    if (orthoEnabled && moveBase) { // ORTHO (F8) : verrouille l'axe dominant
+      const adx = Math.abs(pt.x - moveBase.x), ady = Math.abs(pt.y - moveBase.y);
+      if (adx >= ady) pt.y = moveBase.y; else pt.x = moveBase.x;
+    }
+    return { dx: pt.x - moveBase.x, dy: pt.y - moveBase.y };
+  }
+
+  function updateMovePreview(p) {
+    if (moveMode !== 'moving') return;
+    const { dx, dy } = moveDelta(p);
+    for (const t of moveTargets) {
+      t.f.x = t.x0 + dx; t.f.y = t.y0 + dy; t.f._px = t.f.x; t.f._py = t.f.y;
+      t.f.vx = 0; t.f.vy = 0;
+      for (const ch of t.children) {
+        ch.c.x = ch.x0 + dx; ch.c.y = ch.y0 + dy; ch.c._px = ch.c.x; ch.c._py = ch.c.y;
+      }
+    }
+    redraw();
+  }
+
+  function commitMove(p) {
+    if (moveMode === 'moving') updateMovePreview(p); // fige au point final
+    // Geler les fourreaux déplacés (placement précis volontaire)
+    for (const t of moveTargets) { t.f.frozen = true; t.f._frozenByUser = true; }
+    endMoveCleanup();
+    if (gridEnabled) generateCellsFromCurrentLayout();
+    updateStats();
+    redraw();
+  }
+
+  function cancelMoveMode() {
+    if (moveMode === 'moving') { // restaurer les positions d'origine
+      for (const t of moveTargets) {
+        t.f.x = t.x0; t.f.y = t.y0; t.f._px = t.x0; t.f._py = t.y0;
+        for (const ch of t.children) { ch.c.x = ch.x0; ch.c.y = ch.y0; ch.c._px = ch.x0; ch.c._py = ch.y0; }
+      }
+    }
+    endMoveCleanup();
+    redraw();
+  }
+
+  function endMoveCleanup() {
+    if (moveOnMouseMove) { canvas.removeEventListener('mousemove', moveOnMouseMove); moveOnMouseMove = null; }
+    moveMode = null; moveBase = null; moveTargets = [];
+    canvas.style.cursor = '';
   }
 
   function startDrag(obj, sel) {
@@ -8327,6 +8443,16 @@
     canvas.addEventListener('mousedown', e => {
       hideLayoutPreviewPanel();
       const p = canvasCoords(e);
+      // Mode déplacement groupe (touche D) : intercepte les clics
+      if (moveMode) {
+        if (e.button === 0) {
+          if (moveMode === 'armed') beginMove(p);       // 1er clic = point de base
+          else if (moveMode === 'moving') commitMove(p); // clic suivant = dépose
+        } else {
+          cancelMoveMode(); // clic droit/milieu annule
+        }
+        return;
+      }
       if (e.button === 0) { // Clic gauche : sélection + glisser-déposer
         // Vérifier si on clique sur une poignée de resize en priorité
         if (typeof window.handleResizeMouseDown === 'function') {
@@ -9343,6 +9469,7 @@
         return;
       }
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+      if (k === 'd' && !e.ctrlKey && !e.metaKey) { armMoveMode(); return; }
       if (k === 'a') { setMode('place'); return; }
       if (k === 's') { setMode('select'); return; }
       if (e.key === 'Delete') { deleteSelected(); return; }
@@ -9361,7 +9488,7 @@
       if (k === 'x') { toggleFreezeSelected(); return; }
       if (k === 'e') { openEditPopup(); return; }
       if (k === 'i') { toggleShowInfo(); return; }
-      if (k === 'escape') { deactivatePasteMode(); return; }
+      if (k === 'escape') { if (moveMode) { cancelMoveMode(); return; } deactivatePasteMode(); return; }
     });
 
     /* ====== Système de Sauvegarde de Projets ====== */
