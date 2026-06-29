@@ -17,30 +17,40 @@
   const MASS_K = 0.02;
   const DYNAMIC_COLLISION_DAMPING = 0.9;
   const PHYSICS_ITERATIONS = 8; // Plus d'itérations = plus de précision, moins de chevauchement
+  const OSNAP_ALIGN_TOLERANCE = 15; // Distance perpendiculaire max (px) pour déclencher un alignement OSNAP
 
   // Constantes d'affichage
   const CANVAS_MARGIN = 100; // Marge pour les cotations et poignées de redimensionnement
+  window.CANVAS_MARGIN = CANVAS_MARGIN;
   const TOTAL_CANVAS_MARGIN = CANVAS_MARGIN * 2; // 200px total
   const DEFAULT_STROKE_WIDTH = -3; // Épaisseur de trait par défaut
 
   // Constantes de grille
-  const EXTERNAL_GAP = 30; // Écart extérieur souhaité (3 cm = 30 mm)
-  const GRID_MARGIN = 20; // Marge depuis les bords en pixels
+  const DEFAULT_FOURREAU_GAP = 30; // Valeur initiale de l'écart extérieur souhaité
 
   // Système de grille visuelle et magnétisme
   let gridEnabled = false; // Grille activée ou non
   const GRID_SPACING_MAIN = 50; // Espacement principal en mm (lignes épaisses) - mode fixe
-  const GRID_SPACING_SUB = 10;  // Espacement secondaire en mm (lignes fines)
   let snapToGrid = false; // Magnétisme activé ou non
+  let gravityEnabled = false; // Simulation physique/gravité activée ou non (OFF par défaut)
+  let orthoEnabled = false;   // Mode ORTHO F8 : contrainte déplacement H ou V seulement
+  let osnapEnabled = false;   // Mode OSNAP F3 : accroche géométrique sur fourreaux existants
+  let dragStartPos = null;    // Position de l'objet au début du drag {x, y} pour contrainte ORTHO
 
   // Grille adaptative basée sur les fourreaux
   let adaptiveGridEnabled = true; // Utiliser la grille adaptative par défaut
-  let FOURREAU_GAP = 30; // Espace libre entre les bords des fourreaux en mm (réglable 15-50mm)
+  let FOURREAU_GAP = DEFAULT_FOURREAU_GAP; // Espace libre entre les bords des fourreaux en mm (réglable 15-50mm)
+  let EDGE_SAFETY_MARGIN = 50; // Marge de sécurité aux bords en mm, indépendante du gap de pose
   let gridOrigin = null; // Point d'origine de la grille (premier fourreau)
   let gridSpacing = null; // Espacement calculé dynamiquement
   let gridLocked = false; // Verrouille la grille après calcul pour éviter les recalculs
   let gridFourreauxCount = 0; // Nombre de fourreaux au dernier calcul de grille
   let lastGridCells = []; // Stocke les cellules de la grille après placement automatique
+  let lastLayoutVariants = []; // Variantes de placement pour le panel preview
+  let lastVoidFillSuggestions = []; // Suggestions de remplissage vides
+  let arrangeRetryCount = 0;
+  const MAX_ARRANGE_RETRIES = 2;
+  const DEBUG_PLACEMENT = false;
   let snapPreviewPoint = null; // Point de snap preview {x, y, timestamp} pour animation clignotante
   let draggedObject = null; // Objet en cours de drag pour affichage halo preview
   let virtualSlots = []; // Emplacements virtuels disponibles pour placement {x, y, diameter, available}
@@ -48,6 +58,10 @@
   let pendingSlotClick = null; // Slot virtuel cliqué en attente de relâchement souris
   let previewFourreau = null; // Aperçu visuel du fourreau avant placement {x, y, type, code, od}
   let pendingMiddleClick = null; // Données du clic molette en attente {x, y, type, code, od, isCable, cableFam}
+
+  // Inventaire de planification (fourreaux désirés avant placement)
+  let inventoryItems = []; // [{ type, code, diameter, total, placed }]
+  let modeCActive = null;  // item en cours de placement guidé (Mode C)
 
   // Poignées de redimensionnement - SUPPRIMÉ (remplacé par interact.js)
 
@@ -99,14 +113,6 @@
     return {
       x: (width - TOTAL_CANVAS_MARGIN) / 2,
       y: (height - TOTAL_CANVAS_MARGIN) / 2
-    };
-  }
-
-  function getLogicalCanvasSize() {
-    const { width, height } = getLogicalCanvasDimensions();
-    return {
-      width: width - TOTAL_CANVAS_MARGIN,
-      height: height - TOTAL_CANVAS_MARGIN
     };
   }
 
@@ -321,6 +327,14 @@
 
   syncDimensionState();
 
+  // === Bridge Konva : getters live sur les variables internes ===
+  window.konvaMode = true;
+  Object.defineProperty(window, 'fourreaux',      { get: () => fourreaux,      configurable: true });
+  Object.defineProperty(window, 'displayScale',   { get: () => displayScale,   configurable: true });
+  Object.defineProperty(window, 'lastGridCells',  { get: () => lastGridCells,  configurable: true });
+  Object.defineProperty(window, 'canvasOffsetPx', { get: () => canvasOffsetPx, configurable: true });
+  Object.defineProperty(window, 'showInfo',       { get: () => showInfo,       configurable: true });
+
   /* ====== Chargement des données ====== */
   function parseCSV(text, delimiter = ';') {
     const lines = text.replace(/\r/g, '').trim().split('\n');
@@ -421,101 +435,6 @@
   }
 
   /* ====== Sélecteurs & Listes ====== */
-  function createSearchableDropdown(config) {
-    const { containerId, data, groupBy, optionValue, optionText, placeholder, onSelect } = config;
-
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    const input = container.querySelector('.search-select-input');
-    const dropdown = container.querySelector('.search-dropdown');
-
-    input.placeholder = placeholder;
-
-    // Function to render options
-    function renderOptions(filter = '') {
-      dropdown.innerHTML = '';
-      const filterLower = filter.toLowerCase();
-      const groupedData = {};
-
-      // Group data
-      data.forEach(item => {
-        const group = item[groupBy];
-        if (!groupedData[group]) {
-          groupedData[group] = [];
-        }
-        groupedData[group].push(item);
-      });
-
-      let hasResults = false;
-      Object.keys(groupedData).sort().forEach(groupName => {
-        const items = groupedData[groupName];
-        const filteredItems = items.filter(item =>
-          optionText(item).toLowerCase().includes(filterLower) ||
-          groupName.toLowerCase().includes(filterLower)
-        );
-
-        if (filteredItems.length > 0) {
-          hasResults = true;
-          const groupEl = document.createElement('div');
-          groupEl.className = 'search-dropdown-group';
-
-          const labelEl = document.createElement('div');
-          labelEl.className = 'search-dropdown-group-label';
-          labelEl.textContent = groupName;
-          groupEl.appendChild(labelEl);
-
-          filteredItems.forEach(item => {
-            const optionEl = document.createElement('div');
-            optionEl.className = 'search-dropdown-option';
-            optionEl.dataset.value = optionValue(item);
-            optionEl.textContent = optionText(item);
-
-            optionEl.addEventListener('mousedown', (e) => {
-              e.preventDefault();
-              onSelect(optionValue(item), optionText(item));
-              closeDropdown();
-            });
-            groupEl.appendChild(optionEl);
-          });
-          dropdown.appendChild(groupEl);
-        }
-      });
-
-      if (!hasResults) {
-        dropdown.innerHTML = '<div class="search-no-results">Aucun résultat</div>';
-      }
-    }
-
-    function openDropdown() {
-      renderOptions(input.value);
-      dropdown.style.display = 'block';
-      container.classList.add('dropdown-open');
-    }
-
-    function closeDropdown() {
-      dropdown.style.display = 'none';
-      container.classList.remove('dropdown-open');
-    }
-
-    // Event Listeners
-    input.addEventListener('focus', openDropdown);
-    input.addEventListener('input', () => renderOptions(input.value));
-    input.addEventListener('click', openDropdown);
-
-    document.addEventListener('click', (e) => {
-      if (!container.contains(e.target)) {
-        closeDropdown();
-      }
-    });
-
-    // Set initial selection
-    if (data.length > 0) {
-      const firstItem = data[0];
-      onSelect(optionValue(firstItem), optionText(firstItem));
-    }
-  }
-
   function initSearchableLists() {
     // Initialiser la liste des fourreaux avec recherche
     const fourreauSearch = document.getElementById('fourreauSearch');
@@ -571,13 +490,18 @@
               fourreauSearch.value = opt.text;
               hideFourreauList();
 
-              // Activer le mode placement guidé si la grille est active
-              if (gridEnabled && selectedFourreau) {
-                const [type, code] = selectedFourreau.split('|');
-                activateVirtualPlacement(type, code);
+              // Toujours définir pendingFourreauType dès la sélection
+              const [type, code] = opt.value.split('|');
+              const spec = FOURREAUX.find(f => f.type === type && f.code === code);
+              if (spec) pendingFourreauType = { type, code, od: spec.od };
 
-                // NOUVEAU : Recalcul dynamique des cellules virtuelles
-                const spec = FOURREAUX.find(f => f.type === type && f.code === code);
+              // Réinitialiser la quantité à 1 à chaque nouveau type sélectionné
+              const qtyInput = document.getElementById('fourreauQty');
+              if (qtyInput) qtyInput.value = '1';
+
+              // Activer le mode placement guidé si la grille est active
+              if (gridEnabled && spec) {
+                activateVirtualPlacement(type, code);
                 if (spec) {
                   generateVirtualSlots(spec.od);
                   redraw();
@@ -776,6 +700,7 @@
 
     scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${currentZoom.toFixed(0)}%)`;
 
+    if (window.konvaFourreaux) window.konvaFourreaux.syncTransform();
     if (forceRedraw) redraw();
   }
 
@@ -968,6 +893,12 @@
     const state = {
       fourreaux: fourreaux.map(f => ({ ...f, children: [...f.children] })),
       cables: cables.map(c => ({ ...c })),
+      worldWMm: WORLD_W_MM,
+      worldHMm: WORLD_H_MM,
+      worldDMm: WORLD_D_MM,
+      shape: SHAPE,
+      lockWidth: document.getElementById('lockWidth')?.checked ?? false,
+      lockHeight: document.getElementById('lockHeight')?.checked ?? false,
       timestamp: Date.now()
     };
 
@@ -994,6 +925,22 @@
     // Restaurer les câbles
     cables.length = 0;
     cables.push(...previousState.cables.map(c => ({ ...c })));
+
+    // Restaurer les dimensions de la boîte
+    if (previousState.worldWMm !== undefined) {
+      WORLD_W_MM = previousState.worldWMm;
+      WORLD_H_MM = previousState.worldHMm;
+      WORLD_D_MM = previousState.worldDMm;
+      SHAPE = previousState.shape;
+      boxWInput.value = WORLD_W_MM;
+      boxHInput.value = WORLD_H_MM;
+      boxDInput.value = WORLD_D_MM;
+      const lockWEl = document.getElementById('lockWidth');
+      const lockHEl = document.getElementById('lockHeight');
+      if (lockWEl) lockWEl.checked = previousState.lockWidth;
+      if (lockHEl) lockHEl.checked = previousState.lockHeight;
+      setCanvasSize();
+    }
 
     // Réinitialiser complètement la grille adaptative pour recalcul
     if (gridEnabled) {
@@ -1044,9 +991,18 @@
   }
 
   /* ====== Logique de Placement ====== */
-  function isInsideBox(x, y, r) {
-    // Marge de sécurité de 50mm (5cm) en mode grille
-    const safetyMarginPx = gridEnabled ? 50 * MM_TO_PX : 0;
+  function placementDebug(message, data = {}) {
+    if (DEBUG_PLACEMENT) {
+      console.log(`[PLACEMENT] ${message}`, data);
+    }
+  }
+
+  function getEdgeSafetyMarginPx(requireSafetyMargin = gridEnabled) {
+    return requireSafetyMargin ? EDGE_SAFETY_MARGIN * MM_TO_PX : 0;
+  }
+
+  function isInsideBox(x, y, r, options = {}) {
+    const safetyMarginPx = getEdgeSafetyMarginPx(options.requireSafetyMargin ?? gridEnabled);
 
     if (SHAPE === "rect") {
       return x - r >= safetyMarginPx && x + r <= WORLD_W - safetyMarginPx &&
@@ -1061,33 +1017,122 @@
     return Math.hypot(x - cx, y - cy) + r <= WORLD_R - safetyMarginPx;
   }
 
-  function collidesWithFourreau(x, y, r, ignoreId) {
+  function collidesWithFourreau(x, y, r, ignoreId, gapPx = 0) {
     for (const f of fourreaux) {
       if (ignoreId && f.id === ignoreId) continue;
       const R = f.od * MM_TO_PX / 2;
-      if (Math.hypot(x - f.x, y - f.y) < r + R) return true;
+      if (Math.hypot(x - f.x, y - f.y) < r + R + gapPx) return true;
     }
     return false;
   }
 
-  function collidesWithCable(x, y, r, ignoreId) {
+  function collidesWithCable(x, y, r, ignoreId, gapPx = 0, options = {}) {
+    const includeContained = options.includeContained ?? false;
     for (const c of cables) {
       if (ignoreId && c.id === ignoreId) continue;
+      if (!includeContained && c.parent) continue;
       const R = c.od * MM_TO_PX / 2;
-      if (Math.hypot(x - c.x, y - c.y) < r + R) return true;
+      if (Math.hypot(x - c.x, y - c.y) < r + R + gapPx) return true;
     }
     return false;
+  }
+
+  function validatePlacement(candidate, options = {}) {
+    const {
+      ignoreId = candidate.id ?? null,
+      enforceGap = true,
+      checkFourreaux = true,
+      checkCables = true,
+      requireSafetyMargin = gridEnabled,
+      containerFourreau = null,
+      includeContainedCables = false,
+      allowForceCollision = false
+    } = options;
+
+    const gapPx = enforceGap ? FOURREAU_GAP * MM_TO_PX : 0;
+    const { x, y, r } = candidate;
+
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(r)) {
+      return { valid: false, reason: 'invalid-coordinates' };
+    }
+
+    if (containerFourreau) {
+      const innerRadius = containerFourreau.idm * MM_TO_PX / 2;
+      const insideContainer = Math.hypot(x - containerFourreau.x, y - containerFourreau.y) <= innerRadius - r;
+      if (!insideContainer) {
+        placementDebug('refused', { x, y, reason: 'outside-fourreau' });
+        return { valid: false, reason: 'outside-fourreau' };
+      }
+
+      if (!allowForceCollision) {
+        for (const cid of containerFourreau.children) {
+          const cab = cables.find(c => c.id === cid);
+          if (!cab || (ignoreId && cab.id === ignoreId)) continue;
+          const R = cab.od * MM_TO_PX / 2;
+          if (Math.hypot(x - cab.x, y - cab.y) < r + R) {
+            placementDebug('refused', { x, y, reason: 'cable-in-fourreau-collision' });
+            return { valid: false, reason: 'cable-in-fourreau-collision' };
+          }
+        }
+      }
+
+      placementDebug('accepted', { x, y, insideFourreau: true });
+      return { valid: true, reason: null };
+    }
+
+    if (!isInsideBox(x, y, r, { requireSafetyMargin })) {
+      placementDebug('refused', { x, y, reason: 'outside-box', gap: FOURREAU_GAP });
+      return { valid: false, reason: 'outside-box' };
+    }
+
+    if (checkFourreaux && collidesWithFourreau(x, y, r, ignoreId, gapPx)) {
+      placementDebug('refused', { x, y, reason: 'fourreau-collision', gap: FOURREAU_GAP });
+      return { valid: false, reason: 'fourreau-collision' };
+    }
+
+    if (checkCables && collidesWithCable(x, y, r, ignoreId, gapPx, { includeContained: includeContainedCables })) {
+      placementDebug('refused', { x, y, reason: 'cable-collision', gap: FOURREAU_GAP });
+      return { valid: false, reason: 'cable-collision' };
+    }
+
+    placementDebug('accepted', { x, y, gap: FOURREAU_GAP });
+    return { valid: true, reason: null };
+  }
+
+  function validatePlacementBatch(candidates, options = {}) {
+    const gapPx = (options.enforceGap ?? true) ? FOURREAU_GAP * MM_TO_PX : 0;
+
+    for (const candidate of candidates) {
+      const inside = isInsideBox(candidate.x, candidate.y, candidate.r, {
+        requireSafetyMargin: options.requireSafetyMargin ?? false
+      });
+      if (!inside) {
+        return { valid: false, reason: 'outside-box', candidate };
+      }
+    }
+
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        const a = candidates[i];
+        const b = candidates[j];
+        if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r + gapPx) {
+          return { valid: false, reason: 'batch-collision', candidate: a, other: b };
+        }
+      }
+    }
+
+    return { valid: true, reason: null };
   }
 
   function findFreeSpot(x, y, r, ignoreId) {
-    if (isInsideBox(x, y, r) && !collidesWithFourreau(x, y, r, ignoreId) && !collidesWithCable(x, y, r, ignoreId)) return { x, y };
+    if (validatePlacement({ x, y, r, id: ignoreId }, { ignoreId }).valid) return { x, y };
     const { width, height } = getLogicalCanvasDimensions();
     const maxR = Math.max(width, height), step = Math.max(2, r * .25);
     for (let rad = step; rad < maxR; rad += step) {
       const n = Math.ceil(2 * Math.PI * rad / step);
       for (let i = 0; i < n; i++) {
         const a = i / n * 2 * Math.PI, nx = x + rad * Math.cos(a), ny = y + rad * Math.sin(a);
-        if (isInsideBox(nx, ny, r) && !collidesWithFourreau(nx, ny, r, ignoreId) && !collidesWithCable(nx, ny, r, ignoreId)) return { x: nx, y: ny }
+        if (validatePlacement({ x: nx, y: ny, r, id: ignoreId }, { ignoreId }).valid) return { x: nx, y: ny }
       }
     }
     return null;
@@ -1115,14 +1160,24 @@
       }
       return false;
     };
-    if (inside(x, y) && !hits(x, y)) return { x, y };
+    if (validatePlacement({ x, y, r, id: ignoreId }, {
+      ignoreId,
+      containerFourreau: fourreau,
+      allowForceCollision: false,
+      enforceGap: false
+    }).valid) return { x, y };
     const step = Math.max(2, r * .25);
     const maxRad = forcePlace ? ri * 3 : ri; // Chercher plus loin si forcePlace
     for (let rad = step; rad < maxRad; rad += step) {
       const n = Math.ceil(2 * Math.PI * rad / step);
       for (let i = 0; i < n; i++) {
         const a = i / n * 2 * Math.PI, nx = x + rad * Math.cos(a), ny = y + rad * Math.sin(a);
-        if (inside(nx, ny) && !hits(nx, ny)) return { x: nx, y: ny }
+        if (validatePlacement({ x: nx, y: ny, r, id: ignoreId }, {
+          ignoreId,
+          containerFourreau: fourreau,
+          allowForceCollision: false,
+          enforceGap: false
+        }).valid) return { x: nx, y: ny }
       }
     }
     // Si forcePlace et toujours pas de place, placer au centre même si collision
@@ -1132,10 +1187,55 @@
     return null;
   }
 
+  function moveFourreauWithChildren(fourreau, x, y) {
+    const dx = x - fourreau.x;
+    const dy = y - fourreau.y;
+
+    fourreau.x = x;
+    fourreau.y = y;
+    fourreau._px = x;
+    fourreau._py = y;
+    fourreau.frozen = true;
+    fourreau.vx = 0;
+    fourreau.vy = 0;
+
+    if (!dx && !dy) return;
+
+    for (const cable of cables) {
+      if (cable.parent === fourreau.id) {
+        cable.x += dx;
+        cable.y += dy;
+        cable._px = cable.x;
+        cable._py = cable.y;
+        cable.vx = 0;
+        cable.vy = 0;
+      }
+    }
+  }
+
   /* ====== Fonctions d'arrangement en grille ====== */
-  // Fonction principale d'arrangement - utilise le nouveau moteur intelligent
-  function arrangeConduitGrid() {
-    // Utiliser le nouveau moteur de placement optimisé
+
+  function prepareFourreauxInput(list) {
+    return list.map(f => {
+      const spec = FOURREAUX.find(s => s.type === f.type && s.code === f.code);
+      return {
+        diameter:    f.od || (spec ? spec.od : 40),
+        quantity:    1,
+        type:        f.type,
+        code:        f.code,
+        id:          f.id,
+        famille:     f.famille   || null,
+        statut:      f.statut    || 'utilisé',
+        reserve:     f.reserve   || false,
+        usage:       f.usage     || '',
+        origine:     f.origine   || '',
+        destination: f.destination || '',
+      };
+    });
+  }
+
+  // Fonction principale d'arrangement - utilise toujours le nouveau moteur intelligent
+  function arrangeConduitGrid(options = {}) {
     arrangeConduitGridNew();
   }
 
@@ -1159,19 +1259,8 @@
     }
 
     try {
-      // Créer orchestrateur
-      const orchestrator = new window.PlacementOrchestrator();
-
-      // Préparer les fourreaux pour le moteur
-      const fourreauxInput = fourreaux.map(f => {
-        const spec = FOURREAUX.find(s => s.type === f.type && s.code === f.code);
-        return {
-          diameter: f.od || (spec ? spec.od : 40),
-          quantity: 1,
-          type: f.type,
-          id: f.id
-        };
-      });
+      const input = prepareFourreauxInput(fourreaux);
+      const tubes = input.map(f => ({ id: f.id, d: f.diameter }));
 
       // Contraintes actuelles
       const lockWidth = document.getElementById('lockWidth')?.checked;
@@ -1179,56 +1268,62 @@
       const boxWidth = shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value);
       const boxHeight = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
 
-      const constraints = {};
-      if (lockWidth && lockHeight) {
-        // Les deux axes verrouillés : impossible si trop de fourreaux
-        constraints.boxWidth = boxWidth;
-        constraints.boxHeight = boxHeight;
-        constraints.lockedAxis = null; // Tenter quand même
-      } else if (lockWidth) {
-        constraints.lockedAxis = 'width';
-        constraints.boxWidth = boxWidth;
-      } else if (lockHeight) {
-        constraints.lockedAxis = 'height';
-        constraints.boxHeight = boxHeight;
-      }
+      // Axe verrouillé pour le packer. Défaut historique : ranger dans la largeur.
+      const optsPacker = (lockHeight && !lockWidth)
+        ? { lock: 'h', h: boxHeight }
+        : { lock: 'w', w: boxWidth };
 
-      // Calculer meilleur placement (sans auto-resize)
-      const bestConfig = orchestrator.computeBestPlacement(
-        fourreauxInput,
-        constraints,
-        {autoResize: false}
-      );
+      const bestConfig = window.solve(tubes, optsPacker);
+
+      // Calculer offsets de centrage (centrer le placement dans la boîte actuelle)
+      const offsetX = (boxWidth - bestConfig.w) / 2;
+      const offsetY = (boxHeight - bestConfig.h) / 2;
 
       // Appliquer le placement au canvas
-      bestConfig.placedFourreaux.forEach(pf => {
-        const fourreau = fourreaux.find(f => f.id === pf.id);
+      bestConfig.items.forEach(it => {
+        const fourreau = fourreaux.find(f => String(f.id) === String(it.id));
         if (fourreau) {
-          fourreau.x = pf.x * MM_TO_PX;
-          fourreau.y = pf.y * MM_TO_PX;
-          fourreau.frozen = true;
-          fourreau.vx = 0;
-          fourreau.vy = 0;
+          // it.x/it.y = coin bas-gauche de la cellule (système Y=0 en BAS)
+          // Le canvas dessine au CENTRE du cercle avec Y=0 en HAUT
+          const cellSize = window.cell(it.d);
+          const x = (offsetX + it.x + cellSize / 2) * MM_TO_PX;
+          const y = (offsetY + bestConfig.h - it.y - cellSize / 2) * MM_TO_PX; // Inverser Y puis centrer dans la boîte
+          moveFourreauWithChildren(fourreau, x, y);
         }
       });
 
       // Effacer les cellules de grille (pas de grille visuelle avec nouveau système)
       lastGridCells = [];
 
-      // Afficher score et feedback
-      const scorePercent = (bestConfig.score * 100).toFixed(0);
-      showToast(`✅ ${fourreaux.length} fourreaux placés (Score: ${scorePercent}%) - Ctrl+X pour dégeler`);
+      // Exposer les variantes dans le panel d'alternatives
+      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
+      const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
+      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input, false)];
+
+      lastVoidFillSuggestions = [];
+
+      showLayoutPreviewPanel();
+
+      // Afficher taux d'occupation et feedback
+      const fillPercent = (bestConfig.fill * 100).toFixed(0);
+      showToast(`✅ ${fourreaux.length} fourreaux placés (Occupation: ${fillPercent}%) - Ctrl+X pour dégeler`);
 
       updateStats();
       redraw();
 
     } catch (error) {
       console.error('[arrangeConduitGridNew] Erreur:', error);
+      lastLayoutVariants = [];
+      hideLayoutPreviewPanel();
       showToast(`❌ Erreur: ${error.message}`);
 
       // Fallback sur ancien système si échec
       console.warn('[arrangeConduitGridNew] Fallback sur ancien système');
-      arrangeConduitGridOptimized();
+      arrangeConduitGridOptimized({
+        allowResize: false,
+        reduceAfterFit: false,
+        source: 'grid-fallback'
+      });
     }
   }
 
@@ -1240,14 +1335,17 @@
    * @returns {Object} - Résultat du placement.
    */
   function calculateGridPlacement(items, container, options) {
-    const { margin = 0, gap = 0 } = options || {};
+    const { margin = 0, gap = 0, sort = 'desc' } = options || {};
     const numItems = items.length;
 
     if (numItems === 0) {
       return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
     }
 
-    const sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
+    let sortedItems;
+    if (sort === 'asc') sortedItems = [...items].sort((a, b) => a.diameter - b.diameter);
+    else if (sort === 'none') sortedItems = [...items];
+    else sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
 
     const availableWidth = container.width - 2 * margin;
     const availableHeight = container.height - 2 * margin;
@@ -1354,6 +1452,108 @@
     }
   }
 
+  function placeRectangularAspect(items, container, options, targetRatio = 4 / 3) {
+    const { margin = 0, gap = 0 } = options || {};
+    const numItems = items.length;
+
+    if (numItems === 0) {
+      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
+    }
+
+    const sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
+    const availableWidth = container.width - 2 * margin;
+    const availableHeight = container.height - 2 * margin;
+
+    const buildGrid = (cols) => {
+      const rows = Math.ceil(numItems / cols);
+      const grid = Array(rows).fill(null).map(() => Array(cols).fill(null));
+      let itemIndex = 0;
+
+      for (let r = rows - 1; r >= 0; r--) {
+        for (let c = 0; c < cols; c++) {
+          if (itemIndex < numItems) grid[r][c] = sortedItems[itemIndex++];
+        }
+      }
+
+      const colWidths = Array(cols).fill(0);
+      for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < rows; r++) {
+          if (grid[r][c]) colWidths[c] = Math.max(colWidths[c], grid[r][c].diameter + gap);
+        }
+      }
+
+      const rowHeights = Array(rows).fill(0);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c]) rowHeights[r] = Math.max(rowHeights[r], grid[r][c].diameter + gap);
+        }
+      }
+
+      const totalWidth = colWidths.reduce((sum, width) => sum + width, 0);
+      const totalHeight = rowHeights.reduce((sum, height) => sum + height, 0);
+      const ratio = totalWidth / Math.max(totalHeight, 1);
+      const fits = totalWidth <= availableWidth && totalHeight <= availableHeight;
+      const score = Math.abs(ratio - targetRatio) * 1000 + totalHeight + totalWidth * 0.05;
+
+      return { cols, rows, grid, colWidths, rowHeights, totalWidth, totalHeight, ratio, fits, score };
+    };
+
+    const candidates = [];
+    for (let cols = 1; cols <= numItems; cols++) candidates.push(buildGrid(cols));
+
+    const valid = candidates.filter(candidate => candidate.fits);
+    const best = (valid.length > 0 ? valid : candidates)
+      .sort((a, b) => a.score - b.score || a.totalHeight - b.totalHeight || a.totalWidth - b.totalWidth)[0];
+
+    if (!best.fits) {
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols: best.cols, rows: best.rows },
+        cells: [],
+        suggestedContainer: {
+          width: Math.ceil((best.totalWidth + 2 * margin) / 10) * 10,
+          height: Math.ceil((best.totalHeight + 2 * margin) / 10) * 10
+        }
+      };
+    }
+
+    const startX = (container.width - best.totalWidth) / 2;
+    const startY = (container.height - best.totalHeight) / 2;
+    const placements = [];
+    const cells = [];
+
+    let currentY = startY;
+    for (let r = 0; r < best.rows; r++) {
+      let currentX = startX;
+      for (let c = 0; c < best.cols; c++) {
+        const item = best.grid[r][c];
+        if (item) {
+          placements.push({
+            id: item.id,
+            x: currentX + best.colWidths[c] / 2,
+            y: currentY + best.rowHeights[r] / 2
+          });
+          cells.push({
+            x: currentX,
+            y: currentY,
+            width: best.colWidths[c],
+            height: best.rowHeights[r]
+          });
+        }
+        currentX += best.colWidths[c];
+      }
+      currentY += best.rowHeights[r];
+    }
+
+    return {
+      fits: true,
+      placements,
+      grid: { cols: best.cols, rows: best.rows },
+      cells
+    };
+  }
+
   /* ====== Ajout/Suppression d'objets ====== */
   function addFourreauAt(x, y, type, code) {
     const spec = FOURREAUX.find(f => f.type === type && f.code === code);
@@ -1361,9 +1561,27 @@
     const ro = spec.od * MM_TO_PX / 2, spot = findFreeSpot(x, y, ro, null);
     if (!spot) return false;
     saveStateToHistory(); // Sauver l'état avant modification
-    // Geler automatiquement si le snap est actif pour maintenir l'alignement sur la grille
-    const shouldFreeze = snapToGrid;
-    const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, idm: spec.id, color: colorForFourreau(type, code), customColor: null, label: '', children: [], vx: 0, vy: 0, dragging: false, frozen: shouldFreeze, _px: spot.x, _py: spot.y, type, code };
+    // Geler automatiquement si snap actif ou si gravité désactivée (mode placement précis)
+    const shouldFreeze = snapToGrid || !gravityEnabled;
+    // Inférer la famille depuis le moteur de placement si disponible
+    const famille = window.FamilyClassifier
+      ? window.FamilyClassifier.inferFamille({ type, code, diameter: spec.od })
+      : null;
+    const obj = {
+      id: nextId++, x: spot.x, y: spot.y, od: spec.od, idm: spec.id,
+      color: colorForFourreau(type, code), customColor: null, label: '',
+      children: [], vx: 0, vy: 0, dragging: false, frozen: shouldFreeze,
+      _frozenByUser: false, _frozenByMode: !gravityEnabled && !snapToGrid ? shouldFreeze : false,
+      _px: spot.x, _py: spot.y, type, code,
+      // Champs métier (étude fonctionnelle multitubulaire)
+      famille,
+      statut: 'utilisé',
+      usage: '',
+      origine: '',
+      destination: '',
+      reserve: false,
+      aiguille: false,
+    };
     fourreaux.push(obj);
 
     // Expansion automatique de la grille autour du fourreau placé
@@ -1379,6 +1597,15 @@
           generateVirtualSlots(selSpec.od);
         }
       }
+    }
+
+    // Mode A : alimenter l'inventaire de planification automatiquement
+    addToInventory(type, code, 1, true); // silent=true → pas d'animation
+    if (modeCActive && modeCActive.type === type && modeCActive.code === code) {
+      updateInventoryPlacedCount();
+      renderPlanInventory();
+      const remaining = modeCActive.total - modeCActive.placed;
+      if (remaining <= 0) deactivateModeC();
     }
 
     updateStats();
@@ -1397,9 +1624,9 @@
     const spot = container ? findFreeSpotInFourreau(x, y, r, container, null, forcePlace) : findFreeSpot(x, y, r, null);
     if (!spot) return null;
     if (!silent) saveStateToHistory(); // Sauver l'état avant modification (sauf si silent)
-    // Geler automatiquement si le snap est actif pour maintenir l'alignement sur la grille
-    const shouldFreeze = snapToGrid && !container; // Ne geler que les câbles hors fourreaux
-    const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, parent: container ? container.id : null, color: colorForCable(fam, code), customColor: null, label: '', fam, code, vx: 0, vy: 0, dragging: false, frozen: shouldFreeze, _px: spot.x, _py: spot.y };
+    // Les câbles ont toujours la gravité — seul snapToGrid les gèle automatiquement
+    const shouldFreeze = snapToGrid && !container;
+    const obj = { id: nextId++, x: spot.x, y: spot.y, od: spec.od, parent: container ? container.id : null, color: colorForCable(fam, code), customColor: null, label: '', fam, code, vx: 0, vy: 0, dragging: false, frozen: shouldFreeze, _frozenByUser: false, _frozenByMode: false, _px: spot.x, _py: spot.y };
     cables.push(obj);
     if (container) container.children.push(obj.id);
 
@@ -1415,39 +1642,6 @@
 
 
   /* ====== Grille virtuelle adaptative pour multitubulaires (VRD/BTP) ====== */
-
-  /**
-   * Calcule les dimensions de cellule optimisées (rectangulaires) pour un fourreau
-   * @param {Object} item - {id, diameter}
-   * @param {number} gap - Écart en mm
-   * @returns {Object} - {width, height, canStack}
-   */
-  function calculateCellDimensions(item, gap) {
-    const diameter = item.diameter;
-    return {
-      width: diameter + gap,
-      height: diameter + gap,
-      canStack: true
-    };
-  }
-
-  /**
-   * Vérifie si 2 petits fourreaux peuvent être empilés verticalement
-   * @param {Object} small1 - Premier petit {id, diameter}
-   * @param {Object} small2 - Deuxième petit {id, diameter}
-   * @param {Object} adjacentLarge - Gros adjacent {id, diameter}
-   * @param {number} gap - Écart en mm
-   * @returns {Object} - {canStack: boolean, stackedHeight?: number}
-   */
-  function canStackTwoSmall(small1, small2, adjacentLarge, gap) {
-    const stackedHeight = small1.diameter + small2.diameter + gap;
-    const largeHeight = adjacentLarge.diameter;
-
-    if (stackedHeight <= largeHeight + gap) {
-      return { canStack: true, stackedHeight };
-    }
-    return { canStack: false };
-  }
 
   /**
    * Stratégie PYRAMID: Placement hiérarchique (gros en bas, petits autour)
@@ -1475,6 +1669,92 @@
     }
 
     // Trier par taille décroissante (gros en premier)
+    const sortedCompact = [...items].sort((a, b) => b.diameter - a.diameter);
+    const compactAvailableWidth = container.width - 2 * margin;
+    const compactRows = [];
+    let compactIndex = 0;
+
+    while (compactIndex < sortedCompact.length) {
+      const diameter = sortedCompact[compactIndex].diameter;
+      const sameDiameter = [];
+
+      while (compactIndex < sortedCompact.length && sortedCompact[compactIndex].diameter === diameter) {
+        sameDiameter.push(sortedCompact[compactIndex]);
+        compactIndex++;
+      }
+
+      const cellSize = diameter + gap;
+      if (cellSize > compactAvailableWidth + gap) {
+        return {
+          fits: false,
+          placements: [],
+          grid: { cols: 0, rows: compactRows.length },
+          cells: [],
+          suggestedContainer: {
+            width: Math.ceil((cellSize + 2 * margin) / 10) * 10,
+            height: container.height
+          }
+        };
+      }
+
+      const maxCols = Math.max(1, Math.floor((compactAvailableWidth + gap) / cellSize));
+      for (let start = 0; start < sameDiameter.length; start += maxCols) {
+        const rowItems = sameDiameter.slice(start, start + maxCols);
+        compactRows.push({
+          items: rowItems,
+          width: rowItems.length * cellSize,
+          height: cellSize,
+          cellSize
+        });
+      }
+    }
+
+    const compactNeededHeight = compactRows.reduce((sum, row) => sum + row.height, 0) + 2 * margin;
+    if (compactNeededHeight > container.height) {
+      const maxRowWidth = compactRows.reduce((max, row) => Math.max(max, row.width), 0);
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols: Math.max(0, ...compactRows.map(row => row.items.length)), rows: compactRows.length },
+        cells: [],
+        suggestedContainer: {
+          width: Math.ceil((maxRowWidth + 2 * margin) / 10) * 10,
+          height: Math.ceil(compactNeededHeight / 10) * 10
+        }
+      };
+    }
+
+    const compactPlacements = [];
+    const compactCells = [];
+    let compactY = container.height - margin;
+
+    for (const row of compactRows) {
+      compactY -= row.height;
+      const rowStartX = margin + (compactAvailableWidth - row.width) / 2;
+
+      row.items.forEach((item, colIndex) => {
+        const x = rowStartX + colIndex * row.cellSize + row.cellSize / 2;
+        const y = compactY + row.height / 2;
+        compactPlacements.push({ id: item.id, x, y });
+        compactCells.push({
+          x: rowStartX + colIndex * row.cellSize,
+          y: compactY,
+          width: row.cellSize,
+          height: row.height
+        });
+      });
+    }
+
+    return {
+      fits: true,
+      placements: compactPlacements,
+      grid: {
+        cols: Math.max(0, ...compactRows.map(row => row.items.length)),
+        rows: compactRows.length
+      },
+      cells: compactCells
+    };
+
     const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
     const availableWidth = container.width - 2 * margin;
     const availableHeight = container.height - 2 * margin;
@@ -1703,27 +1983,93 @@
 
     const { placements } = layout;
 
-    // Critère 1: Compacité (40%) - Minimiser espace utilisé
-    const usedWidth = Math.max(...placements.map(p => p.x)) - Math.min(...placements.map(p => p.x));
-    const usedHeight = Math.max(...placements.map(p => p.y)) - Math.min(...placements.map(p => p.y));
-    const usedArea = usedWidth * usedHeight;
-    const containerArea = container.width * container.height;
-    const compacityScore = (1 - usedArea / containerArea) * 40;
+    // Critère 1: Compacité (40%) - densité de packing réelle (bords des cercles)
+    const radiusById = new Map(items.map(it => [it.id, it.diameter / 2]));
+    const radiusOf = p => radiusById.get(p.id) || 0;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let circlesArea = 0;
+    for (const p of placements) {
+      const r = radiusOf(p);
+      minX = Math.min(minX, p.x - r);
+      maxX = Math.max(maxX, p.x + r);
+      minY = Math.min(minY, p.y - r);
+      maxY = Math.max(maxY, p.y + r);
+      circlesArea += Math.PI * r * r;
+    }
+    const envArea = (maxX - minX) * (maxY - minY);
+    const packingDensity = envArea > 0 ? circlesArea / envArea : 0;
+    const compacityScore = Math.min(1, packingDensity) * 40;
 
-    // Critère 2: Symétrie (30%) - Layouts équilibrés
+    // Critère 2: Symétrie (30%) - Layouts équilibrés autour de l'axe vertical
     const centerX = container.width / 2;
     const avgDistanceFromCenter = placements.reduce((sum, p) => sum + Math.abs(p.x - centerX), 0) / placements.length;
     const maxDistancePossible = container.width / 2;
-    const symmetryScore = (1 - avgDistanceFromCenter / maxDistancePossible) * 30;
+    const symmetryScore = (1 - Math.min(1, avgDistanceFromCenter / maxDistancePossible)) * 30;
 
     // Critère 3: Alignement (30%) - Grilles bien formées
     const cols = layout.grid?.cols || 1;
     const rows = layout.grid?.rows || 1;
     const ratio = cols / rows;
     const idealRatio = 1.5; // Rectangle large > haut (métier VRD)
-    const alignmentScore = (1 - Math.abs(ratio - idealRatio) / idealRatio) * 30;
+    const alignmentScore = (1 - Math.min(1, Math.abs(ratio - idealRatio) / idealRatio)) * 30;
 
-    return compacityScore + symmetryScore + alignmentScore;
+    const itemById = new Map(items.map(item => [item.id, item]));
+    const maxDiameter = Math.max(...items.map(item => item.diameter || 0));
+    const minDiameter = Math.min(...items.map(item => item.diameter || 0));
+    let largeConduitsAtBottomScore = 0;
+    let smallUnderLargePenalty = 0;
+    let diameterGroupingScore = 0;
+    let regularGapScore = 0;
+
+    if (maxDiameter > minDiameter) {
+      const sortedByY = [...placements].sort((a, b) => a.y - b.y);
+      placements.forEach(p => {
+        const item = itemById.get(p.id);
+        if (!item) return;
+        const verticalRank = sortedByY.findIndex(other => other.id === p.id) / Math.max(placements.length - 1, 1);
+        if (item.diameter === maxDiameter) largeConduitsAtBottomScore += verticalRank;
+        if (item.diameter === minDiameter && verticalRank > 0.65) smallUnderLargePenalty += 1;
+      });
+      largeConduitsAtBottomScore = largeConduitsAtBottomScore / Math.max(items.filter(i => i.diameter === maxDiameter).length, 1) * 30;
+      smallUnderLargePenalty = smallUnderLargePenalty * -8;
+    }
+
+    for (let i = 0; i < placements.length; i++) {
+      let nearestSame = Infinity;
+      let nearestOther = Infinity;
+      const item = itemById.get(placements[i].id);
+      if (!item) continue;
+      for (let j = 0; j < placements.length; j++) {
+        if (i === j) continue;
+        const otherItem = itemById.get(placements[j].id);
+        if (!otherItem) continue;
+        const d = Math.hypot(placements[i].x - placements[j].x, placements[i].y - placements[j].y);
+        if (otherItem.diameter === item.diameter) nearestSame = Math.min(nearestSame, d);
+        else nearestOther = Math.min(nearestOther, d);
+      }
+      if (nearestSame < nearestOther) diameterGroupingScore += 2;
+    }
+
+    const distances = [];
+    for (let i = 0; i < placements.length; i++) {
+      for (let j = i + 1; j < placements.length; j++) {
+        const itemA = itemById.get(placements[i].id);
+        const itemB = itemById.get(placements[j].id);
+        if (!itemA || !itemB) continue;
+        const centerDistance = Math.hypot(placements[i].x - placements[j].x, placements[i].y - placements[j].y);
+        const edgeGap = centerDistance - itemA.diameter / 2 - itemB.diameter / 2;
+        if (edgeGap >= FOURREAU_GAP - 1 && edgeGap <= FOURREAU_GAP * 2.5) distances.push(edgeGap);
+      }
+    }
+    if (distances.length > 0) {
+      const avgGap = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+      const variance = distances.reduce((sum, d) => sum + Math.abs(d - avgGap), 0) / distances.length;
+      regularGapScore = Math.max(0, 20 - variance);
+    }
+
+    const businessScore = largeConduitsAtBottomScore + diameterGroupingScore + regularGapScore + smallUnderLargePenalty;
+
+    return compacityScore + symmetryScore + alignmentScore + businessScore;
   }
 
   /**
@@ -1735,10 +2081,10 @@
    * @param {Object} analysis - Résultat de analyzeConduitMix
    * @returns {Object} - Résultat placement (meilleure variante)
    */
-  function placeComplex(items, container, options, analysis) {
+  function placeComplex(items, container, options) {
     const variants = [];
 
-    // Variante 1: Smart Pyramid (NOUVEAU - placement pyramidal intelligent)
+    // Variante 1: Smart Pyramid (placement pyramidal par rangées, gros en bas)
     const variant1 = placeSmartPyramid(items, container, options);
     variants.push({
       layout: variant1,
@@ -1746,33 +2092,27 @@
       score: scoreLayout(variant1, container, items)
     });
 
-    // Variante 2: Standard (tri taille décroissante)
-    const variant2 = calculateGridPlacement(items, container, options);
+    // Variante 2: Grille, gros fourreaux d'abord
+    const variant2 = calculateGridPlacement(items, container, { ...options, sort: 'desc' });
     variants.push({
       layout: variant2,
-      name: 'Standard',
+      name: 'GridDesc',
       score: scoreLayout(variant2, container, items)
     });
 
-    // Variante 3: Compact rectangulaire (forcer ratio largeur > hauteur)
-    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
-    const variant3 = calculateGridPlacement(sorted, container, options);
+    // Variante 3: Grille, petits fourreaux d'abord (remplissage inverse)
+    const variant3 = calculateGridPlacement(items, container, { ...options, sort: 'asc' });
     variants.push({
       layout: variant3,
-      name: 'Compact',
+      name: 'GridAsc',
       score: scoreLayout(variant3, container, items)
     });
 
-    // Variante 4: Clustering (grouper tailles similaires)
-    const grouped = [...items].sort((a, b) => {
-      const diffA = Math.abs(a.diameter - analysis.stats.maxDiameter);
-      const diffB = Math.abs(b.diameter - analysis.stats.maxDiameter);
-      return diffA - diffB;
-    });
-    const variant4 = calculateGridPlacement(grouped, container, options);
+    // Variante 4: Packing hexagonal (quinconce, plus dense pour cercles)
+    const variant4 = placeHexagonal(items, container, options);
     variants.push({
       layout: variant4,
-      name: 'Clustering',
+      name: 'Hexagonal',
       score: scoreLayout(variant4, container, items)
     });
 
@@ -1782,6 +2122,11 @@
     const best = variants[0];
     console.log(`[COMPLEX] Variantes:`, variants.map(v => `${v.name}=${v.score.toFixed(1)}`).join(', '));
     console.log(`[COMPLEX] Meilleure: ${best.name} (${best.score.toFixed(2)})`);
+
+    // Exposer les variantes pour le panel preview (filtrées : seulement celles qui rentrent)
+    lastLayoutVariants = variants
+      .filter(v => v.layout.fits)
+      .map(v => ({ name: v.name, score: v.score, layout: v.layout, container, items }));
 
     return best.layout;
   }
@@ -1809,29 +2154,8 @@
     const availableWidth = container.width - 2 * margin;
     const availableHeight = container.height - 2 * margin;
 
-    // Calculer grille optimale (préférence largeur > hauteur)
-    const aspectRatio = availableWidth / availableHeight;
-    let bestCols = Math.ceil(Math.sqrt(numItems * aspectRatio));
-    let bestRows = Math.ceil(numItems / bestCols);
-
-    // Vérifier si ça rentre
-    const totalWidth = bestCols * cellSize;
-    const totalHeight = bestRows * cellSize;
-
-    if (totalWidth > availableWidth || totalHeight > availableHeight) {
-      // Ne rentre pas => retourner taille suggérée
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols: bestCols, rows: bestRows },
-        suggestedContainer: {
-          width: totalWidth + 2 * margin,
-          height: totalHeight + 2 * margin
-        }
-      };
-    }
-
-    // Optimisation: chercher grille plus large si possible (3×3 vs 2×5 pour 9 items)
+    // Chercher TOUTES les grilles valides avant de décider si ça rentre
+    // (évite les faux "ne rentre pas" de l'heuristique sqrt)
     let validGrids = [];
     for (let cols = 1; cols <= numItems; cols++) {
       const rows = Math.ceil(numItems / cols);
@@ -1842,16 +2166,26 @@
       }
     }
 
+    let bestCols, bestRows;
     if (validGrids.length > 0) {
       // Privilégier grille la plus carrée (ratio proche de 1) pour uniformité
-      validGrids.sort((a, b) => {
-        const diffA = Math.abs(a.ratio - 1);
-        const diffB = Math.abs(b.ratio - 1);
-        return diffA - diffB;
-      });
-      const best = validGrids[0];
-      bestCols = best.cols;
-      bestRows = best.rows;
+      validGrids.sort((a, b) => Math.abs(a.ratio - 1) - Math.abs(b.ratio - 1));
+      bestCols = validGrids[0].cols;
+      bestRows = validGrids[0].rows;
+    } else {
+      // Aucune grille ne rentre => suggérer une taille minimale
+      const aspectRatio = availableWidth / availableHeight;
+      bestCols = Math.max(1, Math.ceil(Math.sqrt(numItems * aspectRatio)));
+      bestRows = Math.ceil(numItems / bestCols);
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols: bestCols, rows: bestRows },
+        suggestedContainer: {
+          width: bestCols * cellSize + 2 * margin,
+          height: bestRows * cellSize + 2 * margin
+        }
+      };
     }
 
     // Placements centrés
@@ -1895,6 +2229,90 @@
       placements,
       grid: { cols: bestCols, rows: bestRows },
       cells // Retourner les cellules pour affichage
+    };
+  }
+
+  /**
+   * Stratégie HEXAGONAL: packing en quinconce (nid d'abeille) pour cercles.
+   * Les rangées impaires sont décalées de cellSize/2 et le pas vertical vaut
+   * cellSize·√3/2, ce qui loge plus de fourreaux ronds qu'une grille carrée à
+   * boîte égale. Le pas (cellSize) est basé sur le PLUS GROS diamètre pour
+   * rester valide en mix hétérogène.
+   * @param {Array} items - Fourreaux avec {id, diameter}
+   * @param {Object} container - {width, height}
+   * @param {Object} options - {margin, gap}
+   * @returns {Object} - Résultat placement (même contrat que les autres stratégies)
+   */
+  function placeHexagonal(items, container, options) {
+    const { margin = 0, gap = 0 } = options || {};
+    const numItems = items.length;
+
+    if (numItems === 0) {
+      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
+    }
+
+    const maxDiameter = Math.max(...items.map(it => it.diameter));
+    const cellSize = maxDiameter + gap;
+    const vPitch = cellSize * Math.sqrt(3) / 2;
+
+    const availableWidth = container.width - 2 * margin;
+    const availableHeight = container.height - 2 * margin;
+
+    const cols = Math.max(1, Math.floor(availableWidth / cellSize));
+    const colsOffset = (cols * cellSize + cellSize / 2 <= availableWidth) ? cols : Math.max(1, cols - 1);
+
+    // Répartir les items en rangées (bas → haut) en alternant les capacités
+    const rowCaps = [];
+    let remaining = numItems;
+    let rIndex = 0;
+    while (remaining > 0) {
+      const cap = (rIndex % 2 === 0) ? cols : colsOffset;
+      const take = Math.min(cap, remaining);
+      rowCaps.push(take);
+      remaining -= take;
+      rIndex++;
+    }
+    const numRows = rowCaps.length;
+
+    const verticalExtent = (numRows - 1) * vPitch + cellSize;
+    if (verticalExtent > availableHeight) {
+      return {
+        fits: false,
+        placements: [],
+        grid: { cols, rows: numRows },
+        suggestedContainer: {
+          width: Math.ceil(container.width),
+          height: Math.ceil(verticalExtent + 2 * margin)
+        }
+      };
+    }
+
+    const blockWidth = Math.max(cols * cellSize, colsOffset * cellSize + cellSize / 2);
+    const firstColCenter = (container.width - blockWidth) / 2 + cellSize / 2;
+    const bottomY = container.height - margin - cellSize / 2;
+
+    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
+    const placements = [];
+    const cells = [];
+    let itemIndex = 0;
+
+    for (let r = 0; r < numRows && itemIndex < numItems; r++) {
+      const cap = rowCaps[r];
+      const offset = (r % 2 === 0) ? 0 : cellSize / 2;
+      const rowY = bottomY - r * vPitch;
+      for (let c = 0; c < cap && itemIndex < numItems; c++) {
+        const cx = firstColCenter + offset + c * cellSize;
+        placements.push({ id: sorted[itemIndex].id, x: cx, y: rowY });
+        cells.push({ x: cx - cellSize / 2, y: rowY - cellSize / 2, width: cellSize, height: cellSize });
+        itemIndex++;
+      }
+    }
+
+    return {
+      fits: true,
+      placements,
+      grid: { cols, rows: numRows },
+      cells
     };
   }
 
@@ -1970,7 +2388,263 @@
     };
   }
 
-  function arrangeConduitGridOptimized() {
+  /* ── Preview panel des variantes de placement ───────────────────── */
+
+  function renderVariantSVG(variant) {
+    if (!variant || !variant.container) {
+      // Carte COMPACT ou variante sans données moteur : SVG générique
+      const W = 110, H = 75;
+      return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+        <rect x="8" y="8" width="${W-16}" height="${H-16}" fill="none" stroke="var(--text-secondary,#999)" stroke-width="1" rx="2"/>
+        <text x="${W/2}" y="${H/2+4}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#aaa)">actuel</text>
+      </svg>`;
+    }
+    const { layout, container, items } = variant;
+    const W = 110, H = 75;
+    const pad = 6;
+    const scaleX = (W - 2 * pad) / container.width;
+    const scaleY = (H - 2 * pad) / container.height;
+    const scale = Math.min(scaleX, scaleY);
+    const offX = pad + ((W - 2 * pad) - container.width * scale) / 2;
+    const offY = pad + ((H - 2 * pad) - container.height * scale) / 2;
+    const radiusById = new Map((items || []).map(it => [it.id, it.diameter / 2]));
+
+    const toX = x => (offX + x * scale).toFixed(1);
+    const toY = y => (offY + (container.height - y) * scale).toFixed(1); // Y inversé (0=bas dans moteur)
+    const toR = r => Math.max(2, (r * scale).toFixed(1));
+
+    const boxX = offX.toFixed(1), boxY = offY.toFixed(1);
+    const boxW = (container.width * scale).toFixed(1);
+    const boxH = (container.height * scale).toFixed(1);
+
+    const circles = (layout.placements || []).map(p => {
+      const r = radiusById.get(p.id) || 10;
+      return `<circle cx="${toX(p.x)}" cy="${toY(p.y)}" r="${toR(r)}" fill="var(--accent-primary,#ff914d)" fill-opacity="0.7" stroke="var(--accent-primary,#e07030)" stroke-width="0.8"/>`;
+    }).join('');
+
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="none" stroke="var(--text-secondary,#999)" stroke-width="1" rx="1"/>
+      ${circles}
+    </svg>`;
+  }
+
+  function applyLayoutVariant(variantIndex) {
+    const variant = lastLayoutVariants[variantIndex];
+    if (!variant) return;
+    const { layout, container } = variant;
+    if (!layout.fits) return;
+
+    layout.placements.forEach(p => {
+      const f = fourreaux.find(f => f.id === p.id);
+      if (f) moveFourreauWithChildren(f, p.x * MM_TO_PX, p.y * MM_TO_PX);
+    });
+
+    lastGridCells = (layout.cells || []).map(cell => ({
+      x: cell.x * MM_TO_PX, y: cell.y * MM_TO_PX,
+      width: cell.width * MM_TO_PX, height: cell.height * MM_TO_PX
+    }));
+
+    // Mettre en évidence la carte active
+    document.querySelectorAll('.layout-preview-card').forEach((el, i) => {
+      el.classList.toggle('active', i === variantIndex);
+    });
+
+    // Rotation paysage si nécessaire
+    const lockWidth = document.getElementById('lockWidth')?.checked;
+    const lockHeight = document.getElementById('lockHeight')?.checked;
+    if (!lockWidth && !lockHeight && SHAPE === 'rect' && WORLD_H_MM > WORLD_W_MM * 1.2) {
+      rotateBoxAndContents('cw');
+    }
+
+    updateStats();
+    redraw();
+  }
+
+  function applyNappeVariant(variantIndex) {
+    const variant = lastLayoutVariants[variantIndex];
+    if (!variant || !variant.isNappeLayout) return;
+    const cfg   = variant.nappe;
+    const shape = shapeSel.value;
+
+    const lockW = document.getElementById('lockWidth')?.checked;
+    const lockH = document.getElementById('lockHeight')?.checked;
+
+    cfg.placedFourreaux.forEach(pf => {
+      const fourreau = fourreaux.find(f => String(f.id) === String(pf.id));
+      if (!fourreau) return;
+      const cs      = cfg.calculateCellSize(pf.diameter || pf.od || 0);
+      const offsetX = variant.autoResize ? 0 : (variant.boxW - cfg.width)  / 2;
+      const offsetY = variant.autoResize ? 0 : (variant.boxH - cfg.height) / 2;
+      const x = (offsetX + pf.x + cs / 2) * MM_TO_PX;
+      const y = (offsetY + cfg.height - pf.y - cs / 2) * MM_TO_PX;
+      moveFourreauWithChildren(fourreau, x, y);
+    });
+
+    if (variant.autoResize) {
+      const newW = Math.ceil(cfg.width  / 5) * 5;
+      const newH = Math.ceil(cfg.height / 5) * 5;
+      if (shape === 'rect') {
+        if (!lockW) boxWInput.value = newW;
+        if (!lockH) boxHInput.value = newH;
+      } else if (shape === 'circ') {
+        boxDInput.value = Math.max(newW, newH);
+      }
+      // Sauvegarder pan et échelle : applyDimensions() les réinitialise car
+      // fitCanvas() mesure canvasWrap.clientHeight réduit par le panel visible.
+      const savedOffsetX = canvasOffsetPx.x;
+      const savedOffsetY = canvasOffsetPx.y;
+      const savedDisplayScale = displayScale;
+      applyDimensions();
+      canvasOffsetPx.x = savedOffsetX;
+      canvasOffsetPx.y = savedOffsetY;
+      displayScale = savedDisplayScale;
+    }
+
+    lastGridCells = [];
+    document.querySelectorAll('.layout-preview-card').forEach((el, i) => {
+      el.classList.toggle('active', i === variantIndex);
+    });
+    updateStats();
+    redraw();
+  }
+
+  function showLayoutPreviewPanel() {
+    const panel = document.getElementById('layoutPreviewPanel');
+    const cardsEl = document.getElementById('layoutPreviewCards');
+    if (!panel || !cardsEl || lastLayoutVariants.length <= 1) {
+      if (panel) panel.style.display = 'none';
+      return;
+    }
+
+    const STRATEGY_FR = {
+      flowPackingStrategy:       'Flow compact',
+      interleavedStrategy:       'Interleave',
+      familyLevelStrategy:       'Par familles',
+      bottomLeftStrategy:        'Bas-gauche',
+      centeredSymmetricStrategy: 'Symétrique',
+      compactByDiameterStrategy: 'Compact',
+      rectangularAspectStrategy: 'Rectangle 4/3',
+      minWidthStrategy:          'Largeur min',
+      minHeightStrategy:         'Hauteur min',
+      // ancien système (compat)
+      SmartPyramid: 'Pyramide', GridDesc: 'Grille ↓', GridAsc: 'Grille ↑',
+      Hexagonal: 'Hexagonal',   Grille: 'Grille',
+    };
+
+    // Montrer toutes les variantes disponibles (max 5)
+    const visibleVariants = lastLayoutVariants
+      .map((v, originalIdx) => ({ v, originalIdx }))
+      .slice(0, 5);
+
+    if (visibleVariants.length <= 1) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    const CARD_LABELS  = ['COMPACT', 'OPTIMISÉ', 'RECTANGLE'];
+    const CARD_DESCS   = ['Boîte serrée', 'Meilleur score', 'Grille basique'];
+
+    cardsEl.innerHTML = visibleVariants.map(({ v, originalIdx }, i) => {
+      const label      = CARD_LABELS[i]  || (STRATEGY_FR[v.name] || v.name);
+      const desc       = CARD_DESCS[i]   || (STRATEGY_FR[v.name] || v.name);
+      const isOptimized = i === 1;
+      const scoreLabel = v.isNappeLayout
+        ? `${v.nappe.width.toFixed(0)}×${v.nappe.height.toFixed(0)}mm · ${v.score.toFixed(0)}%`
+        : desc;
+      const extraClass = isOptimized ? ' card-optimized' : '';
+      const badge      = isOptimized ? '<span class="card-optimized-badge">⭐</span>' : '';
+      return `<div class="layout-preview-card${i === 0 ? ' active' : ''}${extraClass}" data-idx="${originalIdx}" title="${label} — ${scoreLabel}">
+        ${badge}
+        ${renderVariantSVG(v)}
+        <span class="layout-preview-card-label">${label}</span>
+        <span class="layout-preview-card-name">${v.isNappeLayout ? scoreLabel : desc}</span>
+      </div>`;
+    }).join('');
+
+    panel.style.display = 'block';
+
+    cardsEl.querySelectorAll('.layout-preview-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const idx = parseInt(card.dataset.idx, 10);
+        const v   = lastLayoutVariants[idx];
+        if (v && v.isCompact) {
+          saveStateToHistory();
+          resizeTrayToCurrentFourreaux();
+          document.querySelectorAll('.layout-preview-card').forEach((el, ci) => {
+            el.classList.toggle('active', ci === 0);
+          });
+        } else if (v && v.isNappeLayout) {
+          applyNappeVariant(idx);
+        } else {
+          applyLayoutVariant(idx);
+        }
+      });
+    });
+
+    // Section suggestions remplissage vides
+    let voidFillEl = panel.querySelector('.void-fill-section');
+    if (lastVoidFillSuggestions.length > 0) {
+      if (!voidFillEl) {
+        voidFillEl = document.createElement('div');
+        voidFillEl.className = 'void-fill-section';
+        panel.appendChild(voidFillEl);
+      }
+      voidFillEl.innerHTML = `<div class="void-fill-title">Remplissage possible</div>` +
+        lastVoidFillSuggestions.map((s, i) =>
+          `<div class="void-fill-item" data-fill-idx="${i}">
+            <span class="void-fill-desc">+${s.count} × ${s.code || s.type} (Ø${s.diameter}mm) dans l'espace libre</span>
+            <button class="btn-apply-fill btn btn-sm" data-fill-idx="${i}">Appliquer</button>
+            <button class="btn-ignore-fill btn btn-sm" data-fill-idx="${i}">Ignorer</button>
+          </div>`
+        ).join('');
+      voidFillEl.querySelectorAll('.btn-apply-fill').forEach(btn => {
+        btn.addEventListener('click', () => applyVoidFill(parseInt(btn.dataset.fillIdx, 10)));
+      });
+      voidFillEl.querySelectorAll('.btn-ignore-fill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const item = btn.closest('.void-fill-item');
+          if (item) item.style.display = 'none';
+        });
+      });
+    } else if (voidFillEl) {
+      voidFillEl.remove();
+    }
+  }
+
+  function hideLayoutPreviewPanel() {
+    const panel = document.getElementById('layoutPreviewPanel');
+    if (panel) panel.style.display = 'none';
+  }
+
+  function buildNappeVariants(configs, boxW, boxH, fourreauxInput, autoResize) {
+    return configs.map(cfg => ({
+      isNappeLayout: true,
+      name:  cfg.strategyName || 'auto',
+      score: (cfg.score || 0) * 100,
+      nappe: cfg,
+      container: { width: cfg.width, height: cfg.height },
+      items: fourreauxInput,
+      layout: {
+        fits: true,
+        placements: cfg.placedFourreaux.map(pf => {
+          const cs = cfg.calculateCellSize(pf.diameter || pf.od || 0);
+          return { id: pf.id, x: pf.x + cs / 2, y: pf.y + cs / 2 };
+        }),
+        cells: [],
+      },
+      boxW,
+      boxH,
+      autoResize,
+    }));
+  }
+
+  function arrangeConduitGridOptimized(behaviorOptions = {}) {
+    const allowResize = behaviorOptions.allowResize === true;
+    const reduceAfterFit = behaviorOptions.reduceAfterFit === true;
+    const source = behaviorOptions.source || 'grid';
+    lastLayoutVariants = []; // Réinitialiser les variantes à chaque nouveau placement
+    hideLayoutPreviewPanel();
+
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à disposer en grille');
       return;
@@ -1994,36 +2668,84 @@
       width: (shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value)),
       height: (shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value))
     };
-    const options = { margin: 20, gap: FOURREAU_GAP }; // Utiliser le gap réglable
+    const placementOptions = { margin: getContainerMarginMm(), gap: FOURREAU_GAP };
 
     // Router vers la stratégie appropriée selon l'analyse
+    const placementMode = getPlacementMode();
     let result;
-    switch (analysis.type) {
-      case 'UNIFORM':
-        result = placeUniform(itemsToPlace, container, options);
-        break;
-      case 'PYRAMID':
-        // Utiliser le placement pyramidal intelligent pour les mix de tailles
-        result = placeSmartPyramid(itemsToPlace, container, options);
-        break;
-      case 'COMPLEX':
-        // placeComplex teste déjà plusieurs variantes dont SmartPyramid
-        result = placeComplex(itemsToPlace, container, options, analysis);
-        break;
-      default:
-        // Fallback sur le placement pyramidal intelligent
-        result = placeSmartPyramid(itemsToPlace, container, options);
+    if (placementMode === 'rect43') {
+      result = placeRectangularAspect(itemsToPlace, container, placementOptions, 4 / 3);
+    } else if (placementMode === 'compact') {
+      result = placeSmartPyramid(itemsToPlace, container, placementOptions);
+    } else if (placementMode === 'pyramid') {
+      result = placePyramid(itemsToPlace, container, placementOptions, analysis);
+    } else {
+      switch (analysis.type) {
+        case 'UNIFORM': {
+          // Comparer grille carrée et packing hexagonal, garder le meilleur
+          const uni = placeUniform(itemsToPlace, container, placementOptions);
+          const hex = placeHexagonal(itemsToPlace, container, placementOptions);
+          const uniScore = scoreLayout(uni, container, itemsToPlace);
+          const hexScore = scoreLayout(hex, container, itemsToPlace);
+          result = hexScore > uniScore ? hex : uni;
+          // Exposer les variantes pour le panel preview
+          lastLayoutVariants = [
+            { name: 'Grille', score: uniScore, layout: uni, container, items: itemsToPlace },
+            { name: 'Hexagonal', score: hexScore, layout: hex, container, items: itemsToPlace },
+          ].filter(v => v.layout.fits).sort((a, b) => b.score - a.score);
+          break;
+        }
+        case 'PYRAMID':
+          // Utiliser le placement pyramidal intelligent pour les mix de tailles
+          result = placeSmartPyramid(itemsToPlace, container, placementOptions);
+          break;
+        case 'COMPLEX':
+          // placeComplex teste déjà plusieurs variantes dont SmartPyramid
+          result = placeComplex(itemsToPlace, container, placementOptions);
+          break;
+        default:
+          // Fallback sur le placement pyramidal intelligent
+          result = placeSmartPyramid(itemsToPlace, container, placementOptions);
+      }
     }
 
     if (result.fits) {
+      const candidates = result.placements.map(p => {
+        const fourreau = fourreaux.find(f => f.id === p.id);
+        if (!fourreau) return null;
+        return {
+          x: p.x * MM_TO_PX,
+          y: p.y * MM_TO_PX,
+          r: fourreau.od * MM_TO_PX / 2,
+          id: fourreau.id
+        };
+      }).filter(Boolean);
+
+      const layoutValidation = validatePlacementBatch(candidates, {
+        enforceGap: true,
+        requireSafetyMargin: false
+      });
+
+      if (!layoutValidation.valid) {
+        placementDebug('auto-layout refused', layoutValidation);
+        result = {
+          fits: false,
+          suggestedContainer: {
+            width: Math.ceil((container.width + FOURREAU_GAP) / 10) * 10,
+            height: Math.ceil((container.height + FOURREAU_GAP) / 10) * 10
+          },
+          grid: result.grid,
+          cells: []
+        };
+      }
+    }
+
+    if (result.fits) {
+      arrangeRetryCount = 0;
       result.placements.forEach(p => {
         const fourreau = fourreaux.find(f => f.id === p.id);
         if (fourreau) {
-          fourreau.x = p.x * MM_TO_PX;
-          fourreau.y = p.y * MM_TO_PX;
-          fourreau.frozen = true;
-          fourreau.vx = 0;
-          fourreau.vy = 0;
+          moveFourreauWithChildren(fourreau, p.x * MM_TO_PX, p.y * MM_TO_PX);
         }
       });
 
@@ -2035,12 +2757,36 @@
         height: cell.height * MM_TO_PX
       }));
 
-      showToast(`✅ ${fourreaux.length} fourreaux placés en grille ${result.grid.cols}x${result.grid.rows} (Ctrl+X pour dégeler)`);
+      if (reduceAfterFit) {
+        reduceBoxToCurrentLayout();
+        arrangeInProgress = false;
+        return;
+      }
+
+      // Rotation automatique paysage : si la boite est portrait et non verrouillée, la coucher
+      const lockWidthFinal = document.getElementById('lockWidth')?.checked;
+      const lockHeightFinal = document.getElementById('lockHeight')?.checked;
+      if (!lockWidthFinal && !lockHeightFinal && SHAPE === 'rect' && WORLD_H_MM > WORLD_W_MM * 1.2) {
+        rotateBoxAndContents('cw');
+      }
+
+      // Afficher le panel de sélection des variantes si plusieurs disponibles
+      showLayoutPreviewPanel();
+
+      const suffix = source === 'auto-resize' ? 'avec redimensionnement auto' : 'dans la boite actuelle';
+      showToast(`OK ${fourreaux.length} fourreaux placés en grille ${result.grid.cols}x${result.grid.rows} ${suffix} (Ctrl+X pour dégeler)`);
     } else {
       const { width: newWidth, height: newHeight } = result.suggestedContainer;
       const lockWidth = document.getElementById('lockWidth')?.checked;
       const lockHeight = document.getElementById('lockHeight')?.checked;
 
+
+      if (!allowResize) {
+        showToast(`Impossible de placer en grille dans la boite actuelle (${newWidth}x${newHeight}mm requis)`);
+        arrangeRetryCount = 0;
+        arrangeInProgress = false;
+        return;
+      }
 
       if (lockWidth && lockHeight) {
         showToast(`🔒 Impossible : dimensions verrouillées (${newWidth}×${newHeight}mm requis)`);
@@ -2050,6 +2796,16 @@
 
       const finalWidth = lockWidth ? container.width : newWidth;
       const finalHeight = lockHeight ? container.height : newHeight;
+      const dimensionsChanged = Math.abs(finalWidth - container.width) > 0.5 || Math.abs(finalHeight - container.height) > 0.5;
+
+      if (!dimensionsChanged || arrangeRetryCount >= MAX_ARRANGE_RETRIES) {
+        showToast(`Impossible de placer automatiquement sans dépasser les limites (${newWidth}×${newHeight}mm requis)`);
+        arrangeRetryCount = 0;
+        arrangeInProgress = false;
+        return;
+      }
+
+      arrangeRetryCount++;
 
       if (shape === 'rect') {
         if (!lockWidth) boxWInput.value = finalWidth;
@@ -2064,7 +2820,7 @@
 
       // Utiliser un timeout pour laisser le DOM se mettre à jour avant de relancer
       setTimeout(() => {
-        arrangeConduitGridOptimized();
+        arrangeConduitGridOptimized(behaviorOptions);
       }, 100);
       return; // Sortir pour éviter de déverrouiller arrangeInProgress trop tôt
     }
@@ -2076,20 +2832,43 @@
 
 
   // Cache pour éviter les recalculs inutiles
-  let dimensionsCache = { count: -1, result: null };
+  let dimensionsCache = { signature: null, result: null };
+
+  function invalidateDimensionsCache() {
+    dimensionsCache = { signature: null, result: null };
+  }
+
+  function getContainerMarginMm() {
+    const litDePose = window.PLACEMENT_CONFIG?.litDePose;
+    return Number.isFinite(litDePose) ? litDePose : EDGE_SAFETY_MARGIN;
+  }
+
+  function getPlacementMode() {
+    return document.getElementById('placementModeSelect')?.value || 'auto';
+  }
 
   // Fonction pour calculer les dimensions minimales nécessaires
   function calculateMinimumDimensions(force = false) {
     if (fourreaux.length === 0) return null;
 
+    const dimensionsSignature = [
+      fourreaux.length,
+      FOURREAU_GAP,
+      EDGE_SAFETY_MARGIN,
+      SHAPE,
+      WORLD_W_MM,
+      WORLD_H_MM,
+      WORLD_D_MM,
+      getContainerMarginMm(),
+      fourreaux.map(f => `${f.id}:${Math.round(f.x)}:${Math.round(f.y)}:${f.od}`).join('|')
+    ].join(';');
+
     // Utiliser le cache si le nombre de fourreaux n'a pas changé
-    if (!force && dimensionsCache.count === fourreaux.length && dimensionsCache.result) {
+    if (!force && dimensionsCache.signature === dimensionsSignature && dimensionsCache.result) {
       return dimensionsCache.result;
     }
 
-    // === SYNCHRONISATION AVEC arrangeConduitGridOptimized ===
-    const MARGIN_MM = 30;  // Espacement entre fourreaux (30mm requis)
-    const CONTAINER_MARGIN_MM = 20; // Marge depuis les bords du conteneur
+    const CONTAINER_MARGIN_MM = getContainerMarginMm();
 
     // Vérifier les verrous
     const lockWidth = document.getElementById('lockWidth')?.checked;
@@ -2097,79 +2876,16 @@
     const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
     const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
 
-    // Modélisation : Chaque tube représenté par son encombrement carré/rectangulaire
-    function getFourreauData(fourreau) {
-      const spec = FOURREAUX.find(s => s.type === fourreau.type && s.code === fourreau.code);
-      const diameter = spec ? spec.od : 40;
-      return {
-        fourreau,
-        diameter,
-        encombrement: diameter + MARGIN_MM, // Encombrement = taille + marge
-        width: diameter + MARGIN_MM,
-        height: diameter + MARGIN_MM
-      };
-    }
-
-    // Trier par ordre décroissant de taille (comme Ctrl+G)
-    const sortedFourreaux = [...fourreaux]
-      .map(getFourreauData)
-      .sort((a, b) => b.diameter - a.diameter);
-
-    // Calculer la grille optimale avec la MÊME LOGIQUE que Ctrl+G
-    let optimalCols, optimalRows;
-    const totalFourreaux = sortedFourreaux.length;
-    const availableWidth = currentWidth - 2 * CONTAINER_MARGIN_MM;
-    const availableHeight = currentHeight - 2 * CONTAINER_MARGIN_MM;
-    const aspectRatio = availableWidth / availableHeight;
-
     if (lockWidth && lockHeight) {
       // Les deux dimensions verrouillées = pas de redimensionnement possible
       return null;
-    } else if (lockHeight) {
-      // Hauteur verrouillée : calculer combien de lignes on peut avoir
-      const avgEncombrement = sortedFourreaux.reduce((sum, f) => sum + f.height, 0) / totalFourreaux;
-      const maxRows = Math.floor(availableHeight / avgEncombrement);
-      optimalRows = Math.min(maxRows, totalFourreaux);
-      optimalCols = Math.ceil(totalFourreaux / optimalRows);
-    } else if (lockWidth) {
-      // Largeur verrouillée : calculer combien de colonnes on peut avoir
-      const avgEncombrement = sortedFourreaux.reduce((sum, f) => sum + f.width, 0) / totalFourreaux;
-      const maxCols = Math.floor(availableWidth / avgEncombrement);
-      optimalCols = Math.min(maxCols, totalFourreaux);
-      optimalRows = Math.ceil(totalFourreaux / optimalCols);
-    } else {
-      // MÊME LOGIQUE que Ctrl+G : privilégier horizontal
-      optimalCols = Math.ceil(Math.sqrt(totalFourreaux * aspectRatio * 1.5)); // Facteur 1.5 pour favoriser horizontal
-      optimalRows = Math.ceil(totalFourreaux / optimalCols);
-
-      // Optimiser pour éviter les lignes avec trop peu de fourreaux
-      if (totalFourreaux > 2) {
-        const lastRowItems = totalFourreaux % optimalCols;
-        if (lastRowItems > 0 && lastRowItems < optimalCols * 0.3) {
-          optimalCols = Math.max(1, optimalCols - 1);
-          optimalRows = Math.ceil(totalFourreaux / optimalCols);
-        }
-      }
-
-      // Forcer un minimum horizontal si possible
-      if (totalFourreaux >= 4 && optimalRows > optimalCols) {
-        optimalCols = Math.ceil(totalFourreaux / 2); // Maximum 2 lignes si possible
-        optimalRows = Math.ceil(totalFourreaux / optimalCols);
-      }
     }
-
-    // === CALCULER LES DIMENSIONS BASÉES SUR LES POSITIONS ACTUELLES ===
-    // (Utilisé après Ctrl+G pour trouver la boîte minimale qui contient tous les fourreaux)
 
     let maxX = -Infinity, maxY = -Infinity;
     let minX = Infinity, minY = Infinity;
 
-    // Parcourir tous les fourreaux et trouver l'enveloppe minimale
-    for (const f of sortedFourreaux) {
-      const fourreau = f.fourreau;
-      const radiusMM = f.diameter / 2;
-
-      // Convertir les positions de pixels en mm
+    for (const fourreau of fourreaux) {
+      const radiusMM = fourreau.od / 2;
       const xMM = fourreau.x / MM_TO_PX;
       const yMM = fourreau.y / MM_TO_PX;
 
@@ -2179,7 +2895,6 @@
       minY = Math.min(minY, yMM - radiusMM);
     }
 
-    // Calculer les dimensions avec une marge de sécurité
     let totalWidthMM = (maxX - minX) + 2 * CONTAINER_MARGIN_MM;
     let totalHeightMM = (maxY - minY) + 2 * CONTAINER_MARGIN_MM;
 
@@ -2193,7 +2908,7 @@
     };
 
     // Mettre à jour le cache
-    dimensionsCache = { count: fourreaux.length, result };
+    dimensionsCache = { signature: dimensionsSignature, result };
 
     return result;
   }
@@ -2202,6 +2917,55 @@
     return calculateMinimumDimensions(true);
   }
   window.getResizeMinimumDimensions = getResizeMinimumDimensions;
+
+  function calculateMinimumDimensionsAfterAutoArrange() {
+    if (fourreaux.length === 0) return null;
+
+    const lockWidth = document.getElementById('lockWidth')?.checked;
+    const lockHeight = document.getElementById('lockHeight')?.checked;
+    const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
+    const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
+    const margin = getContainerMarginMm();
+
+    if (lockWidth && lockHeight) return null;
+
+    const uniformDiameters = new Set(fourreaux.map(f => f.od));
+    if (uniformDiameters.size !== 1) {
+      return calculateMinimumDimensions(true);
+    }
+
+    const itemsToPlace = fourreaux.map(f => ({ id: f.id, diameter: f.od }));
+    const result = placeUniform(itemsToPlace, {
+      width: currentWidth,
+      height: currentHeight
+    }, {
+      margin,
+      gap: FOURREAU_GAP
+    });
+
+    if (!result.fits) {
+      return {
+        width: lockWidth ? currentWidth : Math.ceil(result.suggestedContainer.width / 10) * 10,
+        height: lockHeight ? currentHeight : Math.ceil(result.suggestedContainer.height / 10) * 10
+      };
+    }
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of result.placements) {
+      const item = itemsToPlace.find(f => f.id === p.id);
+      if (!item) continue;
+      const radius = item.diameter / 2;
+      minX = Math.min(minX, p.x - radius);
+      minY = Math.min(minY, p.y - radius);
+      maxX = Math.max(maxX, p.x + radius);
+      maxY = Math.max(maxY, p.y + radius);
+    }
+
+    return {
+      width: lockWidth ? currentWidth : Math.ceil(((maxX - minX) + 2 * margin) / 10) * 10,
+      height: lockHeight ? currentHeight : Math.ceil(((maxY - minY) + 2 * margin) / 10) * 10
+    };
+  }
 
   function fitContentsToBox(targetW, targetH) {
     if (SHAPE !== 'rect' && SHAPE !== 'chemin_de_cable') return true;
@@ -2274,7 +3038,7 @@
       return;
     }
 
-    const minDims = calculateMinimumDimensions();
+    const minDims = calculateMinimumDimensionsAfterAutoArrange();
     if (!minDims) {
       hideReduceButton();
       return;
@@ -2341,14 +3105,12 @@
         container.style.display = 'none';
         return;
       } else if (lockWidth) {
-        buttonText = `${needsEnlarge ? 'Agrandir hauteur' : needsReduce ? 'Réduire hauteur' : 'Ajuster hauteur'} (${proposedHeight}mm)`;
+        buttonText = `${needsEnlarge ? 'Agrandir hauteur' : needsReduce ? 'Redimensionner hauteur' : 'Ajuster hauteur'} (${proposedHeight}mm)`;
       } else if (lockHeight) {
-        buttonText = `${needsEnlarge ? 'Agrandir largeur' : needsReduce ? 'Réduire largeur' : 'Ajuster largeur'} (${proposedWidth}mm)`;
+        buttonText = `${needsEnlarge ? 'Agrandir largeur' : needsReduce ? 'Redimensionner largeur' : 'Ajuster largeur'} (${proposedWidth}mm)`;
       } else {
         if (needsEnlarge && !needsReduce) {
           buttonText = `Agrandir (${proposedWidth}×${proposedHeight}mm)`;
-        } else if (needsReduce && !needsEnlarge) {
-          buttonText = `Réduire (${proposedWidth}×${proposedHeight}mm)`;
         } else {
           buttonText = `Redimensionner (${proposedWidth}×${proposedHeight}mm)`;
         }
@@ -2368,9 +3130,224 @@
     }
   }
 
+  function resizeTrayToCurrentFourreaux() {
+    if (fourreaux.length === 0) return;
+    const lockW = document.getElementById('lockWidth')?.checked;
+    const lockH = document.getElementById('lockHeight')?.checked;
+    const LIT = 40 * MM_TO_PX; // litDePose en pixels canvas
+
+    // Bounding box des fourreaux (bords extérieurs)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    fourreaux.forEach(f => {
+      const r = ((f.od || f.diameter || 0) * MM_TO_PX) / 2;
+      minX = Math.min(minX, f.x - r);
+      minY = Math.min(minY, f.y - r);
+      maxX = Math.max(maxX, f.x + r);
+      maxY = Math.max(maxY, f.y + r);
+    });
+
+    // Décaler les fourreaux pour les ramener à (LIT, LIT) dans la nouvelle boîte
+    const shiftX = LIT - minX;
+    const shiftY = LIT - minY;
+    if (Math.abs(shiftX) > 0.5 || Math.abs(shiftY) > 0.5) {
+      fourreaux.forEach(f => moveFourreauWithChildren(f, f.x + shiftX, f.y + shiftY));
+    }
+
+    const newWmm = Math.ceil(((maxX - minX) / MM_TO_PX + 80) / 5) * 5; // 80 = 2×40mm
+    const newHmm = Math.ceil(((maxY - minY) / MM_TO_PX + 80) / 5) * 5;
+
+    const shape = shapeSel.value;
+    if (shape === 'rect') {
+      if (!lockW) boxWInput.value = newWmm;
+      if (!lockH) boxHInput.value = newHmm;
+    } else if (shape === 'circ') {
+      boxDInput.value = Math.max(newWmm, newHmm);
+    }
+
+    // Même protection que applyNappeVariant : éviter que fitCanvas() réduise
+    // le canvas parce que le panel preview est visible dans le flux
+    const savedOffsetX = canvasOffsetPx.x;
+    const savedOffsetY = canvasOffsetPx.y;
+    const savedDisplayScale = displayScale;
+    applyDimensions();
+    canvasOffsetPx.x = savedOffsetX;
+    canvasOffsetPx.y = savedOffsetY;
+    displayScale = savedDisplayScale;
+
+    updateStats();
+    redraw();
+  }
+
+  function autoPlaceFromInventory() {
+    if (inventoryItems.length === 0) {
+      showToast('Ajoutez des fourreaux à l\'inventaire d\'abord');
+      return;
+    }
+
+    const shape = shapeSel.value;
+    if (shape === 'chemin_de_cable') {
+      showToast('Placement non supporté pour les chemins de câbles');
+      return;
+    }
+
+    try {
+      // Expand inventoryItems → liste individuelle pour le moteur
+      let invId = 0;
+      const expandedInput = [];
+      const idToSpec = {};
+
+      inventoryItems.forEach(item => {
+        const spec = FOURREAUX.find(f => f.type === item.type && f.code === item.code);
+        if (!spec || item.total <= 0) return;
+        for (let i = 0; i < item.total; i++) {
+          const id = `inv_${invId++}`;
+          expandedInput.push({
+            id,
+            diameter:  spec.od,
+            quantity:  1,
+            type:      item.type,
+            code:      item.code,
+            famille:   window.FamilyClassifier
+              ? window.FamilyClassifier.inferFamille({ type: item.type, code: item.code, diameter: spec.od })
+              : null,
+            statut:    'utilisé',
+            reserve:   false,
+          });
+          idToSpec[id] = spec;
+        }
+      });
+
+      if (expandedInput.length === 0) {
+        showToast('Aucun fourreau valide dans l\'inventaire');
+        return;
+      }
+
+      const orchestrator = new window.PlacementOrchestrator();
+      const lockWidth  = document.getElementById('lockWidth')?.checked;
+      const lockHeight = document.getElementById('lockHeight')?.checked;
+      const boxWidth   = shape === 'rect' ? parseFloat(boxWInput.value)  : parseFloat(boxDInput.value);
+      const boxHeight  = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
+
+      const constraints = {};
+      if (lockWidth)  { constraints.lockedAxis = 'width';  constraints.boxWidth  = boxWidth; }
+      else if (lockHeight) { constraints.lockedAxis = 'height'; constraints.boxHeight = boxHeight; }
+
+      const bestConfig = orchestrator.computeBestPlacement(
+        expandedInput, constraints, { autoResize: true, placementMode: getPlacementMode() }
+      );
+
+      // Sauver l'état AVANT de modifier le canvas
+      saveStateToHistory();
+
+      // Remplacer tous les fourreaux du canvas par ceux du moteur
+      fourreaux.length = 0;
+
+      bestConfig.placedFourreaux.forEach(pf => {
+        const spec = idToSpec[String(pf.id)];
+        if (!spec) return;
+        const cellSize = bestConfig.calculateCellSize(pf.diameter);
+        const x = (pf.x + cellSize / 2) * MM_TO_PX;
+        const y = (bestConfig.height - pf.y - cellSize / 2) * MM_TO_PX;
+        const famille = window.FamilyClassifier
+          ? window.FamilyClassifier.inferFamille({ type: spec.type, code: spec.code, diameter: spec.od })
+          : null;
+        fourreaux.push({
+          id: pf.id, x, y,     // conserver l'ID moteur pour que applyNappeVariant retrouve le fourreau
+          od: spec.od, idm: spec.id,
+          color: colorForFourreau(spec.type, spec.code), customColor: null, label: '',
+          children: [], vx: 0, vy: 0, dragging: false, frozen: true,
+          _frozenByUser: false, _frozenByMode: true, _px: x, _py: y,
+          type: spec.type, code: spec.code, famille,
+          statut: 'utilisé', usage: '', origine: '', destination: '',
+          reserve: false, aiguille: false,
+        });
+      });
+
+      // Appliquer les dimensions de la boîte
+      const newWidth  = Math.ceil(bestConfig.width  / 5) * 5;
+      const newHeight = Math.ceil(bestConfig.height / 5) * 5;
+      if (shape === 'rect') {
+        if (!lockWidth)  boxWInput.value  = newWidth;
+        if (!lockHeight) boxHInput.value = newHeight;
+      } else if (shape === 'circ') {
+        boxDInput.value = Math.max(newWidth, newHeight);
+      }
+      applyDimensions();
+
+      // Panel variantes
+      const allConfigs = [bestConfig, ...(bestConfig.alternatives || [])];
+      const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
+      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, expandedInput, true)];
+
+      lastVoidFillSuggestions = [];
+      showLayoutPreviewPanel();
+
+      updateInventoryPlacedCount();
+      updateStats();
+      redraw();
+
+      const scorePercent = (bestConfig.score * 100).toFixed(0);
+      showToast(`✅ ${fourreaux.length} fourreaux placés depuis l'inventaire (Score: ${scorePercent}%)`);
+
+    } catch (err) {
+      console.error('[autoPlaceFromInventory]', err);
+      showToast('Erreur lors du placement automatique');
+    }
+  }
+
+  function applyVoidFill(fillIdx) {
+    const s = lastVoidFillSuggestions[fillIdx];
+    if (!s) return;
+    saveStateToHistory();
+    const MM = MM_TO_PX;
+    const currentBoxH = parseFloat(boxHInput.value) || WORLD_H_MM;
+    s.positions.forEach(pos => {
+      const cs = (s.diameter + (window.PLACEMENT_RULES ? window.PLACEMENT_RULES.entraxe : 30));
+      const canvasX = (pos.x + cs / 2) * MM;
+      const canvasY = (currentBoxH - pos.y - cs / 2) * MM;
+      addFourreauAt(canvasX, canvasY, s.type, true);
+    });
+    updateInventoryPlacedCount();
+    redraw();
+    // Masquer la suggestion appliquée
+    const item = document.querySelector(`.void-fill-item[data-fill-idx="${fillIdx}"]`);
+    if (item) item.style.display = 'none';
+    showToast(`+${s.positions.length} × ${s.code || s.type} ajoutés`);
+  }
+
   function reduceToMinimum() {
-    // Utiliser le nouveau moteur intelligent
     reduceToMinimumNew();
+  }
+
+  function reduceBoxToCurrentLayout() {
+    const minDims = calculateMinimumDimensions(true);
+    if (!minDims) {
+      hideReduceButton();
+      return;
+    }
+
+    const lockWidth = document.getElementById('lockWidth')?.checked;
+    const lockHeight = document.getElementById('lockHeight')?.checked;
+
+    if (lockWidth && lockHeight) {
+      showToast('Dimensions verrouillées');
+      hideReduceButton();
+      return;
+    }
+
+    if (SHAPE === 'rect') {
+      if (!lockWidth) boxWInput.value = minDims.width;
+      if (!lockHeight) boxHInput.value = minDims.height;
+    } else if (SHAPE === 'circ') {
+      const newDiameter = Math.max(minDims.width, minDims.height);
+      boxDInput.value = newDiameter;
+    }
+
+    applyDimensions({ fitContents: true });
+    hideReduceButton();
+    showToast(`✅ Boîte redimensionnée à ${minDims.width}×${minDims.height}mm`);
+    updateStats();
+    redraw();
   }
 
   /**
@@ -2379,7 +3356,7 @@
    */
   function reduceToMinimumNew() {
     if (fourreaux.length === 0) {
-      showToast('Aucun fourreau à réduire');
+      showToast('Aucun fourreau à redimensionner');
       return;
     }
 
@@ -2393,16 +3370,7 @@
       // Créer orchestrateur
       const orchestrator = new window.PlacementOrchestrator();
 
-      // Préparer les fourreaux pour le moteur
-      const fourreauxInput = fourreaux.map(f => {
-        const spec = FOURREAUX.find(s => s.type === f.type && s.code === f.code);
-        return {
-          diameter: f.od || (spec ? spec.od : 40),
-          quantity: 1,
-          type: f.type,
-          id: f.id
-        };
-      });
+      const fourreauxInput = prepareFourreauxInput(fourreaux);
 
       // Contraintes (respecter axes verrouillés)
       const lockWidth = document.getElementById('lockWidth')?.checked;
@@ -2423,24 +3391,29 @@
       const bestConfig = orchestrator.computeBestPlacement(
         fourreauxInput,
         constraints,
-        {autoResize: true}
+        { autoResize: true, placementMode: getPlacementMode() }
       );
 
       // Appliquer le placement au canvas
+      // Les positions du moteur incluent déjà les marges (litDePose) sur les 4 côtés.
+      // Pas d'offset supplémentaire nécessaire (offsetX=0, offsetY=0).
       bestConfig.placedFourreaux.forEach(pf => {
-        const fourreau = fourreaux.find(f => f.id === pf.id);
+        const fourreau = fourreaux.find(f => String(f.id) === String(pf.id));
         if (fourreau) {
-          fourreau.x = pf.x * MM_TO_PX;
-          fourreau.y = pf.y * MM_TO_PX;
-          fourreau.frozen = true;
-          fourreau.vx = 0;
-          fourreau.vy = 0;
+          // pf.x/pf.y = coin bas-gauche de la cellule (Y=0 en BAS dans le moteur)
+          // Le canvas dessine au CENTRE du cercle avec Y=0 en HAUT
+          const cellSize = bestConfig.calculateCellSize(pf.diameter);
+          const x = (pf.x + cellSize / 2) * MM_TO_PX;
+          const y = (bestConfig.height - pf.y - cellSize / 2) * MM_TO_PX;
+          moveFourreauWithChildren(fourreau, x, y);
         }
       });
 
       // Mettre à jour les dimensions de la boîte
-      const newWidth = Math.ceil(bestConfig.width);
-      const newHeight = Math.ceil(bestConfig.height);
+      // Arrondir AU-DESSUS au pas de 5mm (comme applyDimensions) pour éviter que
+      // roundToStep n'arrondisse vers le bas et que les fourreaux débordent.
+      const newWidth  = Math.ceil(bestConfig.width  / 5) * 5;
+      const newHeight = Math.ceil(bestConfig.height / 5) * 5;
 
       if (shape === 'rect') {
         if (!lockWidth) boxWInput.value = newWidth;
@@ -2453,15 +3426,38 @@
       applyDimensions();
       hideReduceButton();
 
+      // Rotation automatique paysage si la boite est portrait et non verrouillée
+      if (!lockWidth && !lockHeight && shape === 'rect' && newHeight > newWidth * 1.2) {
+        rotateBoxAndContents('cw');
+      }
+
+      // Exposer les variantes (chacune redimensionnée à son minimum)
+      const alternatives = (bestConfig.alternatives || []);
+      alternatives.forEach(cfg => orchestrator.optimizeDimensions(cfg));
+      const allConfigs = [bestConfig, ...alternatives];
+      const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
+      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, fourreauxInput, true)];
+
+      // Suggestions remplissage vides
+      if (window.detectVoidFill && inventoryItems.length > 0) {
+        lastVoidFillSuggestions = window.detectVoidFill(bestConfig, inventoryItems);
+      } else {
+        lastVoidFillSuggestions = [];
+      }
+
+      showLayoutPreviewPanel();
+
       // Afficher score et feedback
       const scorePercent = (bestConfig.score * 100).toFixed(0);
-      showToast(`✅ Boîte réduite à ${newWidth}×${newHeight}mm (Score: ${scorePercent}%)`);
+      showToast(`✅ Boîte redimensionnée à ${newWidth}×${newHeight}mm (Score: ${scorePercent}%)`);
 
       updateStats();
       redraw();
 
     } catch (error) {
       console.error('[reduceToMinimumNew] Erreur:', error);
+      lastLayoutVariants = [];
+      hideLayoutPreviewPanel();
       showToast(`❌ Erreur: ${error.message}`);
     }
   }
@@ -2798,32 +3794,22 @@
     }
 
     if (fourreaux.length === 0) {
-      gridOrigin = null;
-      gridSpacing = null;
+      const marginPx = getContainerMarginMm() * MM_TO_PX;
+      gridOrigin = { x: marginPx, y: marginPx };
+      gridSpacing = GRID_SPACING_MAIN * MM_TO_PX;
       gridLocked = false;
       gridFourreauxCount = 0;
       lastGridCells = []; // Effacer les cellules
       return;
     }
 
-    // Trouver le fourreau le plus proche du coin supérieur gauche (origine)
-    let closestFourreau = fourreaux[0];
-    let minDist = Math.hypot(closestFourreau.x, closestFourreau.y);
+    // Origine stable indépendante des objets : coin intérieur + marge de sécurité.
+    const marginPx = getContainerMarginMm() * MM_TO_PX;
+    gridOrigin = { x: marginPx, y: marginPx };
 
-    for (const f of fourreaux) {
-      const dist = Math.hypot(f.x, f.y);
-      if (dist < minDist) {
-        minDist = dist;
-        closestFourreau = f;
-      }
-    }
-
-    // L'origine de la grille est le centre du premier fourreau
-    gridOrigin = { x: closestFourreau.x, y: closestFourreau.y };
-
-    // Calculer l'espacement : diamètre du fourreau + gap (en pixels)
-    const fourreauRadiusMm = closestFourreau.od / 2;
-    const spacingMm = closestFourreau.od + FOURREAU_GAP; // Diamètre + espace libre
+    // Calculer l'espacement : plus grand diamètre présent + gap réglable
+    const maxDiameterMm = Math.max(...fourreaux.map(f => f.od || 0), GRID_SPACING_MAIN);
+    const spacingMm = maxDiameterMm + FOURREAU_GAP;
     gridSpacing = spacingMm * MM_TO_PX; // Convertir en pixels
 
     // Verrouiller la grille après le calcul
@@ -2842,20 +3828,77 @@
     }
 
     const cells = [];
+    const directions = [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 1, dy: -1 },
+      { dx: -1, dy: -1 },
+      { dx: 1, dy: 1 },
+      { dx: -1, dy: 1 }
+    ];
+
+    const getSnapTargetDiameter = (sourceFourreau) => {
+      if (draggedObject?.od) return draggedObject.od;
+      if (pendingFourreauType?.od) return pendingFourreauType.od;
+      if (selectedFourreau) {
+        const [selType, selCode] = selectedFourreau.split('|');
+        const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
+        if (selSpec?.od) return selSpec.od;
+      }
+      return sourceFourreau.od;
+    };
+
+    const pushCell = (centerX, centerY, diameterMm, extra = {}) => {
+      const cellSizePx = (diameterMm + FOURREAU_GAP) * MM_TO_PX;
+      const exists = cells.some(cell => {
+        const cellCenterX = cell.x + cell.width / 2;
+        const cellCenterY = cell.y + cell.height / 2;
+        return Math.hypot(centerX - cellCenterX, centerY - cellCenterY) < Math.max(5, cellSizePx * 0.1);
+      });
+      if (exists) return;
+
+      cells.push({
+        x: centerX - cellSizePx / 2,
+        y: centerY - cellSizePx / 2,
+        width: cellSizePx,
+        height: cellSizePx,
+        ...extra
+      });
+    };
 
     // Pour chaque fourreau, créer une cellule centrée sur lui
     fourreaux.forEach(fourreau => {
-      const radiusMm = fourreau.od / 2;
-      const cellSizeMm = fourreau.od + FOURREAU_GAP; // Diamètre + gap
-      const cellSizePx = cellSizeMm * MM_TO_PX;
+      pushCell(fourreau.x, fourreau.y, fourreau.od, {
+        fourreauId: fourreau.id,
+        occupied: true
+      });
 
-      // Cellule centrée sur le fourreau
-      cells.push({
-        x: fourreau.x - cellSizePx / 2,
-        y: fourreau.y - cellSizePx / 2,
-        width: cellSizePx,
-        height: cellSizePx,
-        fourreauId: fourreau.id
+      const targetOd = getSnapTargetDiameter(fourreau);
+      const targetRadiusPx = targetOd * MM_TO_PX / 2;
+      const distancePx = ((fourreau.od / 2) + (targetOd / 2) + FOURREAU_GAP) * MM_TO_PX;
+
+      directions.forEach(dir => {
+        const candidateX = fourreau.x + dir.dx * distancePx;
+        const candidateY = fourreau.y + dir.dy * distancePx;
+        const validation = validatePlacement({
+          x: candidateX,
+          y: candidateY,
+          r: targetRadiusPx,
+          id: draggedObject?.id ?? null
+        }, {
+          ignoreId: draggedObject?.id ?? null,
+          enforceGap: true,
+          requireSafetyMargin: true
+        });
+
+        if (validation.valid) {
+          pushCell(candidateX, candidateY, targetOd, {
+            virtual: true,
+            sourceId: fourreau.id
+          });
+        }
       });
     });
 
@@ -2899,6 +3942,7 @@
 
       row.forEach(cell => {
         optimizedCells.push({
+          ...cell,
           x: cell.x,
           y: avgY - maxHeight / 2,
           width: cell.width,
@@ -2971,6 +4015,20 @@
     console.log(`[EXPANSION] Ajouté ${newCells.length} cellules adjacentes autour du fourreau ${fourreau.id}`);
   }
 
+  function dedupeVirtualSlots(slots, tolerancePx = 5) {
+    const result = [];
+
+    for (const slot of slots) {
+      const exists = result.some(existing =>
+        Math.hypot(existing.x - slot.x, existing.y - slot.y) < tolerancePx
+      );
+
+      if (!exists) result.push(slot);
+    }
+
+    return result;
+  }
+
   /**
    * Génère des emplacements virtuels disponibles pour placement
    * NOUVELLE APPROCHE DYNAMIQUE : Génère des cellules autour de CHAQUE fourreau placé
@@ -3025,27 +4083,22 @@
         const candidateX = fourreau.x + dir.dx * distancePx;
         const candidateY = fourreau.y + dir.dy * distancePx;
 
-        // Test 1 : Vérifier limites du conteneur avec marge de sécurité de 50mm
         const radiusPx = (selectedOd / 2) * MM_TO_PX;
-        const safetyMarginPx = 50 * MM_TO_PX; // 5cm de marge
-        if (candidateX - radiusPx < safetyMarginPx || candidateX + radiusPx > WORLD_W - safetyMarginPx) return;
-        if (candidateY - radiusPx < safetyMarginPx || candidateY + radiusPx > WORLD_H - safetyMarginPx) return;
 
-        // Test 2 : Vérifier collision avec autres fourreaux (sauf celui exclu)
-        const hasCollision = fourreaux.some(otherFourreau => {
-          // Ignorer le fourreau exclu dans les tests de collision
-          if (excludeFourreauId !== null && otherFourreau.id === excludeFourreauId) {
-            return false;
-          }
-
-          const dx = candidateX - otherFourreau.x;
-          const dy = candidateY - otherFourreau.y;
-          const distance = Math.hypot(dx, dy);
-          const minDistance = ((selectedOd / 2) + (otherFourreau.od / 2) + gapMm) * MM_TO_PX;
-          return distance < minDistance;
+        const validation = validatePlacement({
+          x: candidateX,
+          y: candidateY,
+          r: radiusPx,
+          id: excludeFourreauId
+        }, {
+          ignoreId: excludeFourreauId,
+          enforceGap: true,
+          requireSafetyMargin: true,
+          checkFourreaux: true,
+          checkCables: true
         });
 
-        if (!hasCollision) {
+        if (validation.valid) {
           // Cellule valide, l'ajouter aux slots virtuels
           virtualSlots.push({
             x: candidateX,
@@ -3061,6 +4114,7 @@
       });
     });
 
+    virtualSlots = dedupeVirtualSlots(virtualSlots, 5);
     console.log(`[VIRTUAL SLOTS DYNAMIQUE] Généré ${virtualSlots.length} emplacements pour Ø${selectedOd}mm autour de ${fourreaux.length} fourreaux`);
   }
 
@@ -3229,7 +4283,7 @@
   function drawSafetyMargin() {
     if (!gridEnabled) return;
 
-    const marginPx = 50 * MM_TO_PX; // 5cm
+    const marginPx = getContainerMarginMm() * MM_TO_PX;
     const theme = document.documentElement.getAttribute('data-theme') || 'light';
 
     ctx.save();
@@ -3297,10 +4351,11 @@
       originX = gridOrigin.x;
       originY = gridOrigin.y;
     } else {
-      // Mode fixe : grille régulière depuis le coin (0,0)
+      // Mode fixe : grille régulière depuis le lit de pose
       spacingPx = GRID_SPACING_MAIN * MM_TO_PX;
-      originX = 0;
-      originY = 0;
+      const marginPx = getContainerMarginMm() * MM_TO_PX;
+      originX = marginPx;
+      originY = marginPx;
     }
 
     // Déterminer les couleurs selon le thème actif
@@ -3415,7 +4470,14 @@
   function snapPointToGrid(x, y) {
     if (!snapToGrid) return { x, y };
 
-    // Si on a des cellules de placement, snapper au centre de la cellule la plus proche NON OCCUPÉE
+    const candidateRadius = draggedObject?.od
+      ? draggedObject.od * MM_TO_PX / 2
+      : pendingFourreauType?.od
+        ? pendingFourreauType.od * MM_TO_PX / 2
+        : null;
+    const candidateIgnoreId = draggedObject?.id ?? null;
+
+    // Si on a des cellules affichées, snapper au centre de la cellule visible compatible la plus proche
     if (lastGridCells && lastGridCells.length > 0) {
       let closestCell = null;
       let minDistance = Infinity;
@@ -3424,18 +4486,26 @@
         const centerX = cell.x + cell.width / 2;
         const centerY = cell.y + cell.height / 2;
 
-        // Vérifier si un fourreau occupe déjà cette cellule
-        // (mais exclure l'objet en cours de drag)
-        const occupied = fourreaux.some(f => {
-          // Ignorer le fourreau en cours de drag
-          if (draggedObject && f.id === draggedObject.id) return false;
+        if (candidateRadius !== null) {
+          const validation = validatePlacement({
+            x: centerX,
+            y: centerY,
+            r: candidateRadius,
+            id: candidateIgnoreId
+          }, {
+            ignoreId: candidateIgnoreId,
+            enforceGap: true,
+            requireSafetyMargin: true
+          });
 
-          const distance = Math.hypot(f.x - centerX, f.y - centerY);
-          return distance < (f.od * MM_TO_PX / 2 + 10); // Tolérance 10px
-        });
-
-        // Ignorer les cellules occupées
-        if (occupied) return;
+          if (!validation.valid) return;
+        } else {
+          const occupied = fourreaux.some(f => {
+            const distance = Math.hypot(f.x - centerX, f.y - centerY);
+            return distance < (f.od * MM_TO_PX / 2 + 10);
+          });
+          if (occupied) return;
+        }
 
         const distance = Math.hypot(x - centerX, y - centerY);
 
@@ -3462,16 +4532,50 @@
       originX = gridOrigin.x;
       originY = gridOrigin.y;
     } else {
-      // Mode fixe : grille régulière depuis (0,0)
+      // Mode fixe : grille régulière depuis le lit de pose
       spacingPx = GRID_SPACING_MAIN * MM_TO_PX;
-      originX = 0;
-      originY = 0;
+      const marginPx = getContainerMarginMm() * MM_TO_PX;
+      originX = marginPx;
+      originY = marginPx;
     }
 
     return {
       x: snapToGridCoordWithOrigin(x, originX, spacingPx),
       y: snapToGridCoordWithOrigin(y, originY, spacingPx)
     };
+  }
+
+  // Retourne les alignements actifs (H et/ou V) entre le curseur et les snap points des fourreaux.
+  // Un alignement H se déclenche quand |cursorY - snapY| < OSNAP_ALIGN_TOLERANCE.
+  // Un alignement V se déclenche quand |cursorX - snapX| < OSNAP_ALIGN_TOLERANCE.
+  function getOsnapAlignments(mouseX, mouseY, ignoreId) {
+    let bestH = null, bestHDist = OSNAP_ALIGN_TOLERANCE;
+    let bestV = null, bestVDist = OSNAP_ALIGN_TOLERANCE;
+
+    for (const f of fourreaux) {
+      if (f.id === ignoreId) continue;
+      const r = f.od * MM_TO_PX / 2;
+
+      const candidates = [
+        { x: f.x,     y: f.y,     osnapType: 'center'   },
+        { x: f.x,     y: f.y - r, osnapType: 'quadrant' },
+        { x: f.x,     y: f.y + r, osnapType: 'quadrant' },
+        { x: f.x + r, y: f.y,     osnapType: 'quadrant' },
+        { x: f.x - r, y: f.y,     osnapType: 'quadrant' },
+      ];
+
+      for (const pt of candidates) {
+        const dy = Math.abs(mouseY - pt.y);
+        const dx = Math.abs(mouseX - pt.x);
+        if (dy < bestHDist) { bestHDist = dy; bestH = { axis: 'h', snapX: pt.x, snapY: pt.y, osnapType: pt.osnapType }; }
+        if (dx < bestVDist) { bestVDist = dx; bestV = { axis: 'v', snapX: pt.x, snapY: pt.y, osnapType: pt.osnapType }; }
+      }
+    }
+
+    const result = [];
+    if (bestH) result.push(bestH);
+    if (bestV) result.push(bestV);
+    return result;
   }
 
   function drawBox() {
@@ -3909,6 +5013,11 @@
     const theme = document.documentElement.getAttribute('data-theme') || 'light';
     const now = Date.now();
     const elapsed = now - snapPreviewPoint.timestamp;
+    const osnapType = snapPreviewPoint.osnapType;
+
+    // Couleur : dorée pour OSNAP, orange pour snap-grille
+    const isOsnap = osnapType === 'center' || osnapType === 'quadrant';
+    const baseRgb = isOsnap ? '255, 200, 0' : (theme === 'dark' ? '255, 145, 77' : '255, 120, 50');
 
     ctx.save();
 
@@ -3918,16 +5027,9 @@
       snapPreviewPoint.x, snapPreviewPoint.y, 0,
       snapPreviewPoint.x, snapPreviewPoint.y, haloRadius * 1.5
     );
-
-    if (theme === 'dark') {
-      gradient.addColorStop(0, 'rgba(255, 145, 77, 0.3)');
-      gradient.addColorStop(0.7, 'rgba(255, 145, 77, 0.15)');
-      gradient.addColorStop(1, 'rgba(255, 145, 77, 0)');
-    } else {
-      gradient.addColorStop(0, 'rgba(255, 145, 77, 0.25)');
-      gradient.addColorStop(0.7, 'rgba(255, 145, 77, 0.1)');
-      gradient.addColorStop(1, 'rgba(255, 145, 77, 0)');
-    }
+    gradient.addColorStop(0, `rgba(${baseRgb}, 0.3)`);
+    gradient.addColorStop(0.7, `rgba(${baseRgb}, 0.12)`);
+    gradient.addColorStop(1, `rgba(${baseRgb}, 0)`);
 
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -3935,25 +5037,31 @@
     ctx.fill();
 
     // 2. Point clignotant à l'intersection (animation pulsante)
-    const pulsePhase = (elapsed % 800) / 800; // Cycle de 800ms
-    const opacity = 0.4 + Math.sin(pulsePhase * Math.PI * 2) * 0.4; // Oscillation 0.0 à 0.8
-    const pointSize = 4 + Math.sin(pulsePhase * Math.PI * 2) * 2; // Taille 2 à 6
+    const pulsePhase = (elapsed % 800) / 800;
+    const opacity = 0.4 + Math.sin(pulsePhase * Math.PI * 2) * 0.4;
+    const pointSize = 4 + Math.sin(pulsePhase * Math.PI * 2) * 2;
 
-    ctx.fillStyle = theme === 'dark'
-      ? `rgba(255, 145, 77, ${opacity})`
-      : `rgba(255, 120, 50, ${opacity})`;
-
+    ctx.fillStyle = `rgba(${baseRgb}, ${opacity})`;
     ctx.beginPath();
     ctx.arc(snapPreviewPoint.x, snapPreviewPoint.y, pointSize, 0, Math.PI * 2);
     ctx.fill();
 
-    // 3. Cercle de contour pour marquer l'intersection
-    ctx.strokeStyle = theme === 'dark'
-      ? 'rgba(255, 145, 77, 0.6)'
-      : 'rgba(255, 120, 50, 0.5)';
+    // 3. Contour : losange pour quadrant OSNAP, cercle pour centre/grille
+    ctx.strokeStyle = `rgba(${baseRgb}, 0.8)`;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(snapPreviewPoint.x, snapPreviewPoint.y, haloRadius, 0, Math.PI * 2);
+    if (osnapType === 'quadrant') {
+      const s = haloRadius * 0.65;
+      const sx = snapPreviewPoint.x;
+      const sy = snapPreviewPoint.y;
+      ctx.moveTo(sx,     sy - s);
+      ctx.lineTo(sx + s, sy);
+      ctx.lineTo(sx,     sy + s);
+      ctx.lineTo(sx - s, sy);
+      ctx.closePath();
+    } else {
+      ctx.arc(snapPreviewPoint.x, snapPreviewPoint.y, haloRadius, 0, Math.PI * 2);
+    }
     ctx.stroke();
 
     ctx.restore();
@@ -3975,8 +5083,10 @@
     drawDimensions();
 
     drawMarquee(); // Dessiner le rectangle de sélection s'il est actif
-    for (let i = 0; i < fourreaux.length; i++) {
-      drawFourreau(fourreaux[i], i + 1); // Passer le numéro (index + 1)
+    if (!window.konvaMode) {
+      for (let i = 0; i < fourreaux.length; i++) {
+        drawFourreau(fourreaux[i], i + 1);
+      }
     }
     for (const c of cables) drawCable(c);
     drawPreviewFourreau(); // Dessiner l'aperçu du fourreau pendant le clic
@@ -3987,6 +5097,12 @@
     // Dessiner les poignées de resize EN DERNIER pour qu'elles soient au-dessus de tout
     if (typeof window.drawResizeHandles === 'function') {
       window.drawResizeHandles(ctx, WORLD_W, WORLD_H);
+    }
+
+    // Konva : synchroniser le transform et re-rendre les fourreaux
+    if (window.konvaFourreaux) {
+      window.konvaFourreaux.syncTransform();
+      window.konvaFourreaux.render();
     }
   }
 
@@ -4630,6 +5746,123 @@
     buildList(listCable, cc, 'c', searchCable.value || "");
   }
 
+  // ─── Hub Inventaire ──────────────────────────────────────────────────────────
+
+  function addToInventory(type, code, qty, silent = false) {
+    if (!type || !code) return;
+    const spec = FOURREAUX ? FOURREAUX.find(f => f.type === type && f.code === code) : null;
+    const diameter = spec ? spec.od : 0;
+    const existing = inventoryItems.find(i => i.type === type && i.code === code);
+    if (existing) {
+      existing.total += qty;
+    } else {
+      inventoryItems.push({ type, code, diameter, total: qty, placed: 0 });
+    }
+    updateInventoryPlacedCount();
+    renderPlanInventory();
+    if (!silent) pulseInventoryFeedback(type, code);
+  }
+
+  function updateInventoryPlacedCount() {
+    const { fc } = countGroups();
+    inventoryItems.forEach(item => {
+      const key = `${item.type}|${item.code}`;
+      item.placed = fc[key] || 0;
+    });
+  }
+
+  function renderPlanInventory() {
+    const container = document.getElementById('planInventoryList');
+    const actionsEl = document.getElementById('planInventoryActions');
+    if (!container) return;
+
+    if (inventoryItems.length === 0) {
+      container.innerHTML = '';
+      if (actionsEl) actionsEl.style.display = 'none';
+      return;
+    }
+
+    if (actionsEl) actionsEl.style.display = 'block';
+
+    container.innerHTML = inventoryItems.map((item, idx) => {
+      const allPlaced = item.placed >= item.total;
+      const isActive  = modeCActive && modeCActive.type === item.type && modeCActive.code === item.code;
+      const countClass = allPlaced ? 'placed-count done' : 'placed-count';
+      const activeClass = isActive ? ' mode-c-active' : '';
+      return `<div class="plan-inventory-item${activeClass}" data-inv-idx="${idx}" title="Clic : placement guidé (Mode C)">
+        <span class="plan-item-label">${item.type} ${item.code}</span>
+        <div class="plan-item-right">
+          <button class="qty-btn qty-btn-sm" data-action="dec" data-inv-idx="${idx}" title="Diminuer">&#x2212;</button>
+          <span class="${countClass}">${item.placed}/${item.total}</span>
+          <button class="qty-btn qty-btn-sm" data-action="inc" data-inv-idx="${idx}" title="Augmenter">+</button>
+          <button class="qty-btn qty-btn-sm plan-item-remove" data-action="del" data-inv-idx="${idx}" title="Supprimer">&#xD7;</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Événements sur les boutons des items
+    container.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const i   = parseInt(btn.dataset.invIdx, 10);
+        const act = btn.dataset.action;
+        if (act === 'dec') { inventoryItems[i].total = Math.max(1, inventoryItems[i].total - 1); }
+        if (act === 'inc') { inventoryItems[i].total += 1; }
+        if (act === 'del') { inventoryItems.splice(i, 1); if (modeCActive) deactivateModeC(); }
+        updateInventoryPlacedCount();
+        renderPlanInventory();
+      });
+    });
+
+    // Clic sur l'item → Mode C
+    container.querySelectorAll('.plan-inventory-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const i = parseInt(el.dataset.invIdx, 10);
+        activateModeC(inventoryItems[i]);
+      });
+    });
+  }
+
+  function pulseInventoryFeedback(type, code) {
+    const container = document.getElementById('planInventoryList');
+    if (!container) return;
+    const items = container.querySelectorAll('.plan-inventory-item');
+    items.forEach(el => {
+      const idx = parseInt(el.dataset.invIdx, 10);
+      const item = inventoryItems[idx];
+      if (item && item.type === type && item.code === code) {
+        el.classList.add('inventory-pulse');
+        setTimeout(() => el.classList.remove('inventory-pulse'), 600);
+      }
+    });
+  }
+
+  function activateModeC(item) {
+    modeCActive = item;
+    // Sélectionner le type dans la toolbar
+    const fourreauSearch = document.getElementById('fourreauSearch');
+    if (fourreauSearch) {
+      const spec = FOURREAUX ? FOURREAUX.find(f => f.type === item.type && f.code === item.code) : null;
+      if (spec) {
+        fourreauSearch.value = `${spec.type} ${spec.code}`;
+        pendingFourreauType = { type: spec.type, code: spec.code, od: spec.od };
+      }
+    }
+    // Activer grille si pas déjà active
+    if (!gridEnabled) toggleGridVisibility();
+    // Désactiver gravité si active
+    if (gravityEnabled) toggleGravity();
+    renderPlanInventory();
+    showToast(`Mode guidé — ${item.type} ${item.code} (${item.placed}/${item.total} placés)`);
+  }
+
+  function deactivateModeC() {
+    modeCActive = null;
+    renderPlanInventory();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+
   function updateSelectedInfo() {
     // Gestion de la sélection multiple
     if (selectedMultiple.length > 0) {
@@ -4728,14 +5961,14 @@
     let frozenCount = 0;
     let unfrozenCount = 0;
 
-    // Fonction pour basculer le gel d'un élément
+    // X ne gèle que les câbles — les fourreaux sont gérés par le toggle gravité (G)
     const toggleFreeze = (sel) => {
-      let o = null;
-      if (sel.type === 'fourreau') o = fourreaux.find(x => x.id === sel.id);
-      else o = cables.find(x => x.id === sel.id);
+      if (sel.type === 'fourreau') return; // ignoré
+      const o = cables.find(x => x.id === sel.id);
       if (!o) return;
 
       o.frozen = !o.frozen;
+      o._frozenByUser = o.frozen;
       o.vx = 0;
       o.vy = 0;
 
@@ -4746,10 +5979,12 @@
     // Appliquer à la sélection multiple ou simple
     if (selectedMultiple.length > 0) {
       selectedMultiple.forEach(toggleFreeze);
-      showToast(`${frozenCount} figés, ${unfrozenCount} dégelés`);
+      if (frozenCount + unfrozenCount === 0) return;
+      showToast(`${frozenCount} câbles figés, ${unfrozenCount} dégelés`);
     } else if (selected) {
       toggleFreeze(selected);
-      showToast(frozenCount > 0 ? 'Objet figé' : 'Objet dégelé');
+      if (frozenCount + unfrozenCount === 0) return;
+      showToast(frozenCount > 0 ? 'Câble figé' : 'Câble dégelé');
     } else {
       return;
     }
@@ -4759,18 +5994,19 @@
   }
 
   function toggleFreezeAll() {
-    // Compter les éléments gelés vs non-gelés
-    const allElements = [...fourreaux, ...cables];
-    const frozenCount = allElements.filter(obj => obj.frozen).length;
-    const unfrozenCount = allElements.length - frozenCount;
+    // Ctrl+X gèle/dégèle uniquement les câbles — les fourreaux sont gérés par le toggle gravité (G)
+    const frozenCount = cables.filter(obj => obj.frozen).length;
+    const unfrozenCount = cables.length - frozenCount;
 
-    // Décider si on gèle tout ou on dégèle tout
+    if (cables.length === 0) return;
+
     const shouldFreeze = unfrozenCount >= frozenCount;
 
     let changedCount = 0;
-    allElements.forEach(obj => {
+    cables.forEach(obj => {
       if (obj.frozen !== shouldFreeze) {
         obj.frozen = shouldFreeze;
+        obj._frozenByUser = shouldFreeze;
         obj.vx = 0;
         obj.vy = 0;
         changedCount++;
@@ -4778,10 +6014,78 @@
     });
 
     if (changedCount > 0) {
-      showToast(shouldFreeze ? `${changedCount} éléments figés` : `${changedCount} éléments dégelés`);
+      showToast(shouldFreeze ? `${changedCount} câbles figés` : `${changedCount} câbles dégelés`);
       updateSelectedInfo();
       redraw();
     }
+  }
+
+  function updateGravityUI() {
+    const btn = document.getElementById('btn-gravity-toggle');
+    if (!btn) return;
+    btn.classList.toggle('btn-active', gravityEnabled);
+    btn.title = gravityEnabled ? 'Gravité ON (cliquer pour désactiver)' : 'Gravité OFF (cliquer pour activer)';
+  }
+
+  function updateOrthoUI() {
+    const btn = document.getElementById('btn-ortho-toggle');
+    if (!btn) return;
+    btn.classList.toggle('btn-active', orthoEnabled);
+    btn.title = orthoEnabled ? 'ORTHO ON (cliquer pour désactiver)' : 'ORTHO OFF (cliquer pour activer)';
+  }
+
+  function toggleOrtho() {
+    if (gravityEnabled) {
+      showToast('Mode ORTHO indisponible avec la gravité');
+      return;
+    }
+    orthoEnabled = !orthoEnabled;
+    updateOrthoUI();
+    showToast(orthoEnabled ? 'Mode ORTHO activé (F8)' : 'Mode ORTHO désactivé');
+  }
+
+  function updateOsnapUI() {
+    const btn = document.getElementById('btn-osnap-toggle');
+    if (!btn) return;
+    btn.classList.toggle('btn-active', osnapEnabled);
+    btn.title = osnapEnabled ? 'OSNAP ON (cliquer pour désactiver)' : 'OSNAP OFF (cliquer pour activer)';
+  }
+
+  function toggleOsnap() {
+    osnapEnabled = !osnapEnabled;
+    updateOsnapUI();
+    showToast(osnapEnabled ? 'Mode OSNAP activé (F3)' : 'Mode OSNAP désactivé');
+  }
+
+  function toggleGravity() {
+    gravityEnabled = !gravityEnabled;
+    // Les câbles ont toujours la gravité — on ne les touche pas ici
+    const allObjs = [...fourreaux];
+    if (!gravityEnabled) {
+      for (const o of allObjs) {
+        if (!o._frozenByUser) {
+          o.frozen = true;
+          o._frozenByMode = true;
+          o.vx = 0;
+          o.vy = 0;
+        }
+      }
+    } else {
+      for (const o of allObjs) {
+        if (o._frozenByMode) {
+          o._frozenByMode = false;
+          o.frozen = !!o._frozenByUser;
+        }
+      }
+    }
+    // ORTHO incompatible avec la gravité — le désactiver si on passe ON
+    if (gravityEnabled && orthoEnabled) {
+      orthoEnabled = false;
+      updateOrthoUI();
+    }
+    updateGravityUI();
+    showToast(gravityEnabled ? 'Gravité activée' : 'Gravité désactivée');
+    redraw();
   }
 
   function toggleShowInfo() {
@@ -4792,6 +6096,68 @@
     }
     redraw();
     showToast(showInfo ? 'Infos affichées' : 'Infos masquées');
+  }
+
+  function rotateBoxAndContents(direction) {
+    if (SHAPE !== 'rect') {
+      showToast('Rotation disponible uniquement pour une boîte rectangulaire', 'warning');
+      return;
+    }
+
+    if (!Number.isFinite(WORLD_W) || !Number.isFinite(WORLD_H) || WORLD_W <= 0 || WORLD_H <= 0) {
+      showToast('Dimensions invalides pour la rotation', 'error');
+      return;
+    }
+
+    saveStateToHistory();
+
+    const oldWidthPx = WORLD_W;
+    const oldHeightPx = WORLD_H;
+    const oldWidthMm = WORLD_W_MM;
+    const oldHeightMm = WORLD_H_MM;
+
+    const rotatePoint = direction === 'cw'
+      ? (x, y) => ({ x: oldHeightPx - y, y: x })
+      : (x, y) => ({ x: y, y: oldWidthPx - x });
+
+    const rotateObject = (obj) => {
+      const rotated = rotatePoint(obj.x, obj.y);
+      obj.x = rotated.x;
+      obj.y = rotated.y;
+      obj._px = rotated.x;
+      obj._py = rotated.y;
+      obj.vx = 0;
+      obj.vy = 0;
+      obj.dragging = false;
+    };
+
+    fourreaux.forEach(rotateObject);
+    cables.forEach(rotateObject);
+
+    WORLD_W_MM = oldHeightMm;
+    WORLD_H_MM = oldWidthMm;
+    boxWInput.value = WORLD_W_MM;
+    boxHInput.value = WORLD_H_MM;
+
+    gridLocked = false;
+    gridOrigin = null;
+    gridSpacing = null;
+    lastGridCells = [];
+    virtualSlots = [];
+    pendingSlotClick = null;
+    previewFourreau = null;
+    invalidateDimensionsCache();
+
+    syncDimensionState();
+    setCanvasSize();
+    updateStats();
+    updateInventory();
+    updateSelectedInfo();
+    checkForPossibleReduction();
+    redraw();
+
+    const label = direction === 'cw' ? 'horaire' : 'antihoraire';
+    showToast(`Boîte tournée de 90° ${label}`);
   }
 
   /**
@@ -4806,9 +6172,13 @@
       toggleGridBtn.classList.toggle('btn-active', gridEnabled);
     }
 
-    redraw();
-
     if (gridEnabled) {
+      lastGridCells = [];
+      gridLocked = false;
+      gridOrigin = null;
+      gridSpacing = null;
+      generateCellsFromCurrentLayout();
+
       if (adaptiveGridEnabled) {
         showToast(`Grille adaptative activée (gap ${FOURREAU_GAP}mm) - objets gelés auto`);
       } else {
@@ -4817,6 +6187,8 @@
     } else {
       showToast('Grille désactivée');
     }
+
+    redraw();
   }
 
   // Système de notifications intégrées
@@ -5013,11 +6385,14 @@
   }
 
   function startDrag(obj, sel) {
+    saveStateToHistory(); // Sauver avant déplacement pour Ctrl+Z
+
     // NE PAS effacer lastGridCells ici pour permettre le snap sur la grille existante
     // lastGridCells = []; // RETIRÉ : gardé pour le snap pendant drag
 
-    // Stocker l'objet en cours de drag pour le halo preview
+    // Stocker l'objet en cours de drag pour le halo preview et la contrainte ORTHO
     draggedObject = obj;
+    dragStartPos = { x: obj.x, y: obj.y };
 
     // NOUVEAU : Si on déplace un fourreau, recalculer les positions disponibles en excluant celui-ci
     if (gridEnabled && sel.type === 'fourreau') {
@@ -5057,11 +6432,63 @@
       if (sel.type === 'fourreau') {
         const f = fourreaux.find(o => o.id === sel.id);
         if (!f) return;
-        const dx = p.x - f.x;
-        const dy = p.y - f.y;
 
-        // Snap en temps réel si activé
-        const targetPos = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : p;
+        // OSNAP : lignes projetées H/V depuis les snap points des fourreaux voisins
+        const osnapAlignments = osnapEnabled ? getOsnapAlignments(p.x, p.y, f.id) : [];
+        const osnapH = osnapAlignments.find(a => a.axis === 'h');
+        const osnapV = osnapAlignments.find(a => a.axis === 'v');
+
+        let targetPos;
+        if (osnapAlignments.length > 0) {
+          // Position de base : libre ou snap-grille
+          const base = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : p;
+
+          // Appliquer les alignements OSNAP (H et/ou V)
+          let tx = osnapV ? osnapV.snapX : base.x;
+          let ty = osnapH ? osnapH.snapY : base.y;
+
+          // ORTHO combiné : verrouille l'axe dominant depuis dragStartPos
+          if (orthoEnabled && dragStartPos) {
+            const adx = Math.abs(tx - dragStartPos.x);
+            const ady = Math.abs(ty - dragStartPos.y);
+            if (adx >= ady) ty = dragStartPos.y;
+            else tx = dragStartPos.x;
+          }
+
+          targetPos = { x: tx, y: ty };
+          snapPreviewPoint = { x: tx, y: ty, timestamp: Date.now(), osnapType: (osnapH || osnapV).osnapType };
+          if (window.konvaFourreaux) window.konvaFourreaux.showOsnapGuides(osnapAlignments, tx, ty);
+        } else {
+          // Sans OSNAP : snap-grille puis ORTHO
+          targetPos = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : p;
+
+          if (orthoEnabled && dragStartPos) {
+            const adx = Math.abs(targetPos.x - dragStartPos.x);
+            const ady = Math.abs(targetPos.y - dragStartPos.y);
+            targetPos = adx >= ady
+              ? { x: targetPos.x, y: dragStartPos.y }
+              : { x: dragStartPos.x, y: targetPos.y };
+          }
+
+          if (window.konvaFourreaux) window.konvaFourreaux.showGuides(targetPos.x, targetPos.y, orthoEnabled ? 'ortho' : 'normal');
+        }
+
+        // dx/dy calculés APRÈS ORTHO/OSNAP pour que les enfants suivent le parent contraint
+        const dx = targetPos.x - f.x;
+        const dy = targetPos.y - f.y;
+
+        const validation = validatePlacement({
+          x: targetPos.x,
+          y: targetPos.y,
+          r: f.od * MM_TO_PX / 2,
+          id: f.id
+        }, {
+          ignoreId: f.id,
+          enforceGap: true,
+          requireSafetyMargin: gridEnabled
+        });
+        if (!validation.valid) return;
+
         f.x = targetPos.x; f.y = targetPos.y; f._px = targetPos.x; f._py = targetPos.y;
 
         // Déplacer les enfants avec le TPC (seulement si pas gelés)
@@ -5077,7 +6504,32 @@
         if (!c) return;
 
         // Snap en temps réel si activé
-        const targetPos = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : p;
+        let targetPos = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : p;
+
+        // Contrainte ORTHO (après snap)
+        if (orthoEnabled && dragStartPos) {
+          const adx = Math.abs(targetPos.x - dragStartPos.x);
+          const ady = Math.abs(targetPos.y - dragStartPos.y);
+          targetPos = adx >= ady
+            ? { x: targetPos.x, y: dragStartPos.y }
+            : { x: dragStartPos.x, y: targetPos.y };
+        }
+
+        const parentFourreau = c.parent ? fourreaux.find(f => f.id === c.parent) : null;
+        const validation = validatePlacement({
+          x: targetPos.x,
+          y: targetPos.y,
+          r: c.od * MM_TO_PX / 2,
+          id: c.id
+        }, {
+          ignoreId: c.id,
+          enforceGap: !parentFourreau,
+          requireSafetyMargin: gridEnabled,
+          checkFourreaux: !parentFourreau,
+          containerFourreau: parentFourreau
+        });
+        if (!validation.valid) return;
+
         c.x = targetPos.x; c.y = targetPos.y; c._px = targetPos.x; c._py = targetPos.y;
       }
       // Le redraw est géré par l'animation continue
@@ -5101,9 +6553,13 @@
         }
       }
 
-      // Nettoyer les variables de preview
+      // Cacher les guide lines Konva
+      if (window.konvaFourreaux) window.konvaFourreaux.hideGuides();
+
+      // Nettoyer les variables de preview et ORTHO
       draggedObject = null;
       snapPreviewPoint = null;
+      dragStartPos = null;
 
       // Arrêter l'animation
       if (animationFrameId) {
@@ -5341,8 +6797,8 @@
     if (fitContents && typeof window.fitContentsToBox === 'function') {
       window.fitContentsToBox(WORLD_W_MM, WORLD_H_MM);
     }
-    pruneOutside();
     setCanvasSize();
+    pruneOutside();
     updateStats();
     updateInventory();
     updateSelectedInfo();
@@ -5357,25 +6813,74 @@
   }
 
   window.applyDimensions = applyDimensions;
+  window.redraw = redraw;
+  window.addFourreauAt = addFourreauAt;
+
+  function clampInsideRect(o, r) {
+    o.x = Math.max(r, Math.min(WORLD_W - r, o.x));
+    o.y = Math.max(r, Math.min(WORLD_H - r, o.y));
+  }
+
+  function clampInsideCircle(o, r) {
+    const { x: cx, y: cy } = getCanvasCenter();
+    const dist = Math.hypot(o.x - cx, o.y - cy);
+    if (dist + r > WORLD_R && dist > 0) {
+      const scale = (WORLD_R - r) / dist;
+      o.x = cx + (o.x - cx) * Math.max(0, scale);
+      o.y = cy + (o.y - cy) * Math.max(0, scale);
+    }
+  }
+
+  function clampCableInsideFourreau(c, f) {
+    const r = c.od * MM_TO_PX / 2;
+    const limit = Math.max(0, f.idm * MM_TO_PX / 2 - r);
+    const dx = c.x - f.x;
+    const dy = c.y - f.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > limit) {
+      const nx = dx / (dist || 1);
+      const ny = dy / (dist || 1);
+      c.x = f.x + nx * limit;
+      c.y = f.y + ny * limit;
+      c._px = c.x;
+      c._py = c.y;
+      c.vx = 0;
+      c.vy = 0;
+    }
+  }
 
   function pruneOutside() {
-    if (arrangeInProgress) return; // Ne pas supprimer durant l'arrangement en grille
+    if (arrangeInProgress) return; // Ne pas toucher durant l'arrangement en grille
 
-    let fourreauxRemoved = false;
-    for (let i = fourreaux.length - 1; i >= 0; i--) {
-      const f = fourreaux[i], r = f.od * MM_TO_PX / 2;
+    // Clamper les fourreaux hors-boîte à l'intérieur au lieu de les supprimer
+    for (const f of fourreaux) {
+      const r = f.od * MM_TO_PX / 2;
       if (!isInsideBox(f.x, f.y, r)) {
-        for (const cid of f.children) {
-          const j = cables.findIndex(k => k.id === cid);
-          if (j >= 0) cables.splice(j, 1);
+        const prevX = f.x, prevY = f.y;
+        if (SHAPE === 'rect' || SHAPE === 'chemin_de_cable') {
+          clampInsideRect(f, r);
+        } else {
+          // Cercle : ramener vers le centre si hors-rayon
+          clampInsideCircle(f, r);
         }
-        fourreaux.splice(i, 1);
-        fourreauxRemoved = true;
+        // Déplacer les câbles internes avec le fourreau pour éviter leur suppression
+        const dx = f.x - prevX, dy = f.y - prevY;
+        if (dx || dy) {
+          for (const c of cables) {
+            if (c.parent === f.id) {
+              c.x += dx;
+              c.y += dy;
+              c._px = c.x;
+              c._py = c.y;
+            }
+          }
+        }
+        f._px = f.x;
+        f._py = f.y;
+        f.vx = 0;
+        f.vy = 0;
       }
-    }
-    // Déverrouiller la grille si des fourreaux ont été supprimés
-    if (fourreauxRemoved) {
-      gridLocked = false;
     }
     for (let i = cables.length - 1; i >= 0; i--) {
       const c = cables[i], r = c.od * MM_TO_PX / 2;
@@ -5385,10 +6890,17 @@
           cables.splice(i, 1);
           continue;
         }
-        const ri = f.idm * MM_TO_PX / 2;
-        if (Math.hypot(c.x - f.x, c.y - f.y) > ri - r) cables.splice(i, 1);
+        clampCableInsideFourreau(c, f);
       } else if (!isInsideBox(c.x, c.y, r)) {
-        cables.splice(i, 1);
+        if (SHAPE === 'rect' || SHAPE === 'chemin_de_cable') {
+          clampInsideRect(c, r);
+        } else {
+          clampInsideCircle(c, r);
+        }
+        c._px = c.x;
+        c._py = c.y;
+        c.vx = 0;
+        c.vy = 0;
       }
     }
   }
@@ -5464,7 +6976,8 @@
     const allObjects = [...fourreaux, ...cables];
     for (const o of allObjects) {
       o._px = o.x; o._py = o.y;
-      if (!o.dragging && !o.frozen) {
+      // Les câbles ('fam' in o) ont toujours la gravité ; les fourreaux suivent gravityEnabled
+      if (!o.dragging && !o.frozen && (gravityEnabled || 'fam' in o)) {
         o.vy += GRAVITY;
         o.vx *= AIR_DRAG;
         o.vy *= AIR_DRAG;
@@ -5637,104 +7150,6 @@
 
   let selectedImageBase64 = null;
 
-  function setupImageDropZone() {
-    const dropZone = document.getElementById('dynamicImageDropZone');
-    const fileInput = document.getElementById('dynamicImageInput');
-    const placeholder = document.getElementById('dynamicImagePlaceholder');
-
-    // Clic pour ouvrir le sélecteur de fichier (uniquement sur le placeholder)
-    if (placeholder) {
-      placeholder.addEventListener('click', (e) => {
-        e.stopPropagation();
-        fileInput.click();
-      });
-    }
-
-    // Empêcher la dropZone de capturer les événements qui ne concernent pas le drag&drop
-    dropZone.addEventListener('click', (e) => {
-      // Ne rien faire si le clic est sur le placeholder ou sur l'input
-      if (e.target === dropZone || e.target === placeholder || placeholder.contains(e.target)) {
-        return;
-      }
-      e.stopPropagation();
-    });
-
-    // Glisser-déposer
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.add('dragover');
-    });
-
-    dropZone.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.remove('dragover');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.remove('dragover');
-
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        handleImageFile(files[0]);
-      }
-    });
-
-    // Sélection de fichier
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length > 0) {
-        handleImageFile(e.target.files[0]);
-      }
-    });
-  }
-
-  function handleImageFile(file) {
-    // Vérifier le type de fichier
-    if (!file.type.startsWith('image/')) {
-      showToast('Veuillez sélectionner un fichier image');
-      return;
-    }
-
-    // Vérifier la taille (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Le fichier est trop volumineux (max 5MB)');
-      return;
-    }
-
-    // Lire le fichier
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      selectedImageBase64 = e.target.result;
-      showImagePreview(e.target.result);
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function showImagePreview(imageSrc) {
-    const placeholder = document.getElementById('dynamicImagePlaceholder');
-    const preview = document.getElementById('dynamicImagePreview');
-    const previewImg = document.getElementById('dynamicImagePreviewImg');
-
-    placeholder.style.display = 'none';
-    preview.style.display = 'block';
-    previewImg.src = imageSrc;
-  }
-
-  window.removeDynamicImage = function () {
-    selectedImageBase64 = null;
-    const placeholder = document.getElementById('dynamicImagePlaceholder');
-    const preview = document.getElementById('dynamicImagePreview');
-
-    placeholder.style.display = 'block';
-    preview.style.display = 'none';
-
-    // Reset input
-    document.getElementById('dynamicImageInput').value = '';
-  }
-
   function closePdfExportModal() {
     const modal = document.getElementById('pdfExportModal');
     if (modal) {
@@ -5742,41 +7157,6 @@
     }
   }
 
-  // Nouvelles fonctions pour la modal dynamique
-  window.closeDynamicPdfModal = function () {
-    const modal = document.getElementById('tontonkadPdfExportModal');
-    if (modal) {
-      modal.remove();
-    }
-    // Reset de l'image sélectionnée pour éviter le cache
-    selectedImageBase64 = null;
-  }
-
-  window.generateDynamicPDF = async function () {
-    try {
-      // Récupérer les valeurs des champs dynamiques
-      const formData = {
-        projectName: document.getElementById('dynamicPdfProjectName').value || 'Projet TontonKAD',
-        viewName: document.getElementById('dynamicPdfViewName').value || 'Vue principale',
-        author: document.getElementById('dynamicPdfAuthor').value || 'TontonKAD',
-        client: document.getElementById('dynamicPdfClient').value || '',
-        description: document.getElementById('dynamicPdfDescription').value || '',
-        includeStats: document.getElementById('dynamicPdfIncludeStats').checked
-      };
-
-      // Afficher un indicateur de chargement
-      showToast('Génération du PDF en cours...');
-
-      // Générer le PDF avec les données du formulaire dynamique AVANT de fermer la modal
-      await exportToPDFWithData(formData);
-
-      // Fermer la modal APRÈS la génération du PDF
-      closeDynamicPdfModal();
-    } catch (error) {
-      console.error('Erreur lors de la génération PDF:', error);
-      showToast('Erreur: ' + error.message);
-    }
-  }
 
   function calculateFourreauOccupancy(fourreau) {
     // Calculer l'aire intérieure du fourreau (basée sur le diamètre intérieur)
@@ -5789,6 +7169,29 @@
     const cablesArea = cablesInFourreau.reduce((sum, c) => sum + areaCircle(c.od), 0);
 
     return (cablesArea / fourreauInnerArea) * 100;
+  }
+
+  function getPdfObjectLabel(obj, fallback) {
+    const label = typeof obj?.label === 'string' ? obj.label.trim() : '';
+    if (label) return label;
+
+    const customLabel = typeof obj?.customLabel === 'string' ? obj.customLabel.trim() : '';
+    if (customLabel) return customLabel;
+
+    return fallback;
+  }
+
+  function getPdfFourreauName(fourreau, numero) {
+    return getPdfObjectLabel(fourreau, `F${numero}`);
+  }
+
+  function getPdfCableName(cable, index) {
+    return getPdfObjectLabel(cable, `L${index + 1}`);
+  }
+
+  function truncatePdfText(text, maxChars) {
+    const value = String(text ?? '');
+    return value.length > maxChars ? value.substring(0, Math.max(0, maxChars - 3)) + '...' : value;
   }
 
   function generatePdfStats() {
@@ -5819,6 +7222,7 @@
       code: f.code,
       od: f.od.toFixed(1),
       idm: f.idm.toFixed(1),
+      nom: getPdfFourreauName(f, index + 1),
       nbCables: cables.filter(c => c.parent === f.id).length,
       occupation: calculateFourreauOccupancy(f).toFixed(1)
     }));
@@ -6386,8 +7790,8 @@
             // Nom du fourreau (label personnalisé ou auto-généré)
             pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
             const fourreauObj = fourreaux.find(fo => fo.id === f.id);
-            const nomFourreau = (fourreauObj && fourreauObj.customLabel) || `F${f.numero}`;
-            pdf.text(nomFourreau, currentX + 2, currentY + 5);
+            const nomFourreau = f.nom || getPdfFourreauName(fourreauObj, f.numero);
+            pdf.text(truncatePdfText(nomFourreau, 14), currentX + 2, currentY + 5);
             currentX += colWidths.nom;
 
             pdf.rect(currentX, currentY, colWidths.type, rowHeight);
@@ -6541,16 +7945,8 @@
 
             // Nom du câble (depuis la couleur, ou label personnalisé, ou numéro)
             pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
-            let nomCable = `L${idx + 1}`; // Par défaut
-            if (c.customColor) {
-              const phaseFromColor = getPhaseFromColor(c.customColor);
-              if (phaseFromColor) {
-                nomCable = phaseFromColor;
-              }
-            } else if (c.customLabel) {
-              nomCable = c.customLabel;
-            }
-            pdf.text(nomCable, currentX + 2, currentY + 4);
+            const nomCable = getPdfCableName(c, idx);
+            pdf.text(truncatePdfText(nomCable, 14), currentX + 2, currentY + 4);
             currentX += colWidths.nom;
 
             pdf.rect(currentX, currentY, colWidths.famille, rowHeight);
@@ -6568,10 +7964,13 @@
             if (c.parent) {
               const parentIdx = fourreaux.findIndex(f => f.id === c.parent);
               if (parentIdx !== -1) {
-                locText = `Fourreau #${parentIdx + 1}`;
+                const parentFourreau = fourreaux[parentIdx];
+                const parentAutoName = `F${parentIdx + 1}`;
+                const parentName = getPdfFourreauName(parentFourreau, parentIdx + 1);
+                locText = parentName === parentAutoName ? `Fourreau #${parentIdx + 1}` : `#${parentIdx + 1} ${parentName}`;
               }
             }
-            pdf.text(locText, currentX + 2, currentY + 4);
+            pdf.text(truncatePdfText(locText, 32), currentX + 2, currentY + 4);
             currentX += colWidths.localisation;
 
             pdf.rect(currentX, currentY, colWidths.phase, rowHeight);
@@ -6703,8 +8102,8 @@
 
             // Nom du fourreau
             pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
-            const nomFourreau = (f.customLabel) || `F${idx + 1}`;
-            pdf.text(nomFourreau, currentX + 2, currentY + 4);
+            const nomFourreau = getPdfFourreauName(f, idx + 1);
+            pdf.text(truncatePdfText(nomFourreau, 16), currentX + 2, currentY + 4);
             currentX += colWidths.nom;
 
             pdf.rect(currentX, currentY, colWidths.type, rowHeight);
@@ -6728,14 +8127,9 @@
             if (cablesInFourreau.length > 0) {
               const cableNames = cablesInFourreau.map(c => {
                 const cIdx = cables.findIndex(cable => cable.id === c.id);
-                // Déterminer le nom depuis la couleur
-                if (c.customColor) {
-                  const phaseFromColor = getPhaseFromColor(c.customColor);
-                  if (phaseFromColor) return phaseFromColor;
-                }
-                return c.customLabel || `L${cIdx + 1}`;
+                return getPdfCableName(c, cIdx);
               }).join(', ');
-              const namesText = cableNames.length > 20 ? cableNames.substring(0, 17) + '...' : cableNames;
+              const namesText = truncatePdfText(cableNames, 20);
               pdf.text(namesText, currentX + 2, currentY + 4);
             } else {
               pdf.text('Aucun', currentX + 2, currentY + 4);
@@ -6861,6 +8255,18 @@
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         e.preventDefault();
         toggleGridVisibility();
+      } else if (!e.shiftKey && !e.ctrlKey && !e.altKey && (e.key === 'G' || e.key === 'g')) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        toggleGravity();
+      } else if (e.key === 'F8') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        toggleOrtho();
+      } else if (e.key === 'F3') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        toggleOsnap();
       }
     });
     searchCable.addEventListener('input', updateInventory);
@@ -6871,6 +8277,8 @@
     const toolInfo = document.getElementById('toolInfo');
     const gridArrange = document.getElementById('gridArrange');
     const toggleGridBtn = document.getElementById('toggleGridBtn');
+    const rotateBoxCcw = document.getElementById('rotateBoxCcw');
+    const rotateBoxCw = document.getElementById('rotateBoxCw');
     const gapSlider = document.getElementById('gapSlider');
     const gapValue = document.getElementById('gapValue');
 
@@ -6878,34 +8286,108 @@
     if (toolInfo) toolInfo.addEventListener('click', toggleShowInfo);
     if (gridArrange) gridArrange.addEventListener('click', arrangeConduitGrid);
     if (toggleGridBtn) toggleGridBtn.addEventListener('click', toggleGridVisibility);
+    if (rotateBoxCcw) rotateBoxCcw.addEventListener('click', () => rotateBoxAndContents('ccw'));
+    if (rotateBoxCw) rotateBoxCw.addEventListener('click', () => rotateBoxAndContents('cw'));
     if (freezeBtn) freezeBtn.addEventListener('click', toggleFreezeSelected);
+    const gravityToggleBtn = document.getElementById('btn-gravity-toggle');
+    if (gravityToggleBtn) gravityToggleBtn.addEventListener('click', toggleGravity);
+    updateGravityUI();
+    const orthoToggleBtn = document.getElementById('btn-ortho-toggle');
+    if (orthoToggleBtn) orthoToggleBtn.addEventListener('click', toggleOrtho);
+    updateOrthoUI();
+    const osnapToggleBtn = document.getElementById('btn-osnap-toggle');
+    if (osnapToggleBtn) osnapToggleBtn.addEventListener('click', toggleOsnap);
+    updateOsnapUI();
 
-    // Event listener pour le slider de gap
+    // Relance le placement avec autorisation de redimensionnement si les params changent
+    function reArrangeAfterParamChange(label) {
+      if (fourreaux.length === 0) return;
+      const shape = shapeSel?.value;
+      if (shape === 'chemin_de_cable') return;
+      const lockWidth = document.getElementById('lockWidth')?.checked;
+      const lockHeight = document.getElementById('lockHeight')?.checked;
+      if (lockWidth && lockHeight) return;
+      showToast(`${label} — recalcul du placement…`, 'default', 1500);
+      arrangeConduitGrid({ allowResize: true, reduceAfterFit: false, source: 'param-change' });
+    }
+
+    // Event listener pour le slider de gap (entraxe entre fourreaux)
     if (gapSlider && gapValue) {
       gapSlider.addEventListener('input', (e) => {
         const newGap = parseInt(e.target.value, 10);
         FOURREAU_GAP = newGap;
         gapValue.textContent = newGap;
-
-        // Déverrouiller la grille pour recalcul avec le nouveau gap
+        if (window.PLACEMENT_CONFIG) window.PLACEMENT_CONFIG.entraxe = newGap;
         gridLocked = false;
         gridOrigin = null;
         gridSpacing = null;
-        lastGridCells = []; // Effacer les cellules
-
-        // Redessiner pour mettre à jour la grille visuelle si activée
-        if (gridEnabled) {
-          redraw();
-        }
+        lastGridCells = [];
+        invalidateDimensionsCache();
+        checkForPossibleReduction();
+        if (gridEnabled) redraw();
       });
 
-      // Toast uniquement au relâchement du slider
       gapSlider.addEventListener('change', (e) => {
         const newGap = parseInt(e.target.value, 10);
-        showToast(`Écart ajusté à ${newGap}mm`, 'default', 1500);
+        reArrangeAfterParamChange(`Écart ajusté à ${newGap}mm`);
       });
     }
+
+    // Event listeners pour le lit de pose
+    const litDePoseEnabled = document.getElementById('litDePoseEnabled');
+    const litDePoseSlider = document.getElementById('litDePoseSlider');
+    const litDePoseDisplay = document.getElementById('litDePoseDisplay');
+
+    function applyLitDePose() {
+      const enabled = litDePoseEnabled?.checked ?? true;
+      const value = enabled ? (parseInt(litDePoseSlider?.value, 10) || 0) : 0;
+      if (window.PLACEMENT_CONFIG) window.PLACEMENT_CONFIG.litDePose = value;
+      if (litDePoseDisplay) litDePoseDisplay.textContent = value;
+      if (litDePoseSlider) litDePoseSlider.disabled = !enabled;
+      gridLocked = false;
+      gridOrigin = null;
+      gridSpacing = null;
+      lastGridCells = [];
+      invalidateDimensionsCache();
+      checkForPossibleReduction();
+      if (gridEnabled) redraw();
+    }
+
+    if (litDePoseEnabled) {
+      litDePoseEnabled.addEventListener('change', () => {
+        applyLitDePose();
+        const enabled = litDePoseEnabled.checked;
+        const value = enabled ? (parseInt(litDePoseSlider?.value, 10) || 0) : 0;
+        reArrangeAfterParamChange(`Lit de pose ${enabled ? value + 'mm' : 'désactivé'}`);
+      });
+    }
+    if (litDePoseSlider) {
+      litDePoseSlider.addEventListener('input', applyLitDePose);
+      litDePoseSlider.addEventListener('change', (e) => {
+        if (litDePoseEnabled?.checked) {
+          reArrangeAfterParamChange(`Lit de pose : ${e.target.value}mm`);
+        }
+      });
+    }
+
+    const placementModeSelect = document.getElementById('placementModeSelect');
+    if (placementModeSelect) {
+      placementModeSelect.addEventListener('change', () => {
+        invalidateDimensionsCache();
+        gridLocked = false;
+        lastGridCells = [];
+        hideLayoutPreviewPanel();
+        checkForPossibleReduction();
+        showToast(`Placement : ${placementModeSelect.options[placementModeSelect.selectedIndex].text}`, 'default', 1500);
+      });
+    }
+
+    const closePreviewBtn = document.getElementById('closeLayoutPreview');
+    if (closePreviewBtn) {
+      closePreviewBtn.addEventListener('click', hideLayoutPreviewPanel);
+    }
     canvas.addEventListener('mousedown', e => {
+      hideLayoutPreviewPanel();
       const p = canvasCoords(e);
       if (e.button === 0) { // Clic gauche : sélection + glisser-déposer
         // Vérifier si on clique sur une poignée de resize en priorité
@@ -7283,6 +8765,32 @@
 
     // Event listener pour le bouton de réduction
     if (reduceToMinimumBtn) reduceToMinimumBtn.addEventListener('click', reduceToMinimum);
+
+    // Hub inventaire — boutons qty toolbar
+    const qtyDecBtn = document.getElementById('qtyDecrement');
+    const qtyIncBtn = document.getElementById('qtyIncrement');
+    const qtyInput  = document.getElementById('fourreauQty');
+    if (qtyDecBtn && qtyInput) qtyDecBtn.addEventListener('click', () => {
+      qtyInput.value = Math.max(1, parseInt(qtyInput.value || '1', 10) - 1);
+    });
+    if (qtyIncBtn && qtyInput) qtyIncBtn.addEventListener('click', () => {
+      qtyInput.value = Math.min(99, parseInt(qtyInput.value || '1', 10) + 1);
+    });
+
+    // Bouton [+ Ajouter] → plan inventory
+    const addToInvBtn = document.getElementById('addToInventoryBtn');
+    if (addToInvBtn) addToInvBtn.addEventListener('click', () => {
+      const qty = parseInt(document.getElementById('fourreauQty')?.value || '1', 10);
+      if (pendingFourreauType) {
+        addToInventory(pendingFourreauType.type, pendingFourreauType.code, qty);
+      } else {
+        showToast('Sélectionnez un type de fourreau d\'abord');
+      }
+    });
+
+    // Bouton ⚡ PLACEMENT AUTO (Mode B)
+    const autoPlaceBtn = document.getElementById('autoPlaceBtn');
+    if (autoPlaceBtn) autoPlaceBtn.addEventListener('click', () => autoPlaceFromInventory());
 
     // Fonction utilitaire pour gérer les changements de couleur des câbles
     function handleCableColorChange(obj, selectedPhase, colorInputValue) {
@@ -7887,13 +9395,20 @@
 
     addEventListener('keydown', e => {
       const t = e.target; const tag = t && t.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
       const k = (e.key || '').toLowerCase();
+      if (k === 'g' && e.ctrlKey) {
+        e.preventDefault();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+        arrangeConduitGrid();
+        return;
+      }
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
       if (k === 'a') { setMode('place'); return; }
       if (k === 's') { setMode('select'); return; }
       if (e.key === 'Delete') { deleteSelected(); return; }
       if (k === 'x' && e.ctrlKey) { e.preventDefault(); toggleFreezeAll(); return; }
-      if (k === 'g' && e.ctrlKey) { e.preventDefault(); arrangeConduitGrid(); return; }
       if (k === 'c' && e.ctrlKey) { e.preventDefault(); copySelected(); return; }
       if (k === 'v' && e.ctrlKey) {
         e.preventDefault();
