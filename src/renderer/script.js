@@ -6362,35 +6362,44 @@
     showToast(`Déplacement de ${targets.length} fourreau(x) : cliquez le point de base (Échap pour annuler)`, 'default', 2500);
   }
 
-  // Snappe un point : grille puis osnap (H/V). ignoreIds = Set d'ids exclus de l'osnap.
-  // Retourne { x, y, osnapType } (osnapType = 'center'|'quadrant'|null) pour le marqueur visuel.
-  function snapMovePoint(p, ignoreIds) {
-    let x = p.x, y = p.y, osnapType = null;
-    if (gridEnabled && snapToGrid) { const g = snapPointToGrid(p.x, p.y); x = g.x; y = g.y; }
-    if (osnapEnabled) {
-      const al = getOsnapAlignments(p.x, p.y, ignoreIds);
-      const v = al.find(a => a.axis === 'v');
-      const h = al.find(a => a.axis === 'h');
-      if (v) { x = v.snapX; osnapType = v.osnapType; }
-      if (h) { y = h.snapY; osnapType = h.osnapType || osnapType; }
+  // Osnap de POINT : centre/quadrant réel le plus proche (distance 2D), dans la tolérance.
+  // Toujours actif en mode D (indépendant de F3) pour attraper un point de référence concret.
+  // ignoreIds = Set d'ids exclus (fourreaux en cours de déplacement).
+  function nearestOsnapPoint(p, ignoreIds) {
+    const skip = ignoreIds instanceof Set ? (id) => ignoreIds.has(id) : () => false;
+    const TOL = 22; // px
+    let best = null, bestD = TOL;
+    for (const f of fourreaux) {
+      if (skip(f.id)) continue;
+      const r = f.od * MM_TO_PX / 2;
+      const pts = [
+        { x: f.x,     y: f.y,     osnapType: 'center'   },
+        { x: f.x,     y: f.y - r, osnapType: 'quadrant' },
+        { x: f.x,     y: f.y + r, osnapType: 'quadrant' },
+        { x: f.x + r, y: f.y,     osnapType: 'quadrant' },
+        { x: f.x - r, y: f.y,     osnapType: 'quadrant' },
+      ];
+      for (const pt of pts) {
+        const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+        if (d < bestD) { bestD = d; best = pt; }
+      }
     }
-    return { x, y, osnapType };
+    return best;
   }
 
-  // Affiche le marqueur osnap sous le curseur (et guides Konva si dispo)
-  function showMoveSnap(s, ignoreIds, refX, refY) {
-    snapPreviewPoint = { x: s.x, y: s.y, timestamp: Date.now(), osnapType: s.osnapType };
-    if (window.konvaFourreaux && osnapEnabled) {
-      const al = getOsnapAlignments(refX, refY, ignoreIds);
-      if (al.length > 0) window.konvaFourreaux.showOsnapGuides(al, s.x, s.y);
-      else window.konvaFourreaux.hideGuides();
-    }
+  // Snappe un point : osnap de point (prioritaire) → grille → brut.
+  // Retourne { x, y, osnapType } (osnapType = 'center'|'quadrant'|null).
+  function snapMovePoint(p, ignoreIds) {
+    const o = nearestOsnapPoint(p, ignoreIds);
+    if (o) return { x: o.x, y: o.y, osnapType: o.osnapType };
+    if (gridEnabled && snapToGrid) { const g = snapPointToGrid(p.x, p.y); return { x: g.x, y: g.y, osnapType: null }; }
+    return { x: p.x, y: p.y, osnapType: null };
   }
 
   function onMoveHover(p) {
     if (moveMode === 'armed') {
       const s = snapMovePoint(p, null);
-      showMoveSnap(s, null, p.x, p.y);
+      snapPreviewPoint = { x: s.x, y: s.y, timestamp: Date.now(), osnapType: s.osnapType };
       redraw();
     } else if (moveMode === 'moving') {
       updateMovePreview(p);
@@ -6429,7 +6438,7 @@
         ch.c.x = ch.x0 + dx; ch.c.y = ch.y0 + dy; ch.c._px = ch.c.x; ch.c._py = ch.c.y;
       }
     }
-    showMoveSnap({ x: tx, y: ty, osnapType: s.osnapType }, ignore, p.x, p.y);
+    snapPreviewPoint = { x: tx, y: ty, timestamp: Date.now(), osnapType: s.osnapType };
     redraw();
   }
 
