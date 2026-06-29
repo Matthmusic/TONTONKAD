@@ -6421,16 +6421,55 @@
     redraw();
   }
 
+  // Liste les points de snap (centre + 4 quadrants) d'un fourreau à une position centre donnée.
+  function fourreauSnapPoints(cx, cy, od) {
+    const r = od * MM_TO_PX / 2;
+    return [{ x: cx, y: cy }, { x: cx, y: cy - r }, { x: cx, y: cy + r }, { x: cx + r, y: cy }, { x: cx - r, y: cy }];
+  }
+
+  // Ajuste le delta du groupe pour ACCROCHER ses fourreaux aux fourreaux FIXES :
+  // aligne (X et Y indépendamment) un point de snap mobile sur un point de snap fixe.
+  // Donne alignement de colonne/rangée et tangence (bord à bord) près des quadrants.
+  function snapGroupDelta(rawDx, rawDy, ignore) {
+    const TOL = 14; // px
+    const statics = [];
+    for (const f of fourreaux) {
+      if (ignore.has(f.id)) continue;
+      statics.push(...fourreauSnapPoints(f.x, f.y, f.od));
+    }
+    if (statics.length === 0) return { dx: rawDx, dy: rawDy, snapped: false };
+
+    let adjX = 0, adjY = 0, bestDX = TOL, bestDY = TOL;
+    for (const t of moveTargets) {
+      const mpts = fourreauSnapPoints(t.x0 + rawDx, t.y0 + rawDy, t.f.od);
+      for (const mp of mpts) {
+        for (const sp of statics) {
+          const ddx = sp.x - mp.x, ddy = sp.y - mp.y;
+          if (Math.abs(ddx) < bestDX) { bestDX = Math.abs(ddx); adjX = ddx; }
+          if (Math.abs(ddy) < bestDY) { bestDY = Math.abs(ddy); adjY = ddy; }
+        }
+      }
+    }
+    const snapped = bestDX < TOL || bestDY < TOL;
+    return { dx: rawDx + (bestDX < TOL ? adjX : 0), dy: rawDy + (bestDY < TOL ? adjY : 0), snapped };
+  }
+
   function updateMovePreview(p) {
     if (moveMode !== 'moving') return;
     const ignore = new Set(moveTargets.map(t => t.f.id));
+
+    // Point cible de base : snap-grille puis osnap de point sur les fourreaux fixes
     const s = snapMovePoint(p, ignore);
-    let tx = s.x, ty = s.y;
+    let dx = s.x - moveBase.x, dy = s.y - moveBase.y;
+
+    // Accrochage du GROUPE aux fourreaux fixes (alignement / tangence)
+    const g = snapGroupDelta(dx, dy, ignore);
+    dx = g.dx; dy = g.dy;
+
     if (orthoEnabled && moveBase) { // ORTHO (F8) : verrouille l'axe dominant
-      const adx = Math.abs(tx - moveBase.x), ady = Math.abs(ty - moveBase.y);
-      if (adx >= ady) ty = moveBase.y; else tx = moveBase.x;
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
     }
-    const dx = tx - moveBase.x, dy = ty - moveBase.y;
+
     for (const t of moveTargets) {
       t.f.x = t.x0 + dx; t.f.y = t.y0 + dy; t.f._px = t.f.x; t.f._py = t.f.y;
       t.f.vx = 0; t.f.vy = 0;
@@ -6438,7 +6477,8 @@
         ch.c.x = ch.x0 + dx; ch.c.y = ch.y0 + dy; ch.c._px = ch.c.x; ch.c._py = ch.c.y;
       }
     }
-    snapPreviewPoint = { x: tx, y: ty, timestamp: Date.now(), osnapType: s.osnapType };
+    snapPreviewPoint = { x: moveBase.x + dx, y: moveBase.y + dy, timestamp: Date.now(),
+                         osnapType: (g.snapped || s.osnapType) ? 'center' : null };
     redraw();
   }
 

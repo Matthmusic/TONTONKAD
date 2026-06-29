@@ -170,8 +170,9 @@ function createWindow() {
   // Charger l'application
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
-  // Afficher la fenêtre une fois prête
+  // Afficher la fenêtre une fois prête (maximisée → "plein écran" au démarrage)
   mainWindow.once('ready-to-show', () => {
+    mainWindow.maximize();
     mainWindow.show();
   });
 
