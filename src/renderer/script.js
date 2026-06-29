@@ -2558,14 +2558,13 @@
         if (v && v.isCompact) {
           saveStateToHistory();
           resizeTrayToCurrentFourreaux();
-          document.querySelectorAll('.layout-preview-card').forEach((el, ci) => {
-            el.classList.toggle('active', ci === 0);
-          });
         } else if (v && v.isNappeLayout) {
           applyNappeVariant(idx);
         } else {
           applyLayoutVariant(idx);
         }
+        // Fermer le panel une fois le choix appliqué (il rouvre au prochain placement)
+        hideLayoutPreviewPanel();
       });
     });
   }
@@ -3235,6 +3234,7 @@
       showLayoutPreviewPanel();
 
       updateInventoryPlacedCount();
+      renderPlanInventory();
       updateStats();
       redraw();
 
@@ -8222,7 +8222,8 @@
       const lockHeight = document.getElementById('lockHeight')?.checked;
       if (lockWidth && lockHeight) return;
       showToast(`${label} — recalcul du placement…`, 'default', 1500);
-      arrangeConduitGrid({ allowResize: true, reduceAfterFit: false, source: 'param-change' });
+      // reduceToMinimumNew replace ET redimensionne la boîte (les axes verrouillés sont respectés)
+      reduceToMinimumNew();
     }
 
     // Event listener pour le slider de gap (entraxe entre fourreaux)
