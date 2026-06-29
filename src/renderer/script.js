@@ -1274,9 +1274,12 @@
 
       const bestConfig = window.solve(tubes, optsPacker);
 
-      // Calculer offsets de centrage (centrer le placement dans la boîte actuelle)
-      const offsetX = (boxWidth - bestConfig.w) / 2;
-      const offsetY = (boxHeight - bestConfig.h) / 2;
+      // La boîte épouse le layout sur les axes LIBRES (pas de débordement),
+      // on centre (offset ≥ 0) sur les axes VERROUILLÉS.
+      const targetW = lockWidth  ? boxWidth  : Math.ceil(bestConfig.w / 5) * 5;
+      const targetH = lockHeight ? boxHeight : Math.ceil(bestConfig.h / 5) * 5;
+      const offsetX = Math.max(0, (targetW - bestConfig.w) / 2);
+      const offsetY = Math.max(0, (targetH - bestConfig.h) / 2);
 
       // Appliquer le placement au canvas
       bestConfig.items.forEach(it => {
@@ -1290,6 +1293,17 @@
           moveFourreauWithChildren(fourreau, x, y);
         }
       });
+
+      // Redimensionner les axes libres pour épouser le layout (évite tout débordement)
+      if (shape === 'rect') {
+        if (!lockWidth)  boxWInput.value = targetW;
+        if (!lockHeight) boxHInput.value = targetH;
+      } else if (shape === 'circ') {
+        boxDInput.value = Math.max(targetW, targetH);
+      }
+      const _savedOX = canvasOffsetPx.x, _savedOY = canvasOffsetPx.y, _savedDS = displayScale;
+      applyDimensions();
+      canvasOffsetPx.x = _savedOX; canvasOffsetPx.y = _savedOY; displayScale = _savedDS;
 
       // Effacer les cellules de grille (pas de grille visuelle avec nouveau système)
       lastGridCells = [];
@@ -2465,36 +2479,40 @@
     const lockW = document.getElementById('lockWidth')?.checked;
     const lockH = document.getElementById('lockHeight')?.checked;
 
+    // La boîte épouse le layout sur les axes LIBRES (pas de débordement) ;
+    // on centre (offset ≥ 0) seulement sur les axes VERROUILLÉS.
+    const curW = shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value);
+    const curH = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
+    const targetW = lockW ? curW : Math.ceil(cfg.w / 5) * 5;
+    const targetH = lockH ? curH : Math.ceil(cfg.h / 5) * 5;
+    const offsetX = Math.max(0, (targetW - cfg.w) / 2);
+    const offsetY = Math.max(0, (targetH - cfg.h) / 2);
+
     cfg.items.forEach(it => {
       const fourreau = fourreaux.find(f => String(f.id) === String(it.id));
       if (!fourreau) return;
-      const cs      = window.cell(it.d);
-      const offsetX = variant.autoResize ? 0 : (variant.boxW - cfg.w) / 2;
-      const offsetY = variant.autoResize ? 0 : (variant.boxH - cfg.h) / 2;
+      const cs = window.cell(it.d);
       const x = (offsetX + it.x + cs / 2) * MM_TO_PX;
       const y = (offsetY + cfg.h - it.y - cs / 2) * MM_TO_PX;
       moveFourreauWithChildren(fourreau, x, y);
     });
 
-    if (variant.autoResize) {
-      const newW = Math.ceil(cfg.w / 5) * 5;
-      const newH = Math.ceil(cfg.h / 5) * 5;
-      if (shape === 'rect') {
-        if (!lockW) boxWInput.value = newW;
-        if (!lockH) boxHInput.value = newH;
-      } else if (shape === 'circ') {
-        boxDInput.value = Math.max(newW, newH);
-      }
-      // Sauvegarder pan et échelle : applyDimensions() les réinitialise car
-      // fitCanvas() mesure canvasWrap.clientHeight réduit par le panel visible.
-      const savedOffsetX = canvasOffsetPx.x;
-      const savedOffsetY = canvasOffsetPx.y;
-      const savedDisplayScale = displayScale;
-      applyDimensions();
-      canvasOffsetPx.x = savedOffsetX;
-      canvasOffsetPx.y = savedOffsetY;
-      displayScale = savedDisplayScale;
+    // Redimensionner les axes libres pour épouser le layout
+    if (shape === 'rect') {
+      if (!lockW) boxWInput.value = targetW;
+      if (!lockH) boxHInput.value = targetH;
+    } else if (shape === 'circ') {
+      boxDInput.value = Math.max(targetW, targetH);
     }
+    // Sauvegarder pan et échelle : applyDimensions() les réinitialise car
+    // fitCanvas() mesure canvasWrap.clientHeight réduit par le panel visible.
+    const savedOffsetX = canvasOffsetPx.x;
+    const savedOffsetY = canvasOffsetPx.y;
+    const savedDisplayScale = displayScale;
+    applyDimensions();
+    canvasOffsetPx.x = savedOffsetX;
+    canvasOffsetPx.y = savedOffsetY;
+    displayScale = savedDisplayScale;
 
     lastGridCells = [];
     document.querySelectorAll('.layout-preview-card').forEach((el, i) => {
