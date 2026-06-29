@@ -1243,8 +1243,7 @@
   window.arrangeConduitGrid = arrangeConduitGrid;
 
   /**
-   * Nouveau système de placement utilisant PlacementOrchestrator
-   * Génère 5 configurations, sélectionne la meilleure selon multi-objectif scoring
+   * Système de placement utilisant le packer (window.solve / window.variants)
    */
   function arrangeConduitGridNew() {
     if (fourreaux.length === 0) {
@@ -1563,10 +1562,7 @@
     saveStateToHistory(); // Sauver l'état avant modification
     // Geler automatiquement si snap actif ou si gravité désactivée (mode placement précis)
     const shouldFreeze = snapToGrid || !gravityEnabled;
-    // Inférer la famille depuis le moteur de placement si disponible
-    const famille = window.FamilyClassifier
-      ? window.FamilyClassifier.inferFamille({ type, code, diameter: spec.od })
-      : null;
+    const famille = null;
     const obj = {
       id: nextId++, x: spot.x, y: spot.y, od: spec.od, idm: spec.id,
       color: colorForFourreau(type, code), customColor: null, label: '',
@@ -2469,20 +2465,20 @@
     const lockW = document.getElementById('lockWidth')?.checked;
     const lockH = document.getElementById('lockHeight')?.checked;
 
-    cfg.placedFourreaux.forEach(pf => {
-      const fourreau = fourreaux.find(f => String(f.id) === String(pf.id));
+    cfg.items.forEach(it => {
+      const fourreau = fourreaux.find(f => String(f.id) === String(it.id));
       if (!fourreau) return;
-      const cs      = cfg.calculateCellSize(pf.diameter || pf.od || 0);
-      const offsetX = variant.autoResize ? 0 : (variant.boxW - cfg.width)  / 2;
-      const offsetY = variant.autoResize ? 0 : (variant.boxH - cfg.height) / 2;
-      const x = (offsetX + pf.x + cs / 2) * MM_TO_PX;
-      const y = (offsetY + cfg.height - pf.y - cs / 2) * MM_TO_PX;
+      const cs      = window.cell(it.d);
+      const offsetX = variant.autoResize ? 0 : (variant.boxW - cfg.w) / 2;
+      const offsetY = variant.autoResize ? 0 : (variant.boxH - cfg.h) / 2;
+      const x = (offsetX + it.x + cs / 2) * MM_TO_PX;
+      const y = (offsetY + cfg.h - it.y - cs / 2) * MM_TO_PX;
       moveFourreauWithChildren(fourreau, x, y);
     });
 
     if (variant.autoResize) {
-      const newW = Math.ceil(cfg.width  / 5) * 5;
-      const newH = Math.ceil(cfg.height / 5) * 5;
+      const newW = Math.ceil(cfg.w / 5) * 5;
+      const newH = Math.ceil(cfg.h / 5) * 5;
       if (shape === 'rect') {
         if (!lockW) boxWInput.value = newW;
         if (!lockH) boxHInput.value = newH;
@@ -2517,18 +2513,10 @@
     }
 
     const STRATEGY_FR = {
-      flowPackingStrategy:       'Flow compact',
-      interleavedStrategy:       'Interleave',
-      familyLevelStrategy:       'Par familles',
-      bottomLeftStrategy:        'Bas-gauche',
-      centeredSymmetricStrategy: 'Symétrique',
-      compactByDiameterStrategy: 'Compact',
-      rectangularAspectStrategy: 'Rectangle 4/3',
-      minWidthStrategy:          'Largeur min',
-      minHeightStrategy:         'Hauteur min',
-      // ancien système (compat)
-      SmartPyramid: 'Pyramide', GridDesc: 'Grille ↓', GridAsc: 'Grille ↑',
-      Hexagonal: 'Hexagonal',   Grille: 'Grille',
+      compact:  'Compact',
+      tranchee: 'Tranchée',
+      rect43:   'Rectangle 4/3',
+      locked:   'Ajusté',
     };
 
     // Montrer toutes les variantes disponibles (max 5)
@@ -2549,7 +2537,7 @@
       const desc       = CARD_DESCS[i]   || (STRATEGY_FR[v.name] || v.name);
       const isOptimized = i === 1;
       const scoreLabel = v.isNappeLayout
-        ? `${v.nappe.width.toFixed(0)}×${v.nappe.height.toFixed(0)}mm · ${v.score.toFixed(0)}%`
+        ? `${v.nappe.w.toFixed(0)}×${v.nappe.h.toFixed(0)}mm · ${v.score.toFixed(0)}%`
         : desc;
       const extraClass = isOptimized ? ' card-optimized' : '';
       const badge      = isOptimized ? '<span class="card-optimized-badge">⭐</span>' : '';
@@ -2580,35 +2568,6 @@
         }
       });
     });
-
-    // Section suggestions remplissage vides
-    let voidFillEl = panel.querySelector('.void-fill-section');
-    if (lastVoidFillSuggestions.length > 0) {
-      if (!voidFillEl) {
-        voidFillEl = document.createElement('div');
-        voidFillEl.className = 'void-fill-section';
-        panel.appendChild(voidFillEl);
-      }
-      voidFillEl.innerHTML = `<div class="void-fill-title">Remplissage possible</div>` +
-        lastVoidFillSuggestions.map((s, i) =>
-          `<div class="void-fill-item" data-fill-idx="${i}">
-            <span class="void-fill-desc">+${s.count} × ${s.code || s.type} (Ø${s.diameter}mm) dans l'espace libre</span>
-            <button class="btn-apply-fill btn btn-sm" data-fill-idx="${i}">Appliquer</button>
-            <button class="btn-ignore-fill btn btn-sm" data-fill-idx="${i}">Ignorer</button>
-          </div>`
-        ).join('');
-      voidFillEl.querySelectorAll('.btn-apply-fill').forEach(btn => {
-        btn.addEventListener('click', () => applyVoidFill(parseInt(btn.dataset.fillIdx, 10)));
-      });
-      voidFillEl.querySelectorAll('.btn-ignore-fill').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const item = btn.closest('.void-fill-item');
-          if (item) item.style.display = 'none';
-        });
-      });
-    } else if (voidFillEl) {
-      voidFillEl.remove();
-    }
   }
 
   function hideLayoutPreviewPanel() {
@@ -2616,19 +2575,19 @@
     if (panel) panel.style.display = 'none';
   }
 
-  function buildNappeVariants(configs, boxW, boxH, fourreauxInput, autoResize) {
+  function buildNappeVariants(configs, boxW, boxH, input, autoResize) {
     return configs.map(cfg => ({
       isNappeLayout: true,
-      name:  cfg.strategyName || 'auto',
-      score: (cfg.score || 0) * 100,
+      name:  cfg.tag || 'auto',
+      score: (cfg.fill || 0) * 100,
       nappe: cfg,
-      container: { width: cfg.width, height: cfg.height },
-      items: fourreauxInput,
+      container: { width: cfg.w, height: cfg.h },
+      items: input,
       layout: {
         fits: true,
-        placements: cfg.placedFourreaux.map(pf => {
-          const cs = cfg.calculateCellSize(pf.diameter || pf.od || 0);
-          return { id: pf.id, x: pf.x + cs / 2, y: pf.y + cs / 2 };
+        placements: cfg.items.map(it => {
+          const cs = window.cell(it.d);
+          return { id: it.id, x: it.x + cs / 2, y: it.y + cs / 2 };
         }),
         cells: [],
       },
@@ -2839,7 +2798,7 @@
   }
 
   function getContainerMarginMm() {
-    const litDePose = window.PLACEMENT_CONFIG?.litDePose;
+    const litDePose = window.GEO?.margin;
     return Number.isFinite(litDePose) ? litDePose : EDGE_SAFETY_MARGIN;
   }
 
@@ -3207,9 +3166,7 @@
             quantity:  1,
             type:      item.type,
             code:      item.code,
-            famille:   window.FamilyClassifier
-              ? window.FamilyClassifier.inferFamille({ type: item.type, code: item.code, diameter: spec.od })
-              : null,
+            famille:   null,
             statut:    'utilisé',
             reserve:   false,
           });
@@ -3222,19 +3179,17 @@
         return;
       }
 
-      const orchestrator = new window.PlacementOrchestrator();
       const lockWidth  = document.getElementById('lockWidth')?.checked;
       const lockHeight = document.getElementById('lockHeight')?.checked;
       const boxWidth   = shape === 'rect' ? parseFloat(boxWInput.value)  : parseFloat(boxDInput.value);
       const boxHeight  = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
 
-      const constraints = {};
-      if (lockWidth)  { constraints.lockedAxis = 'width';  constraints.boxWidth  = boxWidth; }
-      else if (lockHeight) { constraints.lockedAxis = 'height'; constraints.boxHeight = boxHeight; }
+      const tubes = expandedInput.map(f => ({ id: f.id, d: f.diameter }));
+      const optsPacker = {};
+      if (lockWidth)  { optsPacker.lock = 'w'; optsPacker.w = boxWidth; }
+      else if (lockHeight) { optsPacker.lock = 'h'; optsPacker.h = boxHeight; }
 
-      const bestConfig = orchestrator.computeBestPlacement(
-        expandedInput, constraints, { autoResize: true, placementMode: getPlacementMode() }
-      );
+      const bestConfig = window.solve(tubes, optsPacker);
 
       // Sauver l'état AVANT de modifier le canvas
       saveStateToHistory();
@@ -3242,30 +3197,27 @@
       // Remplacer tous les fourreaux du canvas par ceux du moteur
       fourreaux.length = 0;
 
-      bestConfig.placedFourreaux.forEach(pf => {
-        const spec = idToSpec[String(pf.id)];
+      bestConfig.items.forEach(it => {
+        const spec = idToSpec[String(it.id)];
         if (!spec) return;
-        const cellSize = bestConfig.calculateCellSize(pf.diameter);
-        const x = (pf.x + cellSize / 2) * MM_TO_PX;
-        const y = (bestConfig.height - pf.y - cellSize / 2) * MM_TO_PX;
-        const famille = window.FamilyClassifier
-          ? window.FamilyClassifier.inferFamille({ type: spec.type, code: spec.code, diameter: spec.od })
-          : null;
+        const cellSize = window.cell(it.d);
+        const x = (it.x + cellSize / 2) * MM_TO_PX;
+        const y = (bestConfig.h - it.y - cellSize / 2) * MM_TO_PX;
         fourreaux.push({
-          id: pf.id, x, y,     // conserver l'ID moteur pour que applyNappeVariant retrouve le fourreau
+          id: it.id, x, y,     // conserver l'ID moteur pour que applyNappeVariant retrouve le fourreau
           od: spec.od, idm: spec.id,
           color: colorForFourreau(spec.type, spec.code), customColor: null, label: '',
           children: [], vx: 0, vy: 0, dragging: false, frozen: true,
           _frozenByUser: false, _frozenByMode: true, _px: x, _py: y,
-          type: spec.type, code: spec.code, famille,
+          type: spec.type, code: spec.code, famille: null,
           statut: 'utilisé', usage: '', origine: '', destination: '',
           reserve: false, aiguille: false,
         });
       });
 
       // Appliquer les dimensions de la boîte
-      const newWidth  = Math.ceil(bestConfig.width  / 5) * 5;
-      const newHeight = Math.ceil(bestConfig.height / 5) * 5;
+      const newWidth  = Math.ceil(bestConfig.w / 5) * 5;
+      const newHeight = Math.ceil(bestConfig.h / 5) * 5;
       if (shape === 'rect') {
         if (!lockWidth)  boxWInput.value  = newWidth;
         if (!lockHeight) boxHInput.value = newHeight;
@@ -3275,7 +3227,7 @@
       applyDimensions();
 
       // Panel variantes
-      const allConfigs = [bestConfig, ...(bestConfig.alternatives || [])];
+      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
       lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, expandedInput, true)];
 
@@ -3286,33 +3238,13 @@
       updateStats();
       redraw();
 
-      const scorePercent = (bestConfig.score * 100).toFixed(0);
-      showToast(`✅ ${fourreaux.length} fourreaux placés depuis l'inventaire (Score: ${scorePercent}%)`);
+      const fillPercent = (bestConfig.fill * 100).toFixed(0);
+      showToast(`✅ ${fourreaux.length} fourreaux placés depuis l'inventaire (Occupation: ${fillPercent}%)`);
 
     } catch (err) {
       console.error('[autoPlaceFromInventory]', err);
       showToast('Erreur lors du placement automatique');
     }
-  }
-
-  function applyVoidFill(fillIdx) {
-    const s = lastVoidFillSuggestions[fillIdx];
-    if (!s) return;
-    saveStateToHistory();
-    const MM = MM_TO_PX;
-    const currentBoxH = parseFloat(boxHInput.value) || WORLD_H_MM;
-    s.positions.forEach(pos => {
-      const cs = (s.diameter + (window.PLACEMENT_RULES ? window.PLACEMENT_RULES.entraxe : 30));
-      const canvasX = (pos.x + cs / 2) * MM;
-      const canvasY = (currentBoxH - pos.y - cs / 2) * MM;
-      addFourreauAt(canvasX, canvasY, s.type, true);
-    });
-    updateInventoryPlacedCount();
-    redraw();
-    // Masquer la suggestion appliquée
-    const item = document.querySelector(`.void-fill-item[data-fill-idx="${fillIdx}"]`);
-    if (item) item.style.display = 'none';
-    showToast(`+${s.positions.length} × ${s.code || s.type} ajoutés`);
   }
 
   function reduceToMinimum() {
@@ -3351,7 +3283,7 @@
   }
 
   /**
-   * Nouveau système de réduction utilisant PlacementOrchestrator
+   * Système de réduction utilisant le packer (window.solve / window.variants)
    * Génère placement optimal ET réduit dimensions au minimum
    */
   function reduceToMinimumNew() {
@@ -3367,10 +3299,8 @@
     }
 
     try {
-      // Créer orchestrateur
-      const orchestrator = new window.PlacementOrchestrator();
-
-      const fourreauxInput = prepareFourreauxInput(fourreaux);
+      const input = prepareFourreauxInput(fourreaux);
+      const tubes = input.map(f => ({ id: f.id, d: f.diameter }));
 
       // Contraintes (respecter axes verrouillés)
       const lockWidth = document.getElementById('lockWidth')?.checked;
@@ -3378,33 +3308,24 @@
       const boxWidth = shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value);
       const boxHeight = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
 
-      const constraints = {};
-      if (lockWidth) {
-        constraints.lockedAxis = 'width';
-        constraints.boxWidth = boxWidth;
-      } else if (lockHeight) {
-        constraints.lockedAxis = 'height';
-        constraints.boxHeight = boxHeight;
-      }
+      const optsPacker = {};
+      if (lockWidth) { optsPacker.lock = 'w'; optsPacker.w = boxWidth; }
+      else if (lockHeight) { optsPacker.lock = 'h'; optsPacker.h = boxHeight; }
 
-      // Calculer meilleur placement AVEC auto-resize
-      const bestConfig = orchestrator.computeBestPlacement(
-        fourreauxInput,
-        constraints,
-        { autoResize: true, placementMode: getPlacementMode() }
-      );
+      // Meilleur placement (dimensions déjà serrées au minimum par le packer)
+      const bestConfig = window.solve(tubes, optsPacker);
 
       // Appliquer le placement au canvas
       // Les positions du moteur incluent déjà les marges (litDePose) sur les 4 côtés.
       // Pas d'offset supplémentaire nécessaire (offsetX=0, offsetY=0).
-      bestConfig.placedFourreaux.forEach(pf => {
-        const fourreau = fourreaux.find(f => String(f.id) === String(pf.id));
+      bestConfig.items.forEach(it => {
+        const fourreau = fourreaux.find(f => String(f.id) === String(it.id));
         if (fourreau) {
-          // pf.x/pf.y = coin bas-gauche de la cellule (Y=0 en BAS dans le moteur)
+          // it.x/it.y = coin bas-gauche de la cellule (Y=0 en BAS dans le moteur)
           // Le canvas dessine au CENTRE du cercle avec Y=0 en HAUT
-          const cellSize = bestConfig.calculateCellSize(pf.diameter);
-          const x = (pf.x + cellSize / 2) * MM_TO_PX;
-          const y = (bestConfig.height - pf.y - cellSize / 2) * MM_TO_PX;
+          const cellSize = window.cell(it.d);
+          const x = (it.x + cellSize / 2) * MM_TO_PX;
+          const y = (bestConfig.h - it.y - cellSize / 2) * MM_TO_PX;
           moveFourreauWithChildren(fourreau, x, y);
         }
       });
@@ -3412,8 +3333,8 @@
       // Mettre à jour les dimensions de la boîte
       // Arrondir AU-DESSUS au pas de 5mm (comme applyDimensions) pour éviter que
       // roundToStep n'arrondisse vers le bas et que les fourreaux débordent.
-      const newWidth  = Math.ceil(bestConfig.width  / 5) * 5;
-      const newHeight = Math.ceil(bestConfig.height / 5) * 5;
+      const newWidth  = Math.ceil(bestConfig.w / 5) * 5;
+      const newHeight = Math.ceil(bestConfig.h / 5) * 5;
 
       if (shape === 'rect') {
         if (!lockWidth) boxWInput.value = newWidth;
@@ -3431,25 +3352,18 @@
         rotateBoxAndContents('cw');
       }
 
-      // Exposer les variantes (chacune redimensionnée à son minimum)
-      const alternatives = (bestConfig.alternatives || []);
-      alternatives.forEach(cfg => orchestrator.optimizeDimensions(cfg));
-      const allConfigs = [bestConfig, ...alternatives];
+      // Exposer les variantes (chacune déjà serrée à son minimum)
+      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
-      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, fourreauxInput, true)];
+      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input, true)];
 
-      // Suggestions remplissage vides
-      if (window.detectVoidFill && inventoryItems.length > 0) {
-        lastVoidFillSuggestions = window.detectVoidFill(bestConfig, inventoryItems);
-      } else {
-        lastVoidFillSuggestions = [];
-      }
+      lastVoidFillSuggestions = [];
 
       showLayoutPreviewPanel();
 
-      // Afficher score et feedback
-      const scorePercent = (bestConfig.score * 100).toFixed(0);
-      showToast(`✅ Boîte redimensionnée à ${newWidth}×${newHeight}mm (Score: ${scorePercent}%)`);
+      // Afficher taux d'occupation et feedback
+      const fillPercent = (bestConfig.fill * 100).toFixed(0);
+      showToast(`✅ Boîte redimensionnée à ${newWidth}×${newHeight}mm (Occupation: ${fillPercent}%)`);
 
       updateStats();
       redraw();
@@ -8317,7 +8231,7 @@
         const newGap = parseInt(e.target.value, 10);
         FOURREAU_GAP = newGap;
         gapValue.textContent = newGap;
-        if (window.PLACEMENT_CONFIG) window.PLACEMENT_CONFIG.entraxe = newGap;
+        if (window.GEO) window.GEO.gap = newGap;
         gridLocked = false;
         gridOrigin = null;
         gridSpacing = null;
@@ -8341,7 +8255,7 @@
     function applyLitDePose() {
       const enabled = litDePoseEnabled?.checked ?? true;
       const value = enabled ? (parseInt(litDePoseSlider?.value, 10) || 0) : 0;
-      if (window.PLACEMENT_CONFIG) window.PLACEMENT_CONFIG.litDePose = value;
+      if (window.GEO) window.GEO.margin = value;
       if (litDePoseDisplay) litDePoseDisplay.textContent = value;
       if (litDePoseSlider) litDePoseSlider.disabled = !enabled;
       gridLocked = false;
