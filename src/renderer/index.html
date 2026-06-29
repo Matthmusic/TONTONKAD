@@ -350,6 +350,14 @@
               <span class="pill">Ø ext = code</span>,
               <span class="pill">Ø int ≥ liste</span>.
             </div>
+            <div class="fourreau-add-row">
+              <div class="qty-controls">
+                <button class="qty-btn" id="qtyDecrement" title="Reduire quantite">&#x2212;</button>
+                <input type="number" id="fourreauQty" value="1" min="1" max="99" class="qty-input" aria-label="Quantite">
+                <button class="qty-btn" id="qtyIncrement" title="Augmenter quantite">+</button>
+              </div>
+              <button id="addToInventoryBtn" class="btn btn-sm" title="Ajouter a l'inventaire">+ Ajouter</button>
+            </div>
           </div>
           <div id="paneCABLE" class="hidden">
             <div class="row">
@@ -379,6 +387,12 @@
               class="search"
               placeholder="Rechercher Fourreau (type, code)…"
             />
+            <!-- Plan inventaire (fourreaux planifiés) -->
+            <div id="planInventoryList" class="plan-inventory-list"></div>
+            <div class="plan-inventory-actions" id="planInventoryActions" style="display:none;">
+              <button id="autoPlaceBtn" class="btn btn-sm btn-accent">&#x26A1; PLACEMENT AUTO</button>
+            </div>
+            <!-- Inventaire fourreaux placés -->
             <div
               id="listFourreau"
               class="list"
@@ -466,16 +480,41 @@
               <span class="dimension-text"></span>
             </div>
 
+            <!-- Icône verrou poignées de redimensionnement -->
+            <button id="resizeHandlesLockBtn" class="resize-handles-lock-btn locked" aria-label="Déverrouiller le redimensionnement par poignées" title="Déverrouiller les poignées">
+              <!-- SVG cadenas fermé (état locked) -->
+              <svg class="lock-svg lock-closed" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2"/>
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="12" cy="16" r="1.2" fill="currentColor"/>
+              </svg>
+              <!-- SVG cadenas ouvert (état unlocked) -->
+              <svg class="lock-svg lock-open" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2"/>
+                <path d="M8 11V7a4 4 0 0 1 8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="12" cy="16" r="1.2" fill="currentColor"/>
+              </svg>
+            </button>
+
             <!-- Bouton de réduction automatique -->
             <div id="reduceButtonContainer" class="reduce-button-container" style="display: none;">
-              <button id="reduceToMinimum" class="btn reduce-btn">
+              <button id="reduceToMinimum" class="btn reduce-btn" aria-label="Placer automatiquement puis redimensionner la boîte">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                Réduire au minimum
+                Redimensionner auto
               </button>
             </div>
+
           </main>
+          <!-- Panel preview des variantes de placement — sous le canvas -->
+          <div id="layoutPreviewPanel" class="layout-preview-panel" style="display:none;" aria-label="Variantes de placement disponibles">
+            <div class="layout-preview-header">
+              <span class="layout-preview-title">Variantes de placement</span>
+              <button id="closeLayoutPreview" class="layout-preview-close" aria-label="Fermer le panel">✕</button>
+            </div>
+            <div id="layoutPreviewCards" class="layout-preview-cards"></div>
+          </div>
           <!-- Zoom contrôlé par Ctrl+molette dans le canvas -->
         </div>
       </div>
@@ -522,14 +561,14 @@
               <span>Organisation</span>
             </div>
             <div class="command-buttons-row">
-              <button id="gridArrange" class="cmd-btn cmd-btn-secondary" aria-label="Disposer les fourreaux en grille 3cm - Raccourci: Ctrl+G">
+              <button id="gridArrange" class="cmd-btn cmd-btn-secondary" aria-label="Placer en grille dans la boîte actuelle sans redimensionner - Raccourci: Ctrl+G">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                   <rect x="3" y="3" width="6" height="6" stroke="currentColor" stroke-width="2" fill="none"/>
                   <rect x="15" y="3" width="6" height="6" stroke="currentColor" stroke-width="2" fill="none"/>
                   <rect x="3" y="15" width="6" height="6" stroke="currentColor" stroke-width="2" fill="none"/>
                   <rect x="15" y="15" width="6" height="6" stroke="currentColor" stroke-width="2" fill="none"/>
                 </svg>
-                <span class="btn-label">Grille</span>
+                <span class="btn-label">Grille boîte</span>
               </button>
               <button id="toggleGridBtn" class="cmd-btn cmd-btn-secondary" aria-label="Afficher/Masquer la grille et activer le magnétisme - Raccourci: Maj+G">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -542,9 +581,53 @@
                 </svg>
                 <span class="btn-label">Grille Visuelle</span>
               </button>
-              <button id="freezeBtn" class="cmd-btn cmd-btn-secondary" disabled aria-label="Figer l'objet sélectionné - Raccourci: G">
+              <button id="rotateBoxCcw" class="cmd-btn cmd-btn-secondary" aria-label="Tourner la boîte et son contenu de 90 degrés antihoraire">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 7h6a5 5 0 1 1-4.2 7.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7 3v4h4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="btn-label">90° Gauche</span>
+              </button>
+              <button id="rotateBoxCw" class="cmd-btn cmd-btn-secondary" aria-label="Tourner la boîte et son contenu de 90 degrés horaire">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M17 7h-6a5 5 0 1 0 4.2 7.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M17 3v4h-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="btn-label">90° Droite</span>
+              </button>
+              <button id="freezeBtn" class="cmd-btn cmd-btn-secondary" disabled aria-label="Figer l'objet sélectionné - Raccourci: X">
                 <span class="btn-label">Figer</span>
+                <span class="btn-shortcut">X</span>
+              </button>
+              <button id="btn-gravity-toggle" class="cmd-btn cmd-btn-secondary" aria-label="Activer/Désactiver la gravité - Raccourci: G" title="Gravité OFF (cliquer pour activer)">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <polyline points="8,11 12,15 16,11" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  <line x1="6" y1="20" x2="18" y2="20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <span class="btn-label">Gravité</span>
                 <span class="btn-shortcut">G</span>
+              </button>
+              <button id="btn-ortho-toggle" class="cmd-btn cmd-btn-secondary" aria-label="Activer/Désactiver le mode ORTHO - Raccourci: F8" title="ORTHO OFF (cliquer pour activer)">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <rect x="9" y="9" width="6" height="6" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+                </svg>
+                <span class="btn-label">ORTHO</span>
+                <span class="btn-shortcut">F8</span>
+              </button>
+              <button id="btn-osnap-toggle" class="cmd-btn cmd-btn-secondary" aria-label="Activer/Désactiver le mode OSNAP - Raccourci: F3" title="OSNAP OFF (cliquer pour activer)">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
+                  <line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                </svg>
+                <span class="btn-label">OSNAP</span>
+                <span class="btn-shortcut">F3</span>
               </button>
             </div>
 
@@ -554,11 +637,38 @@
                 <span class="gap-icon">↔️</span>
                 <span>Écart fourreaux: <strong id="gapValue">30</strong>mm</span>
               </label>
-              <input type="range" id="gapSlider" min="15" max="50" value="30" step="1" class="gap-slider" aria-label="Régler l'écart entre fourreaux (15-50mm)">
+              <input type="range" id="gapSlider" min="0" max="50" value="30" step="1" class="gap-slider" aria-label="Régler l'écart entre fourreaux (0-50mm)">
               <div class="gap-range-labels">
-                <span>15mm</span>
+                <span>0mm</span>
                 <span>50mm</span>
               </div>
+            </div>
+
+            <!-- Lit de pose réglable -->
+            <div class="gap-control-container">
+              <label class="gap-label">
+                <span class="gap-icon">
+                  <input type="checkbox" id="litDePoseEnabled" checked style="margin-right:4px;vertical-align:middle;">
+                </span>
+                <span>Lit de pose: <strong id="litDePoseDisplay">40</strong>mm</span>
+              </label>
+              <input type="range" id="litDePoseSlider" min="0" max="100" value="40" step="5" class="gap-slider" aria-label="Régler le lit de pose (0-100mm)" id="litDePoseSlider">
+              <div class="gap-range-labels">
+                <span>0mm</span>
+                <span>100mm</span>
+              </div>
+            </div>
+            <div class="gap-control-container">
+              <label for="placementModeSelect" class="gap-label">
+                <span class="gap-icon">▦</span>
+                <span>Placement optimisé</span>
+              </label>
+              <select id="placementModeSelect" class="select-control" aria-label="Choisir le type de placement optimisé">
+                <option value="auto" selected>Auto (meilleur placement)</option>
+                <option value="rect43">Rectangle 4/3</option>
+                <option value="compact">Compact par diamètre</option>
+                <option value="pyramid">Pyramide</option>
+              </select>
             </div>
           </div>
 
@@ -665,10 +775,13 @@
   <script src="manual.js" defer></script>
   <script src="canvas-resize-handler.js"></script>
   <!-- Moteur de placement optimisé -->
+  <script src="maxrects-packer.min.js"></script>
   <script src="placement-engine.js"></script>
   <script src="script.js" defer></script>
   <script src="dimension-button-handler.js" defer></script>
   <script src="electron-integration.js" defer></script>
+  <script src="konva.min.js"></script>
+  <script src="konva-fourreaux.js"></script>
 
   <!-- Popup d'édition -->
   <div id="editPopup" class="edit-popup" style="display: none;" role="dialog" aria-labelledby="editPopupTitle" aria-modal="true">
