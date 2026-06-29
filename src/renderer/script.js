@@ -4948,7 +4948,7 @@
    * Dessine le halo de preview et le point clignotant lors du drag avec snap
    */
   function drawSnapPreview() {
-    if (!snapPreviewPoint || !draggedObject) return;
+    if (!snapPreviewPoint || (!draggedObject && !moveMode)) return;
 
     const theme = document.documentElement.getAttribute('data-theme') || 'light';
     const now = Date.now();
@@ -4962,7 +4962,7 @@
     ctx.save();
 
     // 1. Halo semi-transparent autour du point de snap
-    const haloRadius = draggedObject.od ? (draggedObject.od * MM_TO_PX / 2) : 20;
+    const haloRadius = draggedObject?.od ? (draggedObject.od * MM_TO_PX / 2) : 20;
     const gradient = ctx.createRadialGradient(
       snapPreviewPoint.x, snapPreviewPoint.y, 0,
       snapPreviewPoint.x, snapPreviewPoint.y, haloRadius * 1.5
@@ -6355,51 +6355,72 @@
     }
     moveMode = 'armed';
     canvas.style.cursor = 'crosshair';
+    // Suivi souris dès l'armement → affiche l'osnap pour viser un point de base concret
+    moveOnMouseMove = (ev) => onMoveHover(canvasCoords(ev));
+    canvas.addEventListener('mousemove', moveOnMouseMove);
     showToast(`Déplacement de ${targets.length} fourreau(x) : cliquez le point de base (Échap pour annuler)`, 'default', 2500);
   }
 
   // Snappe un point : grille puis osnap (H/V). ignoreIds = Set d'ids exclus de l'osnap.
+  // Retourne { x, y, osnapType } (osnapType = 'center'|'quadrant'|null) pour le marqueur visuel.
   function snapMovePoint(p, ignoreIds) {
-    let pt = (gridEnabled && snapToGrid) ? snapPointToGrid(p.x, p.y) : { x: p.x, y: p.y };
+    let x = p.x, y = p.y, osnapType = null;
+    if (gridEnabled && snapToGrid) { const g = snapPointToGrid(p.x, p.y); x = g.x; y = g.y; }
     if (osnapEnabled) {
       const al = getOsnapAlignments(p.x, p.y, ignoreIds);
       const v = al.find(a => a.axis === 'v');
       const h = al.find(a => a.axis === 'h');
-      if (v) pt.x = v.snapX;
-      if (h) pt.y = h.snapY;
+      if (v) { x = v.snapX; osnapType = v.osnapType; }
+      if (h) { y = h.snapY; osnapType = h.osnapType || osnapType; }
     }
-    return pt;
+    return { x, y, osnapType };
+  }
+
+  // Affiche le marqueur osnap sous le curseur (et guides Konva si dispo)
+  function showMoveSnap(s, ignoreIds, refX, refY) {
+    snapPreviewPoint = { x: s.x, y: s.y, timestamp: Date.now(), osnapType: s.osnapType };
+    if (window.konvaFourreaux && osnapEnabled) {
+      const al = getOsnapAlignments(refX, refY, ignoreIds);
+      if (al.length > 0) window.konvaFourreaux.showOsnapGuides(al, s.x, s.y);
+      else window.konvaFourreaux.hideGuides();
+    }
+  }
+
+  function onMoveHover(p) {
+    if (moveMode === 'armed') {
+      const s = snapMovePoint(p, null);
+      showMoveSnap(s, null, p.x, p.y);
+      redraw();
+    } else if (moveMode === 'moving') {
+      updateMovePreview(p);
+    }
   }
 
   function beginMove(p) {
     const targets = getSelectedFourreaux();
     if (targets.length === 0) { cancelMoveMode(); return; }
     saveStateToHistory(); // pour Ctrl+Z
-    moveBase = snapMovePoint(p, null); // osnap libre pour accrocher le point de base
+    const s = snapMovePoint(p, null); // osnap libre pour accrocher le point de base
+    moveBase = { x: s.x, y: s.y };
     moveTargets = targets.map(f => ({
       f, x0: f.x, y0: f.y,
       children: cables.filter(c => c.parent === f.id).map(c => ({ c, x0: c.x, y0: c.y })),
     }));
     moveMode = 'moving';
     canvas.style.cursor = 'move';
-    moveOnMouseMove = (ev) => updateMovePreview(canvasCoords(ev));
-    canvas.addEventListener('mousemove', moveOnMouseMove);
     redraw();
-  }
-
-  function moveDelta(p) {
-    const ignore = new Set(moveTargets.map(t => t.f.id));
-    let pt = snapMovePoint(p, ignore);
-    if (orthoEnabled && moveBase) { // ORTHO (F8) : verrouille l'axe dominant
-      const adx = Math.abs(pt.x - moveBase.x), ady = Math.abs(pt.y - moveBase.y);
-      if (adx >= ady) pt.y = moveBase.y; else pt.x = moveBase.x;
-    }
-    return { dx: pt.x - moveBase.x, dy: pt.y - moveBase.y };
   }
 
   function updateMovePreview(p) {
     if (moveMode !== 'moving') return;
-    const { dx, dy } = moveDelta(p);
+    const ignore = new Set(moveTargets.map(t => t.f.id));
+    const s = snapMovePoint(p, ignore);
+    let tx = s.x, ty = s.y;
+    if (orthoEnabled && moveBase) { // ORTHO (F8) : verrouille l'axe dominant
+      const adx = Math.abs(tx - moveBase.x), ady = Math.abs(ty - moveBase.y);
+      if (adx >= ady) ty = moveBase.y; else tx = moveBase.x;
+    }
+    const dx = tx - moveBase.x, dy = ty - moveBase.y;
     for (const t of moveTargets) {
       t.f.x = t.x0 + dx; t.f.y = t.y0 + dy; t.f._px = t.f.x; t.f._py = t.f.y;
       t.f.vx = 0; t.f.vy = 0;
@@ -6407,6 +6428,7 @@
         ch.c.x = ch.x0 + dx; ch.c.y = ch.y0 + dy; ch.c._px = ch.c.x; ch.c._py = ch.c.y;
       }
     }
+    showMoveSnap({ x: tx, y: ty, osnapType: s.osnapType }, ignore, p.x, p.y);
     redraw();
   }
 
@@ -6433,7 +6455,9 @@
 
   function endMoveCleanup() {
     if (moveOnMouseMove) { canvas.removeEventListener('mousemove', moveOnMouseMove); moveOnMouseMove = null; }
+    if (window.konvaFourreaux) window.konvaFourreaux.hideGuides();
     moveMode = null; moveBase = null; moveTargets = [];
+    snapPreviewPoint = null;
     canvas.style.cursor = '';
   }
 
