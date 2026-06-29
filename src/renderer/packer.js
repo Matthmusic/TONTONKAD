@@ -39,11 +39,51 @@
     return { w, h, items, ratio: w / h, fill: cellArea / (w * h), tag };
   }
 
-  // Stubs (implémentés dans les tâches suivantes)
-  function solve(tubes, opts) { throw new Error('not implemented'); }
+  function candidateWidths(tubes) {
+    const cells = tubes.map(t => cell(t.d));
+    const lo = Math.max(...cells);
+    const hi = cells.reduce((s, c) => s + c, 0);
+    if (hi <= lo) return [lo];
+    const N = 40, set = new Set();
+    for (let i = 0; i <= N; i++) set.add(Math.round(lo + (hi - lo) * i / N));
+    return [...set].sort((a, b) => a - b);
+  }
+
+  function emptyLayout() {
+    return { w: 2 * GEO.margin, h: 2 * GEO.margin, items: [], ratio: 1, fill: 0, tag: 'empty' };
+  }
+
+  function solveLockedHeight(list, H) {
+    const innerH = H - 2 * GEO.margin;
+    let best = null;
+    for (const iw of candidateWidths(list)) {
+      const pack = packAt(list, iw);
+      if (!pack || pack.ch > innerH) continue;
+      const L = toLayout(pack, 'locked', null, H);
+      if (!best || L.w < best.w) best = L;
+    }
+    if (!best) {
+      const widths = candidateWidths(list);
+      best = toLayout(packAt(list, widths[widths.length - 1]), 'locked', null, H);
+    }
+    return best;
+  }
+
+  // Stub temporaire — remplacé en Task 5
+  function solveFree(list) { throw new Error('not implemented'); }
+
+  function solve(tubes, opts) {
+    const list = sortTubes(tubes);
+    if (list.length === 0) return emptyLayout();
+    const lock = opts && opts.lock || null;
+    if (lock === 'w') return toLayout(packAt(list, opts.w - 2 * GEO.margin), 'locked', opts.w, null);
+    if (lock === 'h') return solveLockedHeight(list, opts.h);
+    return solveFree(list); // implémenté en Task 5
+  }
+
   function variants(tubes, opts) { throw new Error('not implemented'); }
 
-  const api = { GEO, cell, solve, variants, __test: { sortTubes, packAt, toLayout } };
+  const api = { GEO, cell, solve, variants, __test: { sortTubes, packAt, toLayout, candidateWidths } };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
   } else {

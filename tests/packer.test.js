@@ -46,3 +46,30 @@ describe('packer — pack interne', () => {
     expect(L.fill).toBeLessThanOrEqual(1.0001);
   });
 });
+
+describe('packer — solve verrouillé', () => {
+  const tubes = [
+    { id: 'a', d: 125 }, { id: 'b', d: 125 }, { id: 'c', d: 90 },
+    { id: 'd', d: 63 },  { id: 'e', d: 63 },  { id: 'f', d: 63 },
+  ];
+  test('lock:w → largeur respectée à l\'identique', () => {
+    const L = pkg.solve(tubes, { w: 600, lock: 'w' });
+    expect(L.w).toBe(600);
+    expect(L.tag).toBe('locked');
+    expect(L.items).toHaveLength(6);
+    for (const it of L.items) {
+      const c = pkg.cell(it.d);
+      expect(it.x + c).toBeLessThanOrEqual(600 - pkg.GEO.margin + 0.001);
+    }
+  });
+  test('lock:h → hauteur respectée à l\'identique', () => {
+    const L = pkg.solve(tubes, { h: 500, lock: 'h' });
+    expect(L.h).toBe(500);
+    expect(L.items).toHaveLength(6);
+  });
+  test('liste vide → layout vide', () => {
+    const L = pkg.solve([], { lock: null });
+    expect(L.items).toHaveLength(0);
+    expect(L.tag).toBe('empty');
+  });
+});
