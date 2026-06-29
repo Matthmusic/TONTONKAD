@@ -5874,6 +5874,11 @@
     statCable.textContent = cables.length;
     statOccupation.textContent = `${calculateBoxOccupancy().toFixed(1)} %`;
 
+    // Hub inventaire : recalcul + rafraîchissement des compteurs placés/total
+    // (couvre vider, supprimer, undo, placement… en un seul point)
+    updateInventoryPlacedCount();
+    renderPlanInventory();
+
     // Ne déclencher checkForPossibleReduction que si le nombre de fourreaux a changé
     if (fourreaux.length !== lastFourreauxCount) {
       lastFourreauxCount = fourreaux.length;
