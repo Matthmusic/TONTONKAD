@@ -1,4 +1,4 @@
-# TONTONKAD v2.4.11
+# TONTONKAD v2.5.0
 
 Application de bureau (Electron) pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif.
 
@@ -15,8 +15,10 @@ Application de bureau (Electron) pour concevoir et dimensionner chemins de câbl
 
 ## Fonctionnalités clés
 - Dimensionnement précis : calculs automatiques des taux d'occupation, contrôle des diamètres et sections, alertes visuelles.
-- Conception visuelle : canvas 2D avec interactions fluides (drag & drop, sélection multiple, undo/redo, grille).
-- Exports multiples : PDF pour les revues, DXF pour AutoCAD, JSON pour archiver ou collaborer.
+- Conception visuelle : canvas 2D avec interactions fluides (drag & drop, sélection multiple, undo/redo, grille), rendu des fourreaux via Konva.js avec guides d'accrochage.
+- Déplacement de groupe type AutoCAD MOVE (mode D) avec accrochage aux fourreaux fixes (centre/quadrant).
+- Placement automatique intelligent : nappes forcées en largeur (tranchée), simulation de gravité activable.
+- Exports multiples : PDF (avec aperçu A4 avant génération) pour les revues, DXF pour AutoCAD, JSON pour archiver ou collaborer.
 - Gestion de projets : sauvegarde/chargement local, reprises rapides, thèmes clair/sombre.
 - Productivité : raccourcis clavier (Ctrl+N/O/S, Ctrl+Z/Shift+Z, Ctrl+G pour la grille, Ctrl+T pour le thème).
 
@@ -28,7 +30,7 @@ Application de bureau (Electron) pour concevoir et dimensionner chemins de câbl
 
 ## Architecture en bref
 - Electron (processus principal + preload sécurisé) et renderer en JavaScript natif.
-- Canvas API pour le rendu 2D et la simulation physique légère.
+- Canvas API pour le rendu 2D et la simulation physique légère, couche Konva.js pour le rendu des fourreaux et les guides d'accrochage.
 - jsPDF pour la génération de PDF, export DXF intégré pour AutoCAD.
 - `electron-updater` pour les mises à jour distribuées via GitHub Releases.
 
