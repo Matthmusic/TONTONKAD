@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.5.0",
+    "version": "2.5.1",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,21 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.5.0.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.5.1.exe"
   },
   "changelog": {
+    "2.5.1": {
+      "date": "2026-07-10",
+      "changes": [
+        "Zoom Ctrl+molette ancré sur le curseur : le point sous la souris reste fixe",
+        "Déplacement de la vue au Ctrl+clic molette maintenu (pan)",
+        "Zoom fluide même avec beaucoup de fourreaux (rendu léger pendant la rafale de molette)",
+        "Le canvas zoomé ne redimensionne plus l'interface : il est clippé dans sa zone de travail",
+        "Inventaire : clic sur la pastille d'un groupe (fourreaux/câbles) pour changer sa couleur via la palette AutoCAD",
+        "Correction du débordement de la palette AutoCAD dans la popup d'édition",
+        "Fiabilisation de la publication des releases (nom d'installeur normalisé)"
+      ]
+    },
     "2.5.0": {
       "date": "2026-07-10",
       "changes": [
