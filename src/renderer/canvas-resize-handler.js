@@ -17,11 +17,18 @@
   let lastUpdateTime = 0;
   const UPDATE_THROTTLE_MS = 16; // ~60fps max
 
+  // Les poignées sont verrouillées par défaut
+  let resizeHandlesLocked = true;
+
   /**
    * Dessine les 4 poignées de resize (centres des côtés)
    */
   function drawResizeHandles(ctx, worldW, worldH) {
     if (!ctx || !worldW || !worldH) {
+      return;
+    }
+    // Invisibles quand verrouillées ou pendant un export (PDF/PNG)
+    if (resizeHandlesLocked || window.__suppressResizeHandles) {
       return;
     }
 
@@ -276,10 +283,11 @@
   window.drawResizeHandles = drawResizeHandles;
 
   window.handleResizeMouseDown = function(x, y) {
+    if (resizeHandlesLocked) return false;
     const side = detectHandle(x, y);
     if (side) {
       startResize(side, x, y);
-      return true; // Indique qu'on a capturé l'événement
+      return true;
     }
     return false;
   };
@@ -287,8 +295,12 @@
   window.handleResizeMouseMove = function(x, y) {
     if (dragState) {
       updateResize(x, y);
-    } else {
+    } else if (!resizeHandlesLocked) {
       updateCursor(x, y);
+    } else {
+      // Poignées verrouillées = invisibles : curseur normal
+      const canvas = document.getElementById('world');
+      if (canvas) canvas.style.cursor = 'default';
     }
   };
 
@@ -299,5 +311,39 @@
   window.isResizing = function() {
     return dragState !== null;
   };
+
+  window.isResizeHandlesLocked = function() {
+    return resizeHandlesLocked;
+  };
+
+  function applyLockState() {
+    const label = resizeHandlesLocked ? 'Déverrouiller les poignées' : 'Verrouiller les poignées';
+    document.querySelectorAll('.resize-handles-lock-btn').forEach(btn => {
+      btn.classList.toggle('locked',   resizeHandlesLocked);
+      btn.classList.toggle('unlocked', !resizeHandlesLocked);
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', label);
+    });
+    if (typeof window.redraw === 'function') window.redraw();
+  }
+
+  window.toggleResizeHandlesLock = function() {
+    resizeHandlesLocked = !resizeHandlesLocked;
+    applyLockState();
+  };
+
+  // Câblage de tous les boutons dès que le DOM est prêt
+  function setupLockButton() {
+    document.querySelectorAll('.resize-handles-lock-btn').forEach(btn => {
+      btn.addEventListener('click', window.toggleResizeHandlesLock);
+    });
+    applyLockState();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupLockButton);
+  } else {
+    setupLockButton();
+  }
 
 })();

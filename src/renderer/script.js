@@ -1471,108 +1471,6 @@
     }
   }
 
-  function placeRectangularAspect(items, container, options, targetRatio = 4 / 3) {
-    const { margin = 0, gap = 0 } = options || {};
-    const numItems = items.length;
-
-    if (numItems === 0) {
-      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
-    }
-
-    const sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
-    const availableWidth = container.width - 2 * margin;
-    const availableHeight = container.height - 2 * margin;
-
-    const buildGrid = (cols) => {
-      const rows = Math.ceil(numItems / cols);
-      const grid = Array(rows).fill(null).map(() => Array(cols).fill(null));
-      let itemIndex = 0;
-
-      for (let r = rows - 1; r >= 0; r--) {
-        for (let c = 0; c < cols; c++) {
-          if (itemIndex < numItems) grid[r][c] = sortedItems[itemIndex++];
-        }
-      }
-
-      const colWidths = Array(cols).fill(0);
-      for (let c = 0; c < cols; c++) {
-        for (let r = 0; r < rows; r++) {
-          if (grid[r][c]) colWidths[c] = Math.max(colWidths[c], grid[r][c].diameter + gap);
-        }
-      }
-
-      const rowHeights = Array(rows).fill(0);
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          if (grid[r][c]) rowHeights[r] = Math.max(rowHeights[r], grid[r][c].diameter + gap);
-        }
-      }
-
-      const totalWidth = colWidths.reduce((sum, width) => sum + width, 0);
-      const totalHeight = rowHeights.reduce((sum, height) => sum + height, 0);
-      const ratio = totalWidth / Math.max(totalHeight, 1);
-      const fits = totalWidth <= availableWidth && totalHeight <= availableHeight;
-      const score = Math.abs(ratio - targetRatio) * 1000 + totalHeight + totalWidth * 0.05;
-
-      return { cols, rows, grid, colWidths, rowHeights, totalWidth, totalHeight, ratio, fits, score };
-    };
-
-    const candidates = [];
-    for (let cols = 1; cols <= numItems; cols++) candidates.push(buildGrid(cols));
-
-    const valid = candidates.filter(candidate => candidate.fits);
-    const best = (valid.length > 0 ? valid : candidates)
-      .sort((a, b) => a.score - b.score || a.totalHeight - b.totalHeight || a.totalWidth - b.totalWidth)[0];
-
-    if (!best.fits) {
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols: best.cols, rows: best.rows },
-        cells: [],
-        suggestedContainer: {
-          width: Math.ceil((best.totalWidth + 2 * margin) / 10) * 10,
-          height: Math.ceil((best.totalHeight + 2 * margin) / 10) * 10
-        }
-      };
-    }
-
-    const startX = (container.width - best.totalWidth) / 2;
-    const startY = (container.height - best.totalHeight) / 2;
-    const placements = [];
-    const cells = [];
-
-    let currentY = startY;
-    for (let r = 0; r < best.rows; r++) {
-      let currentX = startX;
-      for (let c = 0; c < best.cols; c++) {
-        const item = best.grid[r][c];
-        if (item) {
-          placements.push({
-            id: item.id,
-            x: currentX + best.colWidths[c] / 2,
-            y: currentY + best.rowHeights[r] / 2
-          });
-          cells.push({
-            x: currentX,
-            y: currentY,
-            width: best.colWidths[c],
-            height: best.rowHeights[r]
-          });
-        }
-        currentX += best.colWidths[c];
-      }
-      currentY += best.rowHeights[r];
-    }
-
-    return {
-      fits: true,
-      placements,
-      grid: { cols: best.cols, rows: best.rows },
-      cells
-    };
-  }
-
   /* ====== Ajout/Suppression d'objets ====== */
   function addFourreauAt(x, y, type, code) {
     const spec = FOURREAUX.find(f => f.type === type && f.code === code);
@@ -2652,43 +2550,34 @@
     };
     const placementOptions = { margin: getContainerMarginMm(), gap: FOURREAU_GAP };
 
-    // Router vers la stratégie appropriée selon l'analyse
-    const placementMode = getPlacementMode();
+    // Router vers la stratégie appropriée selon l'analyse du mix de fourreaux
     let result;
-    if (placementMode === 'rect43') {
-      result = placeRectangularAspect(itemsToPlace, container, placementOptions, 4 / 3);
-    } else if (placementMode === 'compact') {
-      result = placeSmartPyramid(itemsToPlace, container, placementOptions);
-    } else if (placementMode === 'pyramid') {
-      result = placePyramid(itemsToPlace, container, placementOptions, analysis);
-    } else {
-      switch (analysis.type) {
-        case 'UNIFORM': {
-          // Comparer grille carrée et packing hexagonal, garder le meilleur
-          const uni = placeUniform(itemsToPlace, container, placementOptions);
-          const hex = placeHexagonal(itemsToPlace, container, placementOptions);
-          const uniScore = scoreLayout(uni, container, itemsToPlace);
-          const hexScore = scoreLayout(hex, container, itemsToPlace);
-          result = hexScore > uniScore ? hex : uni;
-          // Exposer les variantes pour le panel preview
-          lastLayoutVariants = [
-            { name: 'Grille', score: uniScore, layout: uni, container, items: itemsToPlace },
-            { name: 'Hexagonal', score: hexScore, layout: hex, container, items: itemsToPlace },
-          ].filter(v => v.layout.fits).sort((a, b) => b.score - a.score);
-          break;
-        }
-        case 'PYRAMID':
-          // Utiliser le placement pyramidal intelligent pour les mix de tailles
-          result = placeSmartPyramid(itemsToPlace, container, placementOptions);
-          break;
-        case 'COMPLEX':
-          // placeComplex teste déjà plusieurs variantes dont SmartPyramid
-          result = placeComplex(itemsToPlace, container, placementOptions);
-          break;
-        default:
-          // Fallback sur le placement pyramidal intelligent
-          result = placeSmartPyramid(itemsToPlace, container, placementOptions);
+    switch (analysis.type) {
+      case 'UNIFORM': {
+        // Comparer grille carrée et packing hexagonal, garder le meilleur
+        const uni = placeUniform(itemsToPlace, container, placementOptions);
+        const hex = placeHexagonal(itemsToPlace, container, placementOptions);
+        const uniScore = scoreLayout(uni, container, itemsToPlace);
+        const hexScore = scoreLayout(hex, container, itemsToPlace);
+        result = hexScore > uniScore ? hex : uni;
+        // Exposer les variantes pour le panel preview
+        lastLayoutVariants = [
+          { name: 'Grille', score: uniScore, layout: uni, container, items: itemsToPlace },
+          { name: 'Hexagonal', score: hexScore, layout: hex, container, items: itemsToPlace },
+        ].filter(v => v.layout.fits).sort((a, b) => b.score - a.score);
+        break;
       }
+      case 'PYRAMID':
+        // Utiliser le placement pyramidal intelligent pour les mix de tailles
+        result = placeSmartPyramid(itemsToPlace, container, placementOptions);
+        break;
+      case 'COMPLEX':
+        // placeComplex teste déjà plusieurs variantes dont SmartPyramid
+        result = placeComplex(itemsToPlace, container, placementOptions);
+        break;
+      default:
+        // Fallback sur le placement pyramidal intelligent
+        result = placeSmartPyramid(itemsToPlace, container, placementOptions);
     }
 
     if (result.fits) {
@@ -2823,10 +2712,6 @@
   function getContainerMarginMm() {
     const litDePose = window.GEO?.margin;
     return Number.isFinite(litDePose) ? litDePose : EDGE_SAFETY_MARGIN;
-  }
-
-  function getPlacementMode() {
-    return document.getElementById('placementModeSelect')?.value || 'auto';
   }
 
   // Fonction pour calculer les dimensions minimales nécessaires
@@ -5970,6 +5855,7 @@
     const btn = document.getElementById('btn-gravity-toggle');
     if (!btn) return;
     btn.classList.toggle('btn-active', gravityEnabled);
+    btn.setAttribute('aria-pressed', String(gravityEnabled));
     btn.title = gravityEnabled ? 'Gravité ON (cliquer pour désactiver)' : 'Gravité OFF (cliquer pour activer)';
   }
 
@@ -5977,6 +5863,7 @@
     const btn = document.getElementById('btn-ortho-toggle');
     if (!btn) return;
     btn.classList.toggle('btn-active', orthoEnabled);
+    btn.setAttribute('aria-pressed', String(orthoEnabled));
     btn.title = orthoEnabled ? 'ORTHO ON (cliquer pour désactiver)' : 'ORTHO OFF (cliquer pour activer)';
   }
 
@@ -5994,6 +5881,7 @@
     const btn = document.getElementById('btn-osnap-toggle');
     if (!btn) return;
     btn.classList.toggle('btn-active', osnapEnabled);
+    btn.setAttribute('aria-pressed', String(osnapEnabled));
     btn.title = osnapEnabled ? 'OSNAP ON (cliquer pour désactiver)' : 'OSNAP OFF (cliquer pour activer)';
   }
 
@@ -6116,6 +6004,7 @@
     const toggleGridBtn = document.getElementById('toggleGridBtn');
     if (toggleGridBtn) {
       toggleGridBtn.classList.toggle('btn-active', gridEnabled);
+      toggleGridBtn.setAttribute('aria-pressed', String(gridEnabled));
     }
 
     if (gridEnabled) {
@@ -7245,6 +7134,9 @@
     if (pdfViewName) pdfViewName.value = 'Vue principale';
     if (pdfDescriptionCounter) pdfDescriptionCounter.textContent = '0';
 
+    // Aperçu : la même image que celle qui sera insérée dans le PDF
+    updatePdfPreview();
+
     // IMPORTANT : Déplacer la modale à la fin du body pour éviter les conflits de layout
     // Cela évite que des conteneurs parents avec height:0 ou overflow:hidden ne cachent la modale
     document.body.appendChild(modal);
@@ -7261,9 +7153,9 @@
     modal.style.justifyContent = 'center';
     modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
 
-    // Styles du contenu
+    // Styles du contenu (élargi pour la sidebar d'aperçu A4)
     if (modalContent) {
-      modalContent.style.width = '700px';
+      modalContent.style.width = '1000px';
       modalContent.style.minHeight = '500px';
       modalContent.style.display = 'flex';
       modalContent.style.flexDirection = 'column';
@@ -7276,6 +7168,13 @@
   }
 
   let selectedImageBase64 = null;
+
+  function updatePdfPreview() {
+    const pdfPreviewImage = document.getElementById('pdfPreviewImage');
+    if (pdfPreviewImage) {
+      pdfPreviewImage.src = getCanvasImageData();
+    }
+  }
 
   function closePdfExportModal() {
     const modal = document.getElementById('pdfExportModal');
@@ -7423,6 +7322,13 @@
   }
 
   function getCanvasImageData() {
+    // Capture : masquer les poignées et dessiner les fourreaux sur le canvas
+    // principal (en mode Konva ils sont sur une couche séparée, invisible ici)
+    const konvaModeBackup = window.konvaMode;
+    window.__suppressResizeHandles = true;
+    window.konvaMode = false;
+    redraw();
+
     // Créer un canvas temporaire haute résolution pour éviter la pixelisation
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
@@ -7450,7 +7356,14 @@
       tempCanvas.width, tempCanvas.height // destination width, height (upscaled)
     );
 
-    return tempCanvas.toDataURL('image/png', 1.0);
+    const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
+
+    // Restaurer l'affichage normal (poignées + rendu Konva)
+    window.__suppressResizeHandles = false;
+    window.konvaMode = konvaModeBackup;
+    redraw();
+
+    return dataUrl;
   }
 
   async function exportToPDF() {
@@ -8445,6 +8358,8 @@
         const newGap = parseInt(e.target.value, 10);
         FOURREAU_GAP = newGap;
         gapValue.textContent = newGap;
+        const gapValuePop = document.getElementById('gapValuePop');
+        if (gapValuePop) gapValuePop.textContent = newGap;
         if (window.GEO) window.GEO.gap = newGap;
         gridLocked = false;
         gridOrigin = null;
@@ -8471,6 +8386,8 @@
       const value = enabled ? (parseInt(litDePoseSlider?.value, 10) || 0) : 0;
       if (window.GEO) window.GEO.margin = value;
       if (litDePoseDisplay) litDePoseDisplay.textContent = value;
+      const litValuePop = document.getElementById('litValuePop');
+      if (litValuePop) litValuePop.textContent = value;
       if (litDePoseSlider) litDePoseSlider.disabled = !enabled;
       gridLocked = false;
       gridOrigin = null;
@@ -8498,15 +8415,33 @@
       });
     }
 
-    const placementModeSelect = document.getElementById('placementModeSelect');
-    if (placementModeSelect) {
-      placementModeSelect.addEventListener('change', () => {
-        invalidateDimensionsCache();
-        gridLocked = false;
-        lastGridCells = [];
-        hideLayoutPreviewPanel();
-        checkForPossibleReduction();
-        showToast(`Placement : ${placementModeSelect.options[placementModeSelect.selectedIndex].text}`, 'default', 1500);
+    // Pop-over de réglages (écart + lit de pose) de la barre de contrôle
+    const ctrlSettingsBtn = document.getElementById('ctrlSettingsBtn');
+    const ctrlSettingsPopover = document.getElementById('ctrlSettingsPopover');
+    if (ctrlSettingsBtn && ctrlSettingsPopover) {
+      const closeCtrlSettings = () => {
+        ctrlSettingsPopover.hidden = true;
+        ctrlSettingsBtn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('mousedown', onCtrlSettingsOutside, true);
+        document.removeEventListener('keydown', onCtrlSettingsKey, true);
+      };
+      const onCtrlSettingsOutside = (ev) => {
+        if (!ctrlSettingsPopover.contains(ev.target) && !ctrlSettingsBtn.contains(ev.target)) {
+          closeCtrlSettings();
+        }
+      };
+      const onCtrlSettingsKey = (ev) => { if (ev.key === 'Escape') closeCtrlSettings(); };
+      const openCtrlSettings = () => {
+        ctrlSettingsPopover.hidden = false;
+        ctrlSettingsBtn.setAttribute('aria-expanded', 'true');
+        // Délai pour ne pas capter le clic d'ouverture comme un clic extérieur
+        setTimeout(() => {
+          document.addEventListener('mousedown', onCtrlSettingsOutside, true);
+          document.addEventListener('keydown', onCtrlSettingsKey, true);
+        }, 0);
+      };
+      ctrlSettingsBtn.addEventListener('click', () => {
+        if (ctrlSettingsPopover.hidden) openCtrlSettings(); else closeCtrlSettings();
       });
     }
 
@@ -8732,6 +8667,8 @@
 
         // Vérifier qu'on relâche sur le même slot (ou un slot valide proche)
         if (slot && slot.available && pendingFourreauType) {
+          // Le clic molette active la gravité par défaut
+          if (e.button === 1 && !gravityEnabled) toggleGravity();
           // Placer le fourreau à cet emplacement
           const result = addFourreauAt(slot.x, slot.y, pendingFourreauType.type, pendingFourreauType.code);
           if (result) {
@@ -8761,7 +8698,8 @@
             showToast('❌ Impossible de poser le CÂBLE ici.', 'error');
           }
         } else {
-          // Placer un fourreau
+          // Placer un fourreau — le clic molette active la gravité par défaut
+          if (!gravityEnabled) toggleGravity();
           const result = addFourreauAt(pendingMiddleClick.x, pendingMiddleClick.y, pendingMiddleClick.type, pendingMiddleClick.code);
           if (result) {
             showToast(`✅ Fourreau ${pendingMiddleClick.type} ${pendingMiddleClick.code} placé`);
