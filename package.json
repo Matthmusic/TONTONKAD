@@ -1,6 +1,6 @@
 {
   "name": "tontonkad",
-  "version": "2.4.11",
+  "version": "2.5.0",
   "description": "TONTONKAD - Dimensionnement de chemins de câbles et fourreaux",
   "main": "src/main/main.js",
   "author": "TONTONKAD Team",

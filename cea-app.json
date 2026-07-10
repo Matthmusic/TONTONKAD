@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.4.11",
+    "version": "2.5.0",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,22 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.4.11.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.5.0.exe"
   },
   "changelog": {
+    "2.5.0": {
+      "date": "2026-07-10",
+      "changes": [
+        "Nouveau rendu des fourreaux via Konva.js avec guides d'accrochage pendant le déplacement",
+        "Mode D : déplacement de groupe type AutoCAD MOVE avec accrochage aux fourreaux fixes (osnap centre/quadrant)",
+        "Placement automatique : nappes forcées en largeur (tranchée) au lieu de monter en hauteur",
+        "Export PDF : aperçu du rendu au format A4 directement dans la modale de configuration",
+        "Export PDF : correction des fourreaux absents de l'image exportée et masquage des poignées de redimensionnement",
+        "Poignées de redimensionnement invisibles quand elles sont verrouillées",
+        "Gravité activée automatiquement lors du placement d'un fourreau au clic molette",
+        "Démarrage de l'application en fenêtre maximisée"
+      ]
+    },
     "2.4.11": {
       "date": "2026-01-23",
       "changes": [
