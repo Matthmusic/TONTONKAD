@@ -84,6 +84,7 @@
   let pixelRatio = basePixelRatio;
   let displayScale = 1;
   let canvasOffsetPx = { x: 0, y: 0 };
+  let viewPanPx = { x: 0, y: 0 }; // Décalage écran de la vue (zoom au curseur + pan Ctrl+clic molette)
   let logicalCanvasWidth = 0;
   let logicalCanvasHeight = 0;
   const MAX_EFFECTIVE_PIXEL_RATIO = 4.5; // Cap doux pour le rendu live
@@ -154,6 +155,12 @@
     // Taille d'affichage CSS (taille logique avec zoom)
     canvas.style.width = `${logicalCanvasWidth * displayScale}px`;
     canvas.style.height = `${logicalCanvasHeight * displayScale}px`;
+
+    // Décalage de vue : le canvas reste centré par flex, on le déplace en relatif
+    // (offsetLeft/offsetTop suivent left/top → Konva reste aligné via syncTransform)
+    canvas.style.position = 'relative';
+    canvas.style.left = `${viewPanPx.x}px`;
+    canvas.style.top = `${viewPanPx.y}px`;
 
     // Réinitialiser et appliquer la transformation pour la haute résolution avec offset
     ctx.setTransform(
@@ -700,8 +707,9 @@
     displayScale = computedDisplayScale();
     applyCanvasResolution();
 
-    // Toujours garder overflow visible (pas de scroll)
-    canvasWrap.style.overflow = "visible";
+    // Clipper le canvas dans sa zone : un canvas zoomé ne doit ni recouvrir
+    // ni redimensionner le reste de l'interface
+    canvasWrap.style.overflow = "hidden";
 
     scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${currentZoom.toFixed(0)}%)`;
 
@@ -891,6 +899,69 @@
 
   function zoomOut() {
     setZoom(currentZoom - ZOOM_STEP);
+  }
+
+  function applyViewPan() {
+    canvas.style.left = `${viewPanPx.x}px`;
+    canvas.style.top = `${viewPanPx.y}px`;
+    if (window.konvaFourreaux) window.konvaFourreaux.syncTransform();
+  }
+
+  function resetViewPan() {
+    viewPanPx.x = 0;
+    viewPanPx.y = 0;
+    applyViewPan();
+  }
+
+  // Zoom "léger" pendant une rafale de molette : seule la taille CSS du canvas
+  // change (le contenu est mis à l'échelle par le navigateur). Le bitmap haute
+  // résolution n'est réalloué et redessiné qu'une fois la molette au repos —
+  // c'est lui qui coûte cher quand il y a beaucoup de fourreaux.
+  let zoomSettleTimer = 0;
+  function setZoomLight(newZoom) {
+    currentZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    displayScale = computedDisplayScale();
+    canvas.style.width = `${logicalCanvasWidth * displayScale}px`;
+    canvas.style.height = `${logicalCanvasHeight * displayScale}px`;
+    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${currentZoom.toFixed(0)}%)`;
+    if (window.konvaFourreaux) window.konvaFourreaux.syncTransform();
+    clearTimeout(zoomSettleTimer);
+    zoomSettleTimer = setTimeout(() => fitCanvas(true), 180);
+  }
+
+  // Zoom ancré sur le curseur : le point sous la souris reste sous la souris
+  function setZoomAtPointer(newZoom, clientX, clientY) {
+    const before = canvas.getBoundingClientRect();
+    if (!before.width || !before.height) { setZoom(newZoom); return; }
+    const u = (clientX - before.left) / before.width;
+    const v = (clientY - before.top) / before.height;
+    setZoomLight(newZoom);
+    const after = canvas.getBoundingClientRect();
+    viewPanPx.x += clientX - (after.left + u * after.width);
+    viewPanPx.y += clientY - (after.top + v * after.height);
+    applyViewPan();
+  }
+
+  // Pan de la vue au Ctrl+clic molette maintenu
+  function startViewPan(e) {
+    const startX = e.clientX, startY = e.clientY;
+    const baseX = viewPanPx.x, baseY = viewPanPx.y;
+    const prevCursor = canvas.style.cursor;
+    canvas.style.cursor = 'grabbing';
+    const onMove = (ev) => {
+      viewPanPx.x = baseX + (ev.clientX - startX);
+      viewPanPx.y = baseY + (ev.clientY - startY);
+      canvas.style.cursor = 'grabbing'; // le mousemove de l'app réécrit le curseur
+      applyViewPan();
+    };
+    const onUp = (ev) => {
+      if (ev.button !== 1) return;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      canvas.style.cursor = prevCursor;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   }
 
   /* ====== Système d'historique pour Ctrl+Z ====== */
@@ -5472,6 +5543,72 @@
     return { fc, cc };
   }
 
+  /* ── Palette ACI flottante (changement de couleur depuis l'inventaire) ── */
+  let floatingAciPalette = null;
+
+  function closeAciPalette() {
+    if (!floatingAciPalette) return;
+    if (floatingAciPalette._cleanup) floatingAciPalette._cleanup();
+    floatingAciPalette.remove();
+    floatingAciPalette = null;
+  }
+
+  function openAciPalette(anchorX, anchorY, onPick) {
+    closeAciPalette();
+    const pal = document.createElement('div');
+    pal.className = 'color-dropdown-content show floating-aci-palette';
+    const grid = document.createElement('div');
+    grid.className = 'color-grid';
+    AUTOCAD_COLORS.forEach(colorData => {
+      const sw = document.createElement('div');
+      sw.className = 'color-swatch';
+      sw.style.backgroundColor = colorData.hex;
+      sw.title = `ACI ${colorData.aci} - ${colorData.hex}`;
+      sw.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeAciPalette();
+        onPick(colorData.hex);
+      });
+      grid.appendChild(sw);
+    });
+    pal.appendChild(grid);
+    document.body.appendChild(pal);
+    // Position clampée au viewport
+    const rect = pal.getBoundingClientRect();
+    pal.style.left = `${Math.max(8, Math.min(anchorX, window.innerWidth - rect.width - 8))}px`;
+    pal.style.top = `${Math.max(8, Math.min(anchorY, window.innerHeight - rect.height - 8))}px`;
+    const onDocDown = (e) => { if (!pal.contains(e.target)) closeAciPalette(); };
+    const onKey = (e) => { if (e.key === 'Escape') closeAciPalette(); };
+    pal._cleanup = () => {
+      document.removeEventListener('mousedown', onDocDown, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+    // Différé pour ne pas capter le clic d'ouverture
+    setTimeout(() => {
+      document.addEventListener('mousedown', onDocDown, true);
+      document.addEventListener('keydown', onKey, true);
+    }, 0);
+    floatingAciPalette = pal;
+  }
+
+  // Applique une couleur personnalisée à tous les objets d'un groupe d'inventaire
+  function applyGroupColor(kind, key, hex) {
+    saveStateToHistory();
+    if (kind === 'c') {
+      const [fam, code] = key.split('|');
+      for (const c of cables) if (c.fam === fam && c.code === code) c.customColor = hex;
+      COL_CABLE.set(`CABLE|${fam}|${code}`, hex); // les prochains câbles de ce type aussi
+    } else {
+      const [type, code] = key.split('|');
+      for (const f of fourreaux) if (f.type === type && f.code === code) f.customColor = hex;
+      COL_FOURREAU.set(`FOURREAU|${type}|${code}`, hex);
+    }
+    if (window.konvaFourreaux) window.konvaFourreaux.render();
+    updateInventory();
+    updateSelectedInfo();
+    redraw();
+  }
+
   const cycleIndex = new Map;
   function buildList(container, groups, kind, filter) {
     container.innerHTML = "";
@@ -5489,6 +5626,13 @@
         label = `${type} ${code} — Øext ${spec ? spec.od : '?'} / Øint ≥ ${spec ? spec.id : '?'} mm`;
         swatchColor = colorForFourreau(type, code);
       }
+      // Si tous les objets du groupe partagent une couleur personnalisée, l'afficher
+      const groupObjs = kind === 'c'
+        ? cables.filter(c => `${c.fam}|${c.code}` === key)
+        : fourreaux.filter(f => `${f.type}|${f.code}` === key);
+      if (groupObjs.length && groupObjs[0].customColor && groupObjs.every(o => o.customColor === groupObjs[0].customColor)) {
+        swatchColor = groupObjs[0].customColor;
+      }
       const item = document.createElement('div');
       item.className = 'item';
       item.tabIndex = 0;
@@ -5496,6 +5640,14 @@
       item.dataset.kind = kind;
       item.dataset.key = key;
       item.innerHTML = `<span class="swatch" style="background:${swatchColor}"></span><span class="label">${label}</span><span class="qty">× ${qty}</span>`;
+      const sw = item.querySelector('.swatch');
+      sw.title = 'Cliquer pour changer la couleur du groupe';
+      sw.style.cursor = 'pointer';
+      sw.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAciPalette(e.clientX, e.clientY, (hex) => applyGroupColor(kind, key, hex));
+      });
+      sw.addEventListener('dblclick', (e) => e.stopPropagation());
       item.addEventListener('click', () => selectFromGroup(kind, key, false));
       item.addEventListener('dblclick', () => selectFromGroup(kind, key, true));
       container.appendChild(item);
@@ -6784,6 +6936,7 @@
 
     canvasOffsetPx.x = 0;
     canvasOffsetPx.y = 0;
+    resetViewPan();
 
     SHAPE = shapeSel.value;
     if (SHAPE === 'rect') {
@@ -8268,15 +8421,25 @@
     targetPxPerMmInput.addEventListener("input", () => fitCanvas(true));
 
     // Gestionnaire de zoom par molette (Ctrl+molette)
+    // Les événements wheel arrivent en rafale plus vite que les frames :
+    // on les cumule et on applique un seul zoom par frame d'affichage
+    let wheelZoomPending = null;
     canvas.addEventListener("wheel", (e) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        if (e.deltaY < 0) {
-          zoomIn();
-        } else {
-          zoomOut();
-        }
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      if (wheelZoomPending) {
+        wheelZoomPending.steps += dir;
+        wheelZoomPending.clientX = e.clientX;
+        wheelZoomPending.clientY = e.clientY;
+        return;
       }
+      wheelZoomPending = { steps: dir, clientX: e.clientX, clientY: e.clientY };
+      requestAnimationFrame(() => {
+        const z = wheelZoomPending;
+        wheelZoomPending = null;
+        if (z && z.steps) setZoomAtPointer(currentZoom + z.steps * ZOOM_STEP, z.clientX, z.clientY);
+      });
     });
 
     // Gestionnaire global pour Ctrl+Z, Ctrl+Suppr et Maj+G
@@ -8450,6 +8613,12 @@
       closePreviewBtn.addEventListener('click', hideLayoutPreviewPanel);
     }
     canvas.addEventListener('mousedown', e => {
+      // Ctrl+clic molette : pan de la vue (prioritaire sur tout le reste)
+      if (e.button === 1 && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        startViewPan(e);
+        return;
+      }
       hideLayoutPreviewPanel();
       const p = canvasCoords(e);
       // Mode déplacement groupe (touche D) : intercepte les clics

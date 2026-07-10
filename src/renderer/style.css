@@ -365,12 +365,16 @@ html, body {
     flex-direction: column;
     align-items: stretch;
     overflow: hidden;
+    min-height: 0;
+    min-width: 0;
 }
 
 .main-view-content {
     display: flex;
     align-items: stretch;
     flex: 1;
+    min-height: 0;
+    min-width: 0;
 }
 
 /* ==========================================================================
@@ -382,6 +386,8 @@ html, body {
     display: flex;
     flex-direction: column;
     position: relative;
+    min-width: 0;
+    min-height: 0;
 }
 
 .canvas-wrap {
@@ -390,6 +396,8 @@ html, body {
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    min-width: 0;
+    min-height: 0;
     position: relative;
     margin-right: 60px;
     margin-bottom: 50px;
@@ -408,7 +416,9 @@ canvas {
         0 8px 32px rgba(0, 0, 0, 0.08),
         inset 0 1px 0 rgba(255, 255, 255, 0.8),
         inset 0 0 60px rgba(255, 145, 77, 0.03);
-    transition: all var(--transition-base);
+    /* Pas de transition sur la géométrie (width/height/left/top) :
+       le zoom au curseur et le pan mesurent le layout de façon synchrone */
+    transition: background var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
     position: relative;
     cursor: crosshair;
 }
@@ -3617,10 +3627,12 @@ body.electron-mode .notification-container {
     align-items: center;
     gap: var(--spacing-sm);
     flex-wrap: wrap;
+    /* Ancre du dropdown couleurs : il s'étend sur toute la largeur de la ligne */
+    position: relative;
 }
 
 .color-dropdown {
-    position: relative;
+    position: static;
     display: inline-block;
 }
 
@@ -3663,6 +3675,7 @@ body.electron-mode .notification-container {
     position: absolute;
     top: 100%;
     left: 0;
+    right: 0;
     z-index: var(--z-dropdown);
     background: var(--glass-bg-solid);
     backdrop-filter: var(--glass-backdrop);
@@ -3671,7 +3684,6 @@ body.electron-mode .notification-container {
     box-shadow: 0 10px 32px var(--shadow-color);
     padding: var(--spacing-sm);
     margin-top: 4px;
-    min-width: 320px;
 }
 
 .color-dropdown-content.show {
@@ -3698,13 +3710,25 @@ body.electron-mode .notification-container {
 }
 
 .color-swatch {
-    width: 18px;
-    height: 18px;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    min-width: 0;
     border: 1px solid var(--border-color);
     border-radius: 3px;
     cursor: pointer;
     position: relative;
     transition: all var(--transition-fast);
+}
+
+/* Palette ACI flottante (clic sur une pastille de l'inventaire) */
+.floating-aci-palette {
+    position: fixed;
+    left: auto;
+    right: auto;
+    width: 344px;
+    max-width: calc(100vw - 16px);
+    z-index: 10010;
 }
 
 .color-swatch:hover {
