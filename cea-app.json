@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.5.1",
+    "version": "2.5.2",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,22 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.5.1.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.5.2.exe"
   },
   "changelog": {
+    "2.5.2": {
+      "date": "2026-07-16",
+      "changes": [
+        "Ranger en grille (Ctrl+G) : la boîte garde ses dimensions, la nappe est posée au fond de la tranchée et centrée (fini les fourreaux collés en haut à gauche)",
+        "Redimensionner la boîte ré-ancre automatiquement la nappe au fond",
+        "Nouveau bouton Réduire dans la barre d'outils Plan pour serrer la boîte autour des fourreaux",
+        "Proposition automatique de redimensionnement après un rangement en grille",
+        "Aperçus du panneau de propositions fidèles à la boîte réelle",
+        "ORTHO (F8) et OSNAP (F3) désactivent automatiquement la gravité",
+        "Déplacement de groupe (D) : le groupe bute contre les parois sans se déformer et refuse les chevauchements (pose bord à bord permise)",
+        "Écart et lit de pose à 0 par défaut, réglables via le pop-over de la barre d'outils"
+      ]
+    },
     "2.5.1": {
       "date": "2026-07-10",
       "changes": [
