@@ -2,12 +2,17 @@
 const { GEO, cell } = require('../src/renderer/packer.js');
 const pkg = require('../src/renderer/packer.js');
 
+// Réglages standard utilisés par les suites géométriques ci-dessous
+// (les défauts runtime sont 0/0, réglables via le pop-over de la barre d'outils)
+const setStandardGeo = () => { GEO.gap = 30; GEO.margin = 40; };
+
 describe('packer — géométrie de base', () => {
-  test('GEO défauts', () => {
-    expect(GEO.gap).toBe(30);
-    expect(GEO.margin).toBe(40);
+  test('GEO défauts : écart et lit de pose à 0', () => {
+    expect(GEO.gap).toBe(0);
+    expect(GEO.margin).toBe(0);
   });
   test('cell = diamètre + entraxe', () => {
+    setStandardGeo();
     expect(cell(125)).toBe(155);
     expect(cell(0)).toBe(30);
   });
@@ -15,6 +20,7 @@ describe('packer — géométrie de base', () => {
 
 // Accès aux internes via une trappe de test (voir Step 3).
 describe('packer — pack interne', () => {
+  beforeAll(setStandardGeo);
   const tubes = [
     { id: 'a', d: 125 }, { id: 'b', d: 125 },
     { id: 'c', d: 63 },  { id: 'd', d: 63 },
@@ -48,6 +54,7 @@ describe('packer — pack interne', () => {
 });
 
 describe('packer — solve verrouillé', () => {
+  beforeAll(setStandardGeo);
   const tubes = [
     { id: 'a', d: 125 }, { id: 'b', d: 125 }, { id: 'c', d: 90 },
     { id: 'd', d: 63 },  { id: 'e', d: 63 },  { id: 'f', d: 63 },
@@ -75,6 +82,7 @@ describe('packer — solve verrouillé', () => {
 });
 
 describe('packer — solve libre', () => {
+  beforeAll(setStandardGeo);
   const tubes = Array.from({ length: 12 }, (_, i) => ({ id: 't' + i, d: i % 3 === 0 ? 125 : 63 }));
   test('tranchée : largeur >= hauteur', () => {
     const L = pkg.solve(tubes, { lock: null });
@@ -102,7 +110,77 @@ describe('packer — solve libre', () => {
   });
 });
 
+describe('packer — anchorLayout (ancrage fond de boîte)', () => {
+  beforeAll(setStandardGeo);
+  const eightTubes = Array.from({ length: 8 }, (_, i) => ({ id: i + 1, d: 90 }));
+
+  test('boîte plus grande que la nappe : dimensions conservées, nappe au fond', () => {
+    const cfg = pkg.solve(eightTubes, { lock: null }); // nappe 560×320 (d90, gap 30, marge 40)
+    const A = pkg.anchorLayout(cfg, { w: 700, h: 390, lockW: false, lockH: false });
+    expect(A.w).toBe(700);
+    expect(A.h).toBe(390);
+    // Fond : la rangée la plus basse repose sur le lit de pose (bord bas de cellule = h - marge)
+    const lowest = Math.max(...A.positions.map(p => {
+      const c = pkg.cell(cfg.items.find(it => it.id === p.id).d);
+      return p.y + c / 2;
+    }));
+    expect(lowest).toBeCloseTo(390 - pkg.GEO.margin, 5);
+    // Aucune cellule ne déborde ; yUp est le miroir exact de y (repère moteur)
+    for (const p of A.positions) {
+      const c = pkg.cell(90);
+      expect(p.y + c / 2).toBeLessThanOrEqual(390 - pkg.GEO.margin + 0.001);
+      expect(p.y - c / 2).toBeGreaterThanOrEqual(pkg.GEO.margin - 0.001);
+      expect(p.yUp).toBeCloseTo(A.h - p.y, 9);
+    }
+  });
+
+  test('centrage horizontal : marges gauche/droite égales', () => {
+    const cfg = pkg.solve(eightTubes, { lock: null });
+    const A = pkg.anchorLayout(cfg, { w: 700, h: 390, lockW: false, lockH: false });
+    const c = pkg.cell(90);
+    const left = Math.min(...A.positions.map(p => p.x - c / 2));
+    const right = Math.max(...A.positions.map(p => p.x + c / 2));
+    expect(left).toBeCloseTo(700 - right, 5);
+    expect(left).toBeGreaterThanOrEqual(pkg.GEO.margin - 0.001);
+  });
+
+  test('boîte trop petite sur un axe libre : agrandie au multiple de 5 supérieur', () => {
+    const cfg = pkg.solve(eightTubes, { lock: null }); // 560×320
+    const A = pkg.anchorLayout(cfg, { w: 300, h: 200, lockW: false, lockH: false });
+    expect(A.w).toBe(560);
+    expect(A.h).toBe(320);
+  });
+
+  test('largeur verrouillée : nappe centrée, pas collée à gauche', () => {
+    const tubes = [{ id: 'a', d: 125 }, { id: 'b', d: 125 }, { id: 'c', d: 63 }];
+    const cfg = pkg.solve(tubes, { w: 900, lock: 'w' });
+    const A = pkg.anchorLayout(cfg, { w: 900, h: 400, lockW: true, lockH: false });
+    expect(A.w).toBe(900);
+    const left = Math.min(...A.positions.map(p => {
+      const c = pkg.cell(cfg.items.find(it => it.id === p.id).d);
+      return p.x - c / 2;
+    }));
+    expect(left).toBeGreaterThan(pkg.GEO.margin); // centré → marge gauche > lit de pose seul
+  });
+
+  test('axes verrouillés : dimensions strictement conservées', () => {
+    const cfg = pkg.solve(eightTubes, { w: 700, lock: 'w' });
+    const A = pkg.anchorLayout(cfg, { w: 700, h: 390, lockW: true, lockH: true });
+    expect(A.w).toBe(700);
+    expect(A.h).toBe(390);
+  });
+
+  test('layout vide : pas de crash, dimensions conservées', () => {
+    const cfg = pkg.solve([], { lock: null });
+    const A = pkg.anchorLayout(cfg, { w: 700, h: 390, lockW: false, lockH: false });
+    expect(A.positions).toHaveLength(0);
+    expect(A.w).toBe(700);
+    expect(A.h).toBe(390);
+  });
+});
+
 describe('packer — variants', () => {
+  beforeAll(setStandardGeo);
   const tubes = Array.from({ length: 10 }, (_, i) => ({ id: 'v' + i, d: [125, 63, 90][i % 3] }));
   test('≤ 3 variantes, taguées, dédupliquées, valides', () => {
     const vs = pkg.variants(tubes, { lock: null });

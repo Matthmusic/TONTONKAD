@@ -533,6 +533,15 @@
                 </svg>
                 <span class="ctrl-label">Ranger</span>
               </button>
+              <button id="reduceBoxBtn" class="ctrl-btn" aria-label="Réduire la boîte au minimum autour des fourreaux" title="Réduire la boîte au minimum">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <polyline points="4 14 10 14 10 20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  <polyline points="20 10 14 10 14 4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  <line x1="14" y1="10" x2="21" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="3" y1="21" x2="10" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span class="ctrl-label">Réduire</span>
+              </button>
               <button id="rotateBoxCcw" class="ctrl-btn ctrl-btn-square" aria-label="Tourner la boîte de 90° antihoraire" title="90° gauche">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M7 7h6a5 5 0 1 1-4.2 7.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -626,24 +635,24 @@
                     <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-                  <span class="ctrl-pill-text">Écart <strong id="gapValue">30</strong> · Lit <strong id="litDePoseDisplay">40</strong></span>
+                  <span class="ctrl-pill-text">Écart <strong id="gapValue">0</strong> · Lit <strong id="litDePoseDisplay">0</strong></span>
                   <span class="ctrl-caret" aria-hidden="true">▾</span>
                 </button>
                 <div id="ctrlSettingsPopover" class="ctrl-popover" role="dialog" aria-label="Réglages d'écart et de lit de pose" hidden>
                   <div class="ctrl-popover-row">
                     <label for="gapSlider" class="ctrl-popover-label">
                       <span>Écart entre fourreaux</span>
-                      <span class="ctrl-popover-val"><strong id="gapValuePop">30</strong>mm</span>
+                      <span class="ctrl-popover-val"><strong id="gapValuePop">0</strong>mm</span>
                     </label>
-                    <input type="range" id="gapSlider" min="0" max="50" value="30" step="1" class="gap-slider" aria-label="Régler l'écart entre fourreaux (0-50mm)">
+                    <input type="range" id="gapSlider" min="0" max="50" value="0" step="1" class="gap-slider" aria-label="Régler l'écart entre fourreaux (0-50mm)">
                     <div class="gap-range-labels"><span>0mm</span><span>50mm</span></div>
                   </div>
                   <div class="ctrl-popover-row">
                     <label class="ctrl-popover-label">
                       <span><input type="checkbox" id="litDePoseEnabled" checked> Lit de pose</span>
-                      <span class="ctrl-popover-val"><strong id="litValuePop">40</strong>mm</span>
+                      <span class="ctrl-popover-val"><strong id="litValuePop">0</strong>mm</span>
                     </label>
-                    <input type="range" id="litDePoseSlider" min="0" max="100" value="40" step="5" class="gap-slider" aria-label="Régler le lit de pose (0-100mm)">
+                    <input type="range" id="litDePoseSlider" min="0" max="100" value="0" step="5" class="gap-slider" aria-label="Régler le lit de pose (0-100mm)">
                     <div class="gap-range-labels"><span>0mm</span><span>100mm</span></div>
                   </div>
                 </div>

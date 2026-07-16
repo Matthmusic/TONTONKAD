@@ -6,7 +6,10 @@
   const MaxRectsPacker = MRP.MaxRectsPacker;
   const PACKING_LOGIC  = MRP.PACKING_LOGIC;
 
-  const GEO  = { gap: 30, margin: 40 };
+  // Défauts à 0 : l'écart (entraxe) et le lit de pose sont réglés par
+  // l'utilisateur via le pop-over de la barre de contrôle (gapSlider /
+  // litDePoseSlider), qui mute GEO. Doit rester cohérent avec index.html.
+  const GEO  = { gap: 0, margin: 0 };
   const OPTS = { smart: true, pot: false, square: false, allowRotation: false, border: 0, logic: PACKING_LOGIC.MAX_EDGE };
 
   const cell = (d) => d + GEO.gap;
@@ -131,14 +134,41 @@
     });
   }
 
+  // Ancre un layout (Y-up, origine bas-gauche) dans une boîte existante et
+  // convertit en positions canvas (Y-down, centres des cercles, en mm).
+  // La boîte GARDE ses dimensions ; un axe libre n'est agrandi que si la nappe
+  // ne tient pas. La nappe est posée au FOND (lit de pose) et centrée en largeur.
+  // box = { w, h, lockW, lockH } → { w, h, positions: [{id, d, x, y}] }
+  function anchorLayout(cfg, box) {
+    const round5 = (v) => Math.ceil(v / 5) * 5;
+    let maxX = 0, maxY = 0;
+    for (const it of cfg.items) {
+      const c = cell(it.d);
+      if (it.x + c > maxX) maxX = it.x + c;
+      if (it.y + c > maxY) maxY = it.y + c;
+    }
+    const hasItems = cfg.items.length > 0;
+    const contentW = hasItems ? maxX + GEO.margin : 0;
+    const contentH = hasItems ? maxY + GEO.margin : 0;
+    const w = box.lockW ? box.w : Math.max(box.w, round5(contentW));
+    const h = box.lockH ? box.h : Math.max(box.h, round5(contentH));
+    const offsetX = Math.max(0, (w - contentW) / 2);
+    const positions = cfg.items.map(it => {
+      const c = cell(it.d);
+      const yUp = it.y + c / 2; // centre en repère moteur (Y=0 en bas)
+      return { id: it.id, d: it.d, x: offsetX + it.x + c / 2, y: h - yUp, yUp };
+    });
+    return { w, h, positions };
+  }
+
   const api = {
-    GEO, cell, solve, variants,
+    GEO, cell, solve, variants, anchorLayout,
     __test: { sortTubes, packWidth, packHeight, packAt: packWidth, toLayout, candidateSizes },
   };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
   } else {
     root.PACKER = api;
-    root.GEO = GEO; root.cell = cell; root.solve = solve; root.variants = variants;
+    root.GEO = GEO; root.cell = cell; root.solve = solve; root.variants = variants; root.anchorLayout = anchorLayout;
   }
 })(typeof window !== 'undefined' ? window : globalThis);

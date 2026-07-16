@@ -26,7 +26,7 @@
   const DEFAULT_STROKE_WIDTH = -3; // Épaisseur de trait par défaut
 
   // Constantes de grille
-  const DEFAULT_FOURREAU_GAP = 30; // Valeur initiale de l'écart extérieur souhaité
+  const DEFAULT_FOURREAU_GAP = 0; // Valeur initiale de l'écart extérieur souhaité
 
   // Système de grille visuelle et magnétisme
   let gridEnabled = false; // Grille activée ou non
@@ -1093,9 +1093,10 @@
     return Math.hypot(x - cx, y - cy) + r <= WORLD_R - safetyMarginPx;
   }
 
+  // ignoreId : id unique ou Set d'ids à exclure
   function collidesWithFourreau(x, y, r, ignoreId, gapPx = 0) {
     for (const f of fourreaux) {
-      if (ignoreId && f.id === ignoreId) continue;
+      if (ignoreId && (ignoreId instanceof Set ? ignoreId.has(f.id) : f.id === ignoreId)) continue;
       const R = f.od * MM_TO_PX / 2;
       if (Math.hypot(x - f.x, y - f.y) < r + R + gapPx) return true;
     }
@@ -1310,6 +1311,40 @@
     });
   }
 
+  // Applique une config du packer au canvas : la boîte GARDE ses dimensions
+  // (un axe libre n'est agrandi que si la nappe ne tient pas), la nappe est
+  // posée au FOND et centrée en largeur, les fourreaux déplacés sont gelés.
+  function applyAnchoredConfig(cfg) {
+    const shape = shapeSel.value;
+    const lockW = document.getElementById('lockWidth')?.checked;
+    const lockH = document.getElementById('lockHeight')?.checked;
+    const boxW = shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value);
+    const boxH = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
+
+    const anchored = window.PACKER.anchorLayout(cfg, {
+      w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH,
+    });
+
+    // Positions en mm, centres des cercles, Y=0 en haut
+    anchored.positions.forEach(p => {
+      const fourreau = fourreaux.find(f => String(f.id) === String(p.id));
+      if (fourreau) moveFourreauWithChildren(fourreau, p.x * MM_TO_PX, p.y * MM_TO_PX);
+    });
+
+    // Agrandir les axes libres si la nappe ne tenait pas
+    if (shape === 'rect') {
+      if (!lockW) boxWInput.value = anchored.w;
+      if (!lockH) boxHInput.value = anchored.h;
+    } else if (shape === 'circ') {
+      boxDInput.value = Math.max(anchored.w, anchored.h);
+    }
+    applyDimensions({ preserveView: true });
+
+    // Pas de grille visuelle avec ce système de placement
+    lastGridCells = [];
+    return anchored;
+  }
+
   // Fonction principale d'arrangement - utilise toujours le nouveau moteur intelligent
   function arrangeConduitGrid(options = {}) {
     arrangeConduitGridNew();
@@ -1351,48 +1386,20 @@
 
       const bestConfig = window.solve(tubes, optsPacker);
 
-      // La boîte épouse le layout sur les axes LIBRES (pas de débordement),
-      // on centre (offset ≥ 0) sur les axes VERROUILLÉS.
-      const targetW = lockWidth  ? boxWidth  : Math.ceil(bestConfig.w / 5) * 5;
-      const targetH = lockHeight ? boxHeight : Math.ceil(bestConfig.h / 5) * 5;
-      const offsetX = Math.max(0, (targetW - bestConfig.w) / 2);
-      const offsetY = Math.max(0, (targetH - bestConfig.h) / 2);
-
-      // Appliquer le placement au canvas
-      bestConfig.items.forEach(it => {
-        const fourreau = fourreaux.find(f => String(f.id) === String(it.id));
-        if (fourreau) {
-          // it.x/it.y = coin bas-gauche de la cellule (système Y=0 en BAS)
-          // Le canvas dessine au CENTRE du cercle avec Y=0 en HAUT
-          const cellSize = window.cell(it.d);
-          const x = (offsetX + it.x + cellSize / 2) * MM_TO_PX;
-          const y = (offsetY + bestConfig.h - it.y - cellSize / 2) * MM_TO_PX; // Inverser Y puis centrer dans la boîte
-          moveFourreauWithChildren(fourreau, x, y);
-        }
-      });
-
-      // Redimensionner les axes libres pour épouser le layout (évite tout débordement)
-      if (shape === 'rect') {
-        if (!lockWidth)  boxWInput.value = targetW;
-        if (!lockHeight) boxHInput.value = targetH;
-      } else if (shape === 'circ') {
-        boxDInput.value = Math.max(targetW, targetH);
-      }
-      const _savedOX = canvasOffsetPx.x, _savedOY = canvasOffsetPx.y, _savedDS = displayScale;
-      applyDimensions();
-      canvasOffsetPx.x = _savedOX; canvasOffsetPx.y = _savedOY; displayScale = _savedDS;
-
-      // Effacer les cellules de grille (pas de grille visuelle avec nouveau système)
-      lastGridCells = [];
+      applyAnchoredConfig(bestConfig);
 
       // Exposer les variantes dans le panel d'alternatives
       const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
-      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input, false)];
+      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input)];
 
       lastVoidFillSuggestions = [];
 
       showLayoutPreviewPanel();
+
+      // Proposer le redimensionnement de la boîte (bouton flottant) si la
+      // nappe est nettement plus petite que la boîte conservée
+      checkForPossibleReduction();
 
       // Afficher taux d'occupation et feedback
       const fillPercent = (bestConfig.fill * 100).toFixed(0);
@@ -2448,48 +2455,8 @@
   function applyNappeVariant(variantIndex) {
     const variant = lastLayoutVariants[variantIndex];
     if (!variant || !variant.isNappeLayout) return;
-    const cfg   = variant.nappe;
-    const shape = shapeSel.value;
+    applyAnchoredConfig(variant.nappe);
 
-    const lockW = document.getElementById('lockWidth')?.checked;
-    const lockH = document.getElementById('lockHeight')?.checked;
-
-    // La boîte épouse le layout sur les axes LIBRES (pas de débordement) ;
-    // on centre (offset ≥ 0) seulement sur les axes VERROUILLÉS.
-    const curW = shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value);
-    const curH = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
-    const targetW = lockW ? curW : Math.ceil(cfg.w / 5) * 5;
-    const targetH = lockH ? curH : Math.ceil(cfg.h / 5) * 5;
-    const offsetX = Math.max(0, (targetW - cfg.w) / 2);
-    const offsetY = Math.max(0, (targetH - cfg.h) / 2);
-
-    cfg.items.forEach(it => {
-      const fourreau = fourreaux.find(f => String(f.id) === String(it.id));
-      if (!fourreau) return;
-      const cs = window.cell(it.d);
-      const x = (offsetX + it.x + cs / 2) * MM_TO_PX;
-      const y = (offsetY + cfg.h - it.y - cs / 2) * MM_TO_PX;
-      moveFourreauWithChildren(fourreau, x, y);
-    });
-
-    // Redimensionner les axes libres pour épouser le layout
-    if (shape === 'rect') {
-      if (!lockW) boxWInput.value = targetW;
-      if (!lockH) boxHInput.value = targetH;
-    } else if (shape === 'circ') {
-      boxDInput.value = Math.max(targetW, targetH);
-    }
-    // Sauvegarder pan et échelle : applyDimensions() les réinitialise car
-    // fitCanvas() mesure canvasWrap.clientHeight réduit par le panel visible.
-    const savedOffsetX = canvasOffsetPx.x;
-    const savedOffsetY = canvasOffsetPx.y;
-    const savedDisplayScale = displayScale;
-    applyDimensions();
-    canvasOffsetPx.x = savedOffsetX;
-    canvasOffsetPx.y = savedOffsetY;
-    displayScale = savedDisplayScale;
-
-    lastGridCells = [];
     document.querySelectorAll('.layout-preview-card').forEach((el, i) => {
       el.classList.toggle('active', i === variantIndex);
     });
@@ -2530,7 +2497,7 @@
       const desc       = CARD_DESCS[i]   || (STRATEGY_FR[v.name] || v.name);
       const isOptimized = i === 1;
       const scoreLabel = v.isNappeLayout
-        ? `${v.nappe.w.toFixed(0)}×${v.nappe.h.toFixed(0)}mm · ${v.score.toFixed(0)}%`
+        ? `${v.container.width.toFixed(0)}×${v.container.height.toFixed(0)}mm · ${v.score.toFixed(0)}%`
         : desc;
       const extraClass = isOptimized ? ' card-optimized' : '';
       const badge      = isOptimized ? '<span class="card-optimized-badge">⭐</span>' : '';
@@ -2567,26 +2534,30 @@
     if (panel) panel.style.display = 'none';
   }
 
-  function buildNappeVariants(configs, boxW, boxH, input, autoResize) {
-    return configs.map(cfg => ({
-      isNappeLayout: true,
-      name:  cfg.tag || 'auto',
-      score: (cfg.fill || 0) * 100,
-      nappe: cfg,
-      container: { width: cfg.w, height: cfg.h },
-      items: input,
-      layout: {
-        fits: true,
-        placements: cfg.items.map(it => {
-          const cs = window.cell(it.d);
-          return { id: it.id, x: it.x + cs / 2, y: it.y + cs / 2 };
-        }),
-        cells: [],
-      },
-      boxW,
-      boxH,
-      autoResize,
-    }));
+  function buildNappeVariants(configs, boxW, boxH, input) {
+    const lockW = document.getElementById('lockWidth')?.checked;
+    const lockH = document.getElementById('lockHeight')?.checked;
+    return configs.map(cfg => {
+      // Aperçu fidèle : même ancrage que applyNappeVariant (boîte conservée,
+      // nappe au fond, centrée) — sinon la carte montre une boîte redimensionnée.
+      const anchored = window.PACKER.anchorLayout(cfg, {
+        w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH,
+      });
+      return {
+        isNappeLayout: true,
+        name:  cfg.tag || 'auto',
+        score: (cfg.fill || 0) * 100,
+        nappe: cfg,
+        container: { width: anchored.w, height: anchored.h },
+        items: input,
+        layout: {
+          fits: true,
+          // renderVariantSVG attend du Y-up (0 = bas)
+          placements: anchored.positions.map(p => ({ id: p.id, x: p.x, y: p.yUp })),
+          cells: [],
+        },
+      };
+    });
   }
 
   function arrangeConduitGridOptimized(behaviorOptions = {}) {
@@ -3072,7 +3043,8 @@
     if (fourreaux.length === 0) return;
     const lockW = document.getElementById('lockWidth')?.checked;
     const lockH = document.getElementById('lockHeight')?.checked;
-    const LIT = 40 * MM_TO_PX; // litDePose en pixels canvas
+    const LIT_MM = getContainerMarginMm(); // lit de pose configuré (réglages)
+    const LIT = LIT_MM * MM_TO_PX;
 
     // Bounding box des fourreaux (bords extérieurs)
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -3091,8 +3063,8 @@
       fourreaux.forEach(f => moveFourreauWithChildren(f, f.x + shiftX, f.y + shiftY));
     }
 
-    const newWmm = Math.ceil(((maxX - minX) / MM_TO_PX + 80) / 5) * 5; // 80 = 2×40mm
-    const newHmm = Math.ceil(((maxY - minY) / MM_TO_PX + 80) / 5) * 5;
+    const newWmm = Math.ceil(((maxX - minX) / MM_TO_PX + 2 * LIT_MM) / 5) * 5;
+    const newHmm = Math.ceil(((maxY - minY) / MM_TO_PX + 2 * LIT_MM) / 5) * 5;
 
     const shape = shapeSel.value;
     if (shape === 'rect') {
@@ -3102,15 +3074,7 @@
       boxDInput.value = Math.max(newWmm, newHmm);
     }
 
-    // Même protection que applyNappeVariant : éviter que fitCanvas() réduise
-    // le canvas parce que le panel preview est visible dans le flux
-    const savedOffsetX = canvasOffsetPx.x;
-    const savedOffsetY = canvasOffsetPx.y;
-    const savedDisplayScale = displayScale;
-    applyDimensions();
-    canvasOffsetPx.x = savedOffsetX;
-    canvasOffsetPx.y = savedOffsetY;
-    displayScale = savedDisplayScale;
+    applyDimensions({ preserveView: true });
 
     updateStats();
     redraw();
@@ -3173,17 +3137,23 @@
       // Sauver l'état AVANT de modifier le canvas
       saveStateToHistory();
 
-      // Remplacer tous les fourreaux du canvas par ceux du moteur
+      // Remplacer tous les fourreaux du canvas par ceux du moteur.
+      // Boîte réduite au layout (w/h = 0 : les axes libres épousent la nappe),
+      // ancrage cohérent avec les autres flux (nappe posée sur le lit de pose).
       fourreaux.length = 0;
 
-      bestConfig.items.forEach(it => {
-        const spec = idToSpec[String(it.id)];
+      const anchored = window.PACKER.anchorLayout(bestConfig, {
+        w: lockWidth ? boxWidth : 0, h: lockHeight ? boxHeight : 0,
+        lockW: !!lockWidth, lockH: !!lockHeight,
+      });
+
+      anchored.positions.forEach(p => {
+        const spec = idToSpec[String(p.id)];
         if (!spec) return;
-        const cellSize = window.cell(it.d);
-        const x = (it.x + cellSize / 2) * MM_TO_PX;
-        const y = (bestConfig.h - it.y - cellSize / 2) * MM_TO_PX;
+        const x = p.x * MM_TO_PX;
+        const y = p.y * MM_TO_PX;
         fourreaux.push({
-          id: it.id, x, y,     // conserver l'ID moteur pour que applyNappeVariant retrouve le fourreau
+          id: p.id, x, y,     // conserver l'ID moteur pour que applyNappeVariant retrouve le fourreau
           od: spec.od, idm: spec.id,
           color: colorForFourreau(spec.type, spec.code), customColor: null, label: '',
           children: [], vx: 0, vy: 0, dragging: false, frozen: true,
@@ -3195,20 +3165,18 @@
       });
 
       // Appliquer les dimensions de la boîte
-      const newWidth  = Math.ceil(bestConfig.w / 5) * 5;
-      const newHeight = Math.ceil(bestConfig.h / 5) * 5;
       if (shape === 'rect') {
-        if (!lockWidth)  boxWInput.value  = newWidth;
-        if (!lockHeight) boxHInput.value = newHeight;
+        if (!lockWidth)  boxWInput.value  = anchored.w;
+        if (!lockHeight) boxHInput.value = anchored.h;
       } else if (shape === 'circ') {
-        boxDInput.value = Math.max(newWidth, newHeight);
+        boxDInput.value = Math.max(anchored.w, anchored.h);
       }
       applyDimensions();
 
       // Panel variantes
       const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
-      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, expandedInput, true)];
+      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, expandedInput)];
 
       lastVoidFillSuggestions = [];
       showLayoutPreviewPanel();
@@ -3295,33 +3263,24 @@
       // Meilleur placement (dimensions déjà serrées au minimum par le packer)
       const bestConfig = window.solve(tubes, optsPacker);
 
-      // Appliquer le placement au canvas
-      // Les positions du moteur incluent déjà les marges (litDePose) sur les 4 côtés.
-      // Pas d'offset supplémentaire nécessaire (offsetX=0, offsetY=0).
-      bestConfig.items.forEach(it => {
-        const fourreau = fourreaux.find(f => String(f.id) === String(it.id));
-        if (fourreau) {
-          // it.x/it.y = coin bas-gauche de la cellule (Y=0 en BAS dans le moteur)
-          // Le canvas dessine au CENTRE du cercle avec Y=0 en HAUT
-          const cellSize = window.cell(it.d);
-          const x = (it.x + cellSize / 2) * MM_TO_PX;
-          const y = (bestConfig.h - it.y - cellSize / 2) * MM_TO_PX;
-          moveFourreauWithChildren(fourreau, x, y);
-        }
+      // Boîte réduite au layout (w/h = 0 : les axes libres épousent la nappe),
+      // ancrage cohérent avec les autres flux (nappe posée sur le lit de pose).
+      const anchored = window.PACKER.anchorLayout(bestConfig, {
+        w: lockWidth ? boxWidth : 0, h: lockHeight ? boxHeight : 0,
+        lockW: !!lockWidth, lockH: !!lockHeight,
       });
 
-      // Mettre à jour les dimensions de la boîte
-      // Arrondir AU-DESSUS au pas de 5mm (comme applyDimensions) pour éviter que
-      // roundToStep n'arrondisse vers le bas et que les fourreaux débordent.
-      const newWidth  = Math.ceil(bestConfig.w / 5) * 5;
-      const newHeight = Math.ceil(bestConfig.h / 5) * 5;
+      anchored.positions.forEach(p => {
+        const fourreau = fourreaux.find(f => String(f.id) === String(p.id));
+        if (fourreau) moveFourreauWithChildren(fourreau, p.x * MM_TO_PX, p.y * MM_TO_PX);
+      });
 
+      const newWidth = anchored.w, newHeight = anchored.h;
       if (shape === 'rect') {
         if (!lockWidth) boxWInput.value = newWidth;
         if (!lockHeight) boxHInput.value = newHeight;
       } else if (shape === 'circ') {
-        const newDiameter = Math.max(newWidth, newHeight);
-        boxDInput.value = newDiameter;
+        boxDInput.value = Math.max(newWidth, newHeight);
       }
 
       applyDimensions();
@@ -3335,7 +3294,7 @@
       // Exposer les variantes (chacune déjà serrée à son minimum)
       const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
-      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input, true)];
+      lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input)];
 
       lastVoidFillSuggestions = [];
 
@@ -6020,13 +5979,14 @@
   }
 
   function toggleOrtho() {
-    if (gravityEnabled) {
-      showToast('Mode ORTHO indisponible avec la gravité');
-      return;
-    }
     orthoEnabled = !orthoEnabled;
     updateOrthoUI();
-    showToast(orthoEnabled ? 'Mode ORTHO activé (F8)' : 'Mode ORTHO désactivé');
+    if (orthoEnabled && gravityEnabled) {
+      setGravity(false, { toast: false });
+      showToast('Mode ORTHO activé (F8) — gravité désactivée');
+    } else {
+      showToast(orthoEnabled ? 'Mode ORTHO activé (F8)' : 'Mode ORTHO désactivé');
+    }
   }
 
   function updateOsnapUI() {
@@ -6040,11 +6000,17 @@
   function toggleOsnap() {
     osnapEnabled = !osnapEnabled;
     updateOsnapUI();
-    showToast(osnapEnabled ? 'Mode OSNAP activé (F3)' : 'Mode OSNAP désactivé');
+    if (osnapEnabled && gravityEnabled) {
+      setGravity(false, { toast: false });
+      showToast('Mode OSNAP activé (F3) — gravité désactivée');
+    } else {
+      showToast(osnapEnabled ? 'Mode OSNAP activé (F3)' : 'Mode OSNAP désactivé');
+    }
   }
 
-  function toggleGravity() {
-    gravityEnabled = !gravityEnabled;
+  function setGravity(enabled, { toast = true } = {}) {
+    if (gravityEnabled === enabled) return;
+    gravityEnabled = enabled;
     // Les câbles ont toujours la gravité — on ne les touche pas ici
     const allObjs = [...fourreaux];
     if (!gravityEnabled) {
@@ -6064,14 +6030,22 @@
         }
       }
     }
-    // ORTHO incompatible avec la gravité — le désactiver si on passe ON
+    // ORTHO et OSNAP incompatibles avec la gravité — les désactiver si on passe ON
     if (gravityEnabled && orthoEnabled) {
       orthoEnabled = false;
       updateOrthoUI();
     }
+    if (gravityEnabled && osnapEnabled) {
+      osnapEnabled = false;
+      updateOsnapUI();
+    }
     updateGravityUI();
-    showToast(gravityEnabled ? 'Gravité activée' : 'Gravité désactivée');
+    if (toast) showToast(gravityEnabled ? 'Gravité activée' : 'Gravité désactivée');
     redraw();
+  }
+
+  function toggleGravity() {
+    setGravity(!gravityEnabled);
   }
 
   function toggleShowInfo() {
@@ -6495,6 +6469,48 @@
     return { dx: rawDx + (bestDX < TOL ? adjX : 0), dy: rawDy + (bestDY < TOL ? adjY : 0), snapped };
   }
 
+  // Borne le delta pour que TOUT le groupe reste dans la boîte (déplacement
+  // rigide) : sans cela, confineInBox recale individuellement les fourreaux
+  // qui touchent la paroi pendant que les autres suivent le curseur, et le
+  // groupe s'écrase en se chevauchant contre le bord.
+  function clampGroupDelta(dx, dy) {
+    if (moveTargets.length === 0) return { dx, dy };
+    if (SHAPE === 'rect' || SHAPE === 'chemin_de_cable') {
+      let minDx = -Infinity, maxDx = Infinity, minDy = -Infinity, maxDy = Infinity;
+      for (const t of moveTargets) {
+        const r = t.f.od * MM_TO_PX / 2;
+        minDx = Math.max(minDx, r - t.x0);
+        maxDx = Math.min(maxDx, WORLD_W - r - t.x0);
+        minDy = Math.max(minDy, r - t.y0);
+        maxDy = Math.min(maxDy, WORLD_H - r - t.y0);
+      }
+      return {
+        dx: Math.min(Math.max(dx, minDx), maxDx),
+        dy: Math.min(Math.max(dy, minDy), maxDy),
+      };
+    }
+    // Boîte circulaire : réduire uniformément le delta jusqu'à ce que tout tienne
+    // (rayon réduit d'un epsilon : un fourreau déjà tangent à la paroi doit
+    // compter comme "dedans" malgré les arrondis flottants)
+    const fits = (k) => moveTargets.every(t =>
+      isInsideBox(t.x0 + dx * k, t.y0 + dy * k, t.f.od * MM_TO_PX / 2 - 0.001, { requireSafetyMargin: false }));
+    if (fits(1)) return { dx, dy };
+    if (!fits(0)) return { dx: 0, dy: 0 };
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+    return { dx: dx * lo, dy: dy * lo };
+  }
+
+  // Vrai si un fourreau du groupe déplacé de (dx, dy) chevaucherait un
+  // fourreau fixe. La tangence exacte (accrochage osnap bord à bord) est
+  // tolérée via un gap négatif — on ne bloque que le chevauchement réel
+  // (contrairement au drag simple qui impose l'entraxe via validatePlacement).
+  function groupCollides(dx, dy, ignore) {
+    const EPS = 0.5; // px
+    return moveTargets.some(t =>
+      collidesWithFourreau(t.x0 + dx, t.y0 + dy, t.f.od * MM_TO_PX / 2, ignore, -EPS));
+  }
+
   function updateMovePreview(p) {
     if (moveMode !== 'moving') return;
     const ignore = new Set(moveTargets.map(t => t.f.id));
@@ -6510,6 +6526,14 @@
     if (orthoEnabled && moveBase) { // ORTHO (F8) : verrouille l'axe dominant
       if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
     }
+
+    // Arrêter le groupe entier contre les parois (mouvement rigide)
+    ({ dx, dy } = clampGroupDelta(dx, dy));
+
+    // Refuser les positions en chevauchement avec les fourreaux fixes :
+    // le groupe reste à sa dernière position valide (même logique que le
+    // drag simple via validatePlacement)
+    if (groupCollides(dx, dy, ignore)) return;
 
     for (const t of moveTargets) {
       t.f.x = t.x0 + dx; t.f.y = t.y0 + dy; t.f._px = t.f.x; t.f._py = t.f.y;
@@ -6928,11 +6952,23 @@
     return Math.round(value / step) * step;
   }
 
+  // Options :
+  // - fitContents     : rescale le contenu dans la nouvelle boîte
+  // - anchorContents  : ré-ancre une nappe gelée au fond (réservé aux
+  //                     redimensionnements manuels via l'UI — les flux de
+  //                     placement positionnent déjà leurs fourreaux eux-mêmes)
+  // - preserveView    : conserve pan et échelle d'affichage (fitCanvas() les
+  //                     recalcule mal quand le panel preview est visible)
   function applyDimensions(options = {}) {
     // Vérifier si les fourreaux sont déjà en grille (tous gelés)
     const wasInGrid = fourreaux.length > 0 && fourreaux.every(f => f.frozen);
-    const autoArrange = options.autoArrange === true;
     const fitContents = options.fitContents === true;
+    const anchorContents = options.anchorContents === true;
+    const preserveView = options.preserveView === true;
+    const prevW_MM = WORLD_W_MM, prevH_MM = WORLD_H_MM;
+    const savedView = preserveView
+      ? { x: canvasOffsetPx.x, y: canvasOffsetPx.y, scale: displayScale }
+      : null;
 
     canvasOffsetPx.x = 0;
     canvasOffsetPx.y = 0;
@@ -6963,6 +6999,18 @@
       WORLD_D_MM = roundToStep(parseFloat(boxDInput.value), 5);
     }
     syncDimensionState();
+    // Ré-ancrer la nappe gelée au FOND quand la boîte change de taille
+    // (les coordonnées sont absolues depuis le coin haut-gauche : sans ce
+    // décalage, agrandir la boîte laisse la nappe collée en haut).
+    if (anchorContents && !fitContents && wasInGrid && SHAPE === 'rect') {
+      const dX = ((WORLD_W_MM - prevW_MM) / 2) * MM_TO_PX;
+      const dY = (WORLD_H_MM - prevH_MM) * MM_TO_PX;
+      if (dX || dY) {
+        for (const f of fourreaux) {
+          moveFourreauWithChildren(f, f.x + dX, f.y + dY);
+        }
+      }
+    }
     if (fitContents && typeof window.fitContentsToBox === 'function') {
       window.fitContentsToBox(WORLD_W_MM, WORLD_H_MM);
     }
@@ -6972,13 +7020,17 @@
     updateInventory();
     updateSelectedInfo();
 
-    // Si demandé, réappliquer la grille automatiquement
-    if (autoArrange && wasInGrid && fourreaux.length > 0) {
-      // Petite pause pour laisser le canvas se redimensionner
-      setTimeout(() => {
-        arrangeConduitGrid();
-      }, 120);
+    if (savedView) {
+      canvasOffsetPx.x = savedView.x;
+      canvasOffsetPx.y = savedView.y;
+      displayScale = savedView.scale;
     }
+  }
+
+  // Redimensionnement manuel (bouton Appliquer / touche Entrée) : seul flux
+  // où la nappe gelée doit être ré-ancrée au fond de la nouvelle boîte.
+  function applyDimensionsFromUI() {
+    applyDimensions({ anchorContents: true });
   }
 
   window.applyDimensions = applyDimensions;
@@ -7158,8 +7210,12 @@
     // 2. Résolution des contraintes : Répéter plusieurs fois pour assurer la stabilité et éviter le chevauchement.
     for (let iter = 0; iter < PHYSICS_ITERATIONS; iter++) {
       // A. Confinement des objets dans leurs conteneurs respectifs
-      for (const f of fourreaux) { confineInBox(f, f.od * MM_TO_PX / 2); }
+      // (les objets gelés sont intouchables : les recaler individuellement
+      // écraserait un groupe déplacé volontairement contre une paroi —
+      // c'est pruneOutside qui gère les hors-limites après redimensionnement)
+      for (const f of fourreaux) { if (!f.frozen) confineInBox(f, f.od * MM_TO_PX / 2); }
       for (const c of cables) {
+        if (c.frozen) continue;
         const r = c.od * MM_TO_PX / 2;
         if (c.parent) {
           const f = fourreaux.find(fourreau => fourreau.id === c.parent);
@@ -8488,6 +8544,8 @@
     if (toolEdit) toolEdit.addEventListener('click', openEditPopup);
     if (toolInfo) toolInfo.addEventListener('click', toggleShowInfo);
     if (gridArrange) gridArrange.addEventListener('click', arrangeConduitGrid);
+    const reduceBoxBtn = document.getElementById('reduceBoxBtn');
+    if (reduceBoxBtn) reduceBoxBtn.addEventListener('click', reduceToMinimum);
     if (toggleGridBtn) toggleGridBtn.addEventListener('click', toggleGridVisibility);
     if (rotateBoxCcw) rotateBoxCcw.addEventListener('click', () => rotateBoxAndContents('ccw'));
     if (rotateBoxCw) rotateBoxCw.addEventListener('click', () => rotateBoxAndContents('cw'));
@@ -8923,13 +8981,13 @@
     tabFOURREAU.addEventListener('click', () => setTab('FOURREAU'));
     tabCABLE.addEventListener('click', () => setTab('CÂBLE'));
     shapeSel.addEventListener('change', handleShapeSelectorChange);
-    applyBtn.addEventListener('click', applyDimensions);
-    applyCircBtn.addEventListener('click', applyDimensions);
+    applyBtn.addEventListener('click', applyDimensionsFromUI);
+    applyCircBtn.addEventListener('click', applyDimensionsFromUI);
 
     // Appliquer les dimensions avec la touche Entrée
     function handleDimensionEnter(e) {
       if (e.key === 'Enter') {
-        applyDimensions();
+        applyDimensionsFromUI();
       }
     }
     boxWInput.addEventListener('keydown', handleDimensionEnter);
