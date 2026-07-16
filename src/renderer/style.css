@@ -2542,15 +2542,9 @@ select::-webkit-scrollbar-thumb {
     flex-wrap: wrap;
 }
 
-.control-zone-plan .control-zone-actions,
-.control-zone-precision .control-zone-actions {
-    flex-wrap: nowrap;
-}
-
-.control-zone-output .control-zone-actions,
-.control-zone-danger .control-zone-actions {
-    flex-wrap: nowrap;
-}
+/* Toutes les zones autorisent le retour à la ligne : avec overflow visible,
+   un nowrap fait CHEVAUCHER les boutons sur la zone voisine dès que la
+   largeur allouée par la grille est insuffisante (constaté en 1920px). */
 
 .control-strip .ctrl-btn {
     min-width: 52px;
@@ -2988,6 +2982,9 @@ body.electron-mode .notification-container {
    ========================================================================== */
 
 .brand {
+    /* Ne jamais laisser le flex écraser la carte (seul enfant du panneau
+       avec overflow hidden, elle absorbait toute la compression en 1080p) */
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: var(--spacing-lg);
@@ -6205,3 +6202,70 @@ body.electron-mode .notification-container {
 [data-theme="dark"] .void-fill-desc { color: #ddd; }
 [data-theme="dark"] .btn-ignore-fill { border-color: #555; color: #aaa; }
 [data-theme="dark"] .btn-ignore-fill:hover { background: #333; }
+
+/* ==========================================================================
+   ÉCRANS PEU HAUTS (1080p et moins) — mode compact de la colonne latérale
+   Évite la barre de défilement du panneau à l'ouverture et garde le logo
+   et le titre lisibles (la carte .brand n'est plus écrasée par le flex).
+   ========================================================================== */
+@media (max-height: 1100px) {
+    .wrap {
+        padding: var(--spacing-sm) var(--spacing-md);
+        gap: var(--spacing-md);
+    }
+
+    .panel {
+        padding: var(--spacing-md);
+    }
+
+    .brand {
+        padding: var(--spacing-sm) var(--spacing-md);
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .brand .logo {
+        height: 48px;
+    }
+
+    .brand h1 {
+        font-size: 1.05rem;
+    }
+
+    .list {
+        max-height: 140px;
+    }
+
+    .card {
+        padding: var(--spacing-md);
+    }
+
+    .tabs {
+        margin-bottom: var(--spacing-sm);
+    }
+}
+
+/* ── Largeurs ≤ 2000px (1080p/16:9) : compacter la barre d'outils du bas ──
+   La zone Plan (8 boutons depuis l'ajout de Réduire) et la zone Précision
+   doivent tenir dans leur colonne de grille sans passer sur 2 lignes. */
+@media (max-width: 2000px) {
+    .control-strip .ctrl-btn {
+        min-width: 44px;
+        padding: 6px 6px;
+    }
+
+    .control-strip .ctrl-btn-square {
+        min-width: 38px;
+        width: 38px;
+    }
+
+    .control-strip .ctrl-settings-pill {
+        min-width: 126px;
+        max-width: 142px;
+    }
+
+    .control-zone {
+        gap: 4px;
+        padding: 5px 4px;
+    }
+}
