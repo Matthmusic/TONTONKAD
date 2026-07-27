@@ -954,7 +954,7 @@
   };
 
   /* ====== Utilitaires ====== */
-  const areaCircle = d => { const r = d / 2; return Math.PI * r * r };
+  const areaCircle = d => Geom.areaCircle(d); // impl. pure dans geometry.js (testée)
 
   /* ====== Système de zoom ====== */
   function setZoom(newZoom) {
@@ -5815,21 +5815,11 @@
     }
   }
 
+  // Occupation extraite dans geometry.js (pure, testée). Wrapper : passe les globales.
   function calculateBoxOccupancy() {
-    let totalArea;
-    if (SHAPE === 'rect' || SHAPE === 'chemin_de_cable') {
-      totalArea = WORLD_W_MM * WORLD_H_MM;
-    } else {
-      totalArea = areaCircle(WORLD_D_MM);
-    }
-
-    if (totalArea <= 0) return 0;
-
-    // L'occupation est basée sur l'aire des fourreaux (diamètre extérieur) et des câbles hors fourreaux
-    const occupiedArea = fourreaux.reduce((sum, f) => sum + areaCircle(f.od), 0);
-    const occupiedAreaCable = cables.filter(c => !c.parent).reduce((sum, cable) => sum + areaCircle(cable.od), 0);
-
-    return ((occupiedArea + occupiedAreaCable) / totalArea) * 100;
+    return Geom.computeOccupancy({
+      shape: SHAPE, wMm: WORLD_W_MM, hMm: WORLD_H_MM, dMm: WORLD_D_MM, fourreaux, cables,
+    });
   }
 
   let checkReductionTimeout;
@@ -6961,8 +6951,7 @@
   }
 
   function roundToStep(value, step) {
-    if (!Number.isFinite(value)) return value;
-    return Math.round(value / step) * step;
+    return Geom.roundToStep(value, step); // impl. pure dans geometry.js (testée)
   }
 
   // Options :
