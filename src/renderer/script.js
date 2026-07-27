@@ -7707,27 +7707,18 @@
     return (cablesArea / fourreauInnerArea) * 100;
   }
 
+  // Libellés/textes PDF extraits dans pdf-format.js (purs, testés). Wrappers fins.
   function getPdfObjectLabel(obj, fallback) {
-    const label = typeof obj?.label === 'string' ? obj.label.trim() : '';
-    if (label) return label;
-
-    const customLabel = typeof obj?.customLabel === 'string' ? obj.customLabel.trim() : '';
-    if (customLabel) return customLabel;
-
-    return fallback;
+    return PdfFormat.getObjectLabel(obj, fallback);
   }
-
   function getPdfFourreauName(fourreau, numero) {
-    return getPdfObjectLabel(fourreau, `F${numero}`);
+    return PdfFormat.getFourreauName(fourreau, numero);
   }
-
   function getPdfCableName(cable, index) {
-    return getPdfObjectLabel(cable, `L${index + 1}`);
+    return PdfFormat.getCableName(cable, index);
   }
-
   function truncatePdfText(text, maxChars) {
-    const value = String(text ?? '');
-    return value.length > maxChars ? value.substring(0, Math.max(0, maxChars - 3)) + '...' : value;
+    return PdfFormat.truncate(text, maxChars);
   }
 
   function generatePdfStats() {
