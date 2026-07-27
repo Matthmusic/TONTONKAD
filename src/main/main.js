@@ -68,7 +68,7 @@ async function initializeUserDataFolder() {
     await fs.mkdir(activeDataFolder, { recursive: true });
 
     // Liste des fichiers CSV à copier
-    const csvFiles = ['cables.csv', 'chemins_de_cable.csv', 'fourreaux.csv'];
+    const csvFiles = ['cables.csv', 'chemins_de_cable.csv', 'fourreaux.csv', 'chambres_de_tirage.csv'];
 
     for (const file of csvFiles) {
       const userFilePath = path.join(activeDataFolder, file);

@@ -92,11 +92,12 @@
           {
             title: 'A. Le Panneau Latéral (Gauche) - Centre de Contrôle',
             items: [
-              'En-tête & Paramètres : Logo, numéro de version et bouton ⚙️ pour configurer l\'emplacement de la base de données (CSV)',
-              'Configuration du Contenant : Forme (Rectangulaire, Circulaire, Chemin de câble) et Dimensions avec icône "Cadenas" 🔓 pour verrouiller une dimension',
-              'Sélecteur de Composants : Onglets FOURREAU et CÂBLE avec recherche intelligente pour trouver rapidement une référence',
-              'Inventaires : Deux listes (Fourreaux et Câbles) qui récapitulent ce qui a été ajouté au projet',
-              'Statistiques : Compteurs d\'objets, Taux d\'occupation (KPI critique), Échelle d\'affichage'
+              'Disposition "Deux zones" : l\'en-tête et la barre de statistiques restent fixes, seule la zone de travail (inventaires) défile — vous gardez toujours les totaux sous les yeux',
+              'En-tête compact : Logo, numéro de version, bouton ⓘ (ce manuel) et bouton ⚙️ pour configurer l\'emplacement de la base de données (CSV)',
+              'Configuration du Contenant (ligne compacte) : Forme (Rectangulaire, Circulaire, Chemin de câble) qui occupe la moitié de la ligne, puis les Dimensions L / H (ou Ø) avec icône "Cadenas" 🔓 pour verrouiller une dimension. Le bouton "Appliquer" apparaît sous la ligne quand une valeur change',
+              'Ajout de Composants sur une seule ligne : Onglets FOURREAU / CÂBLE, recherche intelligente de la référence, réglage de la quantité et bouton "+ Ajouter" alignés côte à côte. L\'icône ⓘ rappelle la règle (le fourreau est un anneau)',
+              'Inventaires (zone de travail défilante) : Deux listes côte à côte (Fourreaux et Câbles) qui récapitulent ce qui a été ajouté au projet, avec le bouton ⚡ PLACEMENT AUTO',
+              'Barre de Statistiques (fixe, en bas) : quatre tuiles horizontales — Total Fourreaux, Total Câbles, Taux d\'occupation (KPI critique) et Échelle d\'affichage'
             ]
           },
           {

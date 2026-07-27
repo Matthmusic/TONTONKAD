@@ -223,14 +223,19 @@
   const panel = document.querySelector(".panel");
   const resizeHandle = document.querySelector(".panel-resize-handle");
 
-  // Inputs pour le chemin de câble (créés dynamiquement)
-  let cheminCableInputs, cheminCableSelect;
+  // Picker recherchable "chemin de câble" (créé dynamiquement)
+  let cheminCableInputs;
+  let cheminCableValue = ''; // "largeur|hauteur" sélectionné
+  // Picker recherchable "chambre de tirage" (créé dynamiquement)
+  let chambreTirageInputs;
+  let chambreTirageValue = '';
 
   /* ====== Données de référence ====== */
   /* ====== Données de référence (chargées depuis des fichiers CSV) ====== */
   let FOURREAUX = [];
   let CABLES = [];
   let CHEMINS_CABLE = [];
+  let CHAMBRES_TIRAGE = [];
 
   // Données de fallback intégrées (utilisées si les fichiers CSV ne peuvent pas être chargés)
   const FOURREAUX_FALLBACK = [
@@ -287,6 +292,37 @@
     { nom: "Moyen 200x75", largeur: 200, hauteur: 75 },
     { nom: "Large 300x100", largeur: 300, hauteur: 100 },
     { nom: "Très Large 400x100", largeur: 400, hauteur: 100 }
+  ];
+
+  // Fallback COMPLET si data/chambres_de_tirage.csv n'est pas chargé (ex. en
+  // Electron tant que le fichier n'a pas été copié dans APPDATA). Doit rester
+  // synchronisé avec data/chambres_de_tirage.csv (gamme StradEasy complète).
+  const CHAMBRES_TIRAGE_FALLBACK = [
+    { nom: "L1T Long-pan", largeur: 520, hauteur: 540 },
+    { nom: "L1T Pignon", largeur: 380, hauteur: 540 },
+    { nom: "L2T Long-pan", largeur: 1160, hauteur: 540 },
+    { nom: "L2T Pignon", largeur: 380, hauteur: 540 },
+    { nom: "L3T Long-pan", largeur: 1380, hauteur: 540 },
+    { nom: "L3T Pignon", largeur: 520, hauteur: 540 },
+    { nom: "1/2 L4T Long-pan", largeur: 880, hauteur: 540 },
+    { nom: "1/2 L4T Pignon", largeur: 520, hauteur: 540 },
+    { nom: "L4T Long-pan", largeur: 1670, hauteur: 540 },
+    { nom: "L4T Pignon", largeur: 520, hauteur: 540 },
+    { nom: "L5T Long-pan", largeur: 1790, hauteur: 1140 },
+    { nom: "L5T Pignon", largeur: 880, hauteur: 1140 },
+    { nom: "L6T Long-pan", largeur: 2420, hauteur: 1140 },
+    { nom: "L6T Pignon", largeur: 880, hauteur: 1140 },
+    { nom: "L1C Long-pan", largeur: 520, hauteur: 460 },
+    { nom: "L1C Pignon", largeur: 380, hauteur: 460 },
+    { nom: "L2C Long-pan", largeur: 1160, hauteur: 460 },
+    { nom: "L2C Pignon", largeur: 380, hauteur: 460 },
+    { nom: "L3C Long-pan", largeur: 1380, hauteur: 460 },
+    { nom: "L3C Pignon", largeur: 520, hauteur: 460 },
+    { nom: "K1C", largeur: 750, hauteur: 610 },
+    { nom: "K2C Long-pan", largeur: 1500, hauteur: 610 },
+    { nom: "K2C Pignon", largeur: 750, hauteur: 610 },
+    { nom: "K3C Long-pan", largeur: 2250, hauteur: 610 },
+    { nom: "K3C Pignon", largeur: 750, hauteur: 610 }
   ];
 
   /* ====== État de l'application ====== */
@@ -371,6 +407,8 @@
   }
 
   async function loadData() {
+    // Valeur par défaut ; écrasée si le CSV se charge, conservée sinon (catégorie optionnelle)
+    CHAMBRES_TIRAGE = [...CHAMBRES_TIRAGE_FALLBACK];
     try {
       let tpcText, cableText, cheminsCableText;
 
@@ -414,6 +452,23 @@
       FOURREAUX = parseCSV(tpcText);
       CABLES = parseCSV(cableText);
       CHEMINS_CABLE = parseCSV(cheminsCableText, ',');
+
+      // Chambres de tirage — catégorie optionnelle : chargement non bloquant
+      // (un CSV absent ne doit PAS faire échouer le chargement des fourreaux/câbles)
+      try {
+        let chambresText = null;
+        if (window.electronAPI?.isElectron && window.electronAPI.loadCSV) {
+          const r = await window.electronAPI.loadCSV('chambres_de_tirage.csv');
+          if (r && r.success !== false && typeof r.data === 'string') chambresText = r.data;
+        } else {
+          const resp = await fetch('./data/chambres_de_tirage.csv');
+          if (resp.ok) chambresText = await resp.text();
+        }
+        const parsedChambres = chambresText ? parseCSV(chambresText, ',') : [];
+        if (parsedChambres.length) CHAMBRES_TIRAGE = parsedChambres;
+      } catch (e) {
+        console.warn('[DATA] chambres_de_tirage.csv indisponible, fallback utilisé', e);
+      }
 
       console.debug('[DATA] Données chargées', {
         fourreaux: FOURREAUX.length,
@@ -660,15 +715,45 @@
       // Initialiser avec tous les câbles (mais masqué)
       filterCables();
     }
-    if (CHEMINS_CABLE && CHEMINS_CABLE.length > 0 && cheminCableSelect) {
-      cheminCableSelect.innerHTML = '';
-      CHEMINS_CABLE.forEach(cdc => {
-        const option = document.createElement('option');
-        option.value = `${cdc.largeur}|${cdc.hauteur}`;
-        option.textContent = `${cdc.nom} (${cdc.largeur}x${cdc.hauteur} mm)`;
-        cheminCableSelect.appendChild(option);
+    // Les pickers "chemin de câble" / "chambre de tirage" sont des selects
+    // recherchables gérés par initDimensionSearchable (voir création dynamique).
+  }
+
+  // Select recherchable générique pour les pickers de dimensions (chemin de câble,
+  // chambre de tirage) — même UX que les selects fourreaux/câbles (recherche texte).
+  function initDimensionSearchable(input, list, getItems, setValue) {
+    if (!input || !list) return;
+    const optionsOf = () => (getItems() || []).map(it => ({
+      value: `${it.largeur}|${it.hauteur}`,
+      text: `${it.nom} (${it.largeur}x${it.hauteur} mm)`,
+      search: `${it.nom} ${it.largeur} ${it.hauteur}`.toLowerCase()
+    }));
+    const show = () => { list.classList.add('show'); input.setAttribute('aria-expanded', 'true'); };
+    const hide = () => { list.classList.remove('show'); input.setAttribute('aria-expanded', 'false'); };
+    function render(term = '') {
+      const t = String(term).toLowerCase();
+      list.innerHTML = '';
+      optionsOf().filter(o => o.search.includes(t)).forEach(o => {
+        const div = document.createElement('div');
+        div.className = 'searchable-option';
+        div.dataset.value = o.value;
+        div.textContent = o.text;
+        div.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          setValue(o.value);
+          input.value = o.text;
+          hide();
+        });
+        list.appendChild(div);
       });
     }
+    input.addEventListener('input', function () { render(this.value); show(); });
+    input.addEventListener('focus', function () { this.select(); render(''); show(); });
+    input.addEventListener('blur', () => setTimeout(hide, 150));
+    // Valeur par défaut : première option (comme un <select> natif)
+    const opts = optionsOf();
+    if (opts.length) { setValue(opts[0].value); input.value = opts[0].text; }
+    render('');
   }
   /* ====== Monde & Canvas ====== */
   function setCanvasSize() {
@@ -711,7 +796,8 @@
     // ni redimensionner le reste de l'interface
     canvasWrap.style.overflow = "hidden";
 
-    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${currentZoom.toFixed(0)}%)`;
+    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(2)} px/mm`;
+    scaleInfo.title = `zoom ≈ ${currentZoom.toFixed(0)}%`;
 
     if (window.konvaFourreaux) window.konvaFourreaux.syncTransform();
     if (forceRedraw) redraw();
@@ -923,7 +1009,8 @@
     displayScale = computedDisplayScale();
     canvas.style.width = `${logicalCanvasWidth * displayScale}px`;
     canvas.style.height = `${logicalCanvasHeight * displayScale}px`;
-    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(3)} px/mm (zoom ≈ ${currentZoom.toFixed(0)}%)`;
+    scaleInfo.textContent = `${(MM_TO_PX * displayScale).toFixed(2)} px/mm`;
+    scaleInfo.title = `zoom ≈ ${currentZoom.toFixed(0)}%`;
     if (window.konvaFourreaux) window.konvaFourreaux.syncTransform();
     clearTimeout(zoomSettleTimer);
     zoomSettleTimer = setTimeout(() => fitCanvas(true), 180);
@@ -4937,6 +5024,8 @@
     drawVirtualSlots(); // Dessiner les emplacements virtuels disponibles
     drawBox();
     drawDimensions();
+    drawChamberLabel(); // Type de chambre préformée appliquée (haut-centre de la boîte)
+    drawCompatTampons(); // Tampons compatibles au-dessus de la boîte (si panneau ouvert)
 
     drawMarquee(); // Dessiner le rectangle de sélection s'il est actif
     if (!window.konvaMode) {
@@ -5613,8 +5702,19 @@
     }
     if (entries.length === 0) {
       const empty = document.createElement('div');
-      empty.className = 'item';
-      empty.innerHTML = '<span class="label muted">Aucun résultat</span>';
+      empty.className = 'item empty-hint';
+      const span = document.createElement('span');
+      span.className = 'label muted';
+      if (Object.keys(groups).length > 0) {
+        // L'inventaire contient des objets mais la recherche ne matche rien
+        span.textContent = filter ? `Aucun résultat pour « ${filter} »` : 'Aucun résultat';
+      } else {
+        // Inventaire réellement vide (1er lancement) : inviter, pas signaler une erreur
+        span.textContent = kind === 'f'
+          ? 'Ajoutez un fourreau pour démarrer'
+          : 'Ajoutez un câble pour démarrer';
+      }
+      empty.appendChild(span);
       container.appendChild(empty);
     }
   }
@@ -6362,6 +6462,39 @@
     return result;
   }
 
+  // ─── Opérabilité clavier du plan (canvas focusable, WCAG 2.1.1) ──────────────
+  // Résout la sélection courante en objet concret (fourreau ou câble).
+  function getSelectedObject() {
+    if (!selected) return null;
+    const arr = selected.type === 'cable' ? cables : fourreaux;
+    return arr.find(o => o.id === selected.id) || null;
+  }
+
+  // Parcourt les objets plaçables (Entrée = suivant, Maj+Entrée = précédent).
+  function cycleSelection(dir) {
+    const items = [
+      ...fourreaux.map(f => ({ type: 'fourreau', id: f.id })),
+      ...cables.map(c => ({ type: 'cable', id: c.id })),
+    ];
+    if (items.length === 0) { showToast('Aucun objet à sélectionner'); return; }
+    let idx = selected ? items.findIndex(it => it.type === selected.type && it.id === selected.id) : -1;
+    idx = (idx + (dir < 0 ? -1 : 1) + items.length) % items.length;
+    selected = items[idx];
+    selectedMultiple = [];
+    updateSelectedInfo();
+  }
+
+  // Déplace l'objet sélectionné aux flèches. Pas = 10 mm, Maj = 1 mm (fin).
+  function nudgeSelected(dxMm, dyMm) {
+    const obj = getSelectedObject();
+    if (!obj) { showToast('Sélectionnez un objet (Entrée) puis déplacez-le aux flèches'); return; }
+    obj.x += dxMm * MM_TO_PX;
+    obj.y += dyMm * MM_TO_PX;
+    obj.vx = 0;
+    obj.vy = 0;
+    updateSelectedInfo();
+  }
+
   function armMoveMode() {
     if (moveMode) cancelMoveMode();
     const targets = getSelectedFourreaux();
@@ -6839,6 +6972,26 @@
     if (cheminCableInputs) {
       cheminCableInputs.classList.toggle('hidden', shape !== 'chemin_de_cable');
     }
+    if (chambreTirageInputs) {
+      chambreTirageInputs.classList.toggle('hidden', shape !== 'chambre_de_tirage');
+    }
+    updateDimPickersApply();
+  }
+
+  // Cache le bouton « Appliquer » d'un picker quand sa dimension sélectionnée
+  // correspond déjà à la boîte courante (WORLD_W_MM × WORLD_H_MM).
+  function updateDimPickersApply() {
+    const check = (inputsEl, val) => {
+      if (!inputsEl) return;
+      const btn = inputsEl.querySelector('.apply-btn');
+      if (!btn) return;
+      const [w, h] = String(val || '').split('|').map(parseFloat);
+      const matches = Number.isFinite(w) && Number.isFinite(h)
+        && roundToStep(w, 5) === WORLD_W_MM && roundToStep(h, 5) === WORLD_H_MM;
+      btn.classList.toggle('hidden', matches);
+    };
+    check(cheminCableInputs, cheminCableValue);
+    check(chambreTirageInputs, chambreTirageValue);
   }
 
   function buildShapeDropdownOptions() {
@@ -6980,10 +7133,19 @@
       const lockHeight = document.getElementById('lockHeight')?.checked;
       const step = 5;
 
-      if (!lockWidth) {
+      // Cotes forcées (ex. application d'une chambre préformée) : elles priment
+      // sur les verrous largeur/hauteur, car l'utilisateur demande des cotes exactes.
+      const forcedW = options.width;
+      const forcedH = options.height;
+
+      if (forcedW != null) {
+        WORLD_W_MM = roundToStep(forcedW, step);
+      } else if (!lockWidth) {
         WORLD_W_MM = roundToStep(parseFloat(boxWInput.value), step);
       }
-      if (!lockHeight) {
+      if (forcedH != null) {
+        WORLD_H_MM = roundToStep(forcedH, step);
+      } else if (!lockHeight) {
         WORLD_H_MM = roundToStep(parseFloat(boxHInput.value), step);
       }
 
@@ -6992,9 +7154,17 @@
       boxHInput.value = WORLD_H_MM;
 
     } else if (SHAPE === 'chemin_de_cable') {
-      const [w, h] = cheminCableSelect.value.split('|').map(parseFloat);
+      const [w, h] = (cheminCableValue || '').split('|').map(parseFloat);
       WORLD_W_MM = roundToStep(w || 0, 5);
       WORLD_H_MM = roundToStep(h || 0, 5);
+    } else if (SHAPE === 'chambre_de_tirage') {
+      // La chambre de tirage est une boîte rectangulaire FERMÉE : on lit les
+      // dimensions de la gamme choisie, puis on remappe sur 'rect' pour que tout
+      // le rendu / la physique / le placement se comportent comme une boîte rect.
+      const [w, h] = (chambreTirageValue || '').split('|').map(parseFloat);
+      WORLD_W_MM = roundToStep(w || 0, 5);
+      WORLD_H_MM = roundToStep(h || 0, 5);
+      SHAPE = 'rect';
     } else {
       WORLD_D_MM = roundToStep(parseFloat(boxDInput.value), 5);
     }
@@ -7019,6 +7189,8 @@
     updateStats();
     updateInventory();
     updateSelectedInfo();
+    updateCompatChambresUI();
+    updateDimPickersApply();
 
     if (savedView) {
       canvasOffsetPx.x = savedView.x;
@@ -7036,6 +7208,356 @@
   window.applyDimensions = applyDimensions;
   window.redraw = redraw;
   window.addFourreauAt = addFourreauAt;
+
+  /* ====== Suggestion de chambres de tirage compatibles ====== */
+  const compatChambresState = { open: false, selectedIndex: 0, selected: null, selectedUnit: null, applied: null, appliedUnit: null };
+  // Sous-zone (fractions) de la boîte dans l'image PDF capturée (pour les cotes)
+  let lastCanvasBoxFrac = { fx: 0, fy: 0, fw: 1, fh: 1 };
+
+  // Reconstruit les modèles de chambres {ref, L (long-pan), l (pignon), H} à
+  // partir de CHAMBRES_TIRAGE (qui liste 2 faces par modèle).
+  function getChamberModels() {
+    const byBase = new Map();
+    (CHAMBRES_TIRAGE || []).forEach(ch => {
+      const base = String(ch.nom || '').replace(/\s*(Long-pan|Pignon)\s*$/i, '').trim() || String(ch.nom || '');
+      const w = Number(ch.largeur), h = Number(ch.hauteur);
+      if (!Number.isFinite(w) || w <= 0) return;
+      const cur = byBase.get(base) || { L: 0, l: Infinity, H: 0 };
+      cur.L = Math.max(cur.L, w);
+      cur.l = Math.min(cur.l, w);
+      if (Number.isFinite(h) && h > 0) cur.H = h;
+      byBase.set(base, cur);
+    });
+    return Array.from(byBase.entries())
+      .map(([ref, m]) => ({ ref, L: m.L, l: (m.l === Infinity ? m.L : m.l), H: m.H }));
+  }
+
+  // Logique :
+  //  1) chambre PRÉFORMÉE (StradEasy) : la boîte tient dedans (pignon l >= largeur
+  //     ET hauteur H >= hauteur boîte). Groupées par (l,H), triées par marge.
+  //  2) sinon : chambre MAÇONNÉE sur mesure + TAMPONS (couvercles) posés dessus.
+  //     Le tampon ne couvre que le dessus → on ne raisonne que sur la LARGEUR ;
+  //     la hauteur est libre (maçonnerie), donc PAS de filtre hauteur ici.
+  function computeCompatibleChambers(largeur, hauteur, maxN = 3) {
+    const models = getChamberModels();
+
+    // 1) Chambres préformées compatibles — une entrée PAR RÉFÉRENCE (pour choisir
+    //    la chambre précise, plusieurs réfs pouvant partager les mêmes cotes).
+    const unit = models
+      .filter(m => m.l >= largeur && m.H >= hauteur)
+      .map(m => ({ ref: m.ref, l: m.l, H: m.H, marginW: m.l - largeur, marginH: m.H - hauteur }))
+      .sort((a, b) => (a.marginW + a.marginH) - (b.marginW + b.marginH) || a.ref.localeCompare(b.ref));
+
+    // 2) Sinon : maçonné sur mesure + tampons (couverture de la largeur)
+    let tiling = [];
+    if (unit.length === 0) {
+      const byL = new Map();
+      models.forEach(m => {
+        const g = byL.get(m.l) || { l: m.l, refs: [] };
+        g.refs.push(m.ref);
+        byL.set(m.l, g);
+      });
+      byL.forEach(g => {
+        const N = Math.ceil(largeur / g.l);
+        if (N >= 1 && N <= maxN && N * g.l >= largeur) {
+          tiling.push({ l: g.l, refs: g.refs.sort(), N, total: N * g.l, margin: N * g.l - largeur });
+        }
+      });
+      tiling.sort((a, b) => (a.margin - b.margin) || (a.N - b.N));
+    }
+    return { unit, tiling };
+  }
+
+  // Schéma chambre unitaire : la boîte (largeur × hauteur) imbriquée dans la
+  // chambre (pignon l × hauteur H), ancrée en bas-gauche.
+  function buildUnitSchema(W, H, s) {
+    if (!s) return '';
+    const pad = 4, maxW = 140, maxH = 92;
+    const scale = Math.min(maxW / s.l, maxH / s.H);
+    const chW = s.l * scale, chH = s.H * scale;
+    const bxW = Math.min(W, s.l) * scale, bxH = Math.min(H, s.H) * scale;
+    const ox = pad, oy = pad;
+    const bx = ox + (chW - bxW) / 2, by = oy + (chH - bxH) / 2;
+    const w = Math.max(chW + pad * 2 + 96, 210);
+    const h = chH + pad * 2;
+    return `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" role="img">` +
+      `<rect x="${ox}" y="${oy}" width="${chW.toFixed(1)}" height="${chH.toFixed(1)}" rx="2" fill="rgba(255,145,77,0.10)" stroke="#ff914d" stroke-width="1.5"/>` +
+      `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bxW.toFixed(1)}" height="${bxH.toFixed(1)}" fill="rgba(130,130,130,0.20)" stroke="currentColor" stroke-width="1.2"/>` +
+      `<text x="${(ox + chW + 8).toFixed(1)}" y="${(oy + 12)}" font-size="10" fill="#ff914d" font-family="monospace">${s.ref ? s.ref + ' ' : ''}${s.l}×${s.H}</text>` +
+      `<text x="${(ox + chW + 8).toFixed(1)}" y="${(oy + 26)}" font-size="10" fill="currentColor" font-family="monospace">boîte ${W}×${H}</text>` +
+      `</svg>`;
+  }
+
+  // Schéma repli : les N tampons alignés AU-DESSUS de la ligne de largeur boîte.
+  function buildTileSchema(W, s) {
+    if (!s) return '';
+    const pad = 6, w = 276, rowH = 24, gap = 12, labelH = 12;
+    const totalMax = Math.max(W, s.total, 1);
+    const scale = (w - pad * 2) / totalMax;
+    const bw = W * scale;
+    const rowY = pad;                 // tampons en haut
+    const barY = rowY + rowH + gap;   // ligne boîte en dessous
+    const h = barY + labelH + pad;
+    let tampons = '';
+    for (let i = 0; i < s.N; i++) {
+      const x = pad + i * s.l * scale;
+      const tw = s.l * scale;
+      tampons +=
+        `<rect x="${x.toFixed(1)}" y="${rowY}" width="${Math.max(1, tw - 2).toFixed(1)}" height="${rowH}" rx="3" fill="rgba(255,145,77,0.18)" stroke="#ff914d" stroke-width="1.5"/>` +
+        `<text x="${(x + tw / 2).toFixed(1)}" y="${(rowY + rowH / 2 + 4)}" font-size="10" fill="#ff914d" text-anchor="middle" font-family="monospace">${s.l}</text>`;
+    }
+    const boxBar =
+      `<line x1="${pad}" y1="${barY}" x2="${(pad + bw).toFixed(1)}" y2="${barY}" stroke="currentColor" stroke-width="1.5"/>` +
+      `<line x1="${pad}" y1="${barY - 4}" x2="${pad}" y2="${barY + 4}" stroke="currentColor" stroke-width="1.5"/>` +
+      `<line x1="${(pad + bw).toFixed(1)}" y1="${barY - 4}" x2="${(pad + bw).toFixed(1)}" y2="${barY + 4}" stroke="currentColor" stroke-width="1.5"/>` +
+      `<text x="${pad}" y="${(barY + labelH + 1)}" font-size="10" fill="currentColor" font-family="monospace">boîte ${W} mm</text>`;
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img">${tampons}${boxBar}</svg>`;
+  }
+
+  // Tampon effectif à dessiner : aperçu (panneau ouvert) sinon appliqué (persisté).
+  function getCompatTampon() {
+    if (SHAPE !== 'rect') return null;
+    const t = compatChambresState.open ? compatChambresState.selected : compatChambresState.applied;
+    return (t && t.N && t.l) ? t : null;
+  }
+
+  // Débordement des tampons (px logiques) au-dessus / sur les côtés de la boîte,
+  // pour étendre le recadrage lors de l'export PDF.
+  function getCompatTamponExtent() {
+    const sel = getCompatTampon();
+    if (!sel) return { top: 0, side: 0 };
+    const bandH = Math.min(Math.max(WORLD_H * 0.12, 12), 70);
+    const gap = Math.max(bandH * 0.2, 6);
+    const totalPx = sel.N * sel.l * MM_TO_PX;
+    return { top: gap + bandH, side: Math.max(0, (totalPx - WORLD_W) / 2) };
+  }
+
+  // Dessine les tampons AU-DESSUS de la boîte (couvercles posés sur une chambre
+  // maçonnée), à l'échelle en largeur et centrés (axés à la boîte).
+  function drawCompatTampons() {
+    const sel = getCompatTampon();
+    if (!sel) return;
+    const lpx = sel.l * MM_TO_PX;
+    const totalPx = sel.N * lpx;
+    const startX = WORLD_W / 2 - totalPx / 2;
+    // Bandeau schématique borné pour tenir dans la marge (~100 px-monde au-dessus)
+    const bandH = Math.min(Math.max(WORLD_H * 0.12, 12), 70);
+    const gap = Math.max(bandH * 0.2, 6);
+    const topY = -gap - bandH;
+    ctx.save();
+    ctx.strokeStyle = '#ff914d';
+    ctx.fillStyle = 'rgba(255,145,77,0.18)';
+    ctx.lineWidth = getScaledLineWidth(1.5);
+    for (let i = 0; i < sel.N; i++) {
+      ctx.beginPath();
+      ctx.rect(startX + i * lpx, topY, lpx, bandH);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ff914d';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${getScaledLineWidth(12)}px 'JetBrains Mono', monospace`;
+    for (let i = 0; i < sel.N; i++) {
+      ctx.fillText(String(sel.l), startX + i * lpx + lpx / 2, topY + bandH / 2);
+    }
+    ctx.restore();
+  }
+
+  // Label « type de chambre » à l'intérieur de la boîte (haut-centre). Affiché
+  // uniquement si une chambre préformée est appliquée ET que les cotes de la boîte
+  // correspondent encore → masqué automatiquement après redimensionnement / Ctrl+Z.
+  function drawChamberLabel() {
+    if (SHAPE !== 'rect') return;
+    const ap = compatChambresState.appliedUnit;
+    if (!ap || !ap.ref) return;
+    if (Math.round(WORLD_W_MM) !== Math.round(ap.l) || Math.round(WORLD_H_MM) !== Math.round(ap.H)) return;
+    const text = `Chambre ${ap.ref}`;
+    const fontPx = getScaledLineWidth(13);
+    ctx.save();
+    ctx.font = `${fontPx}px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const padX = getScaledLineWidth(8);
+    const padY = getScaledLineWidth(5);
+    const bw = ctx.measureText(text).width + padX * 2;
+    const bh = fontPx + padY * 2;
+    const cx = WORLD_W / 2;
+    const cy = Math.min(WORLD_H / 2, getScaledLineWidth(14) + bh / 2); // haut-centre, borné
+    ctx.beginPath();
+    const r = getScaledLineWidth(4);
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(cx - bw / 2, cy - bh / 2, bw, bh, r);
+    } else {
+      ctx.rect(cx - bw / 2, cy - bh / 2, bw, bh);
+    }
+    ctx.fillStyle = 'rgba(255,145,77,0.15)';
+    ctx.strokeStyle = '#ff914d';
+    ctx.lineWidth = getScaledLineWidth(1.2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ff914d';
+    ctx.fillText(text, cx, cy);
+    ctx.restore();
+  }
+
+  function renderCompatChambres() {
+    const list = document.getElementById('compatList');
+    const subtitle = document.getElementById('compatSubtitle');
+    const schema = document.getElementById('compatSchema');
+    if (!list) return;
+    const W = Math.round(WORLD_W_MM || 0);
+    const H = Math.round(WORLD_H_MM || 0);
+    if (subtitle) subtitle.textContent = `Boîte ${W} × ${H} mm`;
+    const { unit, tiling } = computeCompatibleChambers(W, H, 3);
+    list.innerHTML = '';
+    if (schema) schema.innerHTML = '';
+
+    let items, mode;
+    if (unit.length) {
+      items = unit; mode = 'unit';
+    } else if (tiling.length) {
+      items = tiling; mode = 'tile';
+      const note = document.createElement('div');
+      note.className = 'compat-empty';
+      note.textContent = `Aucune chambre préformée compatible → chambre maçonnée sur mesure + tampons :`;
+      list.appendChild(note);
+    } else {
+      list.innerHTML = `<div class="compat-empty">Boîte trop large : aucun assemblage de 3 tampons max ne couvre ${W} mm.</div>`;
+      compatChambresState.selected = null;
+      compatChambresState.selectedUnit = null;
+      const applyBtnEmpty = document.getElementById('compatApplyBtn');
+      if (applyBtnEmpty) applyBtnEmpty.style.display = 'none';
+      if (typeof redraw === 'function') redraw();
+      return;
+    }
+
+    if (compatChambresState.selectedIndex >= items.length) compatChambresState.selectedIndex = 0;
+    items.forEach((s, i) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'compat-item' + (i === compatChambresState.selectedIndex ? ' active' : '');
+      if (mode === 'unit') {
+        item.innerHTML =
+          `<span class="compat-item-main"><span>${s.ref} — ${s.l} × ${s.H} mm</span>` +
+          `<span class="compat-item-margin">L+${s.marginW} · H+${s.marginH}</span></span>`;
+      } else {
+        item.innerHTML =
+          `<span class="compat-item-main"><span>${s.N}× tampon ${s.l} → ${s.total} mm</span>` +
+          `<span class="compat-item-margin">+${s.margin}</span></span>` +
+          `<span class="compat-item-refs">${s.refs.join(' · ')}</span>`;
+      }
+      item.addEventListener('click', () => {
+        compatChambresState.selectedIndex = i;
+        renderCompatChambres();
+      });
+      list.appendChild(item);
+    });
+
+    const selSug = items[compatChambresState.selectedIndex];
+    if (schema) {
+      schema.innerHTML = (mode === 'unit') ? buildUnitSchema(W, H, selSug) : buildTileSchema(W, selSug);
+    }
+    // Visualisation canvas : uniquement les tampons (mode maçonné sur mesure)
+    compatChambresState.selected = (mode === 'tile' && selSug)
+      ? { N: selSug.N, l: selSug.l, total: selSug.total }
+      : null;
+    // Suggestion préformée sélectionnée (mode unit) — réf + cotes applicables
+    compatChambresState.selectedUnit = (mode === 'unit' && selSug)
+      ? { ref: selSug.ref, l: selSug.l, H: selSug.H }
+      : null;
+    // Bouton « Appliquer » : redimensionne la boîte (unit) ou pose les tampons (tile)
+    const applyBtn = document.getElementById('compatApplyBtn');
+    if (applyBtn) {
+      const unit = compatChambresState.selectedUnit;
+      const tile = compatChambresState.selected;
+      if (unit) {
+        applyBtn.style.display = 'block';
+        applyBtn.dataset.mode = 'unit';
+        applyBtn.textContent = `Appliquer : ${unit.ref} · ${unit.l} × ${unit.H} mm`;
+        applyBtn.classList.remove('is-applied');
+      } else if (tile) {
+        const ap = compatChambresState.applied;
+        const isApplied = !!(ap && ap.N === tile.N && ap.l === tile.l);
+        applyBtn.style.display = 'block';
+        applyBtn.dataset.mode = 'tile';
+        applyBtn.textContent = isApplied ? '✓ Appliqué — retirer' : 'Appliquer au plan';
+        applyBtn.classList.toggle('is-applied', isApplied);
+      } else {
+        applyBtn.style.display = 'none';
+      }
+    }
+    if (typeof redraw === 'function') redraw();
+  }
+
+  function updateCompatChambresUI() {
+    const btn = document.getElementById('compatChambresBtn');
+    const panel = document.getElementById('compatChambresPanel');
+    if (!btn) return;
+    const isRect = (SHAPE === 'rect');
+    btn.style.display = isRect ? 'inline-flex' : 'none';
+    if (!isRect) {
+      if (panel) panel.style.display = 'none';
+      compatChambresState.open = false;
+      compatChambresState.selected = null;
+      compatChambresState.applied = null;
+      compatChambresState.appliedUnit = null;
+      return;
+    }
+    if (compatChambresState.open && panel) {
+      panel.style.display = 'flex';
+      renderCompatChambres();
+    }
+  }
+
+  function setupCompatChambres() {
+    const btn = document.getElementById('compatChambresBtn');
+    const panel = document.getElementById('compatChambresPanel');
+    const closeBtn = document.getElementById('compatChambresClose');
+    if (!btn || !panel) return;
+    btn.addEventListener('click', () => {
+      compatChambresState.open = !compatChambresState.open;
+      if (compatChambresState.open) {
+        panel.style.display = 'flex';
+        renderCompatChambres();
+      } else {
+        panel.style.display = 'none';
+        compatChambresState.selected = null;
+        if (typeof redraw === 'function') redraw();
+      }
+    });
+    closeBtn?.addEventListener('click', () => {
+      compatChambresState.open = false;
+      panel.style.display = 'none';
+      compatChambresState.selected = null;
+      if (typeof redraw === 'function') redraw();
+    });
+    const applyBtn = document.getElementById('compatApplyBtn');
+    applyBtn?.addEventListener('click', () => {
+      // Mode unit : redimensionner la boîte aux cotes de la chambre préformée.
+      if (applyBtn.dataset.mode === 'unit') {
+        const unit = compatChambresState.selectedUnit;
+        if (!unit) return;
+        saveStateToHistory(); // pour Ctrl+Z
+        // La boîte devient une chambre préformée fermée : retirer tout overlay tampons.
+        compatChambresState.applied = null;
+        applyDimensions({ anchorContents: true, width: unit.l, height: unit.H });
+        // Mémoriser la chambre appliquée → label affiché sur le canvas / PDF.
+        compatChambresState.appliedUnit = { ref: unit.ref, l: unit.l, H: unit.H };
+        showToast(`Chambre ${unit.ref} appliquée : ${unit.l} × ${unit.H} mm`);
+        renderCompatChambres(); // recalcule les suggestions pour la nouvelle boîte
+        return;
+      }
+      // Mode tile : poser / retirer les tampons (overlay non destructif).
+      const sel = compatChambresState.selected;
+      if (!sel) return;
+      const ap = compatChambresState.applied;
+      const isApplied = ap && ap.N === sel.N && ap.l === sel.l;
+      compatChambresState.applied = isApplied ? null : { N: sel.N, l: sel.l, total: sel.total };
+      renderCompatChambres(); // rafraîchit le libellé du bouton et le canvas
+    });
+    updateCompatChambresUI();
+  }
 
   function clampInsideRect(o, r) {
     o.x = Math.max(r, Math.min(WORLD_W - r, o.x));
@@ -7261,6 +7783,7 @@
       isResizing = true;
       startX = e.clientX;
       startWidth = panel.offsetWidth;
+      panel.classList.add('resizing'); // coupe la transition de largeur → drag net, pas de reflow animé
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
       e.preventDefault();
@@ -7281,6 +7804,7 @@
     document.addEventListener('mouseup', () => {
       if (isResizing) {
         isResizing = false;
+        panel.classList.remove('resizing');
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
       }
@@ -7289,13 +7813,14 @@
 
   /* ====== Effet de scroll pour le panel ====== */
   function initPanelScrollEffect() {
-    if (!panel) return;
+    // Depuis la refonte « Deux zones », c'est la zone de travail (.panel-middle)
+    // qui défile, plus le panneau entier. On mesure son scroll mais on garde la
+    // classe sur .panel pour piloter l'accent de coin décoratif.
+    const scroller = document.querySelector('.panel-middle');
+    if (!panel || !scroller) return;
 
     function updateScrollEffect() {
-      const scrollTop = panel.scrollTop;
-      const scrollHeight = panel.scrollHeight;
-      const clientHeight = panel.clientHeight;
-      const scrollBottom = scrollHeight - scrollTop - clientHeight;
+      const scrollBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
 
       // Si on est à moins de 5px du bas, cacher le fade
       if (scrollBottom <= 5) {
@@ -7305,7 +7830,7 @@
       }
     }
 
-    panel.addEventListener('scroll', updateScrollEffect);
+    scroller.addEventListener('scroll', updateScrollEffect);
     // Vérification initiale
     updateScrollEffect();
   }
@@ -7543,9 +8068,18 @@
     const tempCtx = tempCanvas.getContext('2d');
     const effectivePixelRatio = getEffectivePixelRatio();
 
-    // Dimensions du contenu utile (sans marges)
-    const contentWidth = canvas.width - (CANVAS_MARGIN * 2 * effectivePixelRatio);
-    const contentHeight = canvas.height - (CANVAS_MARGIN * 2 * effectivePixelRatio);
+    // Dimensions de la boîte seule (sans marges)
+    const boxWpx = canvas.width - (CANVAS_MARGIN * 2 * effectivePixelRatio);
+    const boxHpx = canvas.height - (CANVAS_MARGIN * 2 * effectivePixelRatio);
+
+    // Débordement des tampons appliqués (haut + côtés), borné à la marge dispo
+    const ext = getCompatTamponExtent();
+    const topExtPx = Math.min(ext.top, CANVAS_MARGIN) * effectivePixelRatio;
+    const sideExtPx = Math.min(ext.side, CANVAS_MARGIN) * effectivePixelRatio;
+
+    // Contenu capturé = boîte + tampons au-dessus (et débordement latéral centré)
+    const contentWidth = boxWpx + 2 * sideExtPx;
+    const contentHeight = boxHpx + topExtPx;
 
     // Multiplier par 2 pour améliorer la qualité d'export
     const exportScale = 2;
@@ -7559,11 +8093,19 @@
     // Copier le contenu utile du canvas principal avec scaling
     tempCtx.drawImage(
       canvas,
-      CANVAS_MARGIN * effectivePixelRatio, CANVAS_MARGIN * effectivePixelRatio, // source x, y
+      (CANVAS_MARGIN * effectivePixelRatio) - sideExtPx, (CANVAS_MARGIN * effectivePixelRatio) - topExtPx, // source x, y
       contentWidth, contentHeight, // source width, height
       0, 0, // destination x, y
       tempCanvas.width, tempCanvas.height // destination width, height (upscaled)
     );
+
+    // Sous-zone (fractions) occupée par la BOÎTE dans l'image, pour placer les cotes
+    lastCanvasBoxFrac = {
+      fx: sideExtPx / contentWidth,
+      fy: topExtPx / contentHeight,
+      fw: boxWpx / contentWidth,
+      fh: boxHpx / contentHeight
+    };
 
     const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
 
@@ -7813,26 +8355,33 @@
       const realWidth = WORLD_W_MM;
       const realHeight = WORLD_H_MM;
 
-      // Cote horizontale (largeur) - en bas
-      const dimensionY = imageY + imageHeight + 8;
-      pdf.line(imageX, dimensionY, imageX + imageWidth, dimensionY);
-      pdf.line(imageX, dimensionY - 2, imageX, dimensionY + 2);
-      pdf.line(imageX + imageWidth, dimensionY - 2, imageX + imageWidth, dimensionY + 2);
+      // Sous-rectangle occupé par la BOÎTE dans l'image (les tampons occupent
+      // le haut et débordent sur les côtés) → cotes alignées sur la boîte.
+      const bx = imageX + lastCanvasBoxFrac.fx * imageWidth;
+      const by = imageY + lastCanvasBoxFrac.fy * imageHeight;
+      const bw = lastCanvasBoxFrac.fw * imageWidth;
+      const bh = lastCanvasBoxFrac.fh * imageHeight;
+
+      // Cote horizontale (largeur) - en bas de la boîte
+      const dimensionY = by + bh + 8;
+      pdf.line(bx, dimensionY, bx + bw, dimensionY);
+      pdf.line(bx, dimensionY - 2, bx, dimensionY + 2);
+      pdf.line(bx + bw, dimensionY - 2, bx + bw, dimensionY + 2);
 
       const widthText = `${realWidth} mm`;
       const widthTextWidth = pdf.getTextWidth(widthText);
-      pdf.text(widthText, imageX + (imageWidth - widthTextWidth) / 2, dimensionY + 5);
+      pdf.text(widthText, bx + (bw - widthTextWidth) / 2, dimensionY + 5);
 
-      // Cote verticale (hauteur) - à droite
+      // Cote verticale (hauteur) - à droite de l'image
       const dimensionX = imageX + imageWidth + 8;
-      pdf.line(dimensionX, imageY, dimensionX, imageY + imageHeight);
-      pdf.line(dimensionX - 2, imageY, dimensionX + 2, imageY);
-      pdf.line(dimensionX - 2, imageY + imageHeight, dimensionX + 2, imageY + imageHeight);
+      pdf.line(dimensionX, by, dimensionX, by + bh);
+      pdf.line(dimensionX - 2, by, dimensionX + 2, by);
+      pdf.line(dimensionX - 2, by + bh, dimensionX + 2, by + bh);
 
       const heightText = `${realHeight} mm`;
 
       // Texte horizontal pour la hauteur (plus simple et lisible)
-      pdf.text(heightText, dimensionX + 3, imageY + imageHeight / 2 + 2);
+      pdf.text(heightText, dimensionX + 3, by + bh / 2 + 2);
 
       // Statistiques en bas
       if (formData.includeStats) {
@@ -8436,41 +8985,69 @@
       return; // Arrêter l'initialisation
     }
 
-    // Création dynamique des contrôles pour "chemin de câble"
-    cheminCableInputs = document.createElement('div');
-    cheminCableInputs.id = 'cheminCableInputs';
-    cheminCableInputs.className = 'hidden'; // Conteneur principal
+    // Pickers "chemin de câble" / "chambre de tirage" : select RECHERCHABLE
+    // (cohérent avec fourreaux/câbles) posé dans .box-config comme les dimensions
+    // rectangulaires (forme + dimensions sur une ligne, Appliquer pleine largeur).
+    function createDimPicker(idBase, placeholder) {
+      const wrap = document.createElement('div');
+      wrap.id = idBase + 'Inputs';
+      wrap.className = 'box-config-dims hidden';
 
-    const row = document.createElement('div');
-    row.className = 'row';
-    const cheminCableLabel = document.createElement('label');
-    cheminCableLabel.htmlFor = 'cheminCableSelect';
-    cheminCableLabel.textContent = 'Dimensions';
-    cheminCableSelect = document.createElement('select');
-    cheminCableSelect.id = 'cheminCableSelect';
-    row.appendChild(cheminCableLabel);
-    row.appendChild(cheminCableSelect);
+      const field = document.createElement('div');
+      field.className = 'inline-input box-config-dim-picker';
+      const label = document.createElement('label');
+      label.htmlFor = idBase + 'Search';
+      label.textContent = 'Dimensions';
+      const container = document.createElement('div');
+      container.className = 'searchable-select-container';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = idBase + 'Search';
+      input.className = 'searchable-input';
+      input.placeholder = placeholder;
+      input.autocomplete = 'off';
+      input.setAttribute('role', 'combobox');
+      input.setAttribute('aria-expanded', 'false');
+      const list = document.createElement('div');
+      list.id = idBase + 'List';
+      list.className = 'searchable-list';
+      list.setAttribute('role', 'listbox');
+      container.appendChild(input);
+      container.appendChild(list);
+      field.appendChild(label);
+      field.appendChild(container);
 
-    const applyBtnContainer = document.createElement('div');
-    applyBtnContainer.className = 'apply-dimensions-btn';
-    const newApplyBtn = document.createElement('button');
-    newApplyBtn.className = 'btn';
-    newApplyBtn.textContent = 'Appliquer les dimensions';
-    newApplyBtn.addEventListener('click', applyDimensions);
-    applyBtnContainer.appendChild(newApplyBtn);
+      const applyBtn = document.createElement('button');
+      applyBtn.type = 'button';
+      applyBtn.className = 'btn apply-btn apply-btn-persistent';
+      applyBtn.textContent = 'Appliquer les dimensions';
+      applyBtn.addEventListener('click', applyDimensions);
 
-    cheminCableInputs.appendChild(row);
-    cheminCableInputs.appendChild(applyBtnContainer);
+      wrap.appendChild(field);
+      wrap.appendChild(applyBtn);
+      return { wrap, input, list };
+    }
 
-    // Insérer après le groupe d'inputs rectangulaires
+    const cheminUI = createDimPicker('cheminCable', 'Choisir une taille…');
+    cheminCableInputs = cheminUI.wrap;
     if (rectInputs && rectInputs.parentNode) {
       rectInputs.parentNode.insertBefore(cheminCableInputs, rectInputs.nextSibling);
     }
+
+    const chambreUI = createDimPicker('chambreTirage', 'Choisir une chambre…');
+    chambreTirageInputs = chambreUI.wrap;
+    if (cheminCableInputs && cheminCableInputs.parentNode) {
+      cheminCableInputs.parentNode.insertBefore(chambreTirageInputs, cheminCableInputs.nextSibling);
+    }
+
+    initDimensionSearchable(cheminUI.input, cheminUI.list, () => CHEMINS_CABLE, (v) => { cheminCableValue = v; updateDimPickersApply(); });
+    initDimensionSearchable(chambreUI.input, chambreUI.list, () => CHAMBRES_TIRAGE, (v) => { chambreTirageValue = v; updateDimPickersApply(); });
 
 
     // 2. Remplir les menus déroulants avec les données chargées
     initSearchableLists();
     setupShapeDropdown();
+    setupCompatChambres();
 
     // 3. Attacher les écouteurs d'événements
     addEventListener("resize", () => fitCanvas(true));
@@ -9708,6 +10285,15 @@
         return;
       }
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+      // ─── Navigation clavier du plan (uniquement quand le canvas a le focus) ───
+      if (document.activeElement === canvas) {
+        const step = e.shiftKey ? 1 : 10; // mm : Maj = pas fin
+        if (e.key === 'ArrowUp') { e.preventDefault(); nudgeSelected(0, -step); return; }
+        if (e.key === 'ArrowDown') { e.preventDefault(); nudgeSelected(0, step); return; }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); nudgeSelected(-step, 0); return; }
+        if (e.key === 'ArrowRight') { e.preventDefault(); nudgeSelected(step, 0); return; }
+        if (e.key === 'Enter') { e.preventDefault(); cycleSelection(e.shiftKey ? -1 : 1); return; }
+      }
       if (k === 'd' && !e.ctrlKey && !e.metaKey) { armMoveMode(); return; }
       if (k === 'a') { setMode('place'); return; }
       if (k === 's') { setMode('select'); return; }
@@ -9750,7 +10336,8 @@
             shape: SHAPE,
             width: WORLD_W_MM,
             height: WORLD_H_MM,
-            diameter: WORLD_D_MM
+            diameter: WORLD_D_MM,
+            chamberRef: compatChambresState.appliedUnit?.ref || null
           },
           fourreaux: fourreaux.map(f => ({
             ...f,
@@ -9849,6 +10436,12 @@
           WORLD_H_MM = projectData.container.height || 1000;
           WORLD_D_MM = projectData.container.diameter || 1000;
           syncDimensionState();
+
+          // Restaurer le label de chambre préformée appliquée (si cotes cohérentes)
+          const savedRef = projectData.container.chamberRef;
+          compatChambresState.appliedUnit = savedRef
+            ? { ref: savedRef, l: Math.round(WORLD_W_MM), H: Math.round(WORLD_H_MM) }
+            : null;
 
           // Mettre à jour l'interface
           shapeSel.value = SHAPE;

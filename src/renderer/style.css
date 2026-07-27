@@ -279,16 +279,23 @@ html, body {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
     transition: width var(--transition-base);
     direction: rtl;
+    /* La largeur est un layout coûteux (reflow du canvas) : pendant un drag de
+       redimensionnement, la classe .resizing coupe la transition pour un rendu
+       net image par image et supprime le reflow animé (voir plus bas). */
     box-shadow: var(--glass-shadow);
     position: relative;
     scrollbar-width: thin;
     scrollbar-color: var(--primary-orange) transparent;
     opacity: 0;
     animation: revealStagger 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Pendant le redimensionnement manuel : pas de transition (rendu synchrone) */
+.panel.resizing {
+    transition: none;
 }
 
 /* Staggered reveal des panels */
@@ -421,6 +428,12 @@ canvas {
     transition: background var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
     position: relative;
     cursor: crosshair;
+}
+
+/* Focus clavier du plan de travail (canvas opérable au clavier — WCAG 2.1.1/2.4.7) */
+#world:focus-visible {
+    outline: 3px solid var(--accent-color);
+    outline-offset: 3px;
 }
 
 canvas:active {
@@ -611,13 +624,11 @@ select:focus-visible {
     outline-offset: 2px;
 }
 
+/* Pas de "lift" global au survol : il faisait sauter les boutons d'état/d'icône.
+   Le lift est réservé aux vrais boutons d'action (.btn, .apply-btn, .reduce-btn),
+   qui portent leur propre :hover. */
 button:hover:not(:disabled) {
-    transform: translateY(-2px);
     transition: all var(--transition-base);
-}
-
-button:active:not(:disabled) {
-    transform: translateY(0);
 }
 
 button:disabled {
@@ -834,6 +845,13 @@ select::-webkit-scrollbar-thumb {
     outline: none;
     border-color: var(--primary-orange);
     box-shadow: 0 0 0 3px rgba(255, 145, 77, 0.2);
+}
+
+/* Anneau de focus net pour la navigation clavier (le glow seul est trop discret) */
+.search-select-input:focus-visible,
+.searchable-input:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
 }
 
 .searchable-list,
@@ -2554,6 +2572,20 @@ select::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.58);
 }
 
+/* Un bouton d'outil désactivé (ex. « Figer » sans sélection) garde sa boîte
+   estompée mais lisible : sinon, quand il passe seul à la ligne, il ressemble
+   à du texte orphelin. Il reste un vrai bouton, juste inactif. */
+.control-strip .ctrl-btn:disabled {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.28);
+    border-color: var(--glass-border);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+[data-theme="dark"] .control-strip .ctrl-btn:disabled {
+    background: rgba(255, 255, 255, 0.04);
+}
+
 .control-strip .ctrl-btn-square {
     min-width: 42px;
     width: 42px;
@@ -2735,11 +2767,10 @@ select::-webkit-scrollbar-thumb {
     font-size: 20px;
     font-weight: 700;
     font-family: 'JetBrains Mono', monospace;
-    color: var(--primary-orange);
+    color: var(--kpi-grad-a);
     letter-spacing: 0.05em;
-    text-shadow: 0 0 10px rgba(255, 145, 77, 0.5);
-    animation: dataReadoutFlicker 3s ease-in-out infinite;
-    background: linear-gradient(135deg, var(--primary-orange) 0%, var(--primary-orange-dark) 100%);
+    text-shadow: 0 0 8px var(--kpi-glow);
+    background: linear-gradient(135deg, var(--kpi-grad-a) 0%, var(--kpi-grad-b) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -3098,15 +3129,294 @@ body.electron-mode .notification-container {
 
 .panel-middle {
     flex: 1 1 auto;
-    overflow: auto;
+    min-height: 0; /* indispensable pour que le scroll interne s'active en flex */
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
     gap: var(--spacing-lg);
+    padding: 2px var(--spacing-xs) var(--spacing-xs);
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-orange) transparent;
+}
+
+.panel-middle::-webkit-scrollbar {
+    width: 10px;
+}
+
+.panel-middle::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.panel-middle::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg,
+        var(--primary-orange),
+        var(--primary-orange-dark)
+    );
+    border-radius: var(--radius-full);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: all 0.3s ease;
+}
+
+.panel-middle::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg,
+        var(--primary-orange-dark),
+        var(--primary-brown)
+    );
+    background-clip: padding-box;
+    box-shadow: 0 0 8px rgba(255, 145, 77, 0.6);
 }
 
 .panel-stats {
     flex: 0 0 auto;
-    margin-top: auto;
+    margin-top: var(--spacing-sm);
+}
+
+/* ==========================================================================
+   SIDEBAR — refonte « Deux zones » (config compacte + travail dominant)
+   ========================================================================== */
+
+/* Zone fixe du haut : configuration boîte + ajout d'objets */
+.setup-zone {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+/* --- Configuration de la boîte, condensée sur une ligne dense --- */
+.box-config {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow);
+    opacity: 0;
+    animation: revealStagger 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.box-config-shape {
+    flex: 2 1 0; /* 1/2 de la largeur de la colonne */
+    min-width: 140px;
+}
+
+/* Picker de dimensions (chemin de câble / chambre de tirage) : moitié de ligne,
+   à côté de la forme (le bouton Appliquer passe pleine largeur dessous). */
+.box-config-dim-picker {
+    flex: 2 1 0;
+    min-width: 150px;
+}
+.box-config-dim-picker .searchable-select-container { width: 100%; }
+.box-config-dim-picker .searchable-input { width: 100%; padding: 8px 10px; }
+
+/* display:contents : les champs L/H (ou Ø) deviennent des colonnes
+   proportionnelles DIRECTES de .box-config (forme 2fr · L 1fr · H 1fr). */
+.box-config-dims {
+    display: contents;
+}
+
+/* .box-config-dims est déclaré après .hidden : on réaffirme le masquage
+   sinon rectInputs/circInputs restent visibles tous les deux. */
+.box-config-dims.hidden {
+    display: none;
+}
+
+/* Le sélecteur de forme n'est plus enfant direct du panneau mais imbriqué dans
+   .box-config (flex-item animé). Son dropdown se retrouvait DERRIÈRE la carte
+   d'ajout : on remonte le z-index de .box-config quand il est ouvert, et on
+   remonte toute la zone fixe au-dessus de la zone de travail scrollable. */
+.box-config:has(.searchable-select-container.dropdown-open),
+.box-config:has(.searchable-list.show) {
+    z-index: var(--z-dropdown);
+}
+
+.setup-zone:has(.searchable-select-container.dropdown-open),
+.setup-zone:has(.searchable-list.show) {
+    position: relative;
+    z-index: var(--z-dropdown);
+}
+
+.box-config-dims .inline-input {
+    flex: 1 1 0; /* 1/4 de la colonne (L et H) */
+    min-width: 0;
+    gap: 2px;
+}
+
+/* En circulaire, l'unique Ø occupe la moitié restante à côté de la forme */
+#circInputs.box-config-dims .inline-input {
+    flex: 2 1 0;
+}
+
+.box-config-dims .inline-input label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.box-config-dims .input-lock-group {
+    gap: 4px;
+}
+
+.box-config-dims input[type="number"] {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 10px;
+}
+
+.box-config-dims .cadenas-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.box-config-dims .dims-sep {
+    flex: 0 0 auto;
+    align-self: flex-end;
+    padding-bottom: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+/* Le bouton Appliquer prend toute la largeur sur sa propre ligne, sous les
+   dimensions (il n'apparaît que transitoirement quand une valeur change). */
+.box-config .apply-btn {
+    flex: 1 1 100%;
+    width: 100%;
+    padding: 8px 14px;
+    margin-top: 2px;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+/* Bouton Appliquer persistant (pickers chemin/chambre) : toujours visible,
+   donc pas d'animation d'attention (contrairement au bouton rect transitoire). */
+.apply-btn.apply-btn-persistent {
+    animation: none !important;
+}
+
+/* --- Icône d'aide (remplace les phrases explicatives) --- */
+.info-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--primary-orange);
+    opacity: 0.75;
+    cursor: help;
+    vertical-align: middle;
+    transition: opacity var(--transition-base);
+}
+
+.info-hint:hover {
+    opacity: 1;
+}
+
+/* Focus clavier visible sur l'icône ⓘ (correction régression a11y — WCAG 2.4.7) */
+.info-hint:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+    border-radius: var(--radius-full);
+}
+
+/* Les phrases d'aide sont désormais dans le tooltip de l'icône ⓘ */
+.add-card .small {
+    display: none;
+}
+
+/* --- Ligne d'ajout compacte : [type] [quantité] [Ajouter] --- */
+.add-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.fourreau-add-row {
+    flex-wrap: wrap;
+}
+
+/* Le select prend la place restante et peut rétrécir sous son contenu */
+.fourreau-add-row .add-select {
+    flex: 1 1 160px;
+    min-width: 0;
+}
+
+/* Bouton Ajouter compact (annule le width:100% hérité de .btn) */
+.add-btn {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 14px;
+}
+
+/* Select câble : pleine largeur sur sa propre ligne (pas de quantité/ajout) */
+.add-select-block {
+    display: block;
+    width: 100%;
+}
+
+/* --- Barre KPI horizontale (bas de la sidebar) --- */
+.kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-md);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow);
+    opacity: 0;
+    animation: revealStagger 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation-delay: 0.35s;
+}
+
+.kpi-strip .row {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0;
+    text-align: center;
+    min-width: 0;
+}
+
+.kpi-strip .row > div:first-child {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.kpi-strip .row > div:last-child {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+/* Version compacte des KPI : on retire les crochets [ ] et on réduit la taille */
+.kpi-strip .kpi {
+    font-size: 15px;
+}
+
+.kpi-strip .kpi::before,
+.kpi-strip .kpi::after {
+    content: none;
+}
+
+/* Séparateurs verticaux légers entre les tuiles */
+.kpi-strip .row:not(:last-child) {
+    border-right: 1px solid var(--glass-border);
 }
 
 /* ==========================================================================
@@ -3227,7 +3537,11 @@ body.electron-mode .notification-container {
 
 .lock-icon {
     cursor: pointer;
-    display: inline-block;
+    /* Zone cliquable ≥ 24px autour de l'icône 20px (WCAG 2.5.8) */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
     transition: all var(--transition-base);
 }
 
@@ -3616,6 +3930,157 @@ body.electron-mode .notification-container {
 }
 
 /* ==========================================================================
+   CHAMBRES DE TIRAGE COMPATIBLES (overlay canvas, panneau à droite)
+   ========================================================================== */
+.compat-chambres-btn {
+    position: absolute;
+    top: 8px;
+    right: 48px;
+    z-index: 55;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    min-height: 36px;
+    box-sizing: border-box;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-full);
+    background: var(--glass-bg-solid);
+    backdrop-filter: var(--glass-backdrop);
+    color: var(--text-primary);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transition: all var(--transition-base);
+}
+
+.compat-chambres-btn:hover {
+    border-color: var(--primary-orange);
+    color: var(--primary-orange);
+    box-shadow: 0 4px 16px rgba(255, 145, 77, 0.3);
+}
+
+.compat-chambres-btn svg { flex: 0 0 auto; }
+
+.compat-chambres-panel {
+    position: absolute;
+    top: 48px;
+    right: 8px;
+    z-index: 60;
+    width: min(300px, calc(100% - 16px));
+    max-height: calc(100% - 56px);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    background: var(--modal-bg-solid);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    color: var(--text-secondary);
+    animation: modalPopIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.compat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+}
+
+.compat-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.compat-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.compat-close:hover { color: var(--primary-orange); background: rgba(255, 145, 77, 0.12); }
+
+.compat-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.compat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-orange) transparent;
+}
+
+.compat-item {
+    text-align: left;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.compat-item:hover { border-color: var(--primary-orange); }
+.compat-item.active { border-color: var(--primary-orange); box-shadow: inset 0 0 0 1px var(--primary-orange); }
+
+.compat-item-main {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.compat-item-margin { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--primary-orange); }
+.compat-item-refs { font-size: 10px; color: var(--text-secondary); }
+
+.compat-empty {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 8px 4px;
+    line-height: 1.4;
+}
+
+.compat-schema { margin-top: 2px; color: var(--text-secondary); }
+.compat-schema svg { display: block; width: 100%; height: auto; }
+
+.compat-apply { width: 100%; margin-top: 2px; }
+.compat-apply.is-applied {
+    background: linear-gradient(135deg, #059669, #047857);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+}
+
+/* Voix cockpit : pas d'emoji-chrome dans les dialogues. Les titres de section et
+   libellés de champ du modal PDF portent seuls (retire les icônes emoji, SR inclus). */
+.pdf-section-icon,
+.label-icon {
+    display: none;
+}
+
+/* ==========================================================================
    COLOR CONTROLS & AUTOCAD PALETTE
    ========================================================================== */
 
@@ -3912,8 +4377,7 @@ body.electron-mode .notification-container {
    ========================================================================== */
 
 .settings-modal-content {
-    background: var(--glass-bg-solid);
-    backdrop-filter: var(--glass-backdrop);
+    background: var(--modal-bg-solid);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
@@ -3926,6 +4390,7 @@ body.electron-mode .notification-container {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    animation: modalSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .settings-modal-body {
@@ -4044,7 +4509,7 @@ body.electron-mode .notification-container {
 .settings-path-display {
     font-size: 12px;
     color: var(--text-secondary);
-    font-family: 'Courier New', monospace;
+    font-family: 'JetBrains Mono', monospace;
     background: var(--glass-bg);
     padding: 6px 10px;
     border-radius: 6px;
@@ -4073,7 +4538,7 @@ body.electron-mode .notification-container {
     border-radius: var(--radius-md);
     color: var(--text-primary);
     font-size: 13px;
-    font-family: 'Courier New', monospace;
+    font-family: 'JetBrains Mono', monospace;
     transition: all 0.2s ease;
 }
 
@@ -4124,9 +4589,9 @@ body.electron-mode .notification-container {
     gap: var(--spacing-xs);
     margin-top: var(--spacing-sm);
     padding: 8px 12px;
-    background: rgba(59, 130, 246, 0.08);
-    border-left: 3px solid rgba(59, 130, 246, 0.5);
-    border-radius: 4px;
+    background: rgba(255, 145, 77, 0.08);
+    border: 1px solid rgba(255, 145, 77, 0.25);
+    border-radius: 8px;
     font-size: 12px;
     color: var(--text-secondary);
 }
@@ -4142,7 +4607,7 @@ body.electron-mode .notification-container {
     background: var(--glass-bg);
     padding: 2px 6px;
     border-radius: 4px;
-    font-family: 'Courier New', monospace;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
 }
 
@@ -4179,8 +4644,7 @@ body.electron-mode .notification-container {
    ========================================================================== */
 
 .pdf-export-modal-enhanced {
-    background: var(--glass-bg-solid) !important;
-    backdrop-filter: var(--glass-backdrop);
+    background: var(--modal-bg-solid) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: var(--radius-lg);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
@@ -4197,6 +4661,7 @@ body.electron-mode .notification-container {
     visibility: visible !important;
     flex-shrink: 0 !important;
     pointer-events: auto !important;
+    animation: modalPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .pdf-export-body {
@@ -4484,9 +4949,7 @@ body.electron-mode .notification-container {
    ========================================================================== */
 
 .project-modal-enhanced {
-    background: var(--glass-bg-solid);
-    backdrop-filter: var(--glass-backdrop);
-    -webkit-backdrop-filter: var(--glass-backdrop);
+    background: var(--modal-bg-solid);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--glass-shadow);
@@ -4497,6 +4960,7 @@ body.electron-mode .notification-container {
     flex-direction: column;
     position: relative;
     z-index: 1;
+    animation: modalPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .project-modal-body {
@@ -5270,7 +5734,7 @@ body.electron-mode .notification-container {
     background: var(--bg-card);
     padding: var(--spacing-md);
     border-radius: var(--radius-sm);
-    border-left: 3px solid var(--primary-orange);
+    border: 1px solid var(--glass-border);
 }
 
 .current-name-label {
@@ -5379,9 +5843,23 @@ body.electron-mode .notification-container {
     to { opacity: 1; }
 }
 
+/* Animation d'entrée pour une modale centrée par flex (pas de translate -50%).
+   Corrige le "saut" : modalSlideUp appliquait translate(-50%,-50%) sur un
+   élément déjà centré par flex, décalant la modale en haut-gauche pendant
+   l'animation avant de sauter au centre. */
+@keyframes modalPopIn {
+    from {
+        opacity: 0;
+        transform: translateY(24px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 .pdf-export-modal-content {
-    background: var(--glass-bg-solid);
-    backdrop-filter: var(--glass-backdrop);
+    background: var(--modal-bg-solid);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
@@ -5391,7 +5869,7 @@ body.electron-mode .notification-container {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    animation: modalSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: modalPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .pdf-export-modal-content .modal-header {
@@ -5862,7 +6340,7 @@ body.electron-mode .notification-container {
 .update-description-box {
     padding: 16px 20px;
     background: rgba(0, 0, 0, 0.2);
-    border-left: 3px solid var(--primary-orange);
+    border: 1px solid var(--glass-border);
     border-radius: 12px;
 }
 
@@ -6068,8 +6546,8 @@ body.electron-mode .notification-container {
 
 /* Card OPTIMISÉ — animation pulse */
 @keyframes pulse-border {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-    50%       { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 145, 77, 0.4); }
+    50%       { box-shadow: 0 0 0 6px rgba(255, 145, 77, 0.0); }
 }
 .layout-preview-card.card-optimized {
     animation: pulse-border 2s ease-in-out infinite;
@@ -6104,8 +6582,8 @@ body.electron-mode .notification-container {
 [data-theme="dark"] .layout-preview-card { background: var(--surface-secondary, #2a2a2a); }
 [data-theme="dark"] .layout-preview-card.active,
 [data-theme="dark"] .layout-preview-card:hover { background: #3a2a1e; }
-[data-theme="dark"] .layout-preview-card.card-optimized { background: #1a2a3a; }
-[data-theme="dark"] .layout-preview-card.card-optimized.active { background: #1a2f4a; }
+[data-theme="dark"] .layout-preview-card.card-optimized { background: rgba(255, 145, 77, 0.08); }
+[data-theme="dark"] .layout-preview-card.card-optimized.active { background: rgba(255, 145, 77, 0.14); }
 
 /* ─── Hub Inventaire ──────────────────────────────────────────────────────── */
 .fourreau-add-row {
@@ -6123,8 +6601,9 @@ body.electron-mode .notification-container {
     background: var(--surface-secondary, #f0f0f0);
     border: 1px solid var(--glass-border, #ddd);
     border-radius: 4px;
-    width: 22px;
-    height: 22px;
+    /* Cible tactile ≥ 24px (WCAG 2.5.8) */
+    width: 26px;
+    height: 26px;
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
@@ -6135,7 +6614,8 @@ body.electron-mode .notification-container {
     color: var(--text-primary, #333);
 }
 .qty-btn:hover { background: var(--surface-hover, #e0e0e0); }
-.qty-btn-sm { width: 18px; height: 18px; font-size: 11px; }
+/* Variante compacte : hit-area maintenue à 24px min via l'icône visuelle plus petite */
+.qty-btn-sm { width: 24px; height: 24px; font-size: 11px; }
 .qty-input {
     width: 48px;
     text-align: center;
@@ -6188,7 +6668,7 @@ body.electron-mode .notification-container {
 [data-theme="dark"] .qty-btn { background: #333; border-color: #555; color: #eee; }
 [data-theme="dark"] .qty-input { background: #2a2a2a; border-color: #555; color: #eee; }
 [data-theme="dark"] .plan-inventory-item:hover { background: #2a2a2a; }
-[data-theme="dark"] .plan-inventory-item.mode-c-active { background: #1a2a3a; border-left-color: #3b82f6; }
+[data-theme="dark"] .plan-inventory-item.mode-c-active { background: rgba(255, 145, 77, 0.10); border-left-color: var(--accent); }
 
 /* Void fill suggestions */
 .void-fill-section { margin-top: 10px; border-top: 1px solid var(--border, #e5e7eb); padding-top: 8px; }
@@ -6242,6 +6722,36 @@ body.electron-mode .notification-container {
 
     .tabs {
         margin-bottom: var(--spacing-sm);
+    }
+
+    /* Refonte « Deux zones » — compacter les zones fixes en écran peu haut */
+    .box-config {
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+
+    .kpi-strip {
+        padding: var(--spacing-sm);
+    }
+
+    .kpi-strip .row > div:last-child,
+    .kpi-strip .kpi {
+        font-size: 14px;
+    }
+}
+
+/* La tuile Échelle porte une valeur plus longue (px/mm) : registre identique
+   (mono cuivre) mais un cran plus petit pour ne jamais tronquer. */
+.kpi-strip .kpi-scale { font-size: 13px; }
+
+/* Accessibilité — respecter prefers-reduced-motion : on neutralise toutes les
+   animations infinies (flicker/pulse/LED) et transitions pour les utilisateurs
+   sensibles au mouvement (usage chantier/écrans variés inclus). */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
     }
 }
 

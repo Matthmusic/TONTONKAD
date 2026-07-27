@@ -22,11 +22,22 @@
   --border-color: rgba(45, 52, 54, 0.1);
   --shadow-color: rgba(0, 0, 0, 0.1);
   --accent-color: var(--primary-orange);
+  /* Accent unique = cuivre (Règle du Cuivre Rare) : ces variables remplacent
+     l'ancien bleu de fallback des états "optimisé" / "mode C". */
+  --accent: var(--primary-orange);
+  --accent-light: rgba(255, 145, 77, 0.14);
   --grid-line-color: rgba(0, 0, 0, 0.25);
+
+  /* Afficheur KPI — cuivre foncé sur verre clair pour passer WCAG AA (≈5:1).
+     En thème sombre (voir plus bas) on repasse au cuivre vif, déjà lisible. */
+  --kpi-grad-a: #8f4200;
+  --kpi-grad-b: #6d2900;
+  --kpi-glow: transparent;
 
   /* Glassmorphism */
   --glass-bg: rgba(255, 255, 255, 0.3);
   --glass-bg-solid: rgba(248, 249, 250, 0.8);
+  --modal-bg-solid: #f8f9fa;
   --glass-border: rgba(45, 52, 54, 0.1);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   --glass-backdrop: blur(20px);
@@ -82,6 +93,7 @@
   /* Glassmorphism Dark */
   --glass-bg: rgba(0, 0, 0, 0.2);
   --glass-bg-solid: rgba(26, 26, 46, 0.8);
+  --modal-bg-solid: #1a1a2e;
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 
@@ -92,4 +104,9 @@
   --info-color: #63b3ed;
   --input-bg: rgba(30, 30, 46, 0.8);
   --grid-line-color: rgba(255, 255, 255, 0.35);
+
+  /* Afficheur KPI — cuivre vif sur fond sombre (contraste largement suffisant) */
+  --kpi-grad-a: var(--primary-orange);
+  --kpi-grad-b: var(--primary-orange-dark);
+  --kpi-glow: rgba(255, 145, 77, 0.35);
 }
