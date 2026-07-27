@@ -5438,17 +5438,9 @@
   }
 
   /* ====== Inventaires & Panneaux d'info ====== */
+  // Agrégation extraite dans inventory-agg.js (pure, testée). Wrapper : passe les globales.
   function countGroups() {
-    const fc = {}, cc = {};
-    for (const f of fourreaux) {
-      const k = `${f.type}|${f.code}`;
-      fc[k] = (fc[k] || 0) + 1;
-    }
-    for (const c of cables) {
-      const k = `${c.fam}|${c.code}`;
-      cc[k] = (cc[k] || 0) + 1;
-    }
-    return { fc, cc };
+    return InventoryAgg.countGroups(fourreaux, cables);
   }
 
   /* ── Palette ACI flottante (changement de couleur depuis l'inventaire) ── */
