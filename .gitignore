@@ -151,4 +151,12 @@ $RECYCLE.BIN/
 # Application specific
 *.backup
 sw.js
-# BMAD (local only)
+
+# BMAD & outillage agents (local only — installés par framework, non versionnés)
+.bmad-core/
+.bmad-control-panel/
+web-bundles/
+.gemini/
+.impeccable/
+.github/chatmodes/
+.claude/commands/BMad/
