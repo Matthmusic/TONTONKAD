@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **TONTONKAD** is an Electron desktop application for designing and dimensioning electrical cable trays, conduits, and multi-tubing boxes with interactive 2D rendering. The application targets electrical engineers and contractors who need to optimize the placement of circular conduits (fourreaux) within rectangular cable trays while respecting occupancy rates and structural constraints.
 
-- **Version**: 2.4.11
+- **Version**: 2.5.3
 - **Platform**: Electron (Windows/Mac/Linux)
 - **Core Technology**: Vanilla JavaScript, HTML5 Canvas, Konva.js for rendering
 - **Build Tool**: Vite (development), electron-builder (distribution)
@@ -52,47 +52,24 @@ The renderer uses a **hybrid rendering approach**:
 
 **Key Design**: Canvas handles physics/grid, Konva handles visual feedback. This separation avoids full Canvas redraws on every drag gesture.
 
-### Business Logic: Placement Engine
+### Business Logic: Placement Engine (packer)
 
-**File**: `src/renderer/placement-engine.js` (~400+ lines)
+**File**: `src/renderer/packer.js` (~175 lines) — built on the `maxrects-packer` library (`maxrects-packer.min.js`). Tested in `tests/packer.test.js`.
 
-Core classes for intelligent conduit placement optimization:
+Optimized placement uses bin-packing (MaxRects), not a bespoke engine. API exposed via `window.PACKER`:
 
-- **`PlacementConfiguration`** - Represents a candidate layout with:
-  - `width`, `height` of the cable tray
-  - `placedFourreaux[]` - positioned conduits
-  - `score` - multi-objective score
-  - Constraint system for locked dimensions (width or height)
+- **`solve(tubes, opts)`** - computes one layout. Free mode favors a "trench" shape (width ≥ height, ratio 1–2) that is as compact as possible; locked mode (`opts.lock = 'w' | 'h'`) preserves the imposed axis.
+- **`variants(tubes, opts)`** - up to 3 candidate layouts, tagged (`compact`, `tranchee`, `rect43`) and de-duplicated.
+- **`anchorLayout(cfg, box)`** - anchors a layout into an existing box: laid at the BOTTOM (lit de pose), centered horizontally; a free axis is only grown (to the next multiple of 5) if the layout does not fit. Converts to canvas coordinates (circle centers, mm).
+- **`GEO`** (`{ gap, margin }`) - entraxe and lit de pose, driven by the control-bar sliders in the UI.
 
-- **`FourreauSorter`** - Intelligent sorting by:
-  - Diameter (descending) → gravité principle
-  - Quantity parity (even pairs first)
-  - Quantity (descending)
-  - Also detects symmetric pairs for balanced layouts
+Business principle: the largest conduits sit at the bottom (gravity); a trench is dug wide rather than deep.
 
-- **`ConfigurationGenerator`** - Explores 5 placement strategies:
-  1. `bottomLeftStrategy` - Classic bin packing
-  2. `centeredSymmetricStrategy` - Balanced around vertical axis
-  3. `minWidthStrategy` - Minimize width (height free)
-  4. `minHeightStrategy` - Minimize height (width free)
-  5. `squareShapeStrategy` - Maximize aspect ratio ≈ 1
-
-- **`MultiObjectiveScorer`** - Evaluates configs on 4 weighted criteria:
-  - `surface` (40%) - Minimize footprint
-  - `symmetry` (25%) - Y-axis balance
-  - `stability` (20%) - No overhangs, gravity principles
-  - `shape` (15%) - Prefer square over elongated
-
-- **`PlacementOrchestrator`** - Coordinates generator + scorer:
-  - Generates 5 candidate configurations
-  - Scores each
-  - Returns best config + alternatives
-
-**Coordinate System**: Y=0 at bottom, increases upward (inverted from canvas). Margins (`litDePose` = 40mm) enforced on all sides.
+**Coordinate System**: Y=0 at bottom, increases upward (inverted from canvas). Margins (`litDePose`) enforced on all sides.
 
 ### Main Script: Canvas & Physics Engine
 
-**File**: `src/renderer/script.js` (~11,000 lines)
+**File**: `src/renderer/script.js` (~12,100 lines)
 
 This is the core application logic, structured as an IIFE with distinct sections:
 
@@ -189,7 +166,7 @@ npm run test:watch
 npm run test:coverage
 
 # Run single test file
-npm test -- placement-engine.test.js
+npm test -- packer.test.js
 ```
 
 Test framework: **Jest**. Tests are in `tests/` directory.
@@ -261,14 +238,14 @@ The file `cea-app.json` at the repo root is the manifest for the CEA App Store (
 
 | File | Purpose | Size | Key Exports/Classes |
 |------|---------|------|-----|
-| `src/renderer/script.js` | Main canvas engine, physics, UI | ~11K lines | Global state, render loop, event handlers |
-| `src/renderer/placement-engine.js` | Intelligent placement optimizer | ~400 lines | `PlacementOrchestrator`, `ConfigurationGenerator`, `MultiObjectiveScorer` |
+| `src/renderer/script.js` | Main canvas engine, physics, UI | ~12K lines | Global state, render loop, event handlers |
+| `src/renderer/packer.js` | Bin-packing placement (MaxRects) | ~175 lines | `solve`, `variants`, `anchorLayout` (via `window.PACKER`) |
 | `src/renderer/konva-fourreaux.js` | Konva rendering overlay | ~300 lines | `init()`, `render()`, `syncTransform()` |
 | `src/renderer/index.html` | DOM structure | ~1.5K lines | `<canvas id="world">`, toolbar, modals |
 | `src/renderer/style.css` | UI styling + CSS variables | ~3.5K lines | `--mm-to-px`, theme variables, responsive layout |
 | `src/main/main.js` | Electron main process | ~600 lines | Window creation, IPC handlers, auto-update setup |
 | `src/preload/preload.js` | Secure API bridge | ~150 lines | `electronAPI` context bridge |
-| `data/*.csv` | Embedded reference data | - | cables.csv, fourreaux.csv, chemins_de_cable.csv |
+| `data/*.csv` | Embedded reference data | - | cables.csv, fourreaux.csv, chemins_de_cable.csv, chambres_de_tirage.csv |
 
 ## Common Patterns & Conventions
 
@@ -300,24 +277,18 @@ Undo is implemented via full state snapshots stored in `actionHistory`.
 
 ### Placement Engine Integration
 
-The placement engine is **optional** and called via:
+Placement is called through `window.PACKER` (see `packer.js`):
 
 ```javascript
-// When user clicks "Grid" (Ctrl+G) or "Reduce au minimum"
-const orchestrator = new PlacementOrchestrator();
-const result = orchestrator.optimize(
-  fourreaux,  // { type, code, diameter, quantity }[]
-  {
-    trayWidth, 
-    trayHeight,
-    constraints: { lockedAxis: 'width'|'height'|null }
-  }
-);
-// result.bestConfiguration contains optimized placement
-// result.alternatives has fallback options
+// tubes: { id, d }[]  (d = diameter in mm, incl. entraxe handled by GEO.gap)
+const layout = PACKER.solve(tubes, { lock: 'w' | 'h' | null, w, h });
+// or several candidates:
+const options = PACKER.variants(tubes, { lock: null });
+// then fit into the current box (kept size unless it must grow):
+const { w, h, positions } = PACKER.anchorLayout(layout, { w, h, lockW, lockH });
 ```
 
-Fallback: If optimization fails, revert to manual placement or previous config.
+Fallback: if a layout does not fit under a locked axis, `solve` returns an empty layout and the UI keeps the manual placement.
 
 ### High-DPI & Zoom Handling
 
@@ -328,19 +299,12 @@ Fallback: If optimization fails, revert to manual placement or previous config.
 - Canvas resolution set to `logicalWidth * effectivePixelRatio`
 - All drawing uses logical (scaled) coordinates; transform applied once
 
-## Placement Optimization Roadmap
+## Historique placement
 
-**Epic 001** (v3.0 roadmap, in `docs/`):
-
-- **Phase 1 (MVP, 13 days)**: Multi-config generator + 4-criteria scorer
-  - Stories 001-004: Foundation, generator, scorer, integration
-  - KPIs: 15-30% surface reduction, >80% symmetry, <100ms performance
-  
-- **Phase 2 (Optional, 10 days)**: TensorFlow.js RL agent
-  - Stories 005-007: Dataset collection, RL training, hybrid mode
-  - KPIs: +5-10% additional improvement, <5% fallback rate
-
-Status: Phase 1 foundational architecture complete (`placement-engine.js`). Phase 2 conditioned on Phase 1 success metrics.
+Le suivi par epics/stories (méthode BMAD) n'est plus le fil directeur du projet.
+Les anciens plans (moteur maison `placement-engine.js`, agent RL TensorFlow.js,
+epics 001–003) sont archivés dans `docs/stories/archive/` à titre historique — le
+placement effectif repose désormais sur `packer.js` (MaxRects). Voir `docs/stories/README.md`.
 
 ## Domain Glossary
 

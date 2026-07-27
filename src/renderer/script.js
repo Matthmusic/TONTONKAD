@@ -979,14 +979,6 @@
     fitCanvas(true);
   }
 
-  function zoomIn() {
-    setZoom(currentZoom + ZOOM_STEP);
-  }
-
-  function zoomOut() {
-    setZoom(currentZoom - ZOOM_STEP);
-  }
-
   function applyViewPan() {
     canvas.style.left = `${viewPanPx.x}px`;
     canvas.style.top = `${viewPanPx.y}px`;
@@ -1930,121 +1922,6 @@
         rows: rows.length
       },
       cells
-    };
-  }
-
-  function placePyramid(items, container, options, analysis) {
-    const { margin = 0, gap = 0 } = options || {};
-    const { stats } = analysis;
-
-    if (items.length === 0) {
-      return { fits: true, placements: [], grid: { cols: 0, rows: 0 } };
-    }
-
-    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
-    const largestDiameter = stats.maxDiameter;
-    const largestCount = stats.diameterCounts[largestDiameter];
-
-    const largeItems = sorted.slice(0, largestCount);
-    const smallItems = sorted.slice(largestCount);
-
-    const placements = [];
-    const cells = []; // Stockage des cellules pour affichage visuel
-
-    // Phase 1: Placer le(s) gros EN BAS au centre (métier VRD: gros en bas, gravité)
-    const baseY = container.height - margin - largestDiameter / 2 - gap / 2;
-    const largeCellSize = largestDiameter + gap;
-
-    if (largestCount === 1) {
-      const x = container.width / 2;
-      placements.push({
-        id: largeItems[0].id,
-        x: x,
-        y: baseY
-      });
-      cells.push({
-        x: x - largeCellSize / 2,
-        y: baseY - largeCellSize / 2,
-        width: largeCellSize,
-        height: largeCellSize
-      });
-    } else {
-      const baseWidth = largestCount * (largestDiameter + gap);
-      const baseStartX = (container.width - baseWidth) / 2 + (largestDiameter + gap) / 2;
-      for (let i = 0; i < largestCount; i++) {
-        const x = baseStartX + i * (largestDiameter + gap);
-        placements.push({
-          id: largeItems[i].id,
-          x: x,
-          y: baseY
-        });
-        cells.push({
-          x: x - largeCellSize / 2,
-          y: baseY - largeCellSize / 2,
-          width: largeCellSize,
-          height: largeCellSize
-        });
-      }
-    }
-
-    // Phase 2: Placer petits AU-DESSUS en grille
-    if (smallItems.length > 0) {
-      const maxSmallDiameter = Math.max(...smallItems.map(s => s.diameter));
-      const smallCellSize = maxSmallDiameter + gap;
-
-      const numCols = Math.max(largestCount, Math.ceil(Math.sqrt(smallItems.length)));
-      const numRows = Math.ceil(smallItems.length / numCols);
-
-      const gridWidth = numCols * smallCellSize;
-      const gridStartX = (container.width - gridWidth) / 2 + smallCellSize / 2;
-      const gridStartY = baseY - largestDiameter / 2 - gap - smallCellSize / 2;
-
-      let smallIndex = 0;
-      // Remplir du bas vers le haut (r décroissant signifie Y décroissant = monter)
-      for (let r = numRows - 1; r >= 0; r--) {
-        for (let c = 0; c < numCols; c++) {
-          if (smallIndex < smallItems.length) {
-            const x = gridStartX + c * smallCellSize;
-            const y = gridStartY - r * smallCellSize;
-            placements.push({
-              id: smallItems[smallIndex].id,
-              x: x,
-              y: y
-            });
-            cells.push({
-              x: x - smallCellSize / 2,
-              y: y - smallCellSize / 2,
-              width: smallCellSize,
-              height: smallCellSize
-            });
-            smallIndex++;
-          }
-        }
-      }
-    }
-
-    // Vérifier si tout rentre
-    const maxY = Math.max(...placements.map(p => p.y)) + Math.max(...sorted.map(s => s.diameter)) / 2 + gap / 2;
-    const maxX = Math.max(...placements.map(p => p.x)) + Math.max(...sorted.map(s => s.diameter)) / 2 + gap / 2;
-
-    if (maxY > container.height || maxX > container.width) {
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols: 0, rows: 0 },
-        cells: [],
-        suggestedContainer: {
-          width: Math.ceil(maxX + margin),
-          height: Math.ceil(maxY + margin)
-        }
-      };
-    }
-
-    return {
-      fits: true,
-      placements,
-      grid: { cols: largestCount, rows: Math.ceil(smallItems.length / Math.max(1, largestCount)) + 1 },
-      cells // Retourner les cellules pour affichage
     };
   }
 
