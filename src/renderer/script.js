@@ -384,26 +384,9 @@
   Object.defineProperty(window, 'showInfo',       { get: () => showInfo,       configurable: true });
 
   /* ====== Chargement des données ====== */
+  // Parsing CSV extrait dans csv.js (pur, testé). Wrapper fin (signature inchangée).
   function parseCSV(text, delimiter = ';') {
-    const lines = text.replace(/\r/g, '').trim().split('\n');
-    if (lines.length < 2) return []; // Pas assez de données (au moins un en-tête et une ligne)
-    const header = lines[0].split(delimiter).map(h => h.trim());
-    const numericHeaders = ['od', 'id', 'largeur', 'hauteur'];
-    const rows = lines.slice(1).map(line => {
-      const values = line.split(delimiter);
-      const obj = {};
-      header.forEach((key, i) => {
-        const value = (values[i] || '').trim();
-        // Convertit en nombre les colonnes qui doivent l'être
-        if (numericHeaders.includes(key)) {
-          obj[key] = parseFloat(value.replace(',', '.')) || 0;
-        } else {
-          obj[key] = value;
-        }
-      });
-      return obj;
-    });
-    return rows;
+    return CSVUtil.parseCSV(text, delimiter);
   }
 
   async function loadData() {
