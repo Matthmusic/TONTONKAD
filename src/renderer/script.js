@@ -482,6 +482,10 @@
         }
       }, 1000);
     }
+    // BIG BRAIN — catalogues nécessaires au contrôleur de la modale (DOM),
+    // ré-assignés à chaque (re)chargement (succès CSV ou fallback).
+    window.FOURREAUX = FOURREAUX;
+    window.CABLES = CABLES;
   }
 
   /* ====== Sélecteurs & Listes ====== */
@@ -7093,6 +7097,7 @@
   window.applyDimensions = applyDimensions;
   window.redraw = redraw;
   window.addFourreauAt = addFourreauAt;
+  window.showToast = showToast; // BIG BRAIN — notifications depuis le contrôleur DOM
 
   /* ====== Suggestion de chambres de tirage compatibles ====== */
   const compatChambresState = { open: false, selectedIndex: 0, selected: null, selectedUnit: null, applied: null, appliedUnit: null };
