@@ -161,3 +161,6 @@ web-bundles/
 .github/chatmodes/
 .claude/commands/BMad/
 AGENTS.md
+
+# Superpowers scratch (brainstorm visuel, ledger SDD — local only)
+.superpowers/
