@@ -7636,9 +7636,15 @@
     const pdfViewName = document.getElementById('pdfViewName');
     const pdfDescriptionCounter = document.getElementById('pdfDescriptionCounter');
 
-    if (pdfProjectName) pdfProjectName.value = `Projet ${currentDate}`;
-    if (pdfViewName) pdfViewName.value = 'Vue principale';
-    if (pdfDescriptionCounter) pdfDescriptionCounter.textContent = '0';
+    // Mémoriser la saisie entre deux ouvertures : la modale n'est pas détruite à
+    // la fermeture (juste masquée), ses champs gardent leurs valeurs. On ne
+    // pré-remplit donc que si le champ est encore vide (première ouverture).
+    if (pdfProjectName && !pdfProjectName.value.trim()) pdfProjectName.value = `Projet ${currentDate}`;
+    if (pdfViewName && !pdfViewName.value.trim()) pdfViewName.value = 'Vue principale';
+    if (pdfDescriptionCounter) {
+      const desc = document.getElementById('pdfDescription');
+      pdfDescriptionCounter.textContent = String(desc?.value.length || 0);
+    }
 
     // Aperçu : la même image que celle qui sera insérée dans le PDF
     updatePdfPreview();
@@ -9363,14 +9369,8 @@
       });
     }
 
-    // Fermer le modal en cliquant en dehors
-    if (pdfExportModal) {
-      pdfExportModal.addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) {
-          closePdfExportModal();
-        }
-      });
-    }
+    // Volontairement PAS de fermeture au clic en dehors (backdrop) : évite de
+    // perdre la saisie par mégarde. Fermeture via la croix, Annuler ou Échap.
 
     // Fermer le modal avec Échap
     document.addEventListener('keydown', (e) => {
