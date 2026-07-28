@@ -565,6 +565,7 @@
                 </svg>
                 <span class="ctrl-label">Réduire</span>
               </button>
+              <button id="bigBrainBtn" class="btn" title="BIG BRAIN — générer depuis les liaisons">🧠 BIG BRAIN</button>
               <button id="rotateBoxCcw" class="ctrl-btn ctrl-btn-square" aria-label="Tourner la boîte de 90° antihoraire" title="90° gauche">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M7 7h6a5 5 0 1 1-4.2 7.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -755,6 +756,7 @@
   <script src="packer.js"></script>
   <script src="cable-assign.js"></script>
   <script src="big-brain.js"></script>
+  <script src="big-brain-modal.js" defer></script>
   <script src="geometry.js"></script>
   <script src="csv.js"></script>
   <script src="pdf-format.js"></script>
@@ -1116,6 +1118,39 @@
       <div class="confirm-actions">
         <button id="confirmCancel" class="btn btn-secondary">Annuler</button>
         <button id="confirmOk" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale BIG BRAIN — génération de fourreaux remplis depuis des liaisons -->
+  <div id="bigBrainModal" class="bb-modal" style="display:none;">
+    <div class="bb-modal-content">
+      <div class="bb-modal-header">
+        <span>🧠 BIG BRAIN — Générer depuis les liaisons</span>
+        <button id="bigBrainClose" class="bb-close" type="button">✕</button>
+      </div>
+      <div class="bb-params">
+        <label>Taux max <input id="bbTaux" type="number" min="5" max="60" value="33" step="1"> %</label>
+        <label>Taille max fourreau <select id="bbTailleMax"></select></label>
+        <span class="bb-types">Types :
+          <label><input type="checkbox" class="bb-type" value="TPC" checked> TPC</label>
+          <label><input type="checkbox" class="bb-type" value="IRL"> IRL</label>
+          <label><input type="checkbox" class="bb-type" value="ICTA"> ICTA</label>
+        </span>
+      </div>
+      <div class="bb-body">
+        <div class="bb-master">
+          <div class="bb-master-head">Liaisons <button id="bbAddLiaison" type="button">+ Nouvelle</button></div>
+          <ul id="bbLiaisonList" class="bb-liaison-list"></ul>
+        </div>
+        <div class="bb-detail" id="bbDetail">
+          <div class="bb-detail-empty">Sélectionne ou crée une liaison.</div>
+        </div>
+      </div>
+      <div class="bb-modal-footer">
+        <span id="bbFootMsg" class="bb-foot-msg"></span>
+        <button id="bigBrainCancel" type="button">Annuler</button>
+        <button id="bigBrainGenerateBtn" type="button" class="bb-go">Générer ▶</button>
       </div>
     </div>
   </div>
