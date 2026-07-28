@@ -19,7 +19,10 @@
       cables.forEach((c) => {
         if (!c || !c.fam || !c.code) errors.push({ index, message: 'Câble incomplet (fam/code)' });
         else if (!(Number(c.od) > 0)) errors.push({ index, message: 'Câble sans diamètre valide' });
-        else if (!(Number.isInteger(c.qty) && c.qty >= 1)) errors.push({ index, message: 'Quantité de câble invalide (≥ 1)' });
+        else {
+          const q = Number(c.qty);
+          if (!(Number.isInteger(q) && q >= 1)) errors.push({ index, message: 'Quantité de câble invalide (≥ 1)' });
+        }
       });
     });
     return { ok: errors.length === 0, errors };

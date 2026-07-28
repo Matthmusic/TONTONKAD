@@ -28,6 +28,10 @@ describe('validateLiaisons', () => {
   test('câble sans fam/code → erreur', () => {
     expect(validateLiaisons([{ id: 'L', nom: 'X', cables: [{ od: 10, qty: 1 }] }]).ok).toBe(false);
   });
+  test('od et qty en chaîne numérique (saisie DOM) → ok:true', () => {
+    const r = validateLiaisons([{ id: 'L', nom: 'X', cables: [{ fam: 'F', code: 'c', od: '25.5', qty: '3' }] }]);
+    expect(r.ok).toBe(true);
+  });
 });
 
 describe('resultToObjects', () => {
