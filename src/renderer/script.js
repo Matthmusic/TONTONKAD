@@ -1693,7 +1693,51 @@
     return obj;
   }
 
-
+  // BIG BRAIN — instancie les fourreaux remplis à partir du résultat moteur, puis
+  // laisse le placement existant (packer) les positionner. Une seule entrée d'historique.
+  function bigBrainGenerate(result, liaisonsById, replace) {
+    const objs = window.BigBrain.resultToObjects(result, liaisonsById || {});
+    saveStateToHistory();
+    if (replace) {
+      fourreaux.length = 0;
+      cables.length = 0;
+      selected = null;
+      selectedMultiple = [];
+      gridLocked = false;
+    }
+    const cx = WORLD_W / 2, cy = WORLD_H / 2;
+    const createdIds = [];
+    objs.fourreaux.forEach((fo, i) => {
+      const id = nextId++;
+      fourreaux.push({
+        id, x: cx, y: cy, od: fo.od, idm: fo.idm,
+        color: colorForFourreau(fo.type, fo.code), customColor: null, label: fo.label || '',
+        children: [], vx: 0, vy: 0, dragging: false, frozen: false,
+        _frozenByUser: false, _frozenByMode: false, _px: cx, _py: cy, type: fo.type, code: fo.code,
+        famille: null, statut: 'utilisé', usage: '', origine: '', destination: '', reserve: false, aiguille: false,
+      });
+      createdIds[i] = id;
+    });
+    objs.cables.forEach((co) => {
+      const parentId = createdIds[co.parentIndex];
+      const parent = fourreaux.find((f) => f.id === parentId);
+      if (!parent) return;
+      const id = nextId++;
+      cables.push({
+        id, x: parent.x, y: parent.y, od: co.od, parent: parentId,
+        color: colorForCable(co.fam, co.code), customColor: null, label: co.label || '',
+        fam: co.fam, code: co.code, vx: 0, vy: 0, dragging: false, frozen: false,
+        _frozenByUser: false, _frozenByMode: false, _px: parent.x, _py: parent.y,
+      });
+      parent.children.push(id);
+    });
+    if (fourreaux.length > 0 && typeof arrangeConduitGrid === 'function') arrangeConduitGrid();
+    updateStats();
+    updateInventory();
+    redraw();
+    return { created: objs.fourreaux.length, nonPlaces: (result.nonPlaces || []).length };
+  }
+  window.bigBrainGenerate = bigBrainGenerate;
 
   /* ====== Grille virtuelle adaptative pour multitubulaires (VRD/BTP) ====== */
 
