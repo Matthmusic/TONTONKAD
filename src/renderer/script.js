@@ -7289,6 +7289,14 @@
       compatChambresState.selected = null;
       if (typeof redraw === 'function') redraw();
     });
+    // Verrouille/déverrouille une cote via sa checkbox cachée (déclenche le change
+    // handler : désactive l'input, met à jour l'icône cadenas, recalcule).
+    const lockBoxDimension = (id, locked) => {
+      const cb = document.getElementById(id);
+      if (!cb || cb.checked === locked) return;
+      cb.checked = locked;
+      cb.dispatchEvent(new Event('change'));
+    };
     const applyBtn = document.getElementById('compatApplyBtn');
     applyBtn?.addEventListener('click', () => {
       // Mode unit : redimensionner la boîte aux cotes de la chambre préformée.
@@ -7301,8 +7309,15 @@
         applyDimensions({ anchorContents: true, width: unit.l, height: unit.H });
         // Mémoriser la chambre appliquée → label affiché sur le canvas / PDF.
         compatChambresState.appliedUnit = { ref: unit.ref, l: unit.l, H: unit.H };
+        // Une chambre préformée a des cotes FIXES → verrouiller largeur ET hauteur.
+        lockBoxDimension('lockWidth', true);
+        lockBoxDimension('lockHeight', true);
         showToast(`Chambre ${unit.ref} appliquée : ${unit.l} × ${unit.H} mm`);
-        renderCompatChambres(); // recalcule les suggestions pour la nouvelle boîte
+        // Fermer le panneau après application.
+        compatChambresState.open = false;
+        compatChambresState.selected = null;
+        panel.style.display = 'none';
+        if (typeof redraw === 'function') redraw();
         return;
       }
       // Mode tile : poser / retirer les tampons (overlay non destructif).
