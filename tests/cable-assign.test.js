@@ -127,4 +127,14 @@ describe('assignCablesToFourreaux', () => {
     const r = assignCablesToFourreaux([liaison('D', 40)], CAT2);
     expect(r.fourreaux[0].code).toBe('110');
   });
+
+  test('typesAutorises end-to-end : un ICTA plus petit mais non-autorisé est ignoré', () => {
+    // ICTA id39.6 : cap@0.33 ≈ 406.4 > aire(19)≈283.5 → serait choisi en premier
+    // (plus petit) si le filtre ne s'appliquait pas au bout-en-bout.
+    const CAT_MIXED = [...CAT2, { type: 'ICTA', code: '50', od: 50, id: 39.6 }];
+    const r = assignCablesToFourreaux([liaison('T', 19)], CAT_MIXED, { tauxMax: 0.33, typesAutorises: ['TPC'] });
+    expect(r.fourreaux.length).toBeGreaterThanOrEqual(1);
+    expect(r.fourreaux.every(f => f.type === 'TPC')).toBe(true);
+    expect(r.nonPlaces).toEqual([]);
+  });
 });
