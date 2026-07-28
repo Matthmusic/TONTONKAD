@@ -10871,6 +10871,7 @@
     constructor() {
       this.modal = document.getElementById('projectModal');
       this.projectsList = document.getElementById('projectsList');
+      this.collapsedFolders = new Set(); // dossiers repliés (mémorisé entre re-render)
       this.newProjectName = document.getElementById('newProjectName');
       this.newFolderName = document.getElementById('newFolderName');
       this.projectFolder = document.getElementById('projectFolder');
@@ -11048,6 +11049,14 @@
 
       // Event delegation pour les boutons tooltip dans la liste des projets
       this.projectsList.addEventListener('click', (e) => {
+        // Replier/déplier un dossier au clic sur son en-tête (hors boutons d'action)
+        const header = e.target.closest('.folder-header');
+        if (header && !e.target.closest('.tooltip-btn')) {
+          const folderItem = header.closest('.folder-item');
+          this.toggleFolderCollapsed(folderItem?.dataset.folderName ?? '', folderItem);
+          return;
+        }
+
         const tooltipBtn = e.target.closest('.tooltip-btn');
         if (!tooltipBtn) return;
 
@@ -11363,6 +11372,14 @@
       this.projectFolder.dataset.lastSelection = this.projectFolder.value;
     }
 
+    // Replie/déplie un dossier (mémorisé dans collapsedFolders, appliqué sans re-render).
+    toggleFolderCollapsed(folderName, folderItem) {
+      const collapse = !this.collapsedFolders.has(folderName);
+      if (collapse) this.collapsedFolders.add(folderName);
+      else this.collapsedFolders.delete(folderName);
+      if (folderItem) folderItem.classList.toggle('collapsed', collapse);
+    }
+
     renderProjectsList() {
       const data = window.projectManager.getAllProjects();
       const hasProjects = Object.keys(data.projects).length > 0 || Object.keys(data.folders).length > 0;
@@ -11385,10 +11402,12 @@
         const folder = data.folders[folderName];
         const projectCount = Object.keys(folder.projects || {}).length;
 
+        const collapsed = this.collapsedFolders.has(folderName);
         html += `
-          <div class="folder-item drop-zone"
+          <div class="folder-item drop-zone${collapsed ? ' collapsed' : ''}"
                data-folder-name="${folderName}">
             <div class="folder-header">
+              <span class="folder-toggle" aria-hidden="true">▾</span>
               <span class="folder-icon">📁</span>
               <span class="folder-name">${folderName}</span>
               <span class="folder-count">(${projectCount} projet${projectCount > 1 ? 's' : ''})</span>
@@ -11407,10 +11426,12 @@
       // Afficher les projets à la racine
       const rootProjects = Object.keys(data.projects);
       if (rootProjects.length > 0) {
+        const rootCollapsed = this.collapsedFolders.has('');
         html += `
-          <div class="folder-item drop-zone"
+          <div class="folder-item drop-zone${rootCollapsed ? ' collapsed' : ''}"
                data-folder-name="">
             <div class="folder-header">
+              <span class="folder-toggle" aria-hidden="true">▾</span>
               <span class="folder-icon">🏠</span>
               <span class="folder-name">Projets sans dossier</span>
               <span class="folder-count">(${rootProjects.length} projet${rootProjects.length > 1 ? 's' : ''})</span>

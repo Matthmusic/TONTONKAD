@@ -5368,6 +5368,26 @@ body.electron-mode .notification-container {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Chevron de repli des dossiers de projets */
+.folder-toggle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    width: 12px;
+    text-align: center;
+    flex: none;
+    transition: transform 0.15s ease;
+}
+
+.folder-item.collapsed .folder-toggle {
+    transform: rotate(-90deg);
+}
+
+.folder-item.collapsed .folder-projects {
+    display: none;
 }
 
 .folder-actions {
