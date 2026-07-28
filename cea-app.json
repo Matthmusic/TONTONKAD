@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.5.3",
+    "version": "2.6.0",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,21 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.5.3.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.6.0.exe"
   },
   "changelog": {
+    "2.6.0": {
+      "date": "2026-07-28",
+      "changes": [
+        "Chambres de tirage compatibles : bouton « Appliquer » qui redimensionne la boîte aux cotes exactes de la chambre préformée choisie",
+        "Le type de chambre appliquée s'affiche sur le plan (et dans l'export PDF) et est sauvegardé avec le projet",
+        "À l'application d'une chambre : le panneau se ferme et les dimensions sont verrouillées automatiquement (cotes fixes)",
+        "Export PDF : la saisie (nom du projet, vue, auteur, client, description) est mémorisée d'une ouverture à l'autre",
+        "Export PDF : la modale ne se ferme plus par mégarde au clic en dehors",
+        "Gestion de projet : les dossiers de projets sauvegardés sont désormais repliables",
+        "Nettoyage interne du code et couverture de tests étendue (sans impact fonctionnel)"
+      ]
+    },
     "2.5.3": {
       "date": "2026-07-16",
       "changes": [
