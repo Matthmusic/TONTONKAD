@@ -1699,8 +1699,17 @@
 
   // BIG BRAIN — instancie les fourreaux remplis à partir du résultat moteur, puis
   // laisse le placement existant (packer) les positionner. Une seule entrée d'historique.
-  function bigBrainGenerate(result, liaisonsById, replace) {
+  function bigBrainGenerate(result, liaisonsById, replace, liaisons) {
     const objs = window.BigBrain.resultToObjects(result, liaisonsById || {});
+    // Phases par liaison : une file de phases consommée dans l'ordre des câbles
+    // de cette liaison (le cycle L1/L2/L3 redémarre à chaque liaison).
+    const phaseQueues = {};
+    if (Array.isArray(liaisons) && window.PhaseAssign) {
+      liaisons.forEach((l) => {
+        phaseQueues[l.id] = window.PhaseAssign.assignPhases(l.cables || []);
+      });
+    }
+    const phaseCursors = {};
     saveStateToHistory();
     if (replace) {
       fourreaux.length = 0;
@@ -1732,10 +1741,22 @@
       const parentId = createdIds[co.parentIndex];
       const parent = fourreaux.find((f) => f.id === parentId);
       if (!parent) return;
+      // Couleur de phase → le libellé L1/L2/L3/N/PE s'affiche automatiquement.
+      let phaseColor = null;
+      const queue = phaseQueues[co.liaisonId];
+      if (queue) {
+        const k = phaseCursors[co.liaisonId] || 0;
+        phaseCursors[co.liaisonId] = k + 1;
+        const phase = queue[k];
+        if (phase && typeof COLOR_SYSTEM !== 'undefined') {
+          const col = COLOR_SYSTEM.getByPhase(phase);
+          if (col) phaseColor = col.hex;
+        }
+      }
       const id = nextId++;
       cables.push({
         id, x: parent.x, y: parent.y, od: co.od, parent: parentId,
-        color: colorForCable(co.fam, co.code), customColor: null, label: co.label || '',
+        color: colorForCable(co.fam, co.code), customColor: phaseColor, label: co.label || '',
         fam: co.fam, code: co.code, vx: 0, vy: 0, dragging: false, frozen: false,
         _frozenByUser: false, _frozenByMode: false, _px: parent.x, _py: parent.y,
       });
@@ -1745,6 +1766,23 @@
     updateStats();
     updateInventory();
     redraw();
+
+    // Suggestion INFORMATIVE de chambre de tirage (rien n'est appliqué).
+    try {
+      if (SHAPE === 'rect' && window.CompatChambres && typeof showToast === 'function') {
+        const models = window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE);
+        const { unit } = window.CompatChambres.computeCompatibleChambers(
+          models, Math.round(WORLD_W_MM), Math.round(WORLD_H_MM), 3
+        );
+        if (unit && unit.length) {
+          const b = unit[0];
+          showToast(`🏗️ Chambre ${b.ref} compatible (${b.l} × ${b.H} mm) — voir « Chambres compatibles »`, 'info', 6000);
+        }
+      }
+    } catch (e) {
+      console.warn('[BIG BRAIN] suggestion de chambre indisponible', e);
+    }
+
     return { created: objs.fourreaux.length, nonPlaces: (result.nonPlaces || []).length };
   }
   window.bigBrainGenerate = bigBrainGenerate;
