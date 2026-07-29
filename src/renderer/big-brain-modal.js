@@ -1,6 +1,7 @@
 // BIG BRAIN — contrôleur DOM de la modale (disposition maître-détail).
 // Façon settings-modal.js : IIFE + DOMContentLoaded, aucune logique métier ici.
 // Validation → window.BigBrain.validateLiaisons
+// Traduction circuit → câbles → window.Circuit.circuitToCables
 // Affectation → window.CableAssign.assignCablesToFourreaux
 // Création + placement → window.bigBrainGenerate (script.js)
 
@@ -8,7 +9,9 @@
   'use strict';
 
   // ── État en mémoire de session (conservé tant que l'app tourne) ──
-  let liaisons = []; // [{ id, nom, cables: [{ fam, code, od, qty }] }]
+  // liaisons : [{ id, nom, circuit: { fam, nbPhases, codePhase, neutre,
+  //               codeNeutre, pe, codePE, parallele } }]
+  let liaisons = [];
   let selectedIndex = -1;
   let seq = 0;
 
@@ -32,6 +35,23 @@
     if (!Array.isArray(catalogue)) return undefined;
     const spec = catalogue.find((c) => c.fam === fam && c.code === code);
     return spec ? spec.od : undefined;
+  }
+
+  // ── Traduction circuit → câbles (module pur circuit.js) ──
+  function cablesOfCircuit(circuit) {
+    if (!window.Circuit || typeof window.Circuit.circuitToCables !== 'function') return [];
+    return window.Circuit.circuitToCables(circuit, resolveOd);
+  }
+  function countCables(circuit) {
+    return cablesOfCircuit(circuit).reduce((s, c) => s + c.qty, 0);
+  }
+  function recapText(circuit) {
+    const cables = cablesOfCircuit(circuit);
+    if (cables.length === 0) return 'Aucun câble — renseigne au moins les phases.';
+    const suffixe = { neutre: ' (N)', PE: ' (PE)' };
+    const parts = cables.map((c) => `${c.qty}×${c.code}${suffixe[c.fonction] || ''}`);
+    const total = cables.reduce((s, c) => s + c.qty, 0);
+    return `${parts.join(' + ')} → ${total} câble(s)`;
   }
 
   // ── Pied de modale : message de statut / erreurs ──
@@ -75,7 +95,7 @@
 
       const count = document.createElement('span');
       count.className = 'bb-liaison-count';
-      count.textContent = liaison.cables.length + ' câble(s)';
+      count.textContent = countCables(liaison.circuit) + ' câble(s)';
 
       const renameBtn = document.createElement('button');
       renameBtn.type = 'button';
@@ -107,7 +127,44 @@
     if (nameEl && liaisons[idx]) nameEl.textContent = liaisons[idx].nom;
   }
 
-  // ── Rendu DÉTAIL : nom de la liaison sélectionnée + ses câbles ──
+  function updateMasterCount(idx) {
+    if (!masterListEl) return;
+    const li = masterListEl.children[idx];
+    if (!li) return;
+    const countEl = li.querySelector('.bb-liaison-count');
+    if (countEl && liaisons[idx]) countEl.textContent = countCables(liaisons[idx].circuit) + ' câble(s)';
+  }
+
+  // ── Petits constructeurs DOM pour le bloc circuit ──
+  function buildCircuitRow(labelText, fieldEls) {
+    const row = document.createElement('div');
+    row.className = 'bb-circuit-row';
+    const label = document.createElement('span');
+    label.className = 'bb-circuit-label';
+    label.textContent = labelText;
+    const fields = document.createElement('div');
+    fields.className = 'bb-circuit-fields';
+    fieldEls.forEach((el) => fields.appendChild(el));
+    row.appendChild(label);
+    row.appendChild(fields);
+    return row;
+  }
+
+  function buildCodeSelect(className, ariaLabel, codes, selectedCode) {
+    const sel = document.createElement('select');
+    sel.className = className;
+    sel.setAttribute('aria-label', ariaLabel);
+    codes.forEach((code) => {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = code;
+      if (code === selectedCode) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    return sel;
+  }
+
+  // ── Rendu DÉTAIL : nom de la liaison + bloc circuit (phases/neutre/PE) ──
   function renderDetail() {
     if (!detailEl) return;
     const liaison = liaisons[selectedIndex];
@@ -124,81 +181,110 @@
     nameInput.setAttribute('aria-label', 'Nom de la liaison');
     detailEl.appendChild(nameInput);
 
+    const circuit = liaison.circuit;
     const families = getFamilies();
+    const codes = getCodesForFam(circuit.fam);
 
-    liaison.cables.forEach((cable, idx) => {
-      const row = document.createElement('div');
-      row.className = 'bb-cable-row';
-      row.dataset.idx = String(idx);
+    const grid = document.createElement('div');
+    grid.className = 'bb-circuit-grid';
 
-      const famSelect = document.createElement('select');
-      famSelect.className = 'bb-cable-fam';
-      famSelect.setAttribute('aria-label', 'Famille de câble');
-      families.forEach((fam) => {
-        const opt = document.createElement('option');
-        opt.value = fam;
-        opt.textContent = fam;
-        if (fam === cable.fam) opt.selected = true;
-        famSelect.appendChild(opt);
-      });
-
-      const codeSelect = document.createElement('select');
-      codeSelect.className = 'bb-cable-code';
-      codeSelect.setAttribute('aria-label', 'Code de câble');
-      getCodesForFam(cable.fam).forEach((code) => {
-        const opt = document.createElement('option');
-        opt.value = code;
-        opt.textContent = code;
-        if (code === cable.code) opt.selected = true;
-        codeSelect.appendChild(opt);
-      });
-
-      const qtyInput = document.createElement('input');
-      qtyInput.type = 'number';
-      qtyInput.className = 'bb-cable-qty';
-      qtyInput.min = '1';
-      qtyInput.step = '1';
-      qtyInput.value = String(cable.qty != null ? cable.qty : 1);
-      qtyInput.setAttribute('aria-label', 'Quantité');
-
-      const fonctionSelect = document.createElement('select');
-      fonctionSelect.className = 'bb-cable-fonction';
-      fonctionSelect.setAttribute('aria-label', 'Fonction du câble (phase)');
-      [
-        ['auto', 'Auto'], ['phase', 'Phase'], ['neutre', 'Neutre'], ['PE', 'PE'], ['aucune', 'Aucune'],
-      ].forEach(([value, texte]) => {
-        const opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = texte;
-        if ((cable.fonction || 'auto') === value) opt.selected = true;
-        fonctionSelect.appendChild(opt);
-      });
-
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'bb-cable-remove';
-      removeBtn.title = 'Retirer ce câble';
-      removeBtn.textContent = '–';
-
-      row.appendChild(famSelect);
-      row.appendChild(codeSelect);
-      row.appendChild(qtyInput);
-      row.appendChild(fonctionSelect);
-      row.appendChild(removeBtn);
-      detailEl.appendChild(row);
+    // Famille
+    const famSelect = document.createElement('select');
+    famSelect.className = 'bb-circuit-fam';
+    famSelect.setAttribute('aria-label', 'Famille de câble du circuit');
+    families.forEach((fam) => {
+      const opt = document.createElement('option');
+      opt.value = fam;
+      opt.textContent = fam;
+      if (fam === circuit.fam) opt.selected = true;
+      famSelect.appendChild(opt);
     });
+    grid.appendChild(buildCircuitRow('Famille', [famSelect]));
 
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'bb-add-cable';
-    addBtn.textContent = '+ Ajouter un câble';
-    detailEl.appendChild(addBtn);
+    // Phases : nombre × section
+    const nbPhasesInput = document.createElement('input');
+    nbPhasesInput.type = 'number';
+    nbPhasesInput.className = 'bb-circuit-nbphases';
+    nbPhasesInput.min = '0';
+    nbPhasesInput.max = '6';
+    nbPhasesInput.step = '1';
+    nbPhasesInput.value = String(circuit.nbPhases != null ? circuit.nbPhases : 0);
+    nbPhasesInput.setAttribute('aria-label', 'Nombre de phases');
+
+    const timesSpan = document.createElement('span');
+    timesSpan.className = 'bb-circuit-times';
+    timesSpan.textContent = '×';
+
+    const codePhaseSelect = buildCodeSelect('bb-circuit-codephase', 'Section des phases', codes, circuit.codePhase);
+
+    grid.appendChild(buildCircuitRow('Phases', [nbPhasesInput, timesSpan, codePhaseSelect]));
+
+    // Neutre : présence + section
+    const neutreCheck = document.createElement('input');
+    neutreCheck.type = 'checkbox';
+    neutreCheck.className = 'bb-circuit-neutre';
+    neutreCheck.checked = !!circuit.neutre;
+    neutreCheck.setAttribute('aria-label', 'Présence d’un neutre');
+
+    const codeNeutreSelect = buildCodeSelect('bb-circuit-codeneutre', 'Section du neutre', codes, circuit.codeNeutre);
+    codeNeutreSelect.disabled = !circuit.neutre;
+
+    grid.appendChild(buildCircuitRow('Neutre', [neutreCheck, codeNeutreSelect]));
+
+    // PE : présence + section
+    const peCheck = document.createElement('input');
+    peCheck.type = 'checkbox';
+    peCheck.className = 'bb-circuit-pe';
+    peCheck.checked = !!circuit.pe;
+    peCheck.setAttribute('aria-label', 'Présence d’un PE');
+
+    const codePESelect = buildCodeSelect('bb-circuit-codepe', 'Section du PE', codes, circuit.codePE);
+    codePESelect.disabled = !circuit.pe;
+
+    grid.appendChild(buildCircuitRow('PE', [peCheck, codePESelect]));
+
+    // Circuits en parallèle
+    const paralleleInput = document.createElement('input');
+    paralleleInput.type = 'number';
+    paralleleInput.className = 'bb-circuit-parallele';
+    paralleleInput.min = '1';
+    paralleleInput.step = '1';
+    paralleleInput.value = String(circuit.parallele != null ? circuit.parallele : 1);
+    paralleleInput.setAttribute('aria-label', 'Nombre de circuits en parallèle');
+
+    grid.appendChild(buildCircuitRow('Circuits en parallèle', [paralleleInput]));
+
+    detailEl.appendChild(grid);
+
+    // Récapitulatif live
+    const recap = document.createElement('div');
+    recap.className = 'bb-circuit-recap';
+    recap.textContent = recapText(circuit);
+    detailEl.appendChild(recap);
+  }
+
+  function updateRecap() {
+    const liaison = liaisons[selectedIndex];
+    if (!liaison || !detailEl) return;
+    const recapEl = detailEl.querySelector('.bb-circuit-recap');
+    if (recapEl) recapEl.textContent = recapText(liaison.circuit);
+    updateMasterCount(selectedIndex);
   }
 
   // ── Actions maître ──
   function addLiaison() {
     seq += 1;
-    liaisons.push({ id: 'L' + seq, nom: 'Liaison ' + seq, cables: [] });
+    const fam = getFamilies()[0] || '';
+    const firstCode = getCodesForFam(fam)[0] || '';
+    liaisons.push({
+      id: 'L' + seq,
+      nom: 'Liaison ' + seq,
+      circuit: {
+        fam, nbPhases: 3, codePhase: firstCode,
+        neutre: true, codeNeutre: firstCode, pe: true, codePE: firstCode,
+        parallele: 1,
+      },
+    });
     selectedIndex = liaisons.length - 1;
     renderMaster();
     renderDetail();
@@ -234,25 +320,6 @@
     }
   }
 
-  // ── Actions détail (câbles de la liaison sélectionnée) ──
-  function addCableToSelected() {
-    const liaison = liaisons[selectedIndex];
-    if (!liaison) return;
-    const fam = getFamilies()[0] || '';
-    const code = getCodesForFam(fam)[0] || '';
-    liaison.cables.push({ fam, code, od: resolveOd(fam, code), qty: 1, fonction: 'auto' });
-    renderDetail();
-    renderMaster();
-  }
-
-  function removeCableFromSelected(idx) {
-    const liaison = liaisons[selectedIndex];
-    if (!liaison) return;
-    liaison.cables.splice(idx, 1);
-    renderDetail();
-    renderMaster();
-  }
-
   // ── Ouverture / fermeture ──
   function open() {
     populateTailleMax();
@@ -273,23 +340,19 @@
 
   // ── Générer : validation → affectation → création (déléguées) ──
   function generate() {
-    if (!window.BigBrain || !window.CableAssign || typeof window.bigBrainGenerate !== 'function') {
+    if (!window.BigBrain || !window.CableAssign || !window.Circuit || typeof window.bigBrainGenerate !== 'function') {
       setFootMsg('BIG BRAIN indisponible (modules non chargés).', true);
       return;
     }
 
-    // Construction des liaisons pour les modules purs : qty (chaîne d'un
-    // <input>) convertie en nombre ici, avant tout appel métier.
+    // Chaque liaison porte un circuit électrique (phases/neutre/PE) traduit
+    // en câbles par le module pur circuit.js — format inchangé pour les
+    // moteurs (validateLiaisons, assignCablesToFourreaux).
+    const resolveOdFn = (fam, code) => resolveOd(fam, code);
     const built = liaisons.map((l) => ({
       id: l.id,
       nom: l.nom,
-      cables: l.cables.map((c) => ({
-        fam: c.fam,
-        code: c.code,
-        od: c.od,
-        qty: parseInt(c.qty, 10),
-        fonction: c.fonction || 'auto',
-      })),
+      cables: window.Circuit.circuitToCables(l.circuit, resolveOdFn),
     }));
 
     const validation = window.BigBrain.validateLiaisons(built);
@@ -398,8 +461,9 @@
     }
 
     if (detailEl) {
-      // Saisie live (nom, quantité) : mise à jour d'état sans re-rendu complet
-      // pour ne pas faire perdre le focus/curseur pendant la frappe.
+      // Saisie live (nom, nombre de phases, parallèle) : mise à jour d'état
+      // sans re-rendu complet pour ne pas faire perdre le focus/curseur
+      // pendant la frappe — seul le récapitulatif est rafraîchi.
       detailEl.addEventListener('input', (e) => {
         const target = e.target;
         const liaison = liaisons[selectedIndex];
@@ -409,48 +473,51 @@
           updateMasterName(selectedIndex);
           return;
         }
-        const row = target.closest('.bb-cable-row');
-        if (!row) return;
-        const idx = Number(row.dataset.idx);
-        const cable = liaison.cables[idx];
-        if (!cable) return;
-        if (target.classList.contains('bb-cable-qty')) {
-          cable.qty = target.value;
+        const circuit = liaison.circuit;
+        if (target.classList.contains('bb-circuit-nbphases')) {
+          circuit.nbPhases = target.value;
+          updateRecap();
+        } else if (target.classList.contains('bb-circuit-parallele')) {
+          circuit.parallele = target.value;
+          updateRecap();
         }
       });
 
-      // Changement de select (fam/code) : structure dépendante → re-rendu détail.
+      // Changement de select/case à cocher : structure dépendante (famille →
+      // codes disponibles, neutre/PE → select activé/désactivé) → re-rendu
+      // détail complet. Les selects de code seuls n'affectent pas la
+      // structure : récapitulatif seul rafraîchi.
       detailEl.addEventListener('change', (e) => {
         const target = e.target;
         const liaison = liaisons[selectedIndex];
         if (!liaison) return;
-        const row = target.closest('.bb-cable-row');
-        if (!row) return;
-        const idx = Number(row.dataset.idx);
-        const cable = liaison.cables[idx];
-        if (!cable) return;
-        if (target.classList.contains('bb-cable-fam')) {
-          cable.fam = target.value;
-          cable.code = getCodesForFam(cable.fam)[0] || '';
-          cable.od = resolveOd(cable.fam, cable.code);
+        const circuit = liaison.circuit;
+        if (target.classList.contains('bb-circuit-fam')) {
+          circuit.fam = target.value;
+          const firstCode = getCodesForFam(circuit.fam)[0] || '';
+          circuit.codePhase = firstCode;
+          circuit.codeNeutre = firstCode;
+          circuit.codePE = firstCode;
           renderDetail();
-        } else if (target.classList.contains('bb-cable-code')) {
-          cable.code = target.value;
-          cable.od = resolveOd(cable.fam, cable.code);
-        } else if (target.classList.contains('bb-cable-fonction')) {
-          cable.fonction = target.value;
-        }
-      });
-
-      detailEl.addEventListener('click', (e) => {
-        if (e.target.closest('.bb-cable-remove')) {
-          const row = e.target.closest('.bb-cable-row');
-          if (row) removeCableFromSelected(Number(row.dataset.idx));
+        } else if (target.classList.contains('bb-circuit-neutre')) {
+          circuit.neutre = target.checked;
+          renderDetail();
+        } else if (target.classList.contains('bb-circuit-pe')) {
+          circuit.pe = target.checked;
+          renderDetail();
+        } else if (target.classList.contains('bb-circuit-codephase')) {
+          circuit.codePhase = target.value;
+          updateRecap();
+        } else if (target.classList.contains('bb-circuit-codeneutre')) {
+          circuit.codeNeutre = target.value;
+          updateRecap();
+        } else if (target.classList.contains('bb-circuit-codepe')) {
+          circuit.codePE = target.value;
+          updateRecap();
+        } else {
           return;
         }
-        if (e.target.closest('.bb-add-cable')) {
-          addCableToSelected();
-        }
+        updateMasterCount(selectedIndex);
       });
     }
   });

@@ -7046,14 +7046,33 @@ body.electron-mode .notification-container {
     font-weight: 600;
 }
 
-.bb-cable-row {
+/* Bloc circuit (famille, phases, neutre, PE, parallèle) — grille 2 colonnes
+   libellé / champs, alignée sur toute la largeur du panneau détail. */
+.bb-circuit-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+.bb-circuit-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+.bb-circuit-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.bb-circuit-fields {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
+    min-width: 0;
 }
-.bb-cable-row select,
-.bb-cable-row input {
+.bb-circuit-fields select,
+.bb-circuit-fields input[type="number"] {
     padding: 6px 8px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
@@ -7062,48 +7081,41 @@ body.electron-mode .notification-container {
     font-size: 13px;
     box-sizing: border-box;
 }
-.bb-cable-row select {
+.bb-circuit-fields select {
     flex: 1;
     min-width: 0;
 }
-.bb-cable-row .bb-cable-qty {
-    width: 56px;
+.bb-circuit-fields select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.bb-circuit-nbphases,
+.bb-circuit-parallele {
+    width: 64px;
     flex: 0 0 auto;
 }
-.bb-cable-row .bb-cable-fonction {
-    width: 90px;
+.bb-circuit-times {
     flex: 0 0 auto;
-}
-.bb-cable-row .bb-cable-remove {
-    flex: 0 0 auto;
-    background: none;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
     color: var(--text-muted);
-    cursor: pointer;
-    padding: 4px 8px;
-    transition: all var(--transition-base);
+    font-weight: 600;
 }
-.bb-cable-row .bb-cable-remove:hover {
-    color: #f56565;
-    border-color: #f56565;
+.bb-circuit-fields input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-orange);
+    cursor: pointer;
 }
 
-.bb-add-cable {
-    background: var(--bg-card);
+/* Récapitulatif live : aide discrète, pas une donnée éditable. */
+.bb-circuit-recap {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
     border: 1px dashed var(--border-color);
     border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-    padding: 8px 12px;
-    cursor: pointer;
-    font-size: 13px;
-    width: 100%;
-    margin-top: var(--spacing-sm);
-    transition: all var(--transition-base);
-}
-.bb-add-cable:hover {
-    border-color: var(--primary-orange);
-    color: var(--primary-orange);
+    padding: 8px 10px;
+    line-height: 1.5;
 }
 
 .bb-modal-footer {
