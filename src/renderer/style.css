@@ -7004,6 +7004,20 @@ body.electron-mode .notification-container {
     color: var(--text-muted);
     flex: 0 0 auto;
 }
+.bb-liaison-item .bb-liaison-rename {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+}
+.bb-liaison-item .bb-liaison-rename:hover {
+    color: var(--primary-orange);
+    background: rgba(255, 145, 77, 0.12);
+}
 .bb-liaison-item .bb-liaison-del {
     flex: 0 0 auto;
     background: none;

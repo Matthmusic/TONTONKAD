@@ -77,6 +77,13 @@
       count.className = 'bb-liaison-count';
       count.textContent = liaison.cables.length + ' câble(s)';
 
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'bb-liaison-rename';
+      renameBtn.title = 'Renommer la liaison';
+      renameBtn.setAttribute('aria-label', 'Renommer la liaison ' + liaison.nom);
+      renameBtn.textContent = '✏';
+
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className = 'bb-liaison-del';
@@ -86,6 +93,7 @@
 
       li.appendChild(name);
       li.appendChild(count);
+      li.appendChild(renameBtn);
       li.appendChild(delBtn);
       masterListEl.appendChild(li);
     });
@@ -199,6 +207,19 @@
     renderDetail();
   }
 
+  // Renommer : sélectionne la liaison (si besoin) puis donne le focus + la
+  // sélection au champ nom du panneau détail, prêt à taper — pas de prompt(),
+  // réutilise le champ d'édition live déjà câblé dans renderDetail().
+  function renameLiaison(idx) {
+    if (!liaisons[idx]) return;
+    if (selectedIndex !== idx) selectLiaison(idx);
+    const nameInput = detailEl && detailEl.querySelector('.bb-detail-name');
+    if (nameInput) {
+      nameInput.focus();
+      nameInput.select();
+    }
+  }
+
   // ── Actions détail (câbles de la liaison sélectionnée) ──
   function addCableToSelected() {
     const liaison = liaisons[selectedIndex];
@@ -270,6 +291,20 @@
 
     const result = window.CableAssign.assignCablesToFourreaux(built, window.FOURREAUX, opts);
 
+    // Rien à générer (ex. câbles trop gros pour la taille max fourreau, ou
+    // taux d'occupation trop bas) : ne pas proposer Remplacer/Ajouter — un
+    // "Remplacer" sur un résultat vide viderait le plan existant sans rien
+    // recréer. La modale reste ouverte pour ajuster les paramètres.
+    if (!result.fourreaux || result.fourreaux.length === 0) {
+      const nonPlaces = result.nonPlaces || [];
+      const msg = `Aucun fourreau ne convient : ${nonPlaces.length} câble(s) non plaçable(s) — augmente la taille max de fourreau ou le taux d'occupation.`;
+      setFootMsg(msg, true);
+      if (typeof window.showToast === 'function') {
+        window.showToast(`⚠️ ${msg}`, 'warning', 7000);
+      }
+      return;
+    }
+
     const replace = confirm(
       'Remplacer le plan actuel par la génération BIG BRAIN ?\n\nOK = Remplacer le plan\nAnnuler = Ajouter au plan existant'
     );
@@ -325,7 +360,13 @@
         if (!li) return;
         const idx = Number(li.dataset.idx);
         if (e.target.closest('.bb-liaison-del')) {
+          e.stopPropagation();
           deleteLiaison(idx);
+          return;
+        }
+        if (e.target.closest('.bb-liaison-rename')) {
+          e.stopPropagation();
+          renameLiaison(idx);
           return;
         }
         selectLiaison(idx);

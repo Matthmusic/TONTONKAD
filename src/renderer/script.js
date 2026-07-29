@@ -1707,7 +1707,13 @@
       cables.length = 0;
       selected = null;
       selectedMultiple = [];
+      // Aligné sur le handler du bouton "clear" : la grille virtuelle calculée
+      // pour l'ancien plan ne doit pas rester affichée après un "Remplacer".
       gridLocked = false;
+      gridOrigin = null;
+      gridSpacing = null;
+      gridFourreauxCount = 0;
+      lastGridCells = [];
     }
     const cx = WORLD_W / 2, cy = WORLD_H / 2;
     const createdIds = [];
