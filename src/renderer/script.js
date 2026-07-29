@@ -1701,14 +1701,14 @@
   // laisse le placement existant (packer) les positionner. Une seule entrée d'historique.
   function bigBrainGenerate(result, liaisonsById, replace, liaisons) {
     const objs = window.BigBrain.resultToObjects(result, liaisonsById || {});
-    // Phases par liaison : une file de phases consommée dans l'ordre des câbles
-    // de cette liaison (le cycle L1/L2/L3 redémarre à chaque liaison).
-    const phaseQueues = {};
-    if (Array.isArray(liaisons) && window.PhaseAssign) {
-      liaisons.forEach((l) => {
-        phaseQueues[l.id] = window.PhaseAssign.assignPhases(l.cables || []);
-      });
-    }
+    // Phases par SIGNATURE de câble (liaisonId|code|fonction), pas par liaison
+    // seule : cable-assign.js peut retrier/scinder les unités d'une liaison
+    // (repli « split par aire décroissante », non-placements partiels), donc une
+    // file unique consommée « dans l'ordre rencontré » désynchroniserait la
+    // phase du câble. Les unités de même signature sont interchangeables.
+    const phaseQueues = (Array.isArray(liaisons) && window.PhaseAssign)
+      ? window.PhaseAssign.buildPhaseQueues(liaisons)
+      : {};
     const phaseCursors = {};
     saveStateToHistory();
     if (replace) {
@@ -1742,11 +1742,14 @@
       const parent = fourreaux.find((f) => f.id === parentId);
       if (!parent) return;
       // Couleur de phase → le libellé L1/L2/L3/N/PE s'affiche automatiquement.
+      // Indexée par signature (liaisonId|code|fonction), pas par ordre de
+      // rencontre : robuste au tri/split de cable-assign.js.
       let phaseColor = null;
-      const queue = phaseQueues[co.liaisonId];
+      const sig = `${co.liaisonId}|${co.code}|${co.fonction || 'auto'}`;
+      const queue = phaseQueues[sig];
       if (queue) {
-        const k = phaseCursors[co.liaisonId] || 0;
-        phaseCursors[co.liaisonId] = k + 1;
+        const k = phaseCursors[sig] || 0;
+        phaseCursors[sig] = k + 1;
         const phase = queue[k];
         if (phase && typeof COLOR_SYSTEM !== 'undefined') {
           const col = COLOR_SYSTEM.getByPhase(phase);
@@ -1776,7 +1779,7 @@
         );
         if (unit && unit.length) {
           const b = unit[0];
-          showToast(`🏗️ Chambre ${b.ref} compatible (${b.l} × ${b.H} mm) — voir « Chambres compatibles »`, 'info', 6000);
+          showToast(`Chambre ${b.ref} compatible (${b.l} × ${b.H} mm) — voir « Chambres compatibles »`, 'info', 6000);
         }
       }
     } catch (e) {
