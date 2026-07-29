@@ -161,6 +161,19 @@
       qtyInput.value = String(cable.qty != null ? cable.qty : 1);
       qtyInput.setAttribute('aria-label', 'Quantité');
 
+      const fonctionSelect = document.createElement('select');
+      fonctionSelect.className = 'bb-cable-fonction';
+      fonctionSelect.setAttribute('aria-label', 'Fonction du câble (phase)');
+      [
+        ['auto', 'Auto'], ['phase', 'Phase'], ['neutre', 'Neutre'], ['PE', 'PE'], ['aucune', 'Aucune'],
+      ].forEach(([value, texte]) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = texte;
+        if ((cable.fonction || 'auto') === value) opt.selected = true;
+        fonctionSelect.appendChild(opt);
+      });
+
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'bb-cable-remove';
@@ -170,6 +183,7 @@
       row.appendChild(famSelect);
       row.appendChild(codeSelect);
       row.appendChild(qtyInput);
+      row.appendChild(fonctionSelect);
       row.appendChild(removeBtn);
       detailEl.appendChild(row);
     });
@@ -226,7 +240,7 @@
     if (!liaison) return;
     const fam = getFamilies()[0] || '';
     const code = getCodesForFam(fam)[0] || '';
-    liaison.cables.push({ fam, code, od: resolveOd(fam, code), qty: 1 });
+    liaison.cables.push({ fam, code, od: resolveOd(fam, code), qty: 1, fonction: 'auto' });
     renderDetail();
     renderMaster();
   }
@@ -270,6 +284,7 @@
         code: c.code,
         od: c.od,
         qty: parseInt(c.qty, 10),
+        fonction: c.fonction || 'auto',
       })),
     }));
 
@@ -310,7 +325,7 @@
     );
 
     const liaisonsById = Object.fromEntries(built.map((l) => [l.id, l.nom]));
-    const summary = window.bigBrainGenerate(result, liaisonsById, replace);
+    const summary = window.bigBrainGenerate(result, liaisonsById, replace, built);
 
     const nonPlaces = result.nonPlaces || [];
     if (nonPlaces.length) {
@@ -413,6 +428,8 @@
         } else if (target.classList.contains('bb-cable-code')) {
           cable.code = target.value;
           cable.od = resolveOd(cable.fam, cable.code);
+        } else if (target.classList.contains('bb-cable-fonction')) {
+          cable.fonction = target.value;
         }
       });
 
