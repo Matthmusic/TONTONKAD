@@ -1,4 +1,4 @@
-// BIG BRAIN — contrôleur DOM de la modale (disposition maître-détail).
+// BIG BRAIN — contrôleur DOM du panneau de la sidebar (3ᵉ onglet).
 // Façon settings-modal.js : IIFE + DOMContentLoaded, aucune logique métier ici.
 // Validation → window.BigBrain.validateLiaisons
 // Traduction circuit → câbles → window.Circuit.circuitToCables
@@ -16,7 +16,7 @@
   let seq = 0;
 
   // ── Éléments DOM (résolus au DOMContentLoaded) ──
-  let openBtn, modalEl, closeBtn, cancelBtn, generateBtn;
+  let paneEl, generateBtn;
   let tauxInput, tailleMaxSelect, addLiaisonBtn, masterListEl, detailEl, footMsgEl;
 
   // ── Catalogue câbles : familles distinctes + codes d'une famille ──
@@ -54,7 +54,7 @@
     return `${parts.join(' + ')} → ${total} câble(s)`;
   }
 
-  // ── Pied de modale : message de statut / erreurs ──
+  // ── Pied de panneau : message de statut / erreurs ──
   function setFootMsg(msg, isError) {
     if (!footMsgEl) return;
     footMsgEl.textContent = msg || '';
@@ -320,23 +320,15 @@
     }
   }
 
-  // ── Ouverture / fermeture ──
-  function open() {
+  // ── Point d'entrée de rafraîchissement ──
+  // window.FOURREAUX peut ne pas être encore chargé à l'init (DOMContentLoaded).
+  // script.js appelle ce point d'entrée quand l'onglet BIG BRAIN devient actif,
+  // pour re-peupler la taille max et re-rendre liste + détail à coup sûr.
+  window.bigBrainPanelRefresh = () => {
     populateTailleMax();
-    // Déplacer la modale en fin de <body> : un conteneur parent avec overflow ou
-    // transform casse le centrage d'un élément position:fixed (même remède que
-    // la modale d'export PDF).
-    if (modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
-    modalEl.style.display = 'flex';
-    setFootMsg('', false);
     renderMaster();
     renderDetail();
-  }
-
-  function close() {
-    modalEl.style.display = 'none';
-    // `liaisons` reste en mémoire de session : réouverture = même contenu.
-  }
+  };
 
   // ── Générer : validation → affectation → création (déléguées) ──
   function generate() {
@@ -376,7 +368,7 @@
     // Rien à générer (ex. câbles trop gros pour la taille max fourreau, ou
     // taux d'occupation trop bas) : ne pas proposer Remplacer/Ajouter — un
     // "Remplacer" sur un résultat vide viderait le plan existant sans rien
-    // recréer. La modale reste ouverte pour ajuster les paramètres.
+    // recréer. Le panneau reste affiché pour ajuster les paramètres.
     if (!result.fourreaux || result.fourreaux.length === 0) {
       const nonPlaces = result.nonPlaces || [];
       const msg = `Aucun fourreau ne convient : ${nonPlaces.length} câble(s) non plaçable(s) — augmente la taille max de fourreau ou le taux d'occupation.`;
@@ -403,16 +395,11 @@
     } else if (typeof window.showToast === 'function') {
       window.showToast(`✅ BIG BRAIN : ${summary.created} fourreau(x) généré(s)`, 'success');
     }
-
-    close();
   }
 
   // ── Initialisation ──
   document.addEventListener('DOMContentLoaded', () => {
-    openBtn = document.getElementById('tabBIGBRAIN');
-    modalEl = document.getElementById('bigBrainModal');
-    closeBtn = document.getElementById('bigBrainClose');
-    cancelBtn = document.getElementById('bigBrainCancel');
+    paneEl = document.getElementById('paneBIGBRAIN');
     generateBtn = document.getElementById('bigBrainGenerateBtn');
     tauxInput = document.getElementById('bbTaux');
     tailleMaxSelect = document.getElementById('bbTailleMax');
@@ -421,22 +408,17 @@
     detailEl = document.getElementById('bbDetail');
     footMsgEl = document.getElementById('bbFootMsg');
 
-    if (!openBtn || !modalEl) return; // markup absent → rien à câbler
+    if (!paneEl) return; // markup absent → rien à câbler
 
-    // L'onglet BIG BRAIN ouvre la modale ; il ne bascule pas de panneau (pas
-    // de setTab — la logique d'onglets FOURREAU/CÂBLE reste dans script.js).
-    openBtn.addEventListener('click', open);
-    // Fallback défensif : si l'ancien bouton de la barre du bas existe encore, le câbler aussi.
-    const legacyOpenBtn = document.getElementById('bigBrainBtn');
-    if (legacyOpenBtn) legacyOpenBtn.addEventListener('click', open);
-    if (closeBtn) closeBtn.addEventListener('click', close);
-    if (cancelBtn) cancelBtn.addEventListener('click', close);
-    modalEl.addEventListener('click', (e) => {
-      if (e.target === modalEl) close();
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modalEl.style.display === 'flex') close();
-    });
+    // Le panneau vit en permanence dans la sidebar : pas d'ouverture/fermeture,
+    // juste masqué/affiché par la bascule d'onglets (setTab, script.js). On
+    // initialise l'état une fois ici (garde défensive si FOURREAUX/CABLES sont
+    // déjà chargés) ; script.js rappelle window.bigBrainPanelRefresh à chaque
+    // activation de l'onglet pour couvrir le cas où ils ne l'étaient pas encore.
+    populateTailleMax();
+    setFootMsg('', false);
+    renderMaster();
+    renderDetail();
 
     if (addLiaisonBtn) addLiaisonBtn.addEventListener('click', addLiaison);
     if (generateBtn) generateBtn.addEventListener('click', generate);

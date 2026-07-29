@@ -202,8 +202,10 @@
   const scaleInfo = document.getElementById("scaleInfo");
   const tabFOURREAU = document.getElementById("tabFOURREAU");
   const tabCABLE = document.getElementById("tabCABLE");
+  const tabBIGBRAIN = document.getElementById("tabBIGBRAIN");
   const paneFOURREAU = document.getElementById("paneFOURREAU");
   const paneCABLE = document.getElementById("paneCABLE");
+  const paneBIGBRAIN = document.getElementById("paneBIGBRAIN");
   const listCable = document.getElementById("listCable");
   const listFourreau = document.getElementById("listFourreau");
   const countInvC = document.getElementById("countInvC");
@@ -6898,8 +6900,10 @@
     activeTab = name;
     tabFOURREAU.classList.toggle('active', name === 'FOURREAU');
     tabCABLE.classList.toggle('active', name === 'CÂBLE');
+    tabBIGBRAIN.classList.toggle('active', name === 'BIGBRAIN');
     paneFOURREAU.classList.toggle('hidden', name !== 'FOURREAU');
     paneCABLE.classList.toggle('hidden', name !== 'CÂBLE');
+    paneBIGBRAIN.classList.toggle('hidden', name !== 'BIGBRAIN');
   }
 
   function toggleInputGroups() {
@@ -9422,6 +9426,10 @@
 
     tabFOURREAU.addEventListener('click', () => setTab('FOURREAU'));
     tabCABLE.addEventListener('click', () => setTab('CÂBLE'));
+    if (tabBIGBRAIN) tabBIGBRAIN.addEventListener('click', () => {
+      setTab('BIGBRAIN');
+      if (typeof window.bigBrainPanelRefresh === 'function') window.bigBrainPanelRefresh();
+    });
     shapeSel.addEventListener('change', handleShapeSelectorChange);
     applyBtn.addEventListener('click', applyDimensionsFromUI);
     applyCircBtn.addEventListener('click', applyDimensionsFromUI);
