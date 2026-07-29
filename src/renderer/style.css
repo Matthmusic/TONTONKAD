@@ -6806,134 +6806,26 @@ body.electron-mode .notification-container {
 }
 
 /* ==========================================================================
-   BIG BRAIN — Modale de génération de fourreaux depuis des liaisons
+   BIG BRAIN — Panneau sidebar (3ᵉ onglet) de génération de fourreaux
+   depuis des liaisons. Colonne étroite, empilée verticalement.
    ========================================================================== */
 
-.bb-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 10001;
-    display: none;
-    align-items: center;
-    justify-content: center;
-}
-
-.bb-modal[style*="display: flex"],
-.bb-modal[style*="display:flex"] {
-    animation: modalFadeIn 0.3s ease forwards;
-}
-
-.bb-modal-content {
-    background: var(--glass-bg-solid);
-    backdrop-filter: var(--glass-backdrop);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-    width: 90vw;
-    max-width: 820px;
-    max-height: 90vh;
+#paneBIGBRAIN {
     display: flex;
     flex-direction: column;
-    color: var(--text-primary);
-    overflow: hidden;
-    animation: modalSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    gap: var(--spacing-md);
 }
 
-.bb-modal-header {
-    padding: var(--spacing-lg) var(--spacing-xl);
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+/* En-tête « Liaisons » + bouton d'ajout */
+.bb-liaison-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 18px;
     font-weight: 600;
-    flex: 0 0 auto;
-}
-
-.bb-close {
-    background: none;
-    border: none;
-    font-size: 20px;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-    transition: all var(--transition-base);
-}
-.bb-close:hover {
-    background: rgba(255, 145, 77, 0.1);
-    color: var(--primary-orange);
-}
-
-.bb-params {
-    padding: var(--spacing-md) var(--spacing-xl);
-    border-bottom: 1px solid var(--border-color);
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--spacing-lg);
     font-size: 13px;
     color: var(--text-secondary);
-    flex: 0 0 auto;
 }
-.bb-params label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-}
-.bb-params input[type="number"],
-.bb-params select {
-    padding: 4px 6px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    background: var(--bg-card);
-    color: var(--text-primary);
-}
-.bb-params input[type="number"] {
-    width: 60px;
-}
-.bb-types {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-}
-.bb-types label {
-    gap: 4px;
-    font-weight: 400;
-}
-
-.bb-body {
-    display: flex;
-    flex: 1;
-    min-height: 320px;
-    overflow: hidden;
-}
-
-.bb-master {
-    flex: 0 0 40%;
-    border-right: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    background: var(--bg-secondary);
-}
-
-.bb-master-head {
-    padding: var(--spacing-md);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-weight: 600;
-    border-bottom: 1px solid var(--border-color);
-    position: sticky;
-    top: 0;
-    background: var(--bg-secondary);
-    z-index: 1;
-}
-.bb-master-head button {
+.bb-liaison-head button {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
@@ -6943,18 +6835,20 @@ body.electron-mode .notification-container {
     cursor: pointer;
     transition: all var(--transition-base);
 }
-.bb-master-head button:hover {
+.bb-liaison-head button:hover {
     border-color: var(--primary-orange);
     color: var(--primary-orange);
 }
 
+/* Liste des liaisons — hauteur bornée pour garder le circuit visible en dessous. */
 .bb-liaison-list {
     list-style: none;
     margin: 0;
-    padding: var(--spacing-sm);
+    padding: 0;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    max-height: 180px;
     overflow-y: auto;
 }
 
@@ -6975,8 +6869,8 @@ body.electron-mode .notification-container {
 }
 .bb-liaison-item.active {
     border-color: var(--primary-orange);
-    background: rgba(255, 145, 77, 0.12);
-    box-shadow: 0 0 0 1px rgba(255, 145, 77, 0.25);
+    background: var(--accent-light);
+    box-shadow: 0 0 0 1px var(--accent-light);
 }
 .bb-liaison-item .bb-liaison-name {
     font-weight: 600;
@@ -7003,7 +6897,7 @@ body.electron-mode .notification-container {
 }
 .bb-liaison-item .bb-liaison-rename:hover {
     color: var(--primary-orange);
-    background: rgba(255, 145, 77, 0.12);
+    background: var(--accent-light);
 }
 .bb-liaison-item .bb-liaison-del {
     flex: 0 0 auto;
@@ -7016,21 +6910,23 @@ body.electron-mode .notification-container {
     border-radius: var(--radius-sm);
 }
 .bb-liaison-item .bb-liaison-del:hover {
-    color: #f56565;
-    background: rgba(245, 101, 101, 0.12);
+    color: var(--error-color);
+    background: var(--error-bg);
 }
 
+/* Détail du circuit sélectionné (nom + phases/neutre/PE + récap). */
 .bb-detail {
-    flex: 1;
-    overflow-y: auto;
-    padding: var(--spacing-lg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    padding: var(--spacing-md);
 }
 
 .bb-detail-empty {
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 13px;
     text-align: center;
-    margin-top: var(--spacing-2xl);
+    padding: var(--spacing-md) 0;
 }
 
 .bb-detail-name {
@@ -7046,8 +6942,8 @@ body.electron-mode .notification-container {
     font-weight: 600;
 }
 
-/* Bloc circuit (famille, phases, neutre, PE, parallèle) — grille 2 colonnes
-   libellé / champs, alignée sur toute la largeur du panneau détail. */
+/* Bloc circuit (famille, phases, neutre, PE, parallèle) — libellé court à
+   gauche, champs à droite ; se réduit proprement dans une colonne étroite. */
 .bb-circuit-grid {
     display: flex;
     flex-direction: column;
@@ -7056,19 +6952,19 @@ body.electron-mode .notification-container {
 }
 .bb-circuit-row {
     display: grid;
-    grid-template-columns: 150px 1fr;
+    grid-template-columns: 84px 1fr;
     align-items: center;
     gap: var(--spacing-sm);
 }
 .bb-circuit-label {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--text-secondary);
 }
 .bb-circuit-fields {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs);
     min-width: 0;
 }
 .bb-circuit-fields select,
@@ -7091,7 +6987,7 @@ body.electron-mode .notification-container {
 }
 .bb-circuit-nbphases,
 .bb-circuit-parallele {
-    width: 64px;
+    width: 48px;
     flex: 0 0 auto;
 }
 .bb-circuit-times {
@@ -7111,59 +7007,96 @@ body.electron-mode .notification-container {
 .bb-circuit-recap {
     font-size: 12px;
     color: var(--text-muted);
-    background: var(--bg-secondary);
+    background: var(--bg-card);
     border: 1px dashed var(--border-color);
     border-radius: var(--radius-sm);
     padding: 8px 10px;
     line-height: 1.5;
 }
 
-.bb-modal-footer {
-    padding: var(--spacing-md) var(--spacing-xl);
-    border-top: 1px solid var(--border-color);
+/* Paramètres — section repliable, fermée par défaut (<details> sans "open"),
+   chevron natif conservé (pas de reset de list-style/marker). */
+.bb-params-details {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
     background: var(--bg-secondary);
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.bb-params-details > summary {
+    cursor: pointer;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.bb-params-details[open] > summary {
+    border-bottom: 1px solid var(--border-color);
+}
+.bb-params {
+    padding: var(--spacing-md);
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--spacing-md);
-    flex: 0 0 auto;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.bb-params label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+.bb-params input[type="number"],
+.bb-params select {
+    padding: 4px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+.bb-params input[type="number"] {
+    width: 60px;
+}
+.bb-types {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+.bb-types label {
+    gap: 4px;
+    font-weight: 400;
 }
 
+/* Pied de panneau : message de statut / erreurs. */
 .bb-foot-msg {
-    flex: 1;
     font-size: 12px;
     color: var(--text-muted);
     white-space: pre-line;
+    min-height: 14px;
 }
 .bb-foot-msg.bb-foot-error {
-    color: #f56565;
+    color: var(--error-color);
 }
 
-.bb-modal-footer button {
-    padding: 8px 18px;
+/* Bouton de génération — pleine largeur en bas du panneau. */
+.bb-go {
+    width: 100%;
+    padding: 10px 18px;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--border-color);
-    background: var(--bg-card);
-    color: var(--text-primary);
-    cursor: pointer;
-    font-weight: 500;
-    transition: all var(--transition-base);
-}
-.bb-modal-footer button:hover {
-    border-color: var(--primary-orange);
-    color: var(--primary-orange);
-}
-
-.bb-modal-footer .bb-go {
+    border: none;
     background: var(--primary-orange);
     color: white;
-    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all var(--transition-base);
 }
-.bb-modal-footer .bb-go:hover {
+.bb-go:hover {
     background: var(--primary-orange-dark);
     color: white;
 }
-.bb-modal-footer .bb-go:disabled {
+.bb-go:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
