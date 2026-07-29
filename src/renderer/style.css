@@ -6810,7 +6810,9 @@ body.electron-mode .notification-container {
    depuis des liaisons. Colonne étroite, empilée verticalement.
    ========================================================================== */
 
-#paneBIGBRAIN {
+/* :not(.hidden) — un sélecteur d'ID pur (spécificité 1-0-0) gagnerait toujours
+   sur .hidden (0-1-0) et casserait le masquage par bascule d'onglets. */
+#paneBIGBRAIN:not(.hidden) {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
