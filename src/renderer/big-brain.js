@@ -42,7 +42,7 @@
         : `${liaisonNames[0]} +${liaisonNames.length - 1}`;
       fourreaux.push({ type: f.type, code: f.code, od: f.od, idm: f.id, tauxOccupation: f.tauxOccupation, label });
       (f.cables || []).forEach((c) => {
-        cables.push({ fam: c.fam, code: c.code, od: c.od, fonction: c.fonction, parentIndex: i, label: nameOf(c.liaisonId) });
+        cables.push({ liaisonId: c.liaisonId, fam: c.fam, code: c.code, od: c.od, fonction: c.fonction, parentIndex: i, label: nameOf(c.liaisonId) });
       });
     });
     return { fourreaux, cables };

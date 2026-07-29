@@ -73,4 +73,8 @@ describe('resultToObjects', () => {
   test('résultat vide → objets vides', () => {
     expect(resultToObjects({ fourreaux: [], nonPlaces: [] }, {})).toEqual({ fourreaux: [], cables: [] });
   });
+  test('chaque câble porte son liaisonId (pour l’affectation des phases)', () => {
+    const { cables } = resultToObjects(result, names);
+    expect(cables.map(c => c.liaisonId)).toEqual(['L1', 'L1', 'L2']);
+  });
 });
