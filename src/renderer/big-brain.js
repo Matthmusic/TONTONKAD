@@ -42,7 +42,11 @@
         : `${liaisonNames[0]} +${liaisonNames.length - 1}`;
       fourreaux.push({ type: f.type, code: f.code, od: f.od, idm: f.id, tauxOccupation: f.tauxOccupation, label });
       (f.cables || []).forEach((c) => {
-        cables.push({ liaisonId: c.liaisonId, fam: c.fam, code: c.code, od: c.od, fonction: c.fonction, parentIndex: i, label: nameOf(c.liaisonId) });
+        // Pas de nom de liaison sur le câble : répété sur chaque câble du
+        // fourreau, il devenait illisible au canvas. Le fourreau garde le
+        // libellé (identifie le circuit sur le plan) ; liaisonId reste
+        // présent (nécessaire à l'affectation des phases).
+        cables.push({ liaisonId: c.liaisonId, fam: c.fam, code: c.code, od: c.od, fonction: c.fonction, parentIndex: i, label: '' });
       });
     });
     return { fourreaux, cables };

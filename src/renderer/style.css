@@ -1411,6 +1411,7 @@ select::-webkit-scrollbar-thumb {
 
 .tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     margin-bottom: var(--spacing-md);
     background: var(--glass-bg);
@@ -1421,23 +1422,27 @@ select::-webkit-scrollbar-thumb {
 }
 
 .tab {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
     text-align: center;
-    padding: 10px 16px;
+    padding: 10px 10px;
     border-radius: calc(var(--radius-lg) - 4px);
     border: none;
     background: transparent;
     cursor: pointer;
     user-select: none;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     font-family: 'IBM Plex Sans', sans-serif;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
     color: var(--text-muted);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     z-index: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tab:hover:not(.active) {
@@ -6803,24 +6808,6 @@ body.electron-mode .notification-container {
 /* ==========================================================================
    BIG BRAIN — Modale de génération de fourreaux depuis des liaisons
    ========================================================================== */
-
-/* Bouton d'ouverture, posé dans la zone "Plan" de la barre d'outils, à côté
-   de Réduire : garde le style .btn (dégradé orange) mais s'aligne sur la
-   hauteur des .ctrl-btn voisins au lieu du width:100% habituel. */
-#bigBrainBtn {
-    width: auto;
-    min-width: 0;
-    padding: 6px 12px;
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-@media (max-width: 2000px) {
-    #bigBrainBtn {
-        padding: 6px 8px;
-        font-size: 11px;
-    }
-}
 
 .bb-modal {
     position: fixed;

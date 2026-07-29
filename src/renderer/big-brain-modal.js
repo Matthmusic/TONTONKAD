@@ -256,6 +256,10 @@
   // ── Ouverture / fermeture ──
   function open() {
     populateTailleMax();
+    // Déplacer la modale en fin de <body> : un conteneur parent avec overflow ou
+    // transform casse le centrage d'un élément position:fixed (même remède que
+    // la modale d'export PDF).
+    if (modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
     modalEl.style.display = 'flex';
     setFootMsg('', false);
     renderMaster();
@@ -342,7 +346,7 @@
 
   // ── Initialisation ──
   document.addEventListener('DOMContentLoaded', () => {
-    openBtn = document.getElementById('bigBrainBtn');
+    openBtn = document.getElementById('tabBIGBRAIN');
     modalEl = document.getElementById('bigBrainModal');
     closeBtn = document.getElementById('bigBrainClose');
     cancelBtn = document.getElementById('bigBrainCancel');
@@ -356,7 +360,12 @@
 
     if (!openBtn || !modalEl) return; // markup absent → rien à câbler
 
+    // L'onglet BIG BRAIN ouvre la modale ; il ne bascule pas de panneau (pas
+    // de setTab — la logique d'onglets FOURREAU/CÂBLE reste dans script.js).
     openBtn.addEventListener('click', open);
+    // Fallback défensif : si l'ancien bouton de la barre du bas existe encore, le câbler aussi.
+    const legacyOpenBtn = document.getElementById('bigBrainBtn');
+    if (legacyOpenBtn) legacyOpenBtn.addEventListener('click', open);
     if (closeBtn) closeBtn.addEventListener('click', close);
     if (cancelBtn) cancelBtn.addEventListener('click', close);
     modalEl.addEventListener('click', (e) => {

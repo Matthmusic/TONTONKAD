@@ -59,10 +59,14 @@ describe('resultToObjects', () => {
     expect(cables.filter(c => c.parentIndex === 0)).toHaveLength(2);
     expect(cables.filter(c => c.parentIndex === 1)).toHaveLength(1);
   });
-  test('labels résolus via liaisonsById, fallback = liaisonId', () => {
+  test('labels résolus via liaisonsById, fallback = liaisonId (fourreau)', () => {
     expect(resultToObjects(result, names).fourreaux[0].label).toBe('TGBT → GE');
-    expect(resultToObjects(result, names).cables[2].label).toBe('GE → Onduleur');
-    expect(resultToObjects(result, {}).cables[0].label).toBe('L1'); // fallback
+    expect(resultToObjects(result, {}).fourreaux[0].label).toBe('L1'); // fallback
+  });
+  test('les câbles ne portent pas le nom de liaison (libellé réservé au fourreau)', () => {
+    const { fourreaux, cables } = resultToObjects(result, names);
+    expect(fourreaux[0].label).toBe('TGBT → GE');
+    expect(cables.every((c) => c.label === '')).toBe(true);
   });
   test('label fourreau multi-liaisons → "nom +N"', () => {
     const mixed = { fourreaux: [{ type: 'T', code: 'c', od: 1, id: 1, cables: [
