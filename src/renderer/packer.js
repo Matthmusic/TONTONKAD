@@ -34,6 +34,11 @@
     const bin = packer.bins[0];
     if (!bin) return null;
     const cw = bin.width, ch = bin.height;
+    // maxrects-packer (smart:true) ne fait pas toujours grandir bins.length quand le
+    // contenu dépasse la borne demandée sur le 2e axe (observé : un bin peut dépasser
+    // maxH tout en restant bins.length===1) : on vérifie donc les dimensions réelles
+    // du bin plutôt que de faire confiance à bins.length seul.
+    if (cw > maxW + 1e-6 || ch > maxH + 1e-6) return null;
     const placed = bin.rects.map(r => ({
       id: r.data.id, d: r.data.d,
       x: r.x,   // maxrects place les gros en premier près de l'origine

@@ -79,6 +79,16 @@ describe('packer — solve verrouillé', () => {
     expect(L.items).toHaveLength(0);
     expect(L.tag).toBe('empty');
   });
+
+  test('lock:h — hauteur trop petite (même < 2×margin) → layout vide, pas de débordement', () => {
+    // maxrects-packer (smart:true) peut renvoyer bins.length===1 avec un bin plus
+    // haut que la borne demandée (observé sur un item unique dont la cellule vaut
+    // exactement l'autre axe) : sans garde sur les dimensions réelles du bin,
+    // solve() renvoyait un layout avec h=50 mais un item positionné jusqu'à y=270.
+    const L = pkg.solve([{ id: 'a', d: 200 }], { h: 50, lock: 'h' });
+    expect(L.tag).toBe('empty');
+    expect(L.items).toHaveLength(0);
+  });
 });
 
 describe('packer — solve libre', () => {
