@@ -422,6 +422,36 @@
     renderDetail();
   };
 
+  // ── Debug console : visibilité sur l'affectation câbles → fourreaux ──
+  // Toujours actif (coût négligeable) : un regroupement qui semble illogique
+  // (ex. beaucoup de fourreaux à 1 seul câble) se diagnostique en ouvrant la
+  // console (Ctrl+Shift+I) plutôt qu'en relisant cable-assign.js.
+  function logGeneration(built, opts, result) {
+    const totalUnites = built.reduce((s, l) => s + l.cables.reduce((s2, c) => s2 + (c.qty || 0), 0), 0);
+    console.groupCollapsed(`[BIG BRAIN] génération — ${built.length} liaison(s), ${totalUnites} câble(s) → ${result.fourreaux.length} fourreau(x)`);
+    console.log('[BIG BRAIN] options', opts);
+    console.log('[BIG BRAIN] liaisons', built.map((l) => ({
+      id: l.id, nom: l.nom,
+      cables: l.cables.map((c) => `${c.qty}×${c.code}(Ø${c.od})`).join(' + ') || '(vide)',
+    })));
+    console.table(result.fourreaux.map((f, i) => ({
+      '#': i, type: f.type, code: f.code,
+      cables: f.cables.length,
+      'Ø int (mm)': f.id,
+      'taux (%)': (f.tauxOccupation * 100).toFixed(1),
+    })));
+    if (result.nonPlaces && result.nonPlaces.length) {
+      console.warn('[BIG BRAIN] non placés', result.nonPlaces.map((n) => `${n.fam} ${n.code} (Ø${n.od})`));
+    }
+    // Repère visuel pour l'anomalie déjà rencontrée : beaucoup de fourreaux
+    // à 1 seul câble alors qu'il y avait plusieurs liaisons à regrouper.
+    const single = result.fourreaux.filter((f) => f.cables.length === 1).length;
+    if (result.fourreaux.length >= 3 && single === result.fourreaux.length && totalUnites > result.fourreaux.length) {
+      console.warn('[BIG BRAIN] suspect : tous les fourreaux ne contiennent qu’un seul câble — regroupement peut-être manqué.');
+    }
+    console.groupEnd();
+  }
+
   // ── Générer : validation → affectation → création (déléguées) ──
   function generate() {
     if (!window.BigBrain || !window.CableAssign || !window.Circuit || typeof window.bigBrainGenerate !== 'function') {
@@ -456,6 +486,7 @@
     };
 
     const result = window.CableAssign.assignCablesToFourreaux(built, window.FOURREAUX, opts);
+    logGeneration(built, opts, result);
 
     // Rien à générer (ex. câbles trop gros pour la taille max fourreau, ou
     // taux d'occupation trop bas) : ne pas proposer Remplacer/Ajouter — un
