@@ -1,7 +1,7 @@
 const { circuitToCables } = require('../src/renderer/circuit.js');
 
 // resolveOd factice : diamètre déduit du code pour vérifier le câblage
-const resolveOd = (fam, code) => ({ '1x185': 25.5, '1x95': 19, '1x50': 15 }[code] || 0);
+const resolveOd = (fam, code) => ({ '1x185': 25.5, '1x95': 19, '1x50': 15, '5x16': 25 }[code] || 0);
 const base = {
   fam: 'U1000-AR2V', nbPhases: 3, codePhase: '1x185',
   neutre: true, codeNeutre: '1x185', pe: true, codePE: '1x185', parallele: 1,
@@ -51,5 +51,33 @@ describe('circuitToCables', () => {
 
   test('resolveOd non fourni → od 0, pas de crash', () => {
     expect(circuitToCables(base)[0].od).toBe(0);
+  });
+});
+
+describe('circuitToCables — mode multi', () => {
+  // base porte 3 phases + neutre + PE : en multi ils doivent être IGNORÉS,
+  // le câble multiconducteur portant déjà tous les conducteurs.
+  const multi = { ...base, mode: 'multi', codeMulti: '5x16' };
+
+  test('multi → une seule entrée, fonction "aucune", phases/N/PE ignorés', () => {
+    expect(circuitToCables(multi, resolveOd)).toEqual([
+      { fam: 'U1000-AR2V', code: '5x16', od: 25, qty: 1, fonction: 'aucune' },
+    ]);
+  });
+
+  test('parallele=3 → qty 3 (un câble par circuit en parallèle)', () => {
+    const r = circuitToCables({ ...multi, parallele: 3 }, resolveOd);
+    expect(r).toHaveLength(1);
+    expect(r[0].qty).toBe(3);
+  });
+
+  test('codeMulti absent ou vide → [] (bloqué en amont par validateLiaisons)', () => {
+    expect(circuitToCables({ ...multi, codeMulti: '' }, resolveOd)).toEqual([]);
+    expect(circuitToCables({ ...base, mode: 'multi' }, resolveOd)).toEqual([]);
+  });
+
+  test('mode "mono" explicite = mode absent (rétrocompatibilité)', () => {
+    expect(circuitToCables({ ...base, mode: 'mono' }, resolveOd))
+      .toEqual(circuitToCables(base, resolveOd));
   });
 });

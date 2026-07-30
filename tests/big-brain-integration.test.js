@@ -9,7 +9,7 @@ const { circuitToCables } = require('../src/renderer/circuit.js');
 const { assignPhases, buildPhaseQueues } = require('../src/renderer/phase-assign.js');
 
 // resolveOd factice : un seul code catalogue partout, comme dans le cas réel.
-const resolveOd = (fam, code) => ({ '1x185': 25.5 }[code] || 0);
+const resolveOd = (fam, code) => ({ '1x185': 25.5, '5x16': 25 }[code] || 0);
 
 describe('BIG BRAIN — circuit → phases, bout en bout', () => {
   test('phases, neutre et PE en MÊME section (1x185) ne se mélangent pas', () => {
@@ -47,5 +47,23 @@ describe('BIG BRAIN — circuit → phases, bout en bout', () => {
     expect(queues['L1|1x185|phase']).toEqual(['L1', 'L2', 'L3', 'L1', 'L2', 'L3']);
     expect(queues['L1|1x185|neutre']).toEqual(['N', 'N']);
     expect(queues['L1|1x185|PE']).toEqual(['PE', 'PE']);
+  });
+
+  test('liaison en multi : un seul câble par circuit, aucune phase attribuée', () => {
+    const circuit = {
+      mode: 'multi', fam: 'U1000-AR2V', codeMulti: '5x16',
+      nbPhases: 3, codePhase: '1x185', neutre: true, codeNeutre: '1x185',
+      pe: true, codePE: '1x185', parallele: 2,
+    };
+    const cables = circuitToCables(circuit, resolveOd);
+    expect(cables).toHaveLength(1);
+    expect(cables[0]).toMatchObject({ code: '5x16', od: 25, qty: 2, fonction: 'aucune' });
+
+    // Un multiconducteur ne porte pas UNE phase : aucun libellé au canvas.
+    expect(assignPhases(cables)).toEqual([null, null]);
+
+    const queues = buildPhaseQueues([{ id: 'L1', nom: 'TG vers PARIF', cables }]);
+    expect(queues['L1|5x16|aucune']).toEqual([null, null]);
+    expect(Object.keys(queues)).toHaveLength(1);
   });
 });
