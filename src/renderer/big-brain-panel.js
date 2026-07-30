@@ -9,8 +9,8 @@
   'use strict';
 
   // ── État en mémoire de session (conservé tant que l'app tourne) ──
-  // liaisons : [{ id, nom, circuit: { fam, nbPhases, codePhase, neutre,
-  //               codeNeutre, pe, codePE, parallele } }]
+  // liaisons : [{ id, nom, circuit: { mode, fam, nbPhases, codePhase, neutre,
+  //               codeNeutre, pe, codePE, codeMulti, parallele } }]
   let liaisons = [];
   let selectedIndex = -1;
   let seq = 0;
@@ -35,6 +35,44 @@
     if (!Array.isArray(catalogue)) return undefined;
     const spec = catalogue.find((c) => c.fam === fam && c.code === code);
     return spec ? spec.od : undefined;
+  }
+
+  // ── Codes filtrés par mode de câblage ──
+  // mono ⇒ unipolaires ('1x…') seulement ; multi ⇒ tous les autres (3G, 5G, 4x…).
+  // Sans ce filtre, « 3x25 » pouvait être choisi comme code de phase en mono,
+  // produisant 3 câbles 3x25 étiquetés L1/L2/L3 — électriquement faux.
+  // Repli : si le filtrage est vide pour une famille, on rend la liste complète
+  // plutôt qu'un select vide (pas de cul-de-sac).
+  function getCodesForMode(fam, mode) {
+    const all = getCodesForFam(fam);
+    const uni = (code) => !!(window.PhaseAssign && window.PhaseAssign.isUnipolaire(code));
+    const filtered = (mode === 'multi') ? all.filter((c) => !uni(c)) : all.filter(uni);
+    return filtered.length ? filtered : all;
+  }
+
+  // Codes par défaut d'une famille, pour les DEUX modes (création de liaison et
+  // changement de famille).
+  function resetCodes(circuit) {
+    const uni = getCodesForMode(circuit.fam, 'mono')[0] || '';
+    circuit.codePhase = uni;
+    circuit.codeNeutre = uni;
+    circuit.codePE = uni;
+    circuit.codeMulti = getCodesForMode(circuit.fam, 'multi')[0] || '';
+  }
+
+  // Bascule de mode : la saisie de l'autre mode est CONSERVÉE ; on ne remplit
+  // que le code du mode visé s'il n'a jamais été renseigné.
+  function ensureCodeForMode(circuit) {
+    if (circuit.mode === 'multi') {
+      if (!circuit.codeMulti) circuit.codeMulti = getCodesForMode(circuit.fam, 'multi')[0] || '';
+      return;
+    }
+    if (!circuit.codePhase) {
+      const uni = getCodesForMode(circuit.fam, 'mono')[0] || '';
+      circuit.codePhase = uni;
+      if (!circuit.codeNeutre) circuit.codeNeutre = uni;
+      if (!circuit.codePE) circuit.codePE = uni;
+    }
   }
 
   // ── Traduction circuit → câbles (module pur circuit.js) ──
@@ -183,10 +221,33 @@
 
     const circuit = liaison.circuit;
     const families = getFamilies();
-    const codes = getCodesForFam(circuit.fam);
+    const isMulti = circuit.mode === 'multi';
+    const codes = getCodesForMode(circuit.fam, circuit.mode);
 
     const grid = document.createElement('div');
     grid.className = 'bb-circuit-grid';
+
+    // Câblage : mono (un câble par conducteur) ou multi (un seul câble)
+    const modeFields = document.createElement('span');
+    modeFields.className = 'bb-circuit-modes';
+    [
+      { value: 'mono', label: 'Mono', title: 'Un câble par conducteur (3 phases + N + PE)' },
+      { value: 'multi', label: 'Multi', title: 'Un seul câble multiconducteur (3G, 5G, 4x…)' },
+    ].forEach((opt) => {
+      const wrap = document.createElement('label');
+      wrap.className = 'bb-circuit-mode-opt';
+      wrap.title = opt.title;
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.className = 'bb-circuit-mode';
+      radio.name = 'bb-circuit-mode';
+      radio.value = opt.value;
+      radio.checked = (opt.value === (isMulti ? 'multi' : 'mono'));
+      wrap.appendChild(radio);
+      wrap.appendChild(document.createTextNode(' ' + opt.label));
+      modeFields.appendChild(wrap);
+    });
+    grid.appendChild(buildCircuitRow('Câblage', [modeFields]));
 
     // Famille
     const famSelect = document.createElement('select');
@@ -201,47 +262,53 @@
     });
     grid.appendChild(buildCircuitRow('Famille', [famSelect]));
 
-    // Phases : nombre × section
-    const nbPhasesInput = document.createElement('input');
-    nbPhasesInput.type = 'number';
-    nbPhasesInput.className = 'bb-circuit-nbphases';
-    nbPhasesInput.min = '0';
-    nbPhasesInput.max = '6';
-    nbPhasesInput.step = '1';
-    nbPhasesInput.value = String(circuit.nbPhases != null ? circuit.nbPhases : 0);
-    nbPhasesInput.setAttribute('aria-label', 'Nombre de phases');
+    if (isMulti) {
+      // Un seul câble : son code porte tous les conducteurs.
+      const codeMultiSelect = buildCodeSelect('bb-circuit-codemulti', 'Câble multiconducteur', codes, circuit.codeMulti);
+      grid.appendChild(buildCircuitRow('Câble', [codeMultiSelect]));
+    } else {
+      // Phases : nombre × section
+      const nbPhasesInput = document.createElement('input');
+      nbPhasesInput.type = 'number';
+      nbPhasesInput.className = 'bb-circuit-nbphases';
+      nbPhasesInput.min = '0';
+      nbPhasesInput.max = '6';
+      nbPhasesInput.step = '1';
+      nbPhasesInput.value = String(circuit.nbPhases != null ? circuit.nbPhases : 0);
+      nbPhasesInput.setAttribute('aria-label', 'Nombre de phases');
 
-    const timesSpan = document.createElement('span');
-    timesSpan.className = 'bb-circuit-times';
-    timesSpan.textContent = '×';
+      const timesSpan = document.createElement('span');
+      timesSpan.className = 'bb-circuit-times';
+      timesSpan.textContent = '×';
 
-    const codePhaseSelect = buildCodeSelect('bb-circuit-codephase', 'Section des phases', codes, circuit.codePhase);
+      const codePhaseSelect = buildCodeSelect('bb-circuit-codephase', 'Section des phases', codes, circuit.codePhase);
 
-    grid.appendChild(buildCircuitRow('Phases', [nbPhasesInput, timesSpan, codePhaseSelect]));
+      grid.appendChild(buildCircuitRow('Phases', [nbPhasesInput, timesSpan, codePhaseSelect]));
 
-    // Neutre : présence + section
-    const neutreCheck = document.createElement('input');
-    neutreCheck.type = 'checkbox';
-    neutreCheck.className = 'bb-circuit-neutre';
-    neutreCheck.checked = !!circuit.neutre;
-    neutreCheck.setAttribute('aria-label', 'Présence d’un neutre');
+      // Neutre : présence + section
+      const neutreCheck = document.createElement('input');
+      neutreCheck.type = 'checkbox';
+      neutreCheck.className = 'bb-circuit-neutre';
+      neutreCheck.checked = !!circuit.neutre;
+      neutreCheck.setAttribute('aria-label', 'Présence d’un neutre');
 
-    const codeNeutreSelect = buildCodeSelect('bb-circuit-codeneutre', 'Section du neutre', codes, circuit.codeNeutre);
-    codeNeutreSelect.disabled = !circuit.neutre;
+      const codeNeutreSelect = buildCodeSelect('bb-circuit-codeneutre', 'Section du neutre', codes, circuit.codeNeutre);
+      codeNeutreSelect.disabled = !circuit.neutre;
 
-    grid.appendChild(buildCircuitRow('Neutre', [neutreCheck, codeNeutreSelect]));
+      grid.appendChild(buildCircuitRow('Neutre', [neutreCheck, codeNeutreSelect]));
 
-    // PE : présence + section
-    const peCheck = document.createElement('input');
-    peCheck.type = 'checkbox';
-    peCheck.className = 'bb-circuit-pe';
-    peCheck.checked = !!circuit.pe;
-    peCheck.setAttribute('aria-label', 'Présence d’un PE');
+      // PE : présence + section
+      const peCheck = document.createElement('input');
+      peCheck.type = 'checkbox';
+      peCheck.className = 'bb-circuit-pe';
+      peCheck.checked = !!circuit.pe;
+      peCheck.setAttribute('aria-label', 'Présence d’un PE');
 
-    const codePESelect = buildCodeSelect('bb-circuit-codepe', 'Section du PE', codes, circuit.codePE);
-    codePESelect.disabled = !circuit.pe;
+      const codePESelect = buildCodeSelect('bb-circuit-codepe', 'Section du PE', codes, circuit.codePE);
+      codePESelect.disabled = !circuit.pe;
 
-    grid.appendChild(buildCircuitRow('PE', [peCheck, codePESelect]));
+      grid.appendChild(buildCircuitRow('PE', [peCheck, codePESelect]));
+    }
 
     // Circuits en parallèle
     const paralleleInput = document.createElement('input');
@@ -252,7 +319,8 @@
     paralleleInput.value = String(circuit.parallele != null ? circuit.parallele : 1);
     paralleleInput.setAttribute('aria-label', 'Nombre de circuits en parallèle');
 
-    grid.appendChild(buildCircuitRow('Circuits en parallèle', [paralleleInput]));
+    // Même champ dans les deux modes : N circuits identiques.
+    grid.appendChild(buildCircuitRow(isMulti ? 'Quantité' : 'Circuits en parallèle', [paralleleInput]));
 
     detailEl.appendChild(grid);
 
@@ -274,17 +342,13 @@
   // ── Actions maître ──
   function addLiaison() {
     seq += 1;
-    const fam = getFamilies()[0] || '';
-    const firstCode = getCodesForFam(fam)[0] || '';
-    liaisons.push({
-      id: 'L' + seq,
-      nom: 'Liaison ' + seq,
-      circuit: {
-        fam, nbPhases: 3, codePhase: firstCode,
-        neutre: true, codeNeutre: firstCode, pe: true, codePE: firstCode,
-        parallele: 1,
-      },
-    });
+    const circuit = {
+      mode: 'mono', fam: getFamilies()[0] || '',
+      nbPhases: 3, codePhase: '', neutre: true, codeNeutre: '', pe: true, codePE: '',
+      codeMulti: '', parallele: 1,
+    };
+    resetCodes(circuit);
+    liaisons.push({ id: 'L' + seq, nom: 'Liaison ' + seq, circuit });
     selectedIndex = liaisons.length - 1;
     renderMaster();
     renderDetail();
@@ -474,13 +538,17 @@
         const liaison = liaisons[selectedIndex];
         if (!liaison) return;
         const circuit = liaison.circuit;
-        if (target.classList.contains('bb-circuit-fam')) {
-          circuit.fam = target.value;
-          const firstCode = getCodesForFam(circuit.fam)[0] || '';
-          circuit.codePhase = firstCode;
-          circuit.codeNeutre = firstCode;
-          circuit.codePE = firstCode;
+        if (target.classList.contains('bb-circuit-mode')) {
+          circuit.mode = (target.value === 'multi') ? 'multi' : 'mono';
+          ensureCodeForMode(circuit);
           renderDetail();
+        } else if (target.classList.contains('bb-circuit-fam')) {
+          circuit.fam = target.value;
+          resetCodes(circuit);
+          renderDetail();
+        } else if (target.classList.contains('bb-circuit-codemulti')) {
+          circuit.codeMulti = target.value;
+          updateRecap();
         } else if (target.classList.contains('bb-circuit-neutre')) {
           circuit.neutre = target.checked;
           renderDetail();

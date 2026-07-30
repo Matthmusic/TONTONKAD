@@ -7005,6 +7005,29 @@ body.electron-mode .notification-container {
     cursor: pointer;
 }
 
+/* Ligne « Câblage » : deux choix courts (Mono / Multi) alignés dans la rangée. */
+.bb-circuit-modes {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    min-width: 0;
+}
+.bb-circuit-mode-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.bb-circuit-fields input[type="radio"] {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary-orange);
+    cursor: pointer;
+}
+
 /* Récapitulatif live : aide discrète, pas une donnée éditable. */
 .bb-circuit-recap {
     font-size: 12px;
