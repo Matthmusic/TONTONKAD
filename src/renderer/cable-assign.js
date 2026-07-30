@@ -4,6 +4,7 @@
   const aire = (d) => Math.PI * (d / 2) * (d / 2);
   const aireInt = (f) => aire(f.id);
   const capacite = (f, tauxMax) => tauxMax * aireInt(f);
+  const EPS = 1e-9;
 
   // Déplie les câbles de toutes les liaisons en unités individuelles (+ area).
   function expandCables(liaisons) {
@@ -35,11 +36,51 @@
     return null;
   }
 
+  // Simule un remplissage best-fit (même critère que la boucle réelle) de
+  // items[startIndex..] dans des fourreaux homogènes de capacité `cap`.
+  // Retourne le nombre de fourreaux nécessaires pour tout le reste de la file.
+  function simulateBinCount(items, startIndex, cap) {
+    const bins = [];
+    for (let i = startIndex; i < items.length; i++) {
+      const a = items[i].area;
+      let bestIdx = -1, bestUsed = -1;
+      for (let b = 0; b < bins.length; b++) {
+        if (bins[b] + a <= cap + EPS && bins[b] > bestUsed) { bestUsed = bins[b]; bestIdx = b; }
+      }
+      if (bestIdx >= 0) bins[bestIdx] += a;
+      else bins.push(a);
+    }
+    return bins.length;
+  }
+
+  // Choisit la taille de fourreau à OUVRIR pour items[startIndex], en anticipant
+  // le reste de la file (items[startIndex+1..], d'aires ≤ celle de l'item
+  // courant puisque la file est triée décroissante) : parmi les tailles
+  // éligibles qui contiennent l'item seul, retient celle qui MINIMISE le
+  // nombre de fourreaux nécessaires pour placer tout le reste — à
+  // regroupement égal, la plus petite (parcours croissant + mise à jour
+  // stricte, donc premier trouvé conservé en cas d'égalité).
+  // Sans cette anticipation (smallestFourreauFor seul), la taille minimale
+  // pour UN item laisse souvent ~0 place pour le suivant : N liaisons
+  // similaires ouvraient N fourreaux à 1 câble chacun au lieu de se
+  // regrouper — exactement ce que le regroupement croisé (ci-dessous) est
+  // censé éviter, mais ne peut pas faire s'il n'a jamais de marge.
+  function chooseFourreauSize(items, startIndex, eligibles, tauxMax) {
+    let best = null;
+    let bestCount = Infinity;
+    for (const f of eligibles) {
+      const cap = capacite(f, tauxMax);
+      if (cap + EPS < items[startIndex].area) continue;
+      const count = simulateBinCount(items, startIndex, cap);
+      if (count < bestCount) { best = f; bestCount = count; }
+    }
+    return best;
+  }
+
   function assignCablesToFourreaux(liaisons, catalogueFourreaux, options = {}) {
     const tauxMax = (typeof options.tauxMax === 'number' && options.tauxMax > 0) ? options.tauxMax : 0.33;
     const eligibles = eligibleFourreaux(catalogueFourreaux, options);
     const raisonAucun = eligibles.length === 0 ? 'aucun fourreau éligible' : 'câble trop gros pour la taille max';
-    const EPS = 1e-9;
 
     const open = [];        // { fourreau, cables:[], usedArea }
     const nonPlaces = [];
@@ -64,21 +105,22 @@
       return best;
     };
     const addTo = (o, cs) => { for (const c of cs) { o.cables.push(c); o.usedArea += c.area; } };
-    const placeSingle = (c) => {
+    const placeSingle = (c, sorted, index) => {
       const o = bestOpenFor(c.area);
       if (o) return addTo(o, [c]);
-      const f = smallestFourreauFor(c.area, eligibles, tauxMax);
+      const f = chooseFourreauSize(sorted, index, eligibles, tauxMax);
       if (f) return open.push({ fourreau: f, cables: [c], usedArea: c.area });
       nonPlaces.push({ liaisonId: c.liaisonId, fam: c.fam, code: c.code, od: c.od, raison: raisonAucun });
     };
 
-    for (const L of liaisonEntries) {
-      const o = bestOpenFor(L.area);                         // 1) regroupement croisé
+    for (let i = 0; i < liaisonEntries.length; i++) {
+      const L = liaisonEntries[i];
+      const o = bestOpenFor(L.area);                              // 1) regroupement croisé
       if (o) { addTo(o, L.cables); continue; }
-      const f = smallestFourreauFor(L.area, eligibles, tauxMax); // 2) nouveau fourreau pour liaison entière
+      const f = chooseFourreauSize(liaisonEntries, i, eligibles, tauxMax); // 2) nouveau fourreau pour liaison entière
       if (f) { open.push({ fourreau: f, cables: [...L.cables], usedArea: L.area }); continue; }
       const sorted = [...L.cables].sort((a, b) => (b.area - a.area) || String(a.code).localeCompare(String(b.code)));
-      for (const c of sorted) placeSingle(c);               // 3) split câble par câble
+      sorted.forEach((c, idx) => placeSingle(c, sorted, idx));     // 3) split câble par câble
     }
 
     const fourreaux = open.map((o) => ({
@@ -92,7 +134,7 @@
 
   const api = {
     assignCablesToFourreaux,
-    __test: { aire, aireInt, capacite, expandCables, eligibleFourreaux, smallestFourreauFor },
+    __test: { aire, aireInt, capacite, expandCables, eligibleFourreaux, smallestFourreauFor, chooseFourreauSize, simulateBinCount },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CableAssign = api;

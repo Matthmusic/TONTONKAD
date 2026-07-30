@@ -112,14 +112,34 @@ Pour chaque liaison (ordre trié) :
    `usedArea + aireLiaison ≤ capacite`. S'il y en a plusieurs, prendre **le plus rempli
    qui rentre encore** (best-fit → maximise le remplissage, laisse de la place ailleurs).
    → placer **toute** la liaison dedans.
-3. Sinon, **nouveau fourreau pour la liaison entière** : plus petit `fourreauEligible`
-   dont `capacite ≥ aireLiaison`. Trouvé → l'ouvrir, y placer toute la liaison.
+3. Sinon, **nouveau fourreau pour la liaison entière**, choisi par **anticipation**
+   (`chooseFourreauSize`, mise à jour 2026-07-30 — voir « Correctif anticipation » ci-dessous)
+   plutôt que par le simple plus petit `fourreauEligible` dont `capacite ≥ aireLiaison`.
+   Trouvé → l'ouvrir, y placer toute la liaison.
 4. Sinon (aucun fourreau ne contient la liaison entière) → **split** :
    - trier les câbles de la liaison par aire décroissante ;
    - placer **chaque câble** un par un : d'abord dans un fourreau ouvert avec marge
-     (best-fit), sinon dans le plus petit fourreau neuf dont `capacite ≥ aire(cable)` ;
+     (best-fit), sinon dans un fourreau neuf choisi par la même anticipation ;
    - si même le plus gros fourreau éligible ne contient pas un câble seul → ce câble va
      dans `nonPlaces` (raison `"câble trop gros pour la taille max"`).
+
+### Correctif anticipation (2026-07-30)
+
+Choisir systématiquement le **plus petit** fourreau qui contient tout juste la liaison
+courante (`smallestFourreauFor`) dégénérait quand plusieurs liaisons ont une aire
+similaire : la 1ʳᵉ liaison ouvrait un fourreau à peine assez grand pour elle-même, sans
+marge pour la 2ᵉ ; celle-ci rouvrait alors un fourreau tout aussi minimal, etc. — au lieu
+du regroupement croisé visé, on obtenait **un fourreau par liaison** (ex. 10 liaisons
+identiques en `3G2,5` → 10 fourreaux à 1 câble). `smallestFourreauFor` reste disponible
+(toujours testé) mais n'est plus utilisé par `assignCablesToFourreaux`.
+
+`chooseFourreauSize(items, startIndex, eligibles, tauxMax)` corrige cela en **anticipant**
+le reste de la file (`items[startIndex+1..]`, d'aires ≤ celle de l'item courant puisque la
+file est triée décroissante) : parmi les tailles éligibles qui contiennent l'item seul, elle
+retient celle qui **minimise le nombre de fourreaux** nécessaires pour placer tout le
+reste — simulé par `simulateBinCount` avec le même critère best-fit que la boucle réelle —
+et, à regroupement égal, la plus petite (aucune sur-dimensionnement inutile). Une seule
+liaison en attente ⇒ comportement inchangé (plus petit fourreau qui la contient).
 
 **Sortie :** pour chaque fourreau ouvert, calculer `tauxOccupation = usedArea / aireInt`.
 Retourner `{ fourreaux, nonPlaces }`.

@@ -1,5 +1,5 @@
 const { __test } = require('../src/renderer/cable-assign.js');
-const { aire, capacite, expandCables, eligibleFourreaux, smallestFourreauFor } = __test;
+const { aire, capacite, expandCables, eligibleFourreaux, smallestFourreauFor, chooseFourreauSize, simulateBinCount } = __test;
 
 const CAT = [
   { type: 'TPC', code: '200', od: 200, id: 150 },
@@ -49,6 +49,33 @@ describe('smallestFourreauFor', () => {
   });
 });
 
+describe('simulateBinCount', () => {
+  test('best-fit homogène : compte les fourreaux nécessaires pour le reste de la file', () => {
+    const items = [{ area: 300 }, { area: 300 }, { area: 300 }];
+    expect(simulateBinCount(items, 0, 700)).toBe(2);   // 300+300≤700, +300 non → 2 bacs
+    expect(simulateBinCount(items, 0, 1000)).toBe(1);  // 3×300=900≤1000 → 1 bac
+    expect(simulateBinCount(items, 1, 700)).toBe(1);   // à partir de l'index 1 : 2 items → 1 bac
+  });
+});
+
+describe('chooseFourreauSize', () => {
+  test('anticipe le reste de la file : choisit la taille qui minimise le nb de fourreaux, la plus petite en cas d’égalité', () => {
+    const elig = eligibleFourreaux(CAT2, {});
+    const items = [{ area: 283.5 }, { area: 283.5 }, { area: 283.5 }]; // 3×od19
+    // 63(cap572.5)→2 bacs ; 110(cap1742.8)→1 bac ; 200(cap5831.5)→1 bac (égalité, 110 gagne)
+    expect(chooseFourreauSize(items, 0, elig, 0.33).id).toBe(82);
+  });
+  test('un seul item restant → plus petit fourreau qui le contient (pas de sur-dimensionnement)', () => {
+    const elig = eligibleFourreaux(CAT2, {});
+    const items = [{ area: 283.5 }];
+    expect(chooseFourreauSize(items, 0, elig, 0.33).id).toBe(47);
+  });
+  test('aucune taille ne contient même l’item seul → null', () => {
+    const elig = eligibleFourreaux(CAT2, {});
+    expect(chooseFourreauSize([{ area: 999999 }], 0, elig, 0.33)).toBeNull();
+  });
+});
+
 const { assignCablesToFourreaux } = require('../src/renderer/cable-assign.js');
 
 const CAT2 = [
@@ -69,12 +96,28 @@ describe('assignCablesToFourreaux', () => {
     expect(r.nonPlaces).toEqual([]);
   });
 
-  test('regroupement croisé : 2 liaisons dans 1 fourreau, la 3e ouvre un 2e', () => {
+  test('regroupement croisé : 3 petites liaisons anticipent et tiennent dans 1 seul fourreau', () => {
     const r = assignCablesToFourreaux([liaison('A', 19), liaison('B', 19), liaison('C', 19)], CAT2, { tauxMax: 0.33 });
-    // 2×283.5=567 ≤ 572.5 ; 3×=850.5 > 572.5
-    expect(r.fourreaux).toHaveLength(2);
-    expect(r.fourreaux[0].cables).toHaveLength(2);
-    expect(r.fourreaux[1].cables).toHaveLength(1);
+    // 3×283.5=850.5 ne tient pas dans le 63 (cap 572.5) mais tient dans le 110
+    // (cap 1742.8) : l'ouverture anticipe le reste de la file plutôt que de
+    // choisir le plus petit fourreau qui contient seulement la 1ère liaison.
+    expect(r.fourreaux).toHaveLength(1);
+    expect(r.fourreaux[0].code).toBe('110');
+    expect(r.fourreaux[0].cables).toHaveLength(3);
+    expect(r.nonPlaces).toEqual([]);
+  });
+
+  test('N liaisons identiques se regroupent dans peu de fourreaux (pas 1 par liaison)', () => {
+    // Cas rapporté : 10 circuits identiques (ici od14, proche d'un 3G2,5 réel)
+    // ouvraient chacun leur propre plus petit fourreau (1 câble dedans) faute
+    // d'anticipation. od14 → aire ≈153.9 ; seul le 110 (cap 1742.8) et le 200
+    // (cap 5831.5) en contiennent plus d'un ; le 110 regroupe déjà les 10.
+    const many = Array.from({ length: 10 }, (_, i) => liaison('L' + i, 14));
+    const r = assignCablesToFourreaux(many, CAT2, { tauxMax: 0.33 });
+    const placed = r.fourreaux.reduce((s, f) => s + f.cables.length, 0);
+    expect(placed).toBe(10);
+    expect(r.fourreaux.length).toBeLessThan(10);
+    for (const f of r.fourreaux) expect(f.tauxOccupation).toBeLessThanOrEqual(TAUX);
     expect(r.nonPlaces).toEqual([]);
   });
 
