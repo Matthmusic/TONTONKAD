@@ -42,12 +42,20 @@
   // Sans ce filtre, « 3x25 » pouvait être choisi comme code de phase en mono,
   // produisant 3 câbles 3x25 étiquetés L1/L2/L3 — électriquement faux.
   // Repli : si le filtrage est vide pour une famille, on rend la liste complète
-  // plutôt qu'un select vide (pas de cul-de-sac).
+  // plutôt qu'un select vide (pas de cul-de-sac) — mais le repli est tracé
+  // (console.warn) car il réintroduit alors précisément le risque ci-dessus.
   function getCodesForMode(fam, mode) {
     const all = getCodesForFam(fam);
     const uni = (code) => !!(window.PhaseAssign && window.PhaseAssign.isUnipolaire(code));
     const filtered = (mode === 'multi') ? all.filter((c) => !uni(c)) : all.filter(uni);
-    return filtered.length ? filtered : all;
+    if (!filtered.length) {
+      // Aucun code du mode visé dans cette famille : liste complète plutôt
+      // qu'un select vide (pas de cul-de-sac), mais on le signale — le filtre
+      // ne protège plus contre un code électriquement faux.
+      console.warn('BIG BRAIN : aucun code ' + mode + ' pour la famille ' + fam + ' — liste complète affichée');
+      return all;
+    }
+    return filtered;
   }
 
   // Codes par défaut d'une famille, pour les DEUX modes (création de liaison et
