@@ -93,7 +93,11 @@
   }
   function recapText(circuit) {
     const cables = cablesOfCircuit(circuit);
-    if (cables.length === 0) return 'Aucun câble — renseigne au moins les phases.';
+    if (cables.length === 0) {
+      return circuit.mode === 'multi'
+        ? 'Aucun câble — choisis un câble multiconducteur.'
+        : 'Aucun câble — renseigne au moins les phases.';
+    }
     const suffixe = { neutre: ' (N)', PE: ' (PE)' };
     const parts = cables.map((c) => `${c.qty}×${c.code}${suffixe[c.fonction] || ''}`);
     const total = cables.reduce((s, c) => s + c.qty, 0);
@@ -232,12 +236,28 @@
     const isMulti = circuit.mode === 'multi';
     const codes = getCodesForMode(circuit.fam, circuit.mode);
 
+    // Garde : le code stocké doit appartenir à la liste du mode courant. Sinon
+    // le select afficherait codes[0] pendant que l'état garde l'ancienne valeur
+    // — et c'est l'état, pas le select, qui alimente la génération.
+    if (codes.length) {
+      const inList = (code) => (codes.indexOf(code) < 0 ? codes[0] : code);
+      if (isMulti) {
+        circuit.codeMulti = inList(circuit.codeMulti);
+      } else {
+        circuit.codePhase = inList(circuit.codePhase);
+        circuit.codeNeutre = inList(circuit.codeNeutre);
+        circuit.codePE = inList(circuit.codePE);
+      }
+    }
+
     const grid = document.createElement('div');
     grid.className = 'bb-circuit-grid';
 
     // Câblage : mono (un câble par conducteur) ou multi (un seul câble)
     const modeFields = document.createElement('span');
     modeFields.className = 'bb-circuit-modes';
+    modeFields.setAttribute('role', 'radiogroup');
+    modeFields.setAttribute('aria-label', 'Nature du câblage');
     [
       { value: 'mono', label: 'Mono', title: 'Un câble par conducteur (3 phases + N + PE)' },
       { value: 'multi', label: 'Multi', title: 'Un seul câble multiconducteur (3G, 5G, 4x…)' },
@@ -550,6 +570,10 @@
           circuit.mode = (target.value === 'multi') ? 'multi' : 'mono';
           ensureCodeForMode(circuit);
           renderDetail();
+          // renderDetail() détruit les radios : rendre le focus au mode coché
+          // pour ne pas casser la navigation au clavier dans le groupe.
+          const modeRadio = detailEl.querySelector('.bb-circuit-mode:checked');
+          if (modeRadio) modeRadio.focus();
         } else if (target.classList.contains('bb-circuit-fam')) {
           circuit.fam = target.value;
           resetCodes(circuit);
