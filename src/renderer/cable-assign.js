@@ -162,7 +162,14 @@
         if (oc) {
           addTo(oc, core);
         } else {
-          const fc = smallestFourreauFor(coreArea, eligibles, tauxMax);
+          // Anticipe le PE en attente (comme chooseFourreauSize anticipe déjà
+          // les liaisons/câbles suivants) plutôt que smallestFourreauFor, qui
+          // choisirait le fourreau tout juste assez grand pour le noyau seul,
+          // sans marge pour que le PE puisse s'y glisser ensuite. Si tout tenir
+          // ensemble (noyau + PE) était possible, l'étape 1/2 aurait déjà
+          // réussi ; ici on ne peut donc pas accueillir la totalité du PE,
+          // mais laisser de la marge en accueille souvent une partie.
+          const fc = chooseFourreauSize([{ area: coreArea }, ...peUnits], 0, eligibles, tauxMax);
           if (fc) {
             open.push({ fourreau: fc, cables: [...core], usedArea: coreArea });
           } else {

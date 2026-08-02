@@ -191,6 +191,34 @@ describe('assignCablesToFourreaux', () => {
     expect(r.nonPlaces).toEqual([]);
   });
 
+  test('split : le noyau accueille du PE si le fourreau choisi laisse de la marge', () => {
+    // 3 phases + neutre (od25.5, aire≈510.7) : le noyau (2042.8) tient en bloc
+    // dans un 125 (cap 2288.9, le plus petit suffisant) OU un 160 (cap 3732.2).
+    // Avec 8 PE (od25.5) en attente, choisir le 160 plutôt que le 125 laisse
+    // de la place pour une partie du PE au lieu de le détacher intégralement.
+    const L = { id: 'BIG', nom: 'BIG', cables: [
+      { fam: 'F', code: '185p', od: 25.5, qty: 3, fonction: 'phase' },
+      { fam: 'F', code: '185n', od: 25.5, qty: 1, fonction: 'neutre' },
+      { fam: 'F', code: '185pe', od: 25.5, qty: 8, fonction: 'PE' },
+    ] };
+    const CAT4 = [
+      { type: 'TPC', code: '90', od: 90, id: 67 },
+      { type: 'TPC', code: '110', od: 110, id: 82 },
+      { type: 'TPC', code: '125', od: 125, id: 94 },
+      { type: 'TPC', code: '160', od: 160, id: 120 },
+      { type: 'TPC', code: '200', od: 200, id: 150 },
+    ];
+    const r = assignCablesToFourreaux([L], CAT4, { tauxMax: 0.33 });
+    const placed = r.fourreaux.reduce((s, f) => s + f.cables.length, 0);
+    expect(placed).toBe(12);
+    expect(r.nonPlaces).toEqual([]);
+    const withCore = r.fourreaux.find((f) => f.cables.some((c) => c.fonction === 'phase'));
+    expect(withCore.cables.filter((c) => c.fonction === 'phase')).toHaveLength(3);
+    expect(withCore.cables.filter((c) => c.fonction === 'neutre')).toHaveLength(1);
+    expect(withCore.cables.some((c) => c.fonction === 'PE')).toBe(true); // du PE a rejoint le noyau
+    expect(r.fourreaux.length).toBeLessThan(3); // mieux qu'un fourreau par groupe isolé
+  });
+
   test('split : même le noyau phase+neutre doit être scindé → jamais mélangé avec le PE', () => {
     // 3 phases + neutre (od60) ne tiennent même pas ensemble (11310>5831) :
     // scindés câble par câble, mais le PE reste dans un fourreau à part —
