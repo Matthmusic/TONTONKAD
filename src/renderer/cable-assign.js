@@ -30,12 +30,6 @@
       .sort((a, b) => (a.id - b.id) || (a.od - b.od) || String(a.type + a.code).localeCompare(String(b.type + b.code)));
   }
 
-  // Plus petit fourreau éligible dont la capacité ≥ area ; null sinon.
-  function smallestFourreauFor(area, eligibles, tauxMax) {
-    for (const f of eligibles) if (capacite(f, tauxMax) >= area) return f;
-    return null;
-  }
-
   // Simule un remplissage best-fit (même critère que la boucle réelle) de
   // items[startIndex..] dans des fourreaux homogènes de capacité `cap`.
   // Retourne le nombre de fourreaux nécessaires pour tout le reste de la file.
@@ -73,6 +67,7 @@
       if (cap + EPS < items[startIndex].area) continue;
       const count = simulateBinCount(items, startIndex, cap);
       if (count < bestCount) { best = f; bestCount = count; }
+      if (bestCount === 1) break; // 1 seul fourreau pour tout le reste : optimum, aucune taille plus grande ne peut faire mieux
     }
     return best;
   }
@@ -130,6 +125,17 @@
       return best;
     };
     const addTo = (o, cs) => { for (const c of cs) { o.cables.push(c); o.usedArea += c.area; } };
+    // Place un bloc (liaison entière, ou noyau phase+neutre) : dans un
+    // fourreau ouvert qui a encore de la place (regroupement croisé), sinon
+    // dans un fourreau neuf dimensionné en anticipant `items[index..]`.
+    // Retourne true si placé.
+    const tryPlaceBlock = (area, cables, items, index) => {
+      const o = bestOpenFor(area);
+      if (o) { addTo(o, cables); return true; }
+      const f = chooseFourreauSize(items, index, eligibles, tauxMax);
+      if (f) { open.push({ fourreau: f, cables: [...cables], usedArea: area }); return true; }
+      return false;
+    };
     const placeSingle = (c, sorted, index) => {
       const o = bestOpenFor(c.area);
       if (o) return addTo(o, [c]);
@@ -137,13 +143,12 @@
       if (f) return open.push({ fourreau: f, cables: [c], usedArea: c.area });
       nonPlaces.push({ liaisonId: c.liaisonId, fam: c.fam, code: c.code, od: c.od, raison: raisonAucun });
     };
+    const placeAll = (arr) => arr.forEach((c, idx) => placeSingle(c, arr, idx));
 
     for (let i = 0; i < liaisonEntries.length; i++) {
       const L = liaisonEntries[i];
-      const o = bestOpenFor(L.area);                              // 1) regroupement croisé (liaison entière, PE compris)
-      if (o) { addTo(o, L.cables); continue; }
-      const f = chooseFourreauSize(liaisonEntries, i, eligibles, tauxMax); // 2) nouveau fourreau pour liaison entière
-      if (f) { open.push({ fourreau: f, cables: [...L.cables], usedArea: L.area }); continue; }
+      // 1+2) regroupement croisé, sinon nouveau fourreau, pour la liaison entière (PE compris)
+      if (tryPlaceBlock(L.area, L.cables, liaisonEntries, i)) continue;
 
       // 3) La liaison entière (PE compris) ne tient nulle part. Le PE ne
       // transporte pas de courant en régime normal (pas d'échauffement
@@ -157,34 +162,22 @@
       const peUnits = L.cables.filter((c) => c.fonction === 'PE');
       const coreArea = core.reduce((s, c) => s + c.area, 0);
 
-      if (core.length) {
-        const oc = bestOpenFor(coreArea);
-        if (oc) {
-          addTo(oc, core);
-        } else {
-          // Anticipe le PE en attente (comme chooseFourreauSize anticipe déjà
-          // les liaisons/câbles suivants) plutôt que smallestFourreauFor, qui
-          // choisirait le fourreau tout juste assez grand pour le noyau seul,
-          // sans marge pour que le PE puisse s'y glisser ensuite. Si tout tenir
-          // ensemble (noyau + PE) était possible, l'étape 1/2 aurait déjà
-          // réussi ; ici on ne peut donc pas accueillir la totalité du PE,
-          // mais laisser de la marge en accueille souvent une partie.
-          const fc = chooseFourreauSize([{ area: coreArea }, ...peUnits], 0, eligibles, tauxMax);
-          if (fc) {
-            open.push({ fourreau: fc, cables: [...core], usedArea: coreArea });
-          } else {
-            // Même le noyau phase+neutre ne tient nulle part en bloc :
-            // dernier recours, on le scinde câble par câble — mais en
-            // ENTRELAÇANT phases et neutre (pas un tri par taille) pour
-            // qu'aucun fourreau ne reçoive que des phases sans leur neutre.
-            const interleaved = interleaveCore(core);
-            interleaved.forEach((c, idx) => placeSingle(c, interleaved, idx));
-          }
-        }
+      // Anticipe le PE en attente (comme chooseFourreauSize anticipe déjà les
+      // liaisons/câbles suivants) en le passant à la suite du noyau, plutôt
+      // qu'un dimensionnement du noyau seul qui ne lui laisserait aucune
+      // marge. Si tout tenir ensemble (noyau + PE) était possible, l'étape
+      // 1/2 aurait déjà réussi ; ici on ne peut donc pas accueillir la
+      // totalité du PE, mais laisser de la marge en accueille souvent une partie.
+      if (core.length && !tryPlaceBlock(coreArea, core, [{ area: coreArea }, ...peUnits], 0)) {
+        // Même le noyau phase+neutre ne tient nulle part en bloc : dernier
+        // recours, on le scinde câble par câble — mais en ENTRELAÇANT phases
+        // et neutre (pas un tri par taille) pour qu'aucun fourreau ne
+        // reçoive que des phases sans leur neutre.
+        placeAll(interleaveCore(core));
       }
       if (peUnits.length) {
         const sortedPE = [...peUnits].sort((a, b) => (b.area - a.area) || String(a.code).localeCompare(String(b.code)));
-        sortedPE.forEach((c, idx) => placeSingle(c, sortedPE, idx));
+        placeAll(sortedPE);
       }
     }
 
@@ -199,7 +192,7 @@
 
   const api = {
     assignCablesToFourreaux,
-    __test: { aire, aireInt, capacite, expandCables, eligibleFourreaux, smallestFourreauFor, chooseFourreauSize, simulateBinCount, interleaveCore },
+    __test: { aire, aireInt, capacite, expandCables, eligibleFourreaux, chooseFourreauSize, simulateBinCount, interleaveCore },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CableAssign = api;

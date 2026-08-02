@@ -1,5 +1,5 @@
 const { __test } = require('../src/renderer/cable-assign.js');
-const { aire, capacite, expandCables, eligibleFourreaux, smallestFourreauFor, chooseFourreauSize, simulateBinCount } = __test;
+const { aire, capacite, expandCables, eligibleFourreaux, chooseFourreauSize, simulateBinCount } = __test;
 
 const CAT = [
   { type: 'TPC', code: '200', od: 200, id: 150 },
@@ -39,15 +39,6 @@ describe('eligibleFourreaux', () => {
   });
 });
 
-describe('smallestFourreauFor', () => {
-  test('plus petit fourreau dont capacité ≥ area, sinon null', () => {
-    const elig = eligibleFourreaux(CAT, {});
-    // cap(id47)@0.33 ≈ 572.5 ; cap(id150) ≈ 5831.5
-    expect(smallestFourreauFor(500, elig, 0.33).id).toBe(47);
-    expect(smallestFourreauFor(3000, elig, 0.33).id).toBe(150);
-    expect(smallestFourreauFor(999999, elig, 0.33)).toBeNull();
-  });
-});
 
 describe('simulateBinCount', () => {
   test('best-fit homogène : compte les fourreaux nécessaires pour le reste de la file', () => {

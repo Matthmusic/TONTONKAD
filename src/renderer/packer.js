@@ -11,6 +11,7 @@
   // litDePoseSlider), qui mute GEO. Doit rester cohérent avec index.html.
   const GEO  = { gap: 0, margin: 0 };
   const OPTS = { smart: true, pot: false, square: false, allowRotation: false, border: 0, logic: PACKING_LOGIC.MAX_EDGE };
+  const EPS  = 1e-6; // tolérance flottante pour les comparaisons de dimensions
 
   const cell = (d) => d + GEO.gap;
 
@@ -38,7 +39,7 @@
     // contenu dépasse la borne demandée sur le 2e axe (observé : un bin peut dépasser
     // maxH tout en restant bins.length===1) : on vérifie donc les dimensions réelles
     // du bin plutôt que de faire confiance à bins.length seul.
-    if (cw > maxW + 1e-6 || ch > maxH + 1e-6) return null;
+    if (cw > maxW + EPS || ch > maxH + EPS) return null;
     const placed = bin.rects.map(r => ({
       id: r.data.id, d: r.data.d,
       x: r.x,   // maxrects place les gros en premier près de l'origine
@@ -167,7 +168,7 @@
     // on recalcule le placement pour respecter la boîte plutôt que de garder
     // des positions qui déborderaient (fourreaux dessinés hors du chemin de
     // câble, sans aucun signal).
-    if (items.length && ((box.lockW && contentW > box.w + 1e-6) || (box.lockH && contentH > box.h + 1e-6))) {
+    if (items.length && ((box.lockW && contentW > box.w + EPS) || (box.lockH && contentH > box.h + EPS))) {
       const tubes = sortTubes(items.map((it) => ({ id: it.id, d: it.d })));
       let pk = null;
       if (box.lockW && box.lockH) pk = packBox(tubes, box.w - 2 * GEO.margin, box.h - 2 * GEO.margin);
@@ -183,8 +184,8 @@
       // (fitsW/fitsH ci-dessous retombent alors sur la croissance normale).
     }
 
-    const fitsW = contentW <= box.w + 1e-6;
-    const fitsH = contentH <= box.h + 1e-6;
+    const fitsW = contentW <= box.w + EPS;
+    const fitsH = contentH <= box.h + EPS;
     const w = (box.lockW && fitsW) ? box.w : Math.max(box.w, round5(contentW));
     const h = (box.lockH && fitsH) ? box.h : Math.max(box.h, round5(contentH));
     const offsetX = Math.max(0, (w - contentW) / 2);
