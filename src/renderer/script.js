@@ -1758,12 +1758,26 @@
           if (col) phaseColor = col.hex;
         }
       }
+      // Écarte chaque câble de ses frères dès la création (spirale, angle d'or) :
+      // des câbles créés pile sur le centre du fourreau (dx=dy=0) ne peuvent
+      // jamais se séparer tout seuls — separateCircles calcule sa direction de
+      // poussée depuis le vecteur entre les deux centres, nul quand ils
+      // coïncident exactement. D'où le symptôme « il faut en bouger un pour que
+      // les autres se rangent » : bouger un câble casse la coïncidence et laisse
+      // enfin la physique agir. Un petit écart initial suffit ; la physique
+      // (gravité + collisions + confineCableInTPC) fait le reste, comme pour un
+      // déplacement manuel.
+      const idx = parent.children.length;
+      const angle = idx * 2.399963229728653; // angle d'or (rad) : répartition en spirale, jamais 2 câbles alignés
+      const spread = idx === 0 ? 0 : (co.od * MM_TO_PX) * Math.sqrt(idx);
+      const x0 = parent.x + Math.cos(angle) * spread;
+      const y0 = parent.y + Math.sin(angle) * spread;
       const id = nextId++;
       cables.push({
-        id, x: parent.x, y: parent.y, od: co.od, parent: parentId,
+        id, x: x0, y: y0, od: co.od, parent: parentId,
         color: colorForCable(co.fam, co.code), customColor: phaseColor, label: co.label || '',
         fam: co.fam, code: co.code, vx: 0, vy: 0, dragging: false, frozen: false,
-        _frozenByUser: false, _frozenByMode: false, _px: parent.x, _py: parent.y,
+        _frozenByUser: false, _frozenByMode: false, _px: x0, _py: y0,
       });
       parent.children.push(id);
     });
