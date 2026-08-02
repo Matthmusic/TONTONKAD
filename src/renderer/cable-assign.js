@@ -77,6 +77,31 @@
     return best;
   }
 
+  // Entrelace phases et neutre dans le même ratio que le circuit (ex. 3
+  // phases pour 1 neutre), au lieu d'un tri par taille qui regroupe par bloc
+  // (toutes les phases d'un côté, tout le neutre de l'autre). Sans le
+  // courant de retour du neutre, un fourreau ne contenant que des phases
+  // n'est plus magnétiquement équilibré — risque d'échauffement par
+  // induction dans un fourreau métallique. Seul le PE (géré à part, jamais
+  // ici) peut être isolé sans ce risque.
+  function interleaveCore(core) {
+    const phases = core.filter((c) => c.fonction === 'phase');
+    const neutres = core.filter((c) => c.fonction === 'neutre');
+    const others = core.filter((c) => c.fonction !== 'phase' && c.fonction !== 'neutre');
+    if (!phases.length || !neutres.length) return [...core]; // rien à entrelacer (ex. multi, ou pas de neutre)
+    const ratio = phases.length / neutres.length;
+    const out = [];
+    let pi = 0;
+    for (let ni = 0; ni < neutres.length; ni++) {
+      const take = Math.round((ni + 1) * ratio) - Math.round(ni * ratio); // répartit un reliquat non entier
+      for (let k = 0; k < take && pi < phases.length; k++) out.push(phases[pi++]);
+      out.push(neutres[ni]);
+    }
+    while (pi < phases.length) out.push(phases[pi++]);
+    out.push(...others);
+    return out;
+  }
+
   function assignCablesToFourreaux(liaisons, catalogueFourreaux, options = {}) {
     const tauxMax = (typeof options.tauxMax === 'number' && options.tauxMax > 0) ? options.tauxMax : 0.33;
     const eligibles = eligibleFourreaux(catalogueFourreaux, options);
@@ -142,9 +167,11 @@
             open.push({ fourreau: fc, cables: [...core], usedArea: coreArea });
           } else {
             // Même le noyau phase+neutre ne tient nulle part en bloc :
-            // dernier recours, on le scinde câble par câble.
-            const sortedCore = [...core].sort((a, b) => (b.area - a.area) || String(a.code).localeCompare(String(b.code)));
-            sortedCore.forEach((c, idx) => placeSingle(c, sortedCore, idx));
+            // dernier recours, on le scinde câble par câble — mais en
+            // ENTRELAÇANT phases et neutre (pas un tri par taille) pour
+            // qu'aucun fourreau ne reçoive que des phases sans leur neutre.
+            const interleaved = interleaveCore(core);
+            interleaved.forEach((c, idx) => placeSingle(c, interleaved, idx));
           }
         }
       }
@@ -165,7 +192,7 @@
 
   const api = {
     assignCablesToFourreaux,
-    __test: { aire, aireInt, capacite, expandCables, eligibleFourreaux, smallestFourreauFor, chooseFourreauSize, simulateBinCount },
+    __test: { aire, aireInt, capacite, expandCables, eligibleFourreaux, smallestFourreauFor, chooseFourreauSize, simulateBinCount, interleaveCore },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CableAssign = api;

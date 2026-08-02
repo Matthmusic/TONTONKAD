@@ -87,6 +87,36 @@ const CAT2 = [
 const liaison = (id, od, qty = 1) => ({ id, nom: id, cables: [{ fam: 'U1000 R2V', code: `${od}`, od, qty }] });
 const TAUX = 0.33 + 1e-9;
 
+describe('interleaveCore', () => {
+  const { interleaveCore } = __test;
+  const u = (fonction, i) => ({ fonction, code: fonction + i, area: 1 });
+
+  test('entrelace 3 phases pour 1 neutre (ratio du circuit préservé)', () => {
+    const phases = [u('phase', 0), u('phase', 1), u('phase', 2), u('phase', 3), u('phase', 4), u('phase', 5)];
+    const neutres = [u('neutre', 0), u('neutre', 1)];
+    const out = interleaveCore([...phases, ...neutres]);
+    expect(out.map((c) => c.fonction)).toEqual([
+      'phase', 'phase', 'phase', 'neutre', 'phase', 'phase', 'phase', 'neutre',
+    ]);
+  });
+
+  test('sans neutre (ou sans phase) → inchangé, rien à entrelacer', () => {
+    const core = [u('phase', 0), u('phase', 1)];
+    expect(interleaveCore(core)).toEqual(core);
+    expect(interleaveCore([u('neutre', 0)])).toEqual([u('neutre', 0)]);
+    expect(interleaveCore([])).toEqual([]);
+  });
+
+  test('reliquat non entier réparti sans perte (7 phases pour 2 neutres)', () => {
+    const phases = Array.from({ length: 7 }, (_, i) => u('phase', i));
+    const neutres = [u('neutre', 0), u('neutre', 1)];
+    const out = interleaveCore([...phases, ...neutres]);
+    expect(out).toHaveLength(9);
+    expect(out.filter((c) => c.fonction === 'phase')).toHaveLength(7);
+    expect(out.filter((c) => c.fonction === 'neutre')).toHaveLength(2);
+  });
+});
+
 describe('assignCablesToFourreaux', () => {
   test('petite liaison → plus petit fourreau', () => {
     const r = assignCablesToFourreaux([liaison('L1', 19)], CAT2, { tauxMax: 0.33 });
@@ -183,6 +213,30 @@ describe('assignCablesToFourreaux', () => {
       const hasPE = f.cables.some((c) => c.fonction === 'PE');
       const hasCore = f.cables.some((c) => c.fonction !== 'PE');
       expect(hasPE && hasCore).toBe(false); // jamais PE + phase/neutre dans le même fourreau
+    }
+  });
+
+  test('split du noyau : phases et neutre entrelacés, aucun fourreau 100% phases ou 100% neutre', () => {
+    // parallele=3, nbPhases=3 (9 phases + 3 neutre, od40) : le noyau entier ne
+    // tient pas dans un seul fourreau (12×1256.6=15079 > cap max 5831.5), donc
+    // split. Sans entrelacement, les phases partiraient toutes ensemble puis
+    // le neutre à part (fourreaux non équilibrés magnétiquement).
+    const L = { id: 'BIG', nom: 'BIG', cables: [
+      { fam: 'F', code: '40p', od: 40, qty: 9, fonction: 'phase' },
+      { fam: 'F', code: '40n', od: 40, qty: 3, fonction: 'neutre' },
+    ] };
+    const CAT3 = [
+      { type: 'TPC', code: '110', od: 110, id: 82 },
+      { type: 'TPC', code: '200', od: 200, id: 150 },
+    ];
+    const r = assignCablesToFourreaux([L], CAT3, { tauxMax: 0.33 });
+    const placed = r.fourreaux.reduce((s, f) => s + f.cables.length, 0);
+    expect(placed).toBe(12);
+    expect(r.nonPlaces).toEqual([]);
+    for (const f of r.fourreaux) {
+      const nPhase = f.cables.filter((c) => c.fonction === 'phase').length;
+      const nNeutre = f.cables.filter((c) => c.fonction === 'neutre').length;
+      if (nPhase > 0) expect(nNeutre).toBeGreaterThan(0); // jamais des phases sans leur neutre
     }
   });
 
