@@ -139,6 +139,18 @@
     });
   }
 
+  // Bornes (Y-up, marge incluse) de la nappe la plus à droite / en haut.
+  function contentBounds(items) {
+    let maxX = 0, maxY = 0;
+    for (const it of items) {
+      const c = cell(it.d);
+      if (it.x + c > maxX) maxX = it.x + c;
+      if (it.y + c > maxY) maxY = it.y + c;
+    }
+    const hasItems = items.length > 0;
+    return { contentW: hasItems ? maxX + GEO.margin : 0, contentH: hasItems ? maxY + GEO.margin : 0 };
+  }
+
   // Ancre un layout (Y-up, origine bas-gauche) dans une boîte existante et
   // convertit en positions canvas (Y-down, centres des cercles, en mm).
   // La boîte GARDE ses dimensions ; un axe libre n'est agrandi que si la nappe
@@ -146,19 +158,37 @@
   // box = { w, h, lockW, lockH } → { w, h, positions: [{id, d, x, y}] }
   function anchorLayout(cfg, box) {
     const round5 = (v) => Math.ceil(v / 5) * 5;
-    let maxX = 0, maxY = 0;
-    for (const it of cfg.items) {
-      const c = cell(it.d);
-      if (it.x + c > maxX) maxX = it.x + c;
-      if (it.y + c > maxY) maxY = it.y + c;
+    let items = cfg.items;
+    let { contentW, contentH } = contentBounds(items);
+
+    // Un axe VERROUILLÉ doit contenir la nappe. Si cfg vient d'un layout LIBRE
+    // plus grand (ex. une variante choisie alors qu'un axe est verrouillé sur
+    // une boîte plus étroite), la nappe ne rentre pas dans la boîte affichée :
+    // on recalcule le placement pour respecter la boîte plutôt que de garder
+    // des positions qui déborderaient (fourreaux dessinés hors du chemin de
+    // câble, sans aucun signal).
+    if (items.length && ((box.lockW && contentW > box.w + 1e-6) || (box.lockH && contentH > box.h + 1e-6))) {
+      const tubes = sortTubes(items.map((it) => ({ id: it.id, d: it.d })));
+      let pk = null;
+      if (box.lockW && box.lockH) pk = packBox(tubes, box.w - 2 * GEO.margin, box.h - 2 * GEO.margin);
+      else if (box.lockW) pk = packWidth(tubes, box.w - 2 * GEO.margin);
+      else pk = packHeight(tubes, box.h - 2 * GEO.margin);
+      if (pk) {
+        items = toLayout(pk, cfg.tag, box.lockW ? box.w : null, box.lockH ? box.h : null).items;
+        ({ contentW, contentH } = contentBounds(items));
+      }
+      // Sinon (même un placement dédié à cette boîte ne tient pas — ex. un seul
+      // fourreau plus gros que l'axe verrouillé) : on ne perd pas les fourreaux
+      // pour autant, ils restent visibles au prix d'un dépassement de CET axe
+      // (fitsW/fitsH ci-dessous retombent alors sur la croissance normale).
     }
-    const hasItems = cfg.items.length > 0;
-    const contentW = hasItems ? maxX + GEO.margin : 0;
-    const contentH = hasItems ? maxY + GEO.margin : 0;
-    const w = box.lockW ? box.w : Math.max(box.w, round5(contentW));
-    const h = box.lockH ? box.h : Math.max(box.h, round5(contentH));
+
+    const fitsW = contentW <= box.w + 1e-6;
+    const fitsH = contentH <= box.h + 1e-6;
+    const w = (box.lockW && fitsW) ? box.w : Math.max(box.w, round5(contentW));
+    const h = (box.lockH && fitsH) ? box.h : Math.max(box.h, round5(contentH));
     const offsetX = Math.max(0, (w - contentW) / 2);
-    const positions = cfg.items.map(it => {
+    const positions = items.map(it => {
       const c = cell(it.d);
       const yUp = it.y + c / 2; // centre en repère moteur (Y=0 en bas)
       return { id: it.id, d: it.d, x: offsetX + it.x + c / 2, y: h - yUp, yUp };

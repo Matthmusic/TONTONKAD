@@ -187,6 +187,61 @@ describe('packer — anchorLayout (ancrage fond de boîte)', () => {
     expect(A.w).toBe(700);
     expect(A.h).toBe(390);
   });
+
+  // Un cfg calculé en mode LIBRE (large) peut ne pas rentrer dans une boîte dont
+  // l'utilisateur a verrouillé un axe plus étroit (ex. une variante choisie après
+  // verrouillage) : anchorLayout doit recalculer pour cet axe plutôt que garder
+  // des positions qui déborderaient de la boîte affichée, sans aucun signal.
+  test('axe verrouillé trop petit pour la nappe libre : recalculé, verrou respecté', () => {
+    const tubes = Array.from({ length: 10 }, (_, i) => ({ id: 't' + i, d: 63 })); // homogène : le repack peut réussir
+    const cfg = pkg.solve(tubes, { lock: null }); // nappe libre large (452×359)
+    const A = pkg.anchorLayout(cfg, { w: 250, h: cfg.h, lockW: true, lockH: false });
+    expect(A.w).toBe(250); // le verrou est bien respecté après recalcul (pas un repli)
+    expect(A.positions).toHaveLength(10);
+    for (const p of A.positions) {
+      const c = pkg.cell(63);
+      expect(p.x - c / 2).toBeGreaterThanOrEqual(-0.001);
+      expect(p.x + c / 2).toBeLessThanOrEqual(A.w + 0.001);
+      expect(p.y - c / 2).toBeGreaterThanOrEqual(-0.001);
+      expect(p.y + c / 2).toBeLessThanOrEqual(A.h + 0.001);
+    }
+  });
+
+  test('axe verrouillé trop petit, repack impossible pour CETTE nappe : repli honnête (pas de débordement caché)', () => {
+    // d=125 (cellule 155) ne peut physiquement pas rentrer dans une largeur
+    // verrouillée de 200mm (intérieur 120mm) : le recalcul échoue, et le repli
+    // fait grandir la boîte plutôt que mentir sur sa largeur réelle.
+    const tubes = Array.from({ length: 10 }, (_, i) => ({ id: 't' + i, d: [125, 90, 63][i % 3] }));
+    const cfg = pkg.solve(tubes, { lock: null });
+    const A = pkg.anchorLayout(cfg, { w: 200, h: cfg.h, lockW: true, lockH: false });
+    expect(A.positions).toHaveLength(10);
+    for (const p of A.positions) {
+      const c = pkg.cell(tubes.find((t) => t.id === p.id).d);
+      expect(p.x - c / 2).toBeGreaterThanOrEqual(-0.001);
+      expect(p.x + c / 2).toBeLessThanOrEqual(A.w + 0.001); // cohérent avec A.w réel, quel qu'il soit
+      expect(p.y - c / 2).toBeGreaterThanOrEqual(-0.001);
+      expect(p.y + c / 2).toBeLessThanOrEqual(A.h + 0.001);
+    }
+  });
+
+  test('largeur ET hauteur verrouillées, place suffisante : les deux respectées après recalcul', () => {
+    const tubes = Array.from({ length: 10 }, (_, i) => ({ id: 't' + i, d: [125, 90, 63][i % 3] }));
+    const cfg = pkg.solve(tubes, { lock: null });
+    const A = pkg.anchorLayout(cfg, { w: 400, h: 900, lockW: true, lockH: true });
+    expect(A.w).toBe(400);
+    expect(A.h).toBe(900);
+    expect(A.positions).toHaveLength(10);
+  });
+
+  test('axe verrouillé impossible à respecter (même recalculé) : repli sans perte de fourreaux', () => {
+    // Un seul fourreau dont la cellule dépasse déjà l'axe verrouillé : aucun
+    // recalcul ne peut le faire rentrer. Les fourreaux restent tous présents,
+    // au prix d'un dépassement de CET axe plutôt que de disparaître.
+    const tubes = [{ id: 'a', d: 300 }];
+    const cfg = pkg.solve(tubes, { lock: null });
+    const A = pkg.anchorLayout(cfg, { w: 50, h: 50, lockW: true, lockH: true });
+    expect(A.positions).toHaveLength(1);
+  });
 });
 
 describe('packer — variants', () => {
