@@ -115,12 +115,43 @@
 
     for (let i = 0; i < liaisonEntries.length; i++) {
       const L = liaisonEntries[i];
-      const o = bestOpenFor(L.area);                              // 1) regroupement croisé
+      const o = bestOpenFor(L.area);                              // 1) regroupement croisé (liaison entière, PE compris)
       if (o) { addTo(o, L.cables); continue; }
       const f = chooseFourreauSize(liaisonEntries, i, eligibles, tauxMax); // 2) nouveau fourreau pour liaison entière
       if (f) { open.push({ fourreau: f, cables: [...L.cables], usedArea: L.area }); continue; }
-      const sorted = [...L.cables].sort((a, b) => (b.area - a.area) || String(a.code).localeCompare(String(b.code)));
-      sorted.forEach((c, idx) => placeSingle(c, sorted, idx));     // 3) split câble par câble
+
+      // 3) La liaison entière (PE compris) ne tient nulle part. Le PE ne
+      // transporte pas de courant en régime normal (pas d'échauffement
+      // inductif s'il est isolé) et peut donc être détaché sans risque
+      // électrique ; les phases et le neutre, eux, doivent rester groupés au
+      // maximum. On tente donc le NOYAU phase+neutre comme un bloc avant
+      // d'envisager de le scinder, et on place le PE séparément en dernier —
+      // il peut retomber dans le même fourreau que le noyau s'il reste de la
+      // place, sinon ailleurs.
+      const core = L.cables.filter((c) => c.fonction !== 'PE');
+      const peUnits = L.cables.filter((c) => c.fonction === 'PE');
+      const coreArea = core.reduce((s, c) => s + c.area, 0);
+
+      if (core.length) {
+        const oc = bestOpenFor(coreArea);
+        if (oc) {
+          addTo(oc, core);
+        } else {
+          const fc = smallestFourreauFor(coreArea, eligibles, tauxMax);
+          if (fc) {
+            open.push({ fourreau: fc, cables: [...core], usedArea: coreArea });
+          } else {
+            // Même le noyau phase+neutre ne tient nulle part en bloc :
+            // dernier recours, on le scinde câble par câble.
+            const sortedCore = [...core].sort((a, b) => (b.area - a.area) || String(a.code).localeCompare(String(b.code)));
+            sortedCore.forEach((c, idx) => placeSingle(c, sortedCore, idx));
+          }
+        }
+      }
+      if (peUnits.length) {
+        const sortedPE = [...peUnits].sort((a, b) => (b.area - a.area) || String(a.code).localeCompare(String(b.code)));
+        sortedPE.forEach((c, idx) => placeSingle(c, sortedPE, idx));
+      }
     }
 
     const fourreaux = open.map((o) => ({

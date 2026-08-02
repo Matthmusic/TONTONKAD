@@ -138,6 +138,54 @@ describe('assignCablesToFourreaux', () => {
     expect(r.nonPlaces).toEqual([]);
   });
 
+  test('split : le PE est détaché seul si nécessaire, phases+neutre restent groupés', () => {
+    // 3 phases + neutre (od40) tiennent ensemble dans un 200 (5026≤5831) ; +PE
+    // ça déborde (6283>5831) : le PE doit être le seul détaché, pas une phase.
+    const L = { id: 'BIG', nom: 'BIG', cables: [
+      { fam: 'F', code: '40p', od: 40, qty: 3, fonction: 'phase' },
+      { fam: 'F', code: '40n', od: 40, qty: 1, fonction: 'neutre' },
+      { fam: 'F', code: '40pe', od: 40, qty: 1, fonction: 'PE' },
+    ] };
+    const CAT3 = [
+      { type: 'TPC', code: '110', od: 110, id: 82 },
+      { type: 'TPC', code: '200', od: 200, id: 150 },
+    ];
+    const r = assignCablesToFourreaux([L], CAT3, { tauxMax: 0.33 });
+    const core = r.fourreaux.find((f) => f.cables.some((c) => c.fonction !== 'PE'));
+    const peOnly = r.fourreaux.find((f) => f.cables.every((c) => c.fonction === 'PE'));
+    expect(core.cables.filter((c) => c.fonction === 'phase')).toHaveLength(3);
+    expect(core.cables.filter((c) => c.fonction === 'neutre')).toHaveLength(1);
+    expect(core.cables.every((c) => c.fonction !== 'PE')).toBe(true); // aucune phase mélangée au PE détaché
+    expect(peOnly.cables).toHaveLength(1);
+    expect(r.fourreaux).toHaveLength(2);
+    expect(r.nonPlaces).toEqual([]);
+  });
+
+  test('split : même le noyau phase+neutre doit être scindé → jamais mélangé avec le PE', () => {
+    // 3 phases + neutre (od60) ne tiennent même pas ensemble (11310>5831) :
+    // scindés câble par câble, mais le PE reste dans un fourreau à part —
+    // aucun fourreau ne doit mélanger du PE avec une phase/neutre ici.
+    const L = { id: 'BIG', nom: 'BIG', cables: [
+      { fam: 'F', code: '60p', od: 60, qty: 3, fonction: 'phase' },
+      { fam: 'F', code: '60n', od: 60, qty: 1, fonction: 'neutre' },
+      { fam: 'F', code: '60pe', od: 60, qty: 1, fonction: 'PE' },
+    ] };
+    const CAT3 = [
+      { type: 'TPC', code: '63', od: 63, id: 47 },
+      { type: 'TPC', code: '110', od: 110, id: 82 },
+      { type: 'TPC', code: '200', od: 200, id: 150 },
+    ];
+    const r = assignCablesToFourreaux([L], CAT3, { tauxMax: 0.33 });
+    const placed = r.fourreaux.reduce((s, f) => s + f.cables.length, 0);
+    expect(placed).toBe(5);
+    expect(r.nonPlaces).toEqual([]);
+    for (const f of r.fourreaux) {
+      const hasPE = f.cables.some((c) => c.fonction === 'PE');
+      const hasCore = f.cables.some((c) => c.fonction !== 'PE');
+      expect(hasPE && hasCore).toBe(false); // jamais PE + phase/neutre dans le même fourreau
+    }
+  });
+
   test('câble trop gros pour la taille max → nonPlaces (pas de crash)', () => {
     const r = assignCablesToFourreaux([liaison('X', 200)], CAT2, { tauxMax: 0.33 });
     expect(r.fourreaux).toEqual([]);
