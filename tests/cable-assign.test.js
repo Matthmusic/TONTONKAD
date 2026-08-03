@@ -210,10 +210,14 @@ describe('assignCablesToFourreaux', () => {
     expect(r.fourreaux.length).toBeLessThan(3); // mieux qu'un fourreau par groupe isolé
   });
 
-  test('split : même le noyau phase+neutre doit être scindé → jamais mélangé avec le PE', () => {
+  test('split : même le noyau phase+neutre doit être scindé → le PE prend ce qu’il reste', () => {
     // 3 phases + neutre (od60) ne tiennent même pas ensemble (11310>5831) :
-    // scindés câble par câble, mais le PE reste dans un fourreau à part —
-    // aucun fourreau ne doit mélanger du PE avec une phase/neutre ici.
+    // scindés câble par câble. Avec ce catalogue à 3 tailles, les fourreaux
+    // ouverts pour le noyau finissent chacun quasi pleins (aucune marge
+    // ≥ un câble od60) : le PE n'a nulle part où se glisser et atterrit
+    // seul dans son propre fourreau — pas par une règle qui l'interdirait
+    // (voir le test suivant : le PE PEUT rejoindre le noyau s'il reste de
+    // la place), mais faute de place ici.
     const L = { id: 'BIG', nom: 'BIG', cables: [
       { fam: 'F', code: '60p', od: 60, qty: 3, fonction: 'phase' },
       { fam: 'F', code: '60n', od: 60, qty: 1, fonction: 'neutre' },
@@ -228,11 +232,8 @@ describe('assignCablesToFourreaux', () => {
     const placed = r.fourreaux.reduce((s, f) => s + f.cables.length, 0);
     expect(placed).toBe(5);
     expect(r.nonPlaces).toEqual([]);
-    for (const f of r.fourreaux) {
-      const hasPE = f.cables.some((c) => c.fonction === 'PE');
-      const hasCore = f.cables.some((c) => c.fonction !== 'PE');
-      expect(hasPE && hasCore).toBe(false); // jamais PE + phase/neutre dans le même fourreau
-    }
+    const peOnly = r.fourreaux.find((f) => f.cables.every((c) => c.fonction === 'PE'));
+    expect(peOnly.cables).toHaveLength(1);
   });
 
   test('split du noyau : phases et neutre entrelacés, aucun fourreau 100% phases ou 100% neutre', () => {
@@ -257,6 +258,37 @@ describe('assignCablesToFourreaux', () => {
       const nNeutre = f.cables.filter((c) => c.fonction === 'neutre').length;
       if (nPhase > 0) expect(nNeutre).toBeGreaterThan(0); // jamais des phases sans leur neutre
     }
+  });
+
+  test('split du noyau : le PE en attente rejoint la file du split (pas de fragmentation)', () => {
+    // Cas réel rapporté : noyau (6 phases + 2 neutre, od28.5) trop gros pour
+    // tenir en un seul fourreau (tailleMaxFourreauOd=160, cap max 3732.2 <
+    // 5103.5) → split câble par câble. Avant ce correctif, chooseFourreauSize
+    // ne voyait que le reliquat du noyau à chaque nouveau fourreau ouvert
+    // pendant ce split, sans anticipation du PE (2× od25.5) encore en
+    // attente : le noyau finissait sous-dimensionné (160 puis 125), et le PE,
+    // sans marge, retombait dans un 3ᵉ fourreau (63) à lui seul — 3 fourreaux
+    // pour cette seule liaison. Avec l'anticipation, le PE partage la place
+    // restante et tout tient dans 2 fourreaux.
+    const L = { id: 'L2', nom: 'Liaison 2', cables: [
+      { fam: 'F', code: '1x240', od: 28.5, qty: 6, fonction: 'phase' },
+      { fam: 'F', code: '1x240', od: 28.5, qty: 2, fonction: 'neutre' },
+      { fam: 'F', code: '1x185', od: 25.5, qty: 2, fonction: 'PE' },
+    ] };
+    const CAT5 = [
+      { type: 'TPC', code: '63', od: 63, id: 47 },
+      { type: 'TPC', code: '75', od: 75, id: 56 },
+      { type: 'TPC', code: '90', od: 90, id: 67 },
+      { type: 'TPC', code: '110', od: 110, id: 82 },
+      { type: 'TPC', code: '125', od: 125, id: 94 },
+      { type: 'TPC', code: '160', od: 160, id: 120 },
+    ];
+    const r = assignCablesToFourreaux([L], CAT5, { tauxMax: 0.33, tailleMaxFourreauOd: 160, typesAutorises: ['TPC'] });
+    const placed = r.fourreaux.reduce((s, f) => s + f.cables.length, 0);
+    expect(placed).toBe(10);
+    expect(r.nonPlaces).toEqual([]);
+    expect(r.fourreaux.length).toBe(2); // pas 3 fourreaux fragmentés
+    expect(r.fourreaux.some((f) => f.cables.some((c) => c.fonction === 'PE') && f.cables.some((c) => c.fonction !== 'PE'))).toBe(true); // le PE a rejoint un fourreau du noyau
   });
 
   test('câble trop gros pour la taille max → nonPlaces (pas de crash)', () => {

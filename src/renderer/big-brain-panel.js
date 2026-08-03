@@ -430,10 +430,11 @@
     const totalUnites = built.reduce((s, l) => s + l.cables.reduce((s2, c) => s2 + (c.qty || 0), 0), 0);
     console.groupCollapsed(`[BIG BRAIN] génération — ${built.length} liaison(s), ${totalUnites} câble(s) → ${result.fourreaux.length} fourreau(x)`);
     console.log('[BIG BRAIN] options', opts);
-    console.log('[BIG BRAIN] liaisons', built.map((l) => ({
-      id: l.id, nom: l.nom,
-      cables: l.cables.map((c) => `${c.qty}×${c.code}(Ø${c.od})`).join(' + ') || '(vide)',
-    })));
+    // Texte brut (pas un tableau d'objets) : reste lisible tel quel dans un
+    // copier-coller de la console, sans avoir à déplier chaque ligne.
+    console.log('[BIG BRAIN] liaisons\n' + built.map((l) =>
+      `  #${l.id} "${l.nom}": ${l.cables.map((c) => `${c.qty}×${c.code}(Ø${c.od}, ${c.fonction || 'aucune'})`).join(' + ') || '(vide)'}`
+    ).join('\n'));
     console.table(result.fourreaux.map((f, i) => ({
       '#': i, type: f.type, code: f.code,
       cables: f.cables.length,

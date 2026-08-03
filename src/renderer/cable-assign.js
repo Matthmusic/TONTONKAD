@@ -161,6 +161,7 @@
       const core = L.cables.filter((c) => c.fonction !== 'PE');
       const peUnits = L.cables.filter((c) => c.fonction === 'PE');
       const coreArea = core.reduce((s, c) => s + c.area, 0);
+      const sortedPE = [...peUnits].sort((a, b) => (b.area - a.area) || String(a.code).localeCompare(String(b.code)));
 
       // Anticipe le PE en attente (comme chooseFourreauSize anticipe déjà les
       // liaisons/câbles suivants) en le passant à la suite du noyau, plutôt
@@ -170,13 +171,16 @@
       // totalité du PE, mais laisser de la marge en accueille souvent une partie.
       if (core.length && !tryPlaceBlock(coreArea, core, [{ area: coreArea }, ...peUnits], 0)) {
         // Même le noyau phase+neutre ne tient nulle part en bloc : dernier
-        // recours, on le scinde câble par câble — mais en ENTRELAÇANT phases
-        // et neutre (pas un tri par taille) pour qu'aucun fourreau ne
-        // reçoive que des phases sans leur neutre.
-        placeAll(interleaveCore(core));
-      }
-      if (peUnits.length) {
-        const sortedPE = [...peUnits].sort((a, b) => (b.area - a.area) || String(a.code).localeCompare(String(b.code)));
+        // recours, on le scinde câble par câble — en ENTRELAÇANT phases et
+        // neutre (pas un tri par taille) pour qu'aucun fourreau ne reçoive
+        // que des phases sans leur neutre. Le PE en attente rejoint la MÊME
+        // file plutôt qu'une passe séparée après coup : sans ça,
+        // chooseFourreauSize ne voit que le reliquat du noyau quand il
+        // dimensionne chaque nouveau fourreau, le sous-dimensionne, et force
+        // le PE dans des fourreaux à part — plus petits et plus nombreux —
+        // alors qu'il aurait pu partager la place restante.
+        placeAll([...interleaveCore(core), ...sortedPE]);
+      } else if (peUnits.length) {
         placeAll(sortedPE);
       }
     }
