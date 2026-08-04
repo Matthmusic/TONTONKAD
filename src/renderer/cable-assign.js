@@ -101,6 +101,14 @@
     const tauxMax = (typeof options.tauxMax === 'number' && options.tauxMax > 0) ? options.tauxMax : 0.33;
     const eligibles = eligibleFourreaux(catalogueFourreaux, options);
     const raisonAucun = eligibles.length === 0 ? 'aucun fourreau éligible' : 'câble trop gros pour la taille max';
+    // Catalogue SANS la limite tailleMaxFourreauOd (mais avec le même
+    // typesAutorises) : sert uniquement de dernier recours pour garder un
+    // circuit entier dans un seul fourreau plutôt que de le scinder (voir
+    // tryPlaceBlockOversized). tauxMax et typesAutorises restent respectés —
+    // seule la taille max, un réglage de confort, peut être dépassée.
+    const eligiblesUncapped = options.tailleMaxFourreauOd == null
+      ? eligibles
+      : eligibleFourreaux(catalogueFourreaux, { ...options, tailleMaxFourreauOd: null });
 
     const open = [];        // { fourreau, cables:[], usedArea }
     const nonPlaces = [];
@@ -136,6 +144,18 @@
       if (f) { open.push({ fourreau: f, cables: [...cables], usedArea: area }); return true; }
       return false;
     };
+    // Dernier recours, appelé seulement après l'échec de tryPlaceBlock : un
+    // circuit qui ne rentre dans AUCUNE taille ≤ tailleMaxFourreauOd force
+    // sinon une scission câble par câble, alors qu'une taille plus grande du
+    // catalogue le contiendrait entier. bestOpenFor n'est pas re-tenté ici :
+    // aucun fourreau n'a pu s'ouvrir entre les deux appels, le résultat
+    // serait identique à celui déjà obtenu dans tryPlaceBlock.
+    const tryPlaceBlockOversized = (area, cables, items, index) => {
+      if (eligiblesUncapped === eligibles) return false; // pas de limite définie, rien à dépasser
+      const f = chooseFourreauSize(items, index, eligiblesUncapped, tauxMax);
+      if (f) { open.push({ fourreau: f, cables: [...cables], usedArea: area }); return true; }
+      return false;
+    };
     const placeSingle = (c, sorted, index) => {
       const o = bestOpenFor(c.area);
       if (o) return addTo(o, [c]);
@@ -149,9 +169,13 @@
       const L = liaisonEntries[i];
       // 1+2) regroupement croisé, sinon nouveau fourreau, pour la liaison entière (PE compris)
       if (tryPlaceBlock(L.area, L.cables, liaisonEntries, i)) continue;
+      // 2.5) rien sous la taille max ne contient la liaison entière : dépasser
+      // cette limite (dernier recours) plutôt que de scinder le circuit.
+      if (tryPlaceBlockOversized(L.area, L.cables, liaisonEntries, i)) continue;
 
-      // 3) La liaison entière (PE compris) ne tient nulle part. Le PE ne
-      // transporte pas de courant en régime normal (pas d'échauffement
+      // 3) La liaison entière (PE compris) ne tient nulle part, même en
+      // dépassant la taille max (aucune taille du catalogue ne suffit). Le
+      // PE ne transporte pas de courant en régime normal (pas d'échauffement
       // inductif s'il est isolé) et peut donc être détaché sans risque
       // électrique ; les phases et le neutre, eux, doivent rester groupés au
       // maximum. On tente donc le NOYAU phase+neutre comme un bloc avant
@@ -169,16 +193,19 @@
       // marge. Si tout tenir ensemble (noyau + PE) était possible, l'étape
       // 1/2 aurait déjà réussi ; ici on ne peut donc pas accueillir la
       // totalité du PE, mais laisser de la marge en accueille souvent une partie.
-      if (core.length && !tryPlaceBlock(coreArea, core, [{ area: coreArea }, ...peUnits], 0)) {
-        // Même le noyau phase+neutre ne tient nulle part en bloc : dernier
-        // recours, on le scinde câble par câble — en ENTRELAÇANT phases et
-        // neutre (pas un tri par taille) pour qu'aucun fourreau ne reçoive
-        // que des phases sans leur neutre. Le PE en attente rejoint la MÊME
-        // file plutôt qu'une passe séparée après coup : sans ça,
-        // chooseFourreauSize ne voit que le reliquat du noyau quand il
-        // dimensionne chaque nouveau fourreau, le sous-dimensionne, et force
-        // le PE dans des fourreaux à part — plus petits et plus nombreux —
-        // alors qu'il aurait pu partager la place restante.
+      const coreItems = [{ area: coreArea }, ...peUnits];
+      if (core.length && !tryPlaceBlock(coreArea, core, coreItems, 0)
+                       && !tryPlaceBlockOversized(coreArea, core, coreItems, 0)) {
+        // Même le noyau phase+neutre ne tient nulle part en bloc — pas même
+        // en dépassant la taille max : dernier recours, on le scinde câble
+        // par câble — en ENTRELAÇANT phases et neutre (pas un tri par
+        // taille) pour qu'aucun fourreau ne reçoive que des phases sans leur
+        // neutre. Le PE en attente rejoint la MÊME file plutôt qu'une passe
+        // séparée après coup : sans ça, chooseFourreauSize ne voit que le
+        // reliquat du noyau quand il dimensionne chaque nouveau fourreau, le
+        // sous-dimensionne, et force le PE dans des fourreaux à part — plus
+        // petits et plus nombreux — alors qu'il aurait pu partager la place
+        // restante.
         placeAll([...interleaveCore(core), ...sortedPE]);
       } else if (peUnits.length) {
         placeAll(sortedPE);

@@ -260,6 +260,33 @@ describe('assignCablesToFourreaux', () => {
     }
   });
 
+  test('noyau trop gros pour la limite mais pas pour le catalogue : reste entier (pas de scission câble par câble)', () => {
+    // 3 phases + 1 neutre (od40, aire 1256.6) : noyau = 5026.5, ne tient dans
+    // aucune taille ≤ 110 (seule taille éligible avec tailleMaxFourreauOd=110,
+    // cap 1742.7) ; le catalogue a plus grand (TPC200, cap 5831.6, hors
+    // limite) qui contient le noyau ENTIER : mieux vaut dépasser la limite que
+    // scinder le noyau câble par câble. Le PE (1 unité), lui, tient dans la
+    // limite (TPC110) et n'a pas besoin de dépasser quoi que ce soit.
+    const L = { id: 'BIG', nom: 'BIG', cables: [
+      { fam: 'F', code: '40p', od: 40, qty: 3, fonction: 'phase' },
+      { fam: 'F', code: '40n', od: 40, qty: 1, fonction: 'neutre' },
+      { fam: 'F', code: '40pe', od: 40, qty: 1, fonction: 'PE' },
+    ] };
+    const CAT6 = [
+      { type: 'TPC', code: '110', od: 110, id: 82 },
+      { type: 'TPC', code: '200', od: 200, id: 150 },
+    ];
+    const r = assignCablesToFourreaux([L], CAT6, { tauxMax: 0.33, tailleMaxFourreauOd: 110, typesAutorises: ['TPC'] });
+    expect(r.nonPlaces).toEqual([]);
+    expect(r.fourreaux).toHaveLength(2);
+    const withCore = r.fourreaux.find((f) => f.cables.some((c) => c.fonction === 'phase'));
+    expect(withCore.cables.filter((c) => c.fonction === 'phase')).toHaveLength(3); // les 3 phases groupées
+    expect(withCore.cables.filter((c) => c.fonction === 'neutre')).toHaveLength(1);
+    expect(withCore.od).toBe(200); // > 110 : la limite a bien été dépassée pour garder le noyau entier
+    const peOnly = r.fourreaux.find((f) => f !== withCore);
+    expect(peOnly.od).toBe(110); // le PE, lui, tient dans la limite normale
+  });
+
   test('split du noyau : le PE en attente rejoint la file du split (pas de fragmentation)', () => {
     // Cas réel rapporté : noyau (6 phases + 2 neutre, od28.5) trop gros pour
     // tenir en un seul fourreau (tailleMaxFourreauOd=160, cap max 3732.2 <
@@ -298,8 +325,24 @@ describe('assignCablesToFourreaux', () => {
     expect(r.nonPlaces[0]).toMatchObject({ liaisonId: 'X', od: 200 });
   });
 
-  test('borne tailleMaxFourreauOd : od40 ne rentre plus si limité au 63', () => {
+  test('borne tailleMaxFourreauOd : od40 dépasse la limite (dernier recours) plutôt que d’échouer', () => {
+    // Aucune taille ≤ 63 ne contient ce câble seul (cap TPC63 572.5 < aire 1256.6),
+    // mais le catalogue a plus grand (TPC110, cap 1742.8) : mieux vaut dépasser
+    // la limite de confort que de déclarer le câble non plaçable.
     const r = assignCablesToFourreaux([liaison('Y', 40)], CAT2, { tauxMax: 0.33, tailleMaxFourreauOd: 63 });
+    expect(r.nonPlaces).toEqual([]);
+    expect(r.fourreaux).toHaveLength(1);
+    expect(r.fourreaux[0].od).toBe(110); // > 63 : la limite a bien été dépassée
+  });
+
+  test('borne tailleMaxFourreauOd : aucune taille, même plus grande, ne suffit → nonPlaces', () => {
+    // Le catalogue plafonne à TPC63 (cap 572.5) : dépasser la limite de 63 ne
+    // change rien puisqu'il n'existe rien de plus grand à proposer.
+    const CAT_MAX63 = [
+      { type: 'TPC', code: '40', od: 40, id: 30 },
+      { type: 'TPC', code: '63', od: 63, id: 47 },
+    ];
+    const r = assignCablesToFourreaux([liaison('Y', 40)], CAT_MAX63, { tauxMax: 0.33, tailleMaxFourreauOd: 63 });
     expect(r.fourreaux).toEqual([]);
     expect(r.nonPlaces).toHaveLength(1);
   });
