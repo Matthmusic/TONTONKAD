@@ -33,7 +33,7 @@ describe('BIG BRAIN — circuit → phases, bout en bout', () => {
     expect(Object.keys(queues)).toHaveLength(3);
   });
 
-  test('parallele=2 : le circuit entier est dupliqué, les files restent séparées', () => {
+  test('parallele=2 : phases et neutre sont dupliqués, mais PAS le PE (un seul PE)', () => {
     const circuit = {
       fam: 'U1000-AR2V', nbPhases: 3, codePhase: '1x185',
       neutre: true, codeNeutre: '1x185', pe: true, codePE: '1x185', parallele: 2,
@@ -41,12 +41,12 @@ describe('BIG BRAIN — circuit → phases, bout en bout', () => {
     const cables = circuitToCables(circuit, resolveOd);
     const liaison = { id: 'L1', nom: 'TGBT → GE', cables };
 
-    expect(assignPhases(cables)).toEqual(['L1', 'L2', 'L3', 'L1', 'L2', 'L3', 'N', 'N', 'PE', 'PE']);
+    expect(assignPhases(cables)).toEqual(['L1', 'L2', 'L3', 'L1', 'L2', 'L3', 'N', 'N', 'PE']);
 
     const queues = buildPhaseQueues([liaison]);
     expect(queues['L1|1x185|phase']).toEqual(['L1', 'L2', 'L3', 'L1', 'L2', 'L3']);
     expect(queues['L1|1x185|neutre']).toEqual(['N', 'N']);
-    expect(queues['L1|1x185|PE']).toEqual(['PE', 'PE']);
+    expect(queues['L1|1x185|PE']).toEqual(['PE']);
   });
 
   test('liaison en multi : un seul câble par circuit, aucune phase attribuée', () => {

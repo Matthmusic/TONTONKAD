@@ -28,9 +28,15 @@ describe('circuitToCables', () => {
     expect(pe).toMatchObject({ code: '1x95', od: 19 });
   });
 
-  test('parallele=2 multiplie tout le circuit', () => {
+  test('parallele=2 multiplie phases et neutre, mais pas le PE (un seul PE quel que soit le nombre de circuits en parallèle)', () => {
     const r = circuitToCables({ ...base, parallele: 2 }, resolveOd);
-    expect(r.map((c) => c.qty)).toEqual([6, 2, 2]);
+    expect(r.map((c) => c.qty)).toEqual([6, 2, 1]);
+  });
+
+  test('parallele=4 → toujours 1 seul PE', () => {
+    const r = circuitToCables({ ...base, parallele: 4 }, resolveOd);
+    const pe = r.find((c) => c.fonction === 'PE');
+    expect(pe.qty).toBe(1);
   });
 
   test('nbPhases=0 → pas d’entrée phase', () => {

@@ -97,12 +97,65 @@
     return out;
   }
 
+  // options.harmonie (bool, défaut false) : ISOLATION TOTALE — chaque liaison
+  // est empaquetée dans SES PROPRES fourreaux, jamais partagés avec une autre
+  // liaison. Deux liaisons de composition identique produisent alors
+  // toujours le même résultat, quel que soit leur rang dans la file ou la
+  // forme de leurs voisines (sans ça, le regroupement croisé et
+  // l'anticipation de chooseFourreauSize peuvent traiter différemment deux
+  // liaisons pourtant identiques, selon ce qui les entoure — visuellement
+  // incohérent pour des circuits censés être symétriques). Coût : perd
+  // l'optimisation croisée entre liaisons différentes (parfois 1-2 fourreaux
+  // de plus au total qu'un optimum global).
+  //
+  // liaisons[i].tailleImposee = { type, code } (optionnel) : fige le
+  // fourreau de CETTE liaison à ce type+code exact du catalogue, en ignorant
+  // tailleMaxFourreauOd/typesAutorises (un choix explicite par liaison prime
+  // sur le réglage global). La liaison est scindée sur autant de fourreaux
+  // de CETTE MÊME taille que nécessaire (jamais une autre), et — comme pour
+  // harmonie — n'est jamais partagée avec une autre liaison (prévisible,
+  // indépendant de la case Harmonie). Si le type+code n'existe pas au
+  // catalogue, ou qu'un câble est trop gros même pour cette taille, les
+  // câbles concernés partent en nonPlaces avec une raison dédiée.
   function assignCablesToFourreaux(liaisons, catalogueFourreaux, options = {}) {
     const tauxMax = (typeof options.tauxMax === 'number' && options.tauxMax > 0) ? options.tauxMax : 0.33;
     const eligibles = eligibleFourreaux(catalogueFourreaux, options);
     const raisonAucun = eligibles.length === 0 ? 'aucun fourreau éligible' : 'câble trop gros pour la taille max';
+    const harmonie = !!options.harmonie;
 
-    const open = [];        // { fourreau, cables:[], usedArea }
+    // Taille imposée par liaison : Map liaisonId → spec du catalogue, ou
+    // `null` si le type+code demandé n'existe pas (imposée invalide).
+    // Absence de clé = pas d'imposition pour cette liaison (comportement
+    // normal : eligibles/harmonie globaux).
+    const forcedSpecById = new Map();
+    (liaisons || []).forEach((l) => {
+      if (l && l.tailleImposee && l.tailleImposee.type != null && l.tailleImposee.code != null) {
+        const spec = (catalogueFourreaux || []).find(
+          (f) => f.type === l.tailleImposee.type && f.code === l.tailleImposee.code
+        );
+        forcedSpecById.set(l.id, spec || null);
+      }
+    });
+    // Isolée = jamais de partage croisé avec une autre liaison : en harmonie
+    // (toutes), ou individuellement pour toute liaison à taille imposée.
+    const isIsolated = (liaisonId) => harmonie || forcedSpecById.has(liaisonId);
+    // Tailles éligibles pour CETTE liaison : la taille imposée seule (ou
+    // aucune, si introuvable au catalogue), sinon le catalogue filtré global.
+    const eligiblesFor = (liaisonId) => {
+      if (!forcedSpecById.has(liaisonId)) return eligibles;
+      const spec = forcedSpecById.get(liaisonId);
+      return spec ? [spec] : [];
+    };
+    const raisonFor = (liaisonId) => {
+      if (forcedSpecById.has(liaisonId)) {
+        return forcedSpecById.get(liaisonId)
+          ? 'câble trop gros pour la taille imposée'
+          : 'taille imposée introuvable au catalogue';
+      }
+      return raisonAucun;
+    };
+
+    const open = [];        // { fourreau, cables:[], usedArea, liaisonId }
     const nonPlaces = [];
 
     // Regrouper les unités par liaison (ordre d'apparition conservé).
@@ -117,38 +170,50 @@
       .sort((a, b) => (b.area - a.area) || String(a.id).localeCompare(String(b.id)));
 
     // Best-fit : fourreau ouvert le plus rempli qui accepte encore `area`.
-    const bestOpenFor = (area) => {
+    // Isolée (harmonie, ou taille imposée) : recherche bornée aux fourreaux
+    // déjà ouverts pour CETTE liaison — jamais ceux d'une autre.
+    const bestOpenFor = (area, liaisonId) => {
+      const isolated = isIsolated(liaisonId);
       let best = null;
       for (const o of open) {
+        if (isolated && o.liaisonId !== liaisonId) continue;
         if (o.usedArea + area <= capacite(o.fourreau, tauxMax) + EPS && (!best || o.usedArea > best.usedArea)) best = o;
       }
       return best;
     };
     const addTo = (o, cs) => { for (const c of cs) { o.cables.push(c); o.usedArea += c.area; } };
     // Place un bloc (liaison entière, ou noyau phase+neutre) : dans un
-    // fourreau ouvert qui a encore de la place (regroupement croisé), sinon
-    // dans un fourreau neuf dimensionné en anticipant `items[index..]`.
-    // Retourne true si placé.
-    const tryPlaceBlock = (area, cables, items, index) => {
-      const o = bestOpenFor(area);
+    // fourreau ouvert qui a encore de la place (regroupement croisé, sauf si
+    // isolée), sinon dans un fourreau neuf dimensionné en anticipant
+    // `items[index..]` — parmi les tailles éligibles de CETTE liaison (voir
+    // eligiblesFor). Retourne true si placé.
+    const tryPlaceBlock = (area, cables, items, index, liaisonId) => {
+      const o = bestOpenFor(area, liaisonId);
       if (o) { addTo(o, cables); return true; }
-      const f = chooseFourreauSize(items, index, eligibles, tauxMax);
-      if (f) { open.push({ fourreau: f, cables: [...cables], usedArea: area }); return true; }
+      const f = chooseFourreauSize(items, index, eligiblesFor(liaisonId), tauxMax);
+      if (f) { open.push({ fourreau: f, cables: [...cables], usedArea: area, liaisonId }); return true; }
       return false;
     };
     const placeSingle = (c, sorted, index) => {
-      const o = bestOpenFor(c.area);
+      const o = bestOpenFor(c.area, c.liaisonId);
       if (o) return addTo(o, [c]);
-      const f = chooseFourreauSize(sorted, index, eligibles, tauxMax);
-      if (f) return open.push({ fourreau: f, cables: [c], usedArea: c.area });
-      nonPlaces.push({ liaisonId: c.liaisonId, fam: c.fam, code: c.code, od: c.od, raison: raisonAucun });
+      const f = chooseFourreauSize(sorted, index, eligiblesFor(c.liaisonId), tauxMax);
+      if (f) return open.push({ fourreau: f, cables: [c], usedArea: c.area, liaisonId: c.liaisonId });
+      nonPlaces.push({ liaisonId: c.liaisonId, fam: c.fam, code: c.code, od: c.od, raison: raisonFor(c.liaisonId) });
     };
     const placeAll = (arr) => arr.forEach((c, idx) => placeSingle(c, arr, idx));
 
     for (let i = 0; i < liaisonEntries.length; i++) {
       const L = liaisonEntries[i];
-      // 1+2) regroupement croisé, sinon nouveau fourreau, pour la liaison entière (PE compris)
-      if (tryPlaceBlock(L.area, L.cables, liaisonEntries, i)) continue;
+      // 1+2) regroupement croisé (sauf isolée), sinon nouveau fourreau, pour
+      // la liaison entière (PE compris). Isolée (harmonie ou taille
+      // imposée) : l'anticipation ne porte que sur CETTE liaison ([L] au
+      // lieu de toute la file) : le choix de taille ne dépend plus des
+      // liaisons voisines.
+      const isolatedL = isIsolated(L.id);
+      const lookahead = isolatedL ? [L] : liaisonEntries;
+      const lookaheadIndex = isolatedL ? 0 : i;
+      if (tryPlaceBlock(L.area, L.cables, lookahead, lookaheadIndex, L.id)) continue;
 
       // 3) La liaison entière (PE compris) ne tient nulle part. Le PE ne
       // transporte pas de courant en régime normal (pas d'échauffement
@@ -168,8 +233,10 @@
       // qu'un dimensionnement du noyau seul qui ne lui laisserait aucune
       // marge. Si tout tenir ensemble (noyau + PE) était possible, l'étape
       // 1/2 aurait déjà réussi ; ici on ne peut donc pas accueillir la
-      // totalité du PE, mais laisser de la marge en accueille souvent une partie.
-      if (core.length && !tryPlaceBlock(coreArea, core, [{ area: coreArea }, ...peUnits], 0)) {
+      // totalité du PE, mais laisser de la marge en accueille souvent une
+      // partie. Cette anticipation-ci est déjà scopée à la liaison courante
+      // (jamais aux voisines), donc inchangée en harmonie.
+      if (core.length && !tryPlaceBlock(coreArea, core, [{ area: coreArea }, ...peUnits], 0, L.id)) {
         // Même le noyau phase+neutre ne tient nulle part en bloc : dernier
         // recours, on le scinde câble par câble — en ENTRELAÇANT phases et
         // neutre (pas un tri par taille) pour qu'aucun fourreau ne reçoive

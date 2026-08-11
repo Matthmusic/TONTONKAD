@@ -92,11 +92,11 @@
           {
             title: 'A. Le Panneau Latéral (Gauche) - Centre de Contrôle',
             items: [
-              'Disposition "Deux zones" : l\'en-tête et la barre de statistiques restent fixes, seule la zone de travail (inventaires) défile — vous gardez toujours les totaux sous les yeux',
-              'En-tête compact : Logo, numéro de version, bouton ⓘ (ce manuel) et bouton ⚙️ pour configurer l\'emplacement de la base de données (CSV)',
-              'Configuration du Contenant (ligne compacte) : Forme (Rectangulaire, Circulaire, Chemin de câble) qui occupe la moitié de la ligne, puis les Dimensions L / H (ou Ø) avec icône "Cadenas" 🔓 pour verrouiller une dimension. Le bouton "Appliquer" apparaît sous la ligne quand une valeur change',
-              'Ajout de Composants sur une seule ligne : Onglets FOURREAU / CÂBLE, recherche intelligente de la référence, réglage de la quantité et bouton "+ Ajouter" alignés côte à côte. L\'icône ⓘ rappelle la règle (le fourreau est un anneau)',
-              'Inventaires (zone de travail défilante) : Deux listes côte à côte (Fourreaux et Câbles) qui récapitulent ce qui a été ajouté au projet, avec le bouton ⚡ PLACEMENT AUTO',
+              'Barre de titre (Electron) : Logo, nom de l\'application et numéro de version à gauche ; boutons ⓘ (ce manuel), ⚙️ (dossier de données CSV), 🔄 (recharger l\'application — demande toujours confirmation, tout objet non sauvegardé du canvas est perdu), 🌙 (thème) et les contrôles de fenêtre à droite',
+              'Disposition "Deux zones" : la configuration du contenant reste fixe en haut, tout le reste (ajout d\'objets, inventaires, détails) défile ensemble dans une seule zone de travail — la barre de statistiques, elle, reste fixe en bas',
+              'Configuration du Contenant (ligne compacte) : Forme (Rectangulaire, Circulaire, Chemin de câble, Chambre de tirage) qui occupe la moitié de la ligne, puis les Dimensions L / H (ou Ø) avec icône "Cadenas" 🔓 pour verrouiller une dimension. Le bouton "Appliquer" apparaît sous la ligne quand une valeur change',
+              'Ajout de Composants sur trois onglets : FOURREAU (recherche + quantité + "+ Ajouter"), CÂBLE (même principe), et 🧠 BIG BRAIN pour générer automatiquement des fourreaux à partir de circuits électriques (voir la section dédiée ci-dessous)',
+              'Inventaires (dans la zone de travail) : Deux listes côte à côte (Fourreaux et Câbles) qui récapitulent ce qui a été ajouté au projet, avec le bouton ⚡ PLACEMENT AUTO. S\'il y a déjà un plan en cours, une confirmation demande de Remplacer ou d\'Ajouter au plan existant — rien n\'est jamais effacé sans le demander',
               'Barre de Statistiques (fixe, en bas) : quatre tuiles horizontales — Total Fourreaux, Total Câbles, Taux d\'occupation (KPI critique) et Échelle d\'affichage'
             ]
           },
@@ -130,16 +130,65 @@
         ]
       },
       {
+        title: '🧠 BIG BRAIN — Génération depuis des liaisons électriques',
+        content: `
+          <p>
+            Plutôt que de placer chaque câble et fourreau à la main, l'onglet <strong>BIG BRAIN</strong> génère automatiquement tout un plan à partir d'une description électrique : vous décrivez vos <strong>liaisons</strong> (circuits), le moteur déplie les câbles (phases, neutre, PE), les répartit dans des fourreaux en respectant le taux d'occupation, puis les place sur le canvas.
+          </p>
+        `,
+        subsections: [
+          {
+            title: 'Décrire une liaison',
+            items: [
+              '<strong>+ Nouvelle</strong> crée une liaison ; l\'icône ⧉ la duplique (utile pour plusieurs circuits identiques ou très proches), 🗑 la supprime',
+              '<strong>📥 Import Caneco</strong> : importe un carnet de câbles Caneco (.xls/.xlsx) — choisissez le fichier, puis cochez les liaisons à importer dans la liste détectée (les réserves non câblées sont exclues d\'office, une ⚠️ signale une famille ou un code à vérifier manuellement)',
+              '<strong>+ Réserve</strong> : ajoute des <strong>fourreaux de réserve vides</strong> (aucun câble) — choisissez juste un type de fourreau et une quantité ; reconnaissables dans la liste par leur contour en pointillés et l\'icône 📦',
+              '<strong>Mode Mono</strong> : un câble par conducteur — nombre de phases, section de phase, neutre (oui/non + section), PE (oui/non + section), chacun avec son propre code catalogue',
+              '<strong>Mode Multi</strong> : un seul câble multiconducteur (ex. 5G16) qui porte déjà tous les conducteurs',
+              '<strong>Parallèle</strong> : nombre de circuits en parallèle. Il multiplie les phases et le neutre, mais jamais le PE — un seul conducteur de protection suffit quel que soit le nombre de circuits en parallèle',
+              '<strong>Taille imposée</strong> (optionnelle) : fige le fourreau de cette liaison à un type/diamètre précis du catalogue, plutôt que de laisser le moteur choisir. La liaison est alors scindée sur plusieurs fourreaux de cette même taille si besoin, jamais une autre'
+            ]
+          },
+          {
+            title: 'Paramètres de génération',
+            items: [
+              '<strong>Taux max</strong> : taux d\'occupation maximal autorisé par fourreau (33% par défaut)',
+              '<strong>Taille max fourreau</strong> et <strong>Types</strong> (TPC / IRL / ICTA) : bornent le catalogue dans lequel le moteur choisit — ignorés pour une liaison à taille imposée',
+              '<strong>Harmonie</strong> : chaque liaison reçoit ses propres fourreaux, jamais partagés avec une autre liaison — deux liaisons identiques obtiennent alors toujours la même taille de fourreau. Sans cette option, le moteur peut regrouper des liaisons différentes dans un même fourreau pour optimiser le nombre total de fourreaux, au prix d\'un résultat parfois moins homogène visuellement'
+            ]
+          },
+          {
+            title: 'Générer',
+            items: [
+              'Le bouton <strong>Générer ▶</strong> calcule le plan puis, s\'il y a déjà des objets sur le canvas, demande de <strong>Remplacer</strong> le plan actuel ou d\'<strong>Ajouter</strong> au plan existant — jamais d\'écrasement silencieux',
+              'Un câble qu\'aucun fourreau ne peut accueillir (trop gros, catalogue trop restreint) apparaît dans un message d\'avertissement avec la raison précise plutôt que de disparaître silencieusement',
+              'La console de développement (Ctrl+Maj+I) affiche le détail complet de chaque génération (liaisons, câbles, fourreaux, taux) — utile pour comprendre un regroupement inattendu'
+            ]
+          }
+        ]
+      },
+      {
         title: '⌨️ Raccourcis Clavier',
         shortcuts: [
           { key: 'Molette (clic)', desc: 'Placer un objet', icon: '🖱️' },
-          { key: 'Ctrl + Molette', desc: 'Zoom Avant / Arrière', icon: '🖱️' },
+          { key: 'Ctrl + Molette', desc: 'Zoom avant / arrière', icon: '🖱️' },
+          { key: 'Flèches', desc: 'Déplacer la sélection (canvas focalisé ; Maj = pas fin)', icon: '⌨️' },
+          { key: 'Entrée', desc: 'Sélectionner l\'objet suivant (canvas focalisé)', icon: '⌨️' },
           { key: 'E', desc: 'Éditer l\'objet sélectionné', icon: '⌨️' },
-          { key: 'I', desc: 'Informations de l\'objet', icon: '⌨️' },
-          { key: 'G', desc: 'Figer l\'objet (Ghost/Freeze)', icon: '⌨️' },
-          { key: 'Ctrl + G', desc: 'Arranger en Grille (Grid)', icon: '⌨️' },
+          { key: 'I', desc: 'Afficher/masquer les informations', icon: '⌨️' },
+          { key: 'D', desc: 'Déplacer un groupe de fourreaux (mode AutoCAD MOVE)', icon: '⌨️' },
+          { key: 'X', desc: 'Figer/dégeler la sélection', icon: '⌨️' },
+          { key: 'Ctrl + X', desc: 'Figer/dégeler tous les objets', icon: '⌨️' },
+          { key: 'G', desc: 'Activer/désactiver la gravité', icon: '⌨️' },
+          { key: 'Maj + G', desc: 'Afficher/masquer la grille', icon: '⌨️' },
+          { key: 'Ctrl + G', desc: 'Ranger tous les fourreaux en grille', icon: '⌨️' },
+          { key: 'F8', desc: 'Mode ORTHO (déplacement horizontal/vertical strict)', icon: '⌨️' },
+          { key: 'F3', desc: 'Mode OSNAP (accrochage aux fourreaux fixes)', icon: '⌨️' },
+          { key: 'Ctrl + C / Ctrl + V', desc: 'Copier / coller la sélection', icon: '⌨️' },
           { key: 'Suppr', desc: 'Supprimer la sélection', icon: '⌨️' },
-          { key: 'Ctrl + S', desc: 'Sauvegarde rapide', icon: '⌨️' },
+          { key: 'Ctrl + Suppr', desc: 'Vider complètement le canvas', icon: '⌨️' },
+          { key: 'Échap', desc: 'Annuler le mode en cours (déplacement, collage)', icon: '⌨️' },
+          { key: 'Ctrl + S', desc: 'Ouvrir le gestionnaire de projets', icon: '⌨️' },
           { key: 'Ctrl + Z', desc: 'Annuler la dernière action', icon: '⌨️' }
         ]
       },

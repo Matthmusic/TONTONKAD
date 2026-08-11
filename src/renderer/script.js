@@ -1453,7 +1453,6 @@
                        : { lock: null };
 
       const bestConfig = window.solve(tubes, optsPacker);
-
       applyAnchoredConfig(bestConfig);
 
       // Exposer les variantes dans le panel d'alternatives
@@ -1480,7 +1479,7 @@
       console.error('[arrangeConduitGridNew] Erreur:', error);
       lastLayoutVariants = [];
       hideLayoutPreviewPanel();
-      showToast(`❌ Erreur: ${error.message}`);
+      showToast('❌ Erreur lors du rangement en grille — réessayez');
 
       // Fallback sur ancien système si échec
       console.warn('[arrangeConduitGridNew] Fallback sur ancien système');
@@ -1699,6 +1698,32 @@
     return obj;
   }
 
+  // Construit un objet fourreau canvas prêt à pousser dans `fourreaux` — même
+  // forme partagée par bigBrainGenerate() et autoPlaceFromInventory() (leur
+  // seule vraie différence : la SOURCE du spec type/code/od, un résultat
+  // BigBrain.resultToObjects (`idm`) ou une entrée FOURREAUX du catalogue
+  // (`id`) — `spec.idm` prime si présent, sinon repli sur `spec.id`.
+  function makeFourreauObject(id, x, y, spec, label) {
+    return {
+      id, x, y, od: spec.od, idm: spec.idm != null ? spec.idm : spec.id,
+      color: colorForFourreau(spec.type, spec.code), customColor: null, label: label || '',
+      children: [], vx: 0, vy: 0, dragging: false, frozen: false,
+      _frozenByUser: false, _frozenByMode: false, _px: x, _py: y,
+      type: spec.type, code: spec.code, famille: null,
+      statut: 'utilisé', usage: '', origine: '', destination: '', reserve: false, aiguille: false,
+    };
+  }
+
+  // Confirmation "Remplacer / Ajouter" partagée par tout flux pouvant écraser
+  // un plan déjà posé (BIG BRAIN, Placement Auto depuis l'inventaire) —
+  // jamais d'écrasement silencieux : OK = Remplacer, Annuler = Ajouter.
+  function confirmReplaceOrAdd(actionLabel) {
+    return confirm(
+      `Remplacer le plan actuel par ${actionLabel} ?\n\nOK = Remplacer le plan\nAnnuler = Ajouter au plan existant`
+    );
+  }
+  window.confirmReplaceOrAdd = confirmReplaceOrAdd; // big-brain-panel.js — même confirmation, même formulation
+
   // BIG BRAIN — instancie les fourreaux remplis à partir du résultat moteur, puis
   // laisse le placement existant (packer) les positionner. Une seule entrée d'historique.
   function bigBrainGenerate(result, liaisonsById, replace, liaisons) {
@@ -1730,13 +1755,7 @@
     const createdIds = [];
     objs.fourreaux.forEach((fo, i) => {
       const id = nextId++;
-      fourreaux.push({
-        id, x: cx, y: cy, od: fo.od, idm: fo.idm,
-        color: colorForFourreau(fo.type, fo.code), customColor: null, label: fo.label || '',
-        children: [], vx: 0, vy: 0, dragging: false, frozen: false,
-        _frozenByUser: false, _frozenByMode: false, _px: cx, _py: cy, type: fo.type, code: fo.code,
-        famille: null, statut: 'utilisé', usage: '', origine: '', destination: '', reserve: false, aiguille: false,
-      });
+      fourreaux.push(makeFourreauObject(id, cx, cy, fo, fo.label));
       createdIds[i] = id;
     });
     objs.cables.forEach((co) => {
@@ -3151,8 +3170,10 @@
     }
 
     try {
-      // Expand inventoryItems → liste individuelle pour le moteur
-      let invId = 0;
+      // Expand inventoryItems → liste individuelle pour le moteur. IDs via le
+      // compteur global nextId (pas un schéma local inv_N) : uniques parmi
+      // TOUS les fourreaux de l'app, condition nécessaire pour pouvoir les
+      // ajouter à un plan existant sans collision (voir plus bas).
       const expandedInput = [];
       const idToSpec = {};
 
@@ -3160,7 +3181,7 @@
         const spec = FOURREAUX.find(f => f.type === item.type && f.code === item.code);
         if (!spec || item.total <= 0) return;
         for (let i = 0; i < item.total; i++) {
-          const id = `inv_${invId++}`;
+          const id = nextId++;
           expandedInput.push({
             id,
             diameter:  spec.od,
@@ -3180,6 +3201,35 @@
         return;
       }
 
+      // Un plan existant (posé à la main, ou généré par BIG BRAIN) ne doit
+      // JAMAIS être effacé silencieusement par ce bouton : Ajouter est le
+      // choix par défaut (Annuler ci-dessous) — Remplacer est une décision
+      // explicite, même pattern que la génération BIG BRAIN.
+      const hasExisting = fourreaux.length > 0;
+      const replace = !hasExisting || confirmReplaceOrAdd('le placement automatique depuis l\'inventaire');
+
+      // Sauver l'état AVANT de modifier le canvas
+      saveStateToHistory();
+
+      if (!replace) {
+        // Ajouter : les nouveaux fourreaux rejoignent ceux déjà présents (au
+        // centre, comme tout fourreau nouvellement créé), puis TOUT le plan
+        // (existant + nouveaux) est réarrangé ensemble — même logique que
+        // BIG BRAIN en mode « Ajouter » (arrangeConduitGrid() repacke déjà
+        // l'intégralité de `fourreaux`, quelle que soit son origine).
+        const cx = WORLD_W / 2, cy = WORLD_H / 2;
+        expandedInput.forEach((f) => {
+          const spec = idToSpec[f.id];
+          fourreaux.push(makeFourreauObject(f.id, cx, cy, spec, ''));
+        });
+        if (typeof arrangeConduitGrid === 'function') arrangeConduitGrid();
+        updateInventoryPlacedCount();
+        renderPlanInventory();
+        updateStats();
+        redraw();
+        return;
+      }
+
       const lockWidth  = document.getElementById('lockWidth')?.checked;
       const lockHeight = document.getElementById('lockHeight')?.checked;
       const boxWidth   = shape === 'rect' ? parseFloat(boxWInput.value)  : parseFloat(boxDInput.value);
@@ -3192,12 +3242,10 @@
 
       const bestConfig = window.solve(tubes, optsPacker);
 
-      // Sauver l'état AVANT de modifier le canvas
-      saveStateToHistory();
-
-      // Remplacer tous les fourreaux du canvas par ceux du moteur.
-      // Boîte réduite au layout (w/h = 0 : les axes libres épousent la nappe),
-      // ancrage cohérent avec les autres flux (nappe posée sur le lit de pose).
+      // Remplacer tous les fourreaux du canvas par ceux du moteur (choix
+      // explicite ci-dessus, ou canvas déjà vide). Boîte réduite au layout
+      // (w/h = 0 : les axes libres épousent la nappe), ancrage cohérent avec
+      // les autres flux (nappe posée sur le lit de pose).
       fourreaux.length = 0;
 
       const anchored = window.PACKER.anchorLayout(bestConfig, {
@@ -3249,7 +3297,7 @@
 
     } catch (err) {
       console.error('[autoPlaceFromInventory]', err);
-      showToast('Erreur lors du placement automatique');
+      showToast('Erreur lors du placement automatique — réessayez');
     }
   }
 
@@ -3369,7 +3417,7 @@
       console.error('[reduceToMinimumNew] Erreur:', error);
       lastLayoutVariants = [];
       hideLayoutPreviewPanel();
-      showToast(`❌ Erreur: ${error.message}`);
+      showToast('❌ Erreur lors de la réduction de la boîte — réessayez');
     }
   }
 
@@ -5488,7 +5536,7 @@
         }
       } catch (error) {
         console.error('Erreur export DXF:', error);
-        showToast('Erreur lors de l\'export DXF');
+        showToast('Erreur lors de l\'export DXF — réessayez');
       }
     } else {
       // Mode Web : utiliser Blob avec charset UTF-8 (sans BOM)
@@ -5531,7 +5579,7 @@
         }
       } catch (error) {
         console.error('Erreur export DXF ZWCAD:', error);
-        showToast('Erreur lors de l\'export DXF ZWCAD');
+        showToast('Erreur lors de l\'export DXF ZWCAD — réessayez');
       }
     } else {
       // Mode Web : utiliser Blob avec charset UTF-8 (sans BOM)
@@ -7163,6 +7211,7 @@
   window.redraw = redraw;
   window.addFourreauAt = addFourreauAt;
   window.showToast = showToast; // BIG BRAIN — notifications depuis le contrôleur DOM
+  window.customConfirm = customConfirm; // titlebar.js — confirmation avant rechargement de l'application
 
   /* ====== Suggestion de chambres de tirage compatibles ====== */
   const compatChambresState = { open: false, selectedIndex: 0, selected: null, selectedUnit: null, applied: null, appliedUnit: null };
@@ -8850,7 +8899,7 @@
 
     } catch (error) {
       errorPdf('Erreur export PDF:', error);
-      showToast('Erreur lors de l\'export PDF: ' + error.message);
+      showToast('Erreur lors de l\'export PDF — réessayez');
       // Reset de l'image même en cas d'erreur
       selectedImageBase64 = null;
     }
@@ -9219,7 +9268,7 @@
 
         if (activeTab === 'FOURREAU') {
           const v = selectedFourreau;
-          if (!v) { showToast('Choisis un fourreau.'); return; }
+          if (!v) { showToast('Sélectionnez un fourreau.'); return; }
           const [type, code] = v.split('|');
           const spec = FOURREAUX.find(f => f.type === type && f.code === code);
           if (spec) {
@@ -9262,7 +9311,7 @@
           }
         } else {
           const v = selectedCable;
-          if (!v) { showToast('Choisis un CÂBLE.'); return; }
+          if (!v) { showToast('Sélectionnez un câble.'); return; }
           const [fam, code] = v.split('|');
           const spec = CABLES.find(c => c.fam === fam && c.code === code);
           if (spec) {
@@ -9382,7 +9431,7 @@
           if (result) {
             showToast(`✅ Câble ${pendingMiddleClick.fam} ${pendingMiddleClick.code} placé`);
           } else {
-            showToast('❌ Impossible de poser le CÂBLE ici.', 'error');
+            showToast('❌ Emplacement occupé ou hors boîte.', 'error');
           }
         } else {
           // Placer un fourreau — le clic molette active la gravité par défaut
@@ -9932,7 +9981,7 @@
       const fillCableSearch = document.getElementById('fillCableSearch');
       const selectedCableValue = fillCableSearch.dataset.selectedValue;
       if (!selectedCableValue) {
-        showToast('Veuillez sélectionner un type de câble.');
+        showToast('Sélectionnez un type de câble.');
         return;
       }
 
@@ -9957,7 +10006,7 @@
           `• Câble : ${fam} ${code} (Ø ${selectedCable.od} mm)\n` +
           `• Nombre de câbles : ${nbCables}\n` +
           `• Occupation totale : ${occupationRate.toFixed(1)}%\n\n` +
-          `Le taux d'occupation dépasse ${maxOccupationRate}%. Veuillez choisir un câble de section plus petite ou un fourreau de diamètre supérieur.`,
+          `Le taux d'occupation dépasse ${maxOccupationRate}%. Choisissez un câble de section plus petite ou un fourreau de diamètre supérieur.`,
           'Remplissage impossible'
         );
         return;
@@ -10365,7 +10414,7 @@
           return true;
         } catch (error) {
           console.error('Erreur lors de la restauration:', error);
-          showToast('Erreur lors du chargement du projet');
+          showToast('Erreur lors du chargement du projet — réessayez');
           return false;
         }
       }
@@ -10458,7 +10507,7 @@
           return true;
         } catch (error) {
           console.error('Erreur sauvegarde projet:', error);
-          showToast('Erreur lors de la sauvegarde');
+          showToast('Erreur lors de la sauvegarde — réessayez');
           return false;
         }
       }
@@ -10480,7 +10529,7 @@
           return false;
         } catch (error) {
           console.error('Erreur chargement projet:', error);
-          showToast(`Erreur lors du chargement de "${projectName}"`);
+          showToast(`Erreur lors du chargement de "${projectName}" — réessayez`);
           return false;
         }
       }
@@ -10513,7 +10562,7 @@
           return true;
         } catch (error) {
           console.error('Erreur renommage projet:', error);
-          showToast('Erreur lors du renommage');
+          showToast('Erreur lors du renommage — réessayez');
           return false;
         }
       }
@@ -10530,7 +10579,7 @@
           return false;
         } catch (error) {
           console.error('Erreur suppression projet:', error);
-          showToast('Erreur lors de la suppression');
+          showToast('Erreur lors de la suppression — réessayez');
           return false;
         }
       }
@@ -10608,7 +10657,7 @@
           return true;
         } catch (error) {
           console.error('Erreur création dossier:', error);
-          showToast('Erreur lors de la création du dossier');
+          showToast('Erreur lors de la création du dossier — réessayez');
           return false;
         }
       }
@@ -10635,7 +10684,7 @@
           return true;
         } catch (error) {
           console.error('Erreur suppression dossier:', error);
-          showToast('Erreur lors de la suppression du dossier');
+          showToast('Erreur lors de la suppression du dossier — réessayez');
           return false;
         }
       }
@@ -10672,7 +10721,7 @@
           return true;
         } catch (error) {
           console.error('Erreur export:', error);
-          showToast('Erreur lors de l\'export');
+          showToast('Erreur lors de l\'export — réessayez');
           return false;
         }
       }
@@ -11145,6 +11194,7 @@
             this.refreshUI();
           } catch (error) {
             console.error('Erreur import:', error);
+            showToast('Erreur lors de l\'import — vérifiez que le fichier est un projet TontonKAD valide');
           }
           e.target.value = ''; // Reset input
         }
@@ -11337,7 +11387,7 @@
 
       const newName = this.newProjectNameInput.value.trim();
       if (!newName) {
-        showToast('⚠️ Veuillez entrer un nom');
+        showToast('⚠️ Entrez un nom');
         this.newProjectNameInput.focus();
         return;
       }
@@ -11385,7 +11435,7 @@
     createNewFolder() {
       const name = this.newFolderName.value.trim();
       if (!name) {
-        showToast('⚠️ Veuillez entrer un nom de dossier');
+        showToast('⚠️ Entrez un nom de dossier');
         this.newFolderName.focus();
         return;
       }
@@ -11405,7 +11455,7 @@
       const folderName = this.projectFolder.value || null;
 
       if (!name) {
-        showToast('⚠️ Veuillez entrer un nom de projet');
+        showToast('⚠️ Entrez un nom de projet');
         this.newProjectName.focus();
         return;
       }
@@ -11843,7 +11893,7 @@
         showToast(`✏️ Projet renommé : "${oldName}" → "${newName}"`);
       } catch (error) {
         console.error('Erreur renommage projet:', error);
-        showToast('Erreur lors du renommage');
+        showToast('Erreur lors du renommage — réessayez');
       }
     }
 
@@ -11906,7 +11956,7 @@
           showToast(`🗑️ Projet "${fullName}" supprimé`);
         } catch (error) {
           console.error('Erreur suppression projet:', error);
-          showToast('Erreur lors de la suppression');
+          showToast('Erreur lors de la suppression — réessayez');
         }
       }
     }
@@ -11941,7 +11991,7 @@
         showToast(`✏️ Dossier renommé : "${oldName}" → "${newName}"`);
       } catch (error) {
         console.error('Erreur renommage dossier:', error);
-        showToast('Erreur lors du renommage du dossier');
+        showToast('Erreur lors du renommage du dossier — réessayez');
       }
     }
 
@@ -12126,7 +12176,7 @@
 
       } catch (error) {
         console.error('Erreur déplacement projet:', error);
-        showToast('Erreur lors du déplacement du projet');
+        showToast('Erreur lors du déplacement du projet — réessayez');
       }
     }
 

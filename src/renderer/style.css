@@ -183,6 +183,19 @@ body.electron-mode .wrap {
     opacity: 0.8;
 }
 
+/* Version — déplacée depuis .brand (Règle de l'Afficheur : registre mono
+   cuivre pour une valeur affichée, même minuscule ici). Pas de badge/glow
+   pleine échelle comme dans une carte : la titlebar fait 32px de haut. */
+.titlebar-version {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--primary-orange);
+    opacity: 0.85;
+    user-select: none;
+    cursor: default;
+}
+
 .titlebar-button {
     width: 46px;
     height: 32px;
@@ -3016,91 +3029,10 @@ body.electron-mode .notification-container {
 /* ==========================================================================
    BRAND & HEADER
    ========================================================================== */
-
-.brand {
-    /* Ne jamais laisser le flex écraser la carte (seul enfant du panneau
-       avec overflow hidden, elle absorbait toute la compression en 1080p) */
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-lg);
-    padding: var(--spacing-xl);
-    background:
-        linear-gradient(135deg, var(--glass-bg) 0%, rgba(255, 145, 77, 0.05) 100%);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--glass-border);
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-}
-
-/* Blueprint grid effect */
-.brand::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image:
-        repeating-linear-gradient(0deg,
-            transparent,
-            transparent 24px,
-            rgba(255, 145, 77, 0.03) 25px),
-        repeating-linear-gradient(90deg,
-            transparent,
-            transparent 24px,
-            rgba(255, 145, 77, 0.03) 25px);
-    pointer-events: none;
-    opacity: 0.5;
-}
-
-.brand .logo {
-    height: 100px;
-    width: auto;
-    display: inline-block;
-    filter: drop-shadow(0 4px 8px rgba(255, 145, 77, 0.2));
-    animation: logoEntry 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-    position: relative;
-    z-index: 1;
-}
-
-@keyframes logoEntry {
-    0% {
-        opacity: 0;
-        transform: scale(0.8) rotate(-5deg);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1) rotate(0deg);
-    }
-}
-
-.brand h1 {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin: 0;
-    color: var(--text-primary);
-    position: relative;
-    z-index: 1;
-    letter-spacing: -0.02em;
-    text-transform: uppercase;
-}
-
-.brand h1::after {
-    content: '';
-    position: absolute;
-    bottom: -4px;
-    left: 0;
-    width: 60px;
-    height: 3px;
-    background: linear-gradient(90deg, var(--primary-orange), var(--primary-orange-dark), transparent);
-    border-radius: 2px;
-    box-shadow: 0 0 10px rgba(255, 145, 77, 0.5);
-}
-
-.panel h1 {
-    margin: 0;
-}
+/* .brand (logo 100px + h1 + boutons manuel/réglages/version) supprimée de
+   index.html — redondante avec la titlebar, qui porte déjà logo + "TONTONKAD"
+   + ces mêmes boutons. Les règles .brand, logoEntry et .panel h1 sont donc
+   retirées avec elle (plus aucun élément ne les sélectionne). */
 
 .headerline {
     display: flex;
@@ -6076,87 +6008,14 @@ body.electron-mode .notification-container {
    SETTINGS BUTTON
    ========================================================================== */
 
-.info-button,
-.settings-button {
-    width: 40px;
-    height: 40px;
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-backdrop);
-    border: 1px solid var(--border-color);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all var(--transition-base);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    user-select: none;
-    flex-shrink: 0;
-    color: var(--text-primary);
-.info-button:hover,
-.settings-button:hover {
-    background: var(--primary-orange);
-    border-color: var(--primary-orange);
-    box-shadow: 0 4px 12px rgba(255, 145, 77, 0.3);
-    transform: scale(1.1);
-    color: white;
-}
-
-.info-button:active,
-.settings-button:active {
-    transform: scale(1.05);
-}
-
-.info-button svg,
-.settings-button svg {
-    width: 20px;
-    height: 20px;
-    display: block;
-}
-
-/* Version Badge */
-.version-info {
-    margin-left: auto;
-    margin-right: var(--spacing-sm);
-    padding: 6px 12px;
-    background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
-    backdrop-filter: var(--glass-backdrop);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 20px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    font-weight: 700;
-    color: white;
-    box-shadow:
-        0 0 20px rgba(255, 145, 77, 0.4),
-        0 2px 8px rgba(0, 0, 0, 0.1);
-    transition: all var(--transition-base);
-    cursor: default;
-    user-select: none;
-    flex-shrink: 0;
-    animation: versionGlow 3s ease-in-out infinite;
-}
-
-@keyframes versionGlow {
-    0%, 100% {
-        box-shadow:
-            0 0 15px rgba(255, 145, 77, 0.3),
-            0 2px 8px rgba(0, 0, 0, 0.1);
-    }
-    50% {
-        box-shadow:
-            0 0 25px rgba(255, 145, 77, 0.6),
-            0 4px 12px rgba(255, 145, 77, 0.2);
-    }
-}
-
-.version-info:hover {
-    background: linear-gradient(135deg, var(--primary-orange-dark), var(--primary-brown));
-    transform: scale(1.05);
-    box-shadow:
-        0 0 30px rgba(255, 145, 77, 0.6),
-        0 4px 12px rgba(255, 145, 77, 0.3);
-}
+/* .settings-button/.info-button/.version-info retirés : #settings-button,
+   #manual-button et #version-info ont déménagé dans la titlebar avec de
+   nouvelles classes (.titlebar-button, .titlebar-version) — plus rien ne
+   référence ces trois classes ni leurs variantes :hover/:active/svg.
+   Historique : cette règle a longtemps eu une accolade fermante manquante
+   avant .info-button:hover, faisant avaler par erreur ~400 lignes de CSS
+   suivantes par un parseur tolérant (postcss, et vraisemblablement les
+   moteurs de rendu réels) — corrigé en même temps que ce nettoyage. */
 
 .dev-helper-btn {
     padding: 6px 10px;
@@ -6474,11 +6333,14 @@ body.electron-mode .notification-container {
     font-size: 16px;
 }
 
-    .settings-button,
-    .rainbow-button {
-        display: none;
-    }
-
+/* Feuille d'impression — l'ouverture @media manquait ici (bug pré-existant,
+   trouvé en même temps que l'accolade manquante de .info-button juste
+   au-dessus : les deux se compensaient et laissaient tout parser sans
+   erreur en avalant ~400 lignes). .rainbow-button n'existe plus dans le HTML ; retiré.
+   #settings-button (déplacé dans la titlebar, elle-même masquée à
+   l'impression par défaut) reste sans effet ici mais l'intention — cacher le
+   chrome applicatif à l'impression — est conservée pour canvas. */
+@media print {
     canvas {
         border: 1px solid #000;
         box-shadow: none;
@@ -6710,8 +6572,8 @@ body.electron-mode .notification-container {
 
 /* ==========================================================================
    ÉCRANS PEU HAUTS (1080p et moins) — mode compact de la colonne latérale
-   Évite la barre de défilement du panneau à l'ouverture et garde le logo
-   et le titre lisibles (la carte .brand n'est plus écrasée par le flex).
+   Évite la barre de défilement du panneau à l'ouverture (.brand a été
+   supprimée — logo/titre vivent désormais uniquement dans la titlebar).
    ========================================================================== */
 @media (max-height: 1100px) {
     .wrap {
@@ -6721,20 +6583,6 @@ body.electron-mode .notification-container {
 
     .panel {
         padding: var(--spacing-md);
-    }
-
-    .brand {
-        padding: var(--spacing-sm) var(--spacing-md);
-        gap: var(--spacing-md);
-        margin-bottom: var(--spacing-sm);
-    }
-
-    .brand .logo {
-        height: 48px;
-    }
-
-    .brand h1 {
-        font-size: 1.05rem;
     }
 
     .list {
@@ -6761,6 +6609,19 @@ body.electron-mode .notification-container {
     .kpi-strip .row > div:last-child,
     .kpi-strip .kpi {
         font-size: 14px;
+    }
+
+    /* BIG BRAIN (3ᵉ onglet) rejoint le même système de compaction que le
+       reste du panneau : rythme plus serré (pas de max-height propre à gérer
+       ici, voir la règle non-compacte ci-dessus — il vit dans .panel-middle
+       qui scrolle déjà). */
+    #paneBIGBRAIN:not(.hidden) {
+        gap: var(--spacing-sm);
+    }
+
+    .bb-detail,
+    .bb-params {
+        padding: var(--spacing-sm);
     }
 }
 
@@ -6811,11 +6672,27 @@ body.electron-mode .notification-container {
    ========================================================================== */
 
 /* :not(.hidden) — un sélecteur d'ID pur (spécificité 1-0-0) gagnerait toujours
-   sur .hidden (0-1-0) et casserait le masquage par bascule d'onglets. */
+   sur .hidden (0-1-0) et casserait le masquage par bascule d'onglets.
+   Plus de max-height/overflow-y propre ici : .card.add-card (qui contient ce
+   panneau) vit maintenant DANS .panel-middle (voir index.html), pas dans
+   .setup-zone — BIG BRAIN profite donc directement du scroll déjà en place
+   pour les inventaires, sans plafond ni scrollbar imbriquée à gérer ici. */
 #paneBIGBRAIN:not(.hidden) {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
+}
+
+/* Rythme délibéré plutôt qu'un espacement uniforme : les groupes MAJEURS
+   (liste, détail, paramètres) gardent l'espacement généreux de
+   #paneBIGBRAIN (spacing-md) ; à l'intérieur d'un même groupe — en-tête +
+   sa liste, message de statut + le bouton qu'il commente — l'espacement se
+   resserre (spacing-sm) pour signaler visuellement leur appartenance commune. */
+.bb-liaison-panel,
+.bb-action-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
 }
 
 /* En-tête « Liaisons » + bouton d'ajout */
@@ -6841,8 +6718,16 @@ body.electron-mode .notification-container {
     border-color: var(--primary-orange);
     color: var(--primary-orange);
 }
+.bb-liaison-head-actions {
+    display: flex;
+    gap: 6px;
+}
 
-/* Liste des liaisons — hauteur bornée pour garder le circuit visible en dessous. */
+/* Liste des liaisons — PAS de scroll propre : #paneBIGBRAIN scrolle déjà tout
+   le panneau (voir plus haut). Un 2e scroll imbriqué ici capturait la molette
+   dès que la souris passait sur la liste (comportement natif du scroll
+   imbriqué), rendant le scroll du panneau incohérent selon la position de la
+   souris — une seule zone de scroll pour tout l'onglet BIG BRAIN. */
 .bb-liaison-list {
     list-style: none;
     margin: 0;
@@ -6850,8 +6735,6 @@ body.electron-mode .notification-container {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-height: 180px;
-    overflow-y: auto;
 }
 
 .bb-liaison-item {
@@ -6874,6 +6757,11 @@ body.electron-mode .notification-container {
     background: var(--accent-light);
     box-shadow: 0 0 0 1px var(--accent-light);
 }
+/* Fourreau de réserve : pas un circuit, contour en pointillés pour le
+   distinguer d'un coup d'œil dans une liste par ailleurs identique. */
+.bb-liaison-item.is-reserve {
+    border-style: dashed;
+}
 .bb-liaison-item .bb-liaison-name {
     font-weight: 600;
     overflow: hidden;
@@ -6887,7 +6775,8 @@ body.electron-mode .notification-container {
     color: var(--text-muted);
     flex: 0 0 auto;
 }
-.bb-liaison-item .bb-liaison-rename {
+.bb-liaison-item .bb-liaison-rename,
+.bb-liaison-item .bb-liaison-dup {
     flex: 0 0 auto;
     background: none;
     border: none;
@@ -6897,7 +6786,8 @@ body.electron-mode .notification-container {
     padding: 2px 4px;
     border-radius: var(--radius-sm);
 }
-.bb-liaison-item .bb-liaison-rename:hover {
+.bb-liaison-item .bb-liaison-rename:hover,
+.bb-liaison-item .bb-liaison-dup:hover {
     color: var(--primary-orange);
     background: var(--accent-light);
 }
@@ -6942,6 +6832,23 @@ body.electron-mode .notification-container {
     color: var(--text-primary);
     font-size: 14px;
     font-weight: 600;
+}
+
+/* Taille de fourreau imposée pour LA liaison — même mise en page que
+   .bb-circuit-row (label court à gauche, champ à droite), mais hors de
+   .bb-circuit-grid (ce n'est pas une donnée électrique) : marge propre. */
+.bb-taille-imposee-row {
+    margin-bottom: var(--spacing-md);
+}
+.bb-taille-imposee-row select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 12px;
 }
 
 /* Bloc circuit (famille, phases, neutre, PE, parallèle) — libellé court à
@@ -7124,4 +7031,137 @@ body.electron-mode .notification-container {
 .bb-go:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* ── Modal Import Caneco ── */
+.caneco-modal-content {
+    background: var(--modal-bg-solid);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    width: 90vw;
+    max-width: 640px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.caneco-modal-body {
+    padding: var(--spacing-xl);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-orange) transparent;
+}
+
+.caneco-help {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0 0 var(--spacing-lg);
+}
+
+.caneco-file-error {
+    color: var(--error-color);
+    font-size: 13px;
+    margin-top: var(--spacing-md);
+    min-height: 1em;
+}
+
+.caneco-pick-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.caneco-pick-summary {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.caneco-pick-actions {
+    display: flex;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.caneco-pick-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 45vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-orange) transparent;
+}
+
+.caneco-pick-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+}
+
+.caneco-pick-item.has-warning {
+    border-color: var(--warning-color, #d9a441);
+}
+
+.caneco-pick-item label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.caneco-pick-item input[type="checkbox"] {
+    accent-color: var(--primary-orange);
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+}
+
+.caneco-pick-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
+}
+
+.caneco-pick-summary-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.caneco-pick-warning {
+    flex: 0 0 auto;
+    font-size: 14px;
+    cursor: help;
+}
+
+.caneco-modal-footer {
+    padding: var(--spacing-lg) var(--spacing-xl);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-md);
+    flex-shrink: 0;
 }

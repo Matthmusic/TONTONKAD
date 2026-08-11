@@ -334,3 +334,132 @@ describe('assignCablesToFourreaux', () => {
     expect(r.nonPlaces).toEqual([]);
   });
 });
+
+describe('assignCablesToFourreaux — option harmonie (isolation totale)', () => {
+  test('harmonie:true — des liaisons identiques ne partagent plus de fourreau (contraste avec le regroupement croisé par défaut)', () => {
+    // Même scénario que le test "regroupement croisé" ci-dessus (3 liaisons
+    // identiques od19), mais harmonie:true : chacune reçoit SON PROPRE
+    // fourreau au lieu de fusionner dans un seul fourreau partagé.
+    const r = assignCablesToFourreaux(
+      [liaison('A', 19), liaison('B', 19), liaison('C', 19)],
+      CAT2,
+      { tauxMax: 0.33, harmonie: true }
+    );
+    expect(r.fourreaux).toHaveLength(3);
+    for (const f of r.fourreaux) {
+      expect(f.cables).toHaveLength(1);
+      expect(f.code).toBe('63'); // même taille pour les 3, car composition identique
+    }
+    expect(r.nonPlaces).toEqual([]);
+  });
+
+  test('harmonie:true — le résultat d’une liaison est indépendant des liaisons voisines de composition différente', () => {
+    // A et C ont EXACTEMENT la même composition (3×od19). B est différente
+    // (1×od60) et vient s'intercaler entre les deux une fois la file triée
+    // par aire décroissante (B > A = C). Sans isolation, l'anticipation de
+    // chooseFourreauSize pourrait faire dépendre le choix de taille de A/C de
+    // la présence de B ; avec harmonie, A et C doivent recevoir EXACTEMENT le
+    // même résultat, que B soit présente ou non.
+    const A = { id: 'A', nom: 'A', cables: [{ fam: 'F', code: '19', od: 19, qty: 3 }] };
+    const B = { id: 'B', nom: 'B', cables: [{ fam: 'F', code: '60', od: 60, qty: 1 }] };
+    const C = { id: 'C', nom: 'C', cables: [{ fam: 'F', code: '19', od: 19, qty: 3 }] };
+
+    const alone = assignCablesToFourreaux([A, C], CAT2, { tauxMax: 0.33, harmonie: true });
+    const withNeighbour = assignCablesToFourreaux([A, B, C], CAT2, { tauxMax: 0.33, harmonie: true });
+
+    const codeOf = (result, liaisonId) =>
+      result.fourreaux.find((f) => f.cables.every((c) => c.liaisonId === liaisonId)).code;
+
+    expect(codeOf(withNeighbour, 'A')).toBe(codeOf(alone, 'A'));
+    expect(codeOf(withNeighbour, 'C')).toBe(codeOf(alone, 'C'));
+    expect(codeOf(withNeighbour, 'A')).toBe(codeOf(withNeighbour, 'C'));
+    // Isolées l'une de l'autre : jamais fusionnées dans le même fourreau.
+    expect(withNeighbour.fourreaux.filter((f) => f.cables.some((c) => c.liaisonId === 'A'))).toHaveLength(1);
+    expect(withNeighbour.fourreaux.filter((f) => f.cables.some((c) => c.liaisonId === 'C'))).toHaveLength(1);
+    expect(withNeighbour.nonPlaces).toEqual([]);
+  });
+
+  test('harmonie absent/false → comportement inchangé (regroupement croisé toujours actif)', () => {
+    const r = assignCablesToFourreaux(
+      [liaison('A', 19), liaison('B', 19), liaison('C', 19)],
+      CAT2,
+      { tauxMax: 0.33 }
+    );
+    expect(r.fourreaux).toHaveLength(1);
+    expect(r.fourreaux[0].cables).toHaveLength(3);
+  });
+});
+
+describe('assignCablesToFourreaux — tailleImposee (taille imposée par liaison)', () => {
+  test('fige le fourreau, même si une taille plus petite serait normalement choisie', () => {
+    // Sans imposition, un seul câble od19 tiendrait dans le plus petit '63'.
+    const L = { id: 'A', nom: 'A', cables: [{ fam: 'F', code: '19', od: 19, qty: 1 }], tailleImposee: { type: 'TPC', code: '200' } };
+    const r = assignCablesToFourreaux([L], CAT2, { tauxMax: 0.33 });
+    expect(r.fourreaux).toHaveLength(1);
+    expect(r.fourreaux[0].code).toBe('200');
+    expect(r.nonPlaces).toEqual([]);
+  });
+
+  test('passe outre tailleMaxFourreauOd et typesAutorises (réglage global)', () => {
+    const L = { id: 'A', nom: 'A', cables: [{ fam: 'F', code: '19', od: 19, qty: 1 }], tailleImposee: { type: 'TPC', code: '200' } };
+    const r = assignCablesToFourreaux([L], CAT2, { tauxMax: 0.33, tailleMaxFourreauOd: 63, typesAutorises: ['IRL'] });
+    expect(r.fourreaux).toHaveLength(1);
+    expect(r.fourreaux[0].code).toBe('200');
+    expect(r.nonPlaces).toEqual([]);
+  });
+
+  test('liaison scindée sur PLUSIEURS fourreaux de la MÊME taille imposée si ça ne tient pas en un seul (jamais une autre taille)', () => {
+    // 3 câbles od40 (aire≈1256.6 chacun) : cap('110')≈1742.7 → un seul câble
+    // od40 par fourreau '110' (2×1256.6=2513.2 > 1742.7). Avec tailleImposee
+    // ='110', les 3 câbles doivent se répartir sur 3 fourreaux '110' — jamais
+    // un '200' même si ce serait plus efficace sans imposition.
+    const L = { id: 'BIG', nom: 'BIG', cables: [{ fam: 'F', code: '40', od: 40, qty: 3 }], tailleImposee: { type: 'TPC', code: '110' } };
+    const r = assignCablesToFourreaux([L], CAT2, { tauxMax: 0.33 });
+    const placed = r.fourreaux.reduce((s, f) => s + f.cables.length, 0);
+    expect(placed).toBe(3);
+    expect(r.fourreaux.every((f) => f.code === '110')).toBe(true);
+    expect(r.nonPlaces).toEqual([]);
+  });
+
+  test('isole toujours la liaison, même face à une autre liaison forcée sur la même taille (jamais de partage)', () => {
+    const A = { id: 'A', nom: 'A', cables: [{ fam: 'F', code: '19', od: 19, qty: 1 }], tailleImposee: { type: 'TPC', code: '200' } };
+    const B = { id: 'B', nom: 'B', cables: [{ fam: 'F', code: '19', od: 19, qty: 1 }], tailleImposee: { type: 'TPC', code: '200' } };
+    const r = assignCablesToFourreaux([A, B], CAT2, { tauxMax: 0.33 });
+    expect(r.fourreaux).toHaveLength(2);
+    for (const f of r.fourreaux) {
+      expect(f.code).toBe('200');
+      expect(f.cables).toHaveLength(1);
+    }
+  });
+
+  test('taille imposée introuvable au catalogue → nonPlaces avec raison dédiée (pas de crash)', () => {
+    const L = { id: 'A', nom: 'A', cables: [{ fam: 'F', code: '19', od: 19, qty: 1 }], tailleImposee: { type: 'TPC', code: '999' } };
+    const r = assignCablesToFourreaux([L], CAT2, {});
+    expect(r.fourreaux).toEqual([]);
+    expect(r.nonPlaces).toHaveLength(1);
+    expect(r.nonPlaces[0].raison).toBe('taille imposée introuvable au catalogue');
+  });
+
+  test('câble trop gros pour la taille imposée → nonPlaces dédié, sans bloquer les autres câbles de la liaison', () => {
+    // od200 dépasse la capacité de TOUT le catalogue CAT2 (max cap≈5831.5
+    // pour '200'), donc trop gros même pour la taille imposée '200'.
+    const L = {
+      id: 'A', nom: 'A',
+      cables: [
+        { fam: 'F', code: '19', od: 19, qty: 1 },
+        { fam: 'F', code: '200', od: 200, qty: 1 },
+      ],
+      tailleImposee: { type: 'TPC', code: '200' },
+    };
+    const r = assignCablesToFourreaux([L], CAT2, {});
+    expect(r.nonPlaces).toHaveLength(1);
+    expect(r.nonPlaces[0]).toMatchObject({ od: 200, raison: 'câble trop gros pour la taille imposée' });
+    const placed = r.fourreaux.reduce((s, f) => s + f.cables.length, 0);
+    expect(placed).toBe(1); // le od19 est bien placé
+  });
+
+  test('tailleImposee absente → comportement inchangé', () => {
+    const r = assignCablesToFourreaux([liaison('A', 19)], CAT2, { tauxMax: 0.33 });
+    expect(r.fourreaux[0].code).toBe('63'); // choix normal, pas de forçage
+  });
+});

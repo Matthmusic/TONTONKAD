@@ -13,6 +13,8 @@
   // Retourne [{ fam, code, od, qty, fonction }] — les entrées à qty 0 sont omises.
   // En 'multi', une seule entrée (codeMulti × parallele, fonction 'aucune') :
   // nbPhases / neutre / pe sont ignorés.
+  // En 'mono', `parallele` multiplie les phases et le neutre, mais PAS le PE
+  // (toujours qty 1 quel que soit le nombre de circuits en parallèle).
   function circuitToCables(circuit, resolveOd) {
     if (!circuit || !circuit.fam) return [];
     const od = (code) => (typeof resolveOd === 'function' ? (resolveOd(circuit.fam, code) || 0) : 0);
@@ -33,7 +35,11 @@
 
     push(circuit.codePhase, num(circuit.nbPhases, 0) * par, 'phase');
     if (circuit.neutre) push(circuit.codeNeutre, par, 'neutre');
-    if (circuit.pe) push(circuit.codePE, par, 'PE');
+    // Le PE ne se multiplie PAS avec le nombre de circuits en parallèle : un
+    // seul conducteur de protection suffit, que le circuit soit en 1, 2 ou 4
+    // conducteurs par phase en parallèle (contrairement aux phases/neutre,
+    // qui doivent chacun suivre le nombre de conducteurs en parallèle).
+    if (circuit.pe) push(circuit.codePE, 1, 'PE');
     return out;
   }
 

@@ -140,7 +140,7 @@
         if (radioCustom.checked) {
           const customPath = customPathInput.value.trim();
           if (!customPath) {
-            showStatus('Veuillez sélectionner un dossier', 'error');
+            showStatus('Sélectionnez un dossier', 'error');
             return;
           }
           result = await window.electronAPI.setDataPath(customPath);
