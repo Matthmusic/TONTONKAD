@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.6.0",
+    "version": "2.7.0",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,23 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.6.0.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.7.0.exe"
   },
   "changelog": {
+    "2.7.0": {
+      "date": "2026-08-11",
+      "changes": [
+        "🧠 BIG BRAIN : nouvel onglet pour décrire des liaisons électriques (circuits phases/neutre/PE ou câbles multiconducteurs) et générer automatiquement les câbles et leur répartition dans des fourreaux",
+        "Import Caneco : importer directement un carnet de câbles (.xls/.xlsx) et choisir les liaisons à récupérer dans BIG BRAIN",
+        "Fourreaux de réserve : ajouter des fourreaux vides (type + quantité) mélangés au reste du plan généré par BIG BRAIN",
+        "BIG BRAIN : duplication de liaison, mode Harmonie (fourreaux homogènes entre liaisons identiques), taille de fourreau imposée par liaison",
+        "Suggestion automatique de chambre de tirage StradEasy compatible après une génération BIG BRAIN",
+        "Sélecteurs de taille de fourreau triés par famille (TPC en tête) puis par taille",
+        "Placement Auto depuis l'inventaire ne vide plus silencieusement un plan existant (demande de confirmation Remplacer/Ajouter)",
+        "Barre de titre : version, manuel et réglages regroupés à droite ; nouveau bouton Recharger l'application (avec confirmation)",
+        "Panneau latéral : BIG BRAIN et inventaire partagent désormais une seule zone de défilement"
+      ]
+    },
     "2.6.0": {
       "date": "2026-07-28",
       "changes": [

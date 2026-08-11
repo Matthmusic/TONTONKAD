@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **TONTONKAD** is an Electron desktop application for designing and dimensioning electrical cable trays, conduits, and multi-tubing boxes with interactive 2D rendering. The application targets electrical engineers and contractors who need to optimize the placement of circular conduits (fourreaux) within rectangular cable trays while respecting occupancy rates and structural constraints.
 
-- **Version**: 2.6.0
+- **Version**: 2.7.0
 - **Platform**: Electron (Windows/Mac/Linux)
 - **Core Technology**: Vanilla JavaScript, HTML5 Canvas, Konva.js for rendering
 - **Build Tool**: Vite (development), electron-builder (distribution)
