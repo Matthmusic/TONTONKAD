@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **TONTONKAD** is an Electron desktop application for designing and dimensioning electrical cable trays, conduits, and multi-tubing boxes with interactive 2D rendering. The application targets electrical engineers and contractors who need to optimize the placement of circular conduits (fourreaux) within rectangular cable trays while respecting occupancy rates and structural constraints.
 
-- **Version**: 2.5.3
+- **Version**: 2.6.0
 - **Platform**: Electron (Windows/Mac/Linux)
 - **Core Technology**: Vanilla JavaScript, HTML5 Canvas, Konva.js for rendering
 - **Build Tool**: Vite (development), electron-builder (distribution)
@@ -54,7 +54,7 @@ The renderer uses a **hybrid rendering approach**:
 
 ### Business Logic: Placement Engine (packer)
 
-**File**: `src/renderer/packer.js` (~175 lines) — built on the `maxrects-packer` library (`maxrects-packer.min.js`). Tested in `tests/packer.test.js`.
+**File**: `src/renderer/packer.js` (~210 lines) — built on the `maxrects-packer` library (`maxrects-packer.min.js`). Tested in `tests/packer.test.js`.
 
 Optimized placement uses bin-packing (MaxRects), not a bespoke engine. API exposed via `window.PACKER`:
 
@@ -66,6 +66,37 @@ Optimized placement uses bin-packing (MaxRects), not a bespoke engine. API expos
 Business principle: the largest conduits sit at the bottom (gravity); a trench is dug wide rather than deep.
 
 **Coordinate System**: Y=0 at bottom, increases upward (inverted from canvas). Margins (`litDePose`) enforced on all sides.
+
+### Pure Core Modules (extracted, packer-style)
+
+Besides `packer.js`, several business-logic pieces have been extracted out of `script.js` into small, dependency-free files that follow the same convention: no DOM/canvas access and no mutated globals (inputs/outputs only, or an injected resolver callback such as `resolveOd`); each is exposed both as `window.<Namespace>` for the runtime (loaded via `<script>` in `index.html`) and as `module.exports` for Jest, so `tests/*.test.js` can `require()` the file directly without a DOM. `script.js` and `big-brain-panel.js` call into these namespaces rather than reimplementing the logic.
+
+| Module | Namespace | Responsibility | Test |
+|---|---|---|---|
+| `geometry.js` | `window.Geom` | Circle area, occupancy rate, rounding to a step | `geometry.test.js` |
+| `csv.js` | `window.CSVUtil` | CSV text → array of objects (feeds `data/*.csv` loading) | `csv.test.js` |
+| `compat-chambres.js` | `window.CompatChambres` | Compatible chambre de tirage (StradEasy) lookup from tray dimensions | `compat-chambres.test.js` |
+| `pdf-format.js` | `window.PdfFormat` | Label formatting for PDF export | `pdf-format.test.js` |
+| `inventory-agg.js` | `window.InventoryAgg` | Aggregates placed fourreaux/câbles into inventory counts | `inventory-agg.test.js` |
+| `circuit.js` | `window.Circuit` | Translates a circuit (phases/neutral/PE) into a flat cable list | `circuit.test.js` |
+| `phase-assign.js` | `window.PhaseAssign` | Assigns L1/L2/L3/N/PE to individual cable units | `phase-assign.test.js` |
+| `cable-assign.js` | `window.CableAssign` | Packs a liaison's cables into fourreaux (built on `packer.js`) | `cable-assign.test.js` |
+| `big-brain.js` | `window.BigBrain` | Pure adapter between `CableAssign` output and the panel | `big-brain.test.js` |
+
+### BIG BRAIN: Circuit → Cable → Fourreau Pipeline
+
+The "🧠 BIG BRAIN" sidebar tab (3rd tab — `#tabBIGBRAIN` / `#paneBIGBRAIN` in `index.html`) lets a user describe electrical **liaisons** (circuits: phases + neutral + PE, chosen from the cable catalogue) and auto-generates the individual cables and their fourreau placement, instead of placing everything by hand.
+
+Pipeline, front to back:
+
+1. **`big-brain-panel.js`** (~640 lines) — DOM controller for the sidebar tab only (IIFE + `DOMContentLoaded`, no business logic), à la `settings-modal.js`. Holds the in-memory list of liaisons for the session.
+2. **`window.BigBrain.validateLiaisons`** — validates the liaison list before generation.
+3. **`window.Circuit.circuitToCables`** — turns one circuit description into `{ fam, code, od, qty, fonction }[]` (`fonction` ∈ `phase | neutre | PE | aucune`).
+4. **`window.PhaseAssign`** — assigns L1/L2/L3/N/PE to individual cable units, cycling phases.
+5. **`window.CableAssign.assignCablesToFourreaux`** — packs the unrolled cables into fourreaux, built on `packer.js`.
+6. **`bigBrainGenerate()`** (`script.js:1704`, exposed as `window.bigBrainGenerate`) — creates and places the resulting fourreaux/cables on the canvas.
+
+Tested end-to-end in `tests/big-brain-integration.test.js`, which locks the invariant that L1/L2/L3/N/PE are never mixed even when they share the exact same catalogue code (e.g. an all-1x185 circuit) — the case where a regression indexing by code alone would be invisible.
 
 ### Main Script: Canvas & Physics Engine
 
@@ -238,11 +269,14 @@ The file `cea-app.json` at the repo root is the manifest for the CEA App Store (
 
 | File | Purpose | Size | Key Exports/Classes |
 |------|---------|------|-----|
-| `src/renderer/script.js` | Main canvas engine, physics, UI | ~12K lines | Global state, render loop, event handlers |
-| `src/renderer/packer.js` | Bin-packing placement (MaxRects) | ~175 lines | `solve`, `variants`, `anchorLayout` (via `window.PACKER`) |
-| `src/renderer/konva-fourreaux.js` | Konva rendering overlay | ~300 lines | `init()`, `render()`, `syncTransform()` |
-| `src/renderer/index.html` | DOM structure | ~1.5K lines | `<canvas id="world">`, toolbar, modals |
-| `src/renderer/style.css` | UI styling + CSS variables | ~3.5K lines | `--mm-to-px`, theme variables, responsive layout |
+| `src/renderer/script.js` | Main canvas engine, physics, UI | ~12K lines | Global state, render loop, event handlers, `bigBrainGenerate()` |
+| `src/renderer/packer.js` | Bin-packing placement (MaxRects) | ~210 lines | `solve`, `variants`, `anchorLayout` (via `window.PACKER`) |
+| `src/renderer/big-brain-panel.js` | BIG BRAIN sidebar tab (DOM only) | ~640 lines | Liaison list state, wiring to `bigBrainGenerate()` |
+| `src/renderer/cable-assign.js`, `circuit.js`, `phase-assign.js`, `big-brain.js`, `geometry.js`, `csv.js`, `compat-chambres.js`, `pdf-format.js`, `inventory-agg.js` | Pure, DOM-free business logic extracted from `script.js` | 20–210 lines each | See [Pure Core Modules](#pure-core-modules-extracted-packer-style) above |
+| `src/renderer/konva-fourreaux.js` | Konva rendering overlay | ~275 lines | `init()`, `render()`, `syncTransform()` |
+| `src/renderer/index.html` | DOM structure | ~1.5K lines | `<canvas id="world">`, toolbar, modals, BIG BRAIN tab |
+| `src/renderer/style.css` + `cea-variables.css` | UI styling + CSS variables | ~3.5K lines | theme variables, responsive layout |
+| `src/renderer/electron-integration.js` | Renderer-side Electron IPC bridge | ~650 lines | Consumes `electronAPI` from `preload.js` (save/load, dev vs. packaged detection) |
 | `src/main/main.js` | Electron main process | ~600 lines | Window creation, IPC handlers, auto-update setup |
 | `src/preload/preload.js` | Secure API bridge | ~150 lines | `electronAPI` context bridge |
 | `data/*.csv` | Embedded reference data | - | cables.csv, fourreaux.csv, chemins_de_cable.csv, chambres_de_tirage.csv |
@@ -341,8 +375,10 @@ placement effectif repose désormais sur `packer.js` (MaxRects). Voir `docs/stor
 
 ## Resources
 
-- **Architecture decisions**: See `docs/brainstorming-optimisation-placement-fourreaux.md`
-- **Epic & stories**: `docs/roadmap-optimisation-placement-fourreaux.md` and `docs/stories/*.md`
+- **Product definition**: `PRODUCT.md` (users, positioning, business rules — lit de pose, entraxe, chambres StradEasy)
+- **Design system**: `DESIGN.md` (colors, typography, spacing tokens)
+- **Brainstorming / architecture history**: `docs/brainstorming-session-results.md`
+- **Archived epics & stories** (historical only, see `docs/stories/README.md`): `docs/stories/archive/`
 - **Electron docs**: https://www.electronjs.org/docs
 - **Konva.js**: https://konvajs.org/
 - **Bin packing reference**: https://en.wikipedia.org/wiki/Bin_packing_problem
