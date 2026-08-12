@@ -7292,7 +7292,7 @@
     const ap = compatChambresState.appliedUnit;
     if (!ap || !ap.ref) return;
     if (Math.round(WORLD_W_MM) !== Math.round(ap.l) || Math.round(WORLD_H_MM) !== Math.round(ap.H)) return;
-    const text = `Chambre ${ap.ref}`;
+    const text = ap.via === 'longpan' ? `Chambre ${ap.ref} (long-pan)` : `Chambre ${ap.ref}`;
     const fontPx = getScaledLineWidth(13);
     ctx.save();
     ctx.font = `${fontPx}px 'JetBrains Mono', monospace`;
@@ -7354,6 +7354,12 @@
     else if (k !== 'unit' && k !== 'longpan') compatChambresState.activeKind = unit.length ? 'unit' : 'longpan';
 
     if (unit.length) {
+      if (longPan.length) {
+        const note = document.createElement('div');
+        note.className = 'compat-empty';
+        note.textContent = 'Compatible par le pignon (entrée en ligne droite) :';
+        list.appendChild(note);
+      }
       if (compatChambresState.selectedIndex >= unit.length) compatChambresState.selectedIndex = 0;
       unit.forEach((s, i) => {
         const item = document.createElement('button');
@@ -7433,8 +7439,9 @@
       ? { N: selSug.N, l: selSug.l, total: selSug.total }
       : null;
     // Suggestion préformée sélectionnée (pignon ou long-pan) — réf + cotes applicables
+    // + via : quelle face a satisfait le match, pour qualifier le libellé une fois appliqué.
     compatChambresState.selectedUnit = (compatChambresState.activeKind !== 'tile' && selSug)
-      ? { ref: selSug.ref, l: selSug.l, H: selSug.H }
+      ? { ref: selSug.ref, l: selSug.l, H: selSug.H, via: compatChambresState.activeKind }
       : null;
 
     // Bouton « Appliquer » : redimensionne la boîte (préformé, pignon ou long-pan)
@@ -7446,7 +7453,8 @@
       if (unitSel) {
         applyBtn.style.display = 'block';
         applyBtn.dataset.mode = 'unit';
-        applyBtn.textContent = `Appliquer : ${unitSel.ref} · ${unitSel.l} × ${unitSel.H} mm`;
+        const viaLabel = unitSel.via === 'longpan' ? ' (long-pan)' : '';
+        applyBtn.textContent = `Appliquer : ${unitSel.ref}${viaLabel} · ${unitSel.l} × ${unitSel.H} mm`;
         applyBtn.classList.remove('is-applied');
       } else if (tile) {
         const ap = compatChambresState.applied;
@@ -7522,12 +7530,15 @@
         // La boîte devient une chambre préformée fermée : retirer tout overlay tampons.
         compatChambresState.applied = null;
         applyDimensions({ anchorContents: true, width: unit.l, height: unit.H });
-        // Mémoriser la chambre appliquée → label affiché sur le canvas / PDF.
-        compatChambresState.appliedUnit = { ref: unit.ref, l: unit.l, H: unit.H };
+        // Mémoriser la chambre appliquée → label affiché sur le canvas / PDF. `via` qualifie
+        // le libellé (« (long-pan) ») sans changer le format de sauvegarde : non persisté,
+        // reperdu après un rechargement de projet (redevient "Chambre REF" simple).
+        compatChambresState.appliedUnit = { ref: unit.ref, l: unit.l, H: unit.H, via: unit.via };
         // Une chambre préformée a des cotes FIXES → verrouiller largeur ET hauteur.
         lockBoxDimension('lockWidth', true);
         lockBoxDimension('lockHeight', true);
-        showToast(`Chambre ${unit.ref} appliquée : ${unit.l} × ${unit.H} mm`);
+        const viaSuffix = unit.via === 'longpan' ? ' (long-pan)' : '';
+        showToast(`Chambre ${unit.ref}${viaSuffix} appliquée : ${unit.l} × ${unit.H} mm`);
         // Fermer le panneau après application.
         compatChambresState.open = false;
         compatChambresState.selected = null;
