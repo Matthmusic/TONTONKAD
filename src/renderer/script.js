@@ -7214,7 +7214,7 @@
   window.customConfirm = customConfirm; // titlebar.js — confirmation avant rechargement de l'application
 
   /* ====== Suggestion de chambres de tirage compatibles ====== */
-  const compatChambresState = { open: false, selectedIndex: 0, selected: null, selectedUnit: null, applied: null, appliedUnit: null };
+  const compatChambresState = { open: false, selectedIndex: 0, selectedLongPanIndex: 0, activeKind: null, selected: null, selectedUnit: null, applied: null, appliedUnit: null };
   // Sous-zone (fractions) de la boîte dans l'image PDF capturée (pour les cotes)
   let lastCanvasBoxFrac = { fx: 0, fy: 0, fw: 1, fh: 1 };
 
@@ -7329,20 +7329,12 @@
     const W = Math.round(WORLD_W_MM || 0);
     const H = Math.round(WORLD_H_MM || 0);
     if (subtitle) subtitle.textContent = `Boîte ${W} × ${H} mm`;
-    const { unit, tiling } = computeCompatibleChambers(W, H, 3);
+    const { unit, longPan, tiling } = computeCompatibleChambers(W, H, 3);
     list.innerHTML = '';
     if (schema) schema.innerHTML = '';
 
-    let items, mode;
-    if (unit.length) {
-      items = unit; mode = 'unit';
-    } else if (tiling.length) {
-      items = tiling; mode = 'tile';
-      const note = document.createElement('div');
-      note.className = 'compat-empty';
-      note.textContent = `Aucune chambre préformée compatible → chambre maçonnée sur mesure + tampons :`;
-      list.appendChild(note);
-    } else {
+    const hasPreformed = unit.length > 0 || longPan.length > 0;
+    if (!hasPreformed && tiling.length === 0) {
       list.innerHTML = `<div class="compat-empty">Boîte trop large : aucun assemblage de 3 tampons max ne couvre ${W} mm.</div>`;
       compatChambresState.selected = null;
       compatChambresState.selectedUnit = null;
@@ -7352,49 +7344,109 @@
       return;
     }
 
-    if (compatChambresState.selectedIndex >= items.length) compatChambresState.selectedIndex = 0;
-    items.forEach((s, i) => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'compat-item' + (i === compatChambresState.selectedIndex ? ' active' : '');
-      if (mode === 'unit') {
+    // Section active (celle qui pilote schéma/bouton Appliquer) : conservée d'un
+    // rendu à l'autre, sauf si elle n'a plus d'éléments → repli pignon puis
+    // long-pan puis tampons.
+    const k = compatChambresState.activeKind;
+    if (!hasPreformed) compatChambresState.activeKind = 'tile';
+    else if (k === 'longpan' && !longPan.length) compatChambresState.activeKind = 'unit';
+    else if (k === 'unit' && !unit.length) compatChambresState.activeKind = 'longpan';
+    else if (k !== 'unit' && k !== 'longpan') compatChambresState.activeKind = unit.length ? 'unit' : 'longpan';
+
+    if (unit.length) {
+      if (compatChambresState.selectedIndex >= unit.length) compatChambresState.selectedIndex = 0;
+      unit.forEach((s, i) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'compat-item' + (compatChambresState.activeKind === 'unit' && i === compatChambresState.selectedIndex ? ' active' : '');
         item.innerHTML =
           `<span class="compat-item-main"><span>${s.ref} — ${s.l} × ${s.H} mm</span>` +
           `<span class="compat-item-margin">L+${s.marginW} · H+${s.marginH}</span></span>`;
-      } else {
+        item.addEventListener('click', () => {
+          compatChambresState.activeKind = 'unit';
+          compatChambresState.selectedIndex = i;
+          renderCompatChambres();
+        });
+        list.appendChild(item);
+      });
+    }
+
+    if (longPan.length) {
+      const note = document.createElement('div');
+      note.className = 'compat-empty';
+      note.textContent = 'Compatible par le long-pan (entrée latérale) :';
+      list.appendChild(note);
+      if (compatChambresState.selectedLongPanIndex >= longPan.length) compatChambresState.selectedLongPanIndex = 0;
+      longPan.forEach((s, i) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'compat-item' + (compatChambresState.activeKind === 'longpan' && i === compatChambresState.selectedLongPanIndex ? ' active' : '');
+        item.innerHTML =
+          `<span class="compat-item-main"><span>${s.ref} — ${s.L} × ${s.H} mm</span>` +
+          `<span class="compat-item-margin">L+${s.marginW} · H+${s.marginH}</span></span>`;
+        item.addEventListener('click', () => {
+          compatChambresState.activeKind = 'longpan';
+          compatChambresState.selectedLongPanIndex = i;
+          renderCompatChambres();
+        });
+        list.appendChild(item);
+      });
+    }
+
+    if (compatChambresState.activeKind === 'tile') {
+      const note = document.createElement('div');
+      note.className = 'compat-empty';
+      note.textContent = `Aucune chambre préformée compatible → chambre maçonnée sur mesure + tampons :`;
+      list.appendChild(note);
+      if (compatChambresState.selectedIndex >= tiling.length) compatChambresState.selectedIndex = 0;
+      tiling.forEach((s, i) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'compat-item' + (i === compatChambresState.selectedIndex ? ' active' : '');
         item.innerHTML =
           `<span class="compat-item-main"><span>${s.N}× tampon ${s.l} → ${s.total} mm</span>` +
           `<span class="compat-item-margin">+${s.margin}</span></span>` +
           `<span class="compat-item-refs">${s.refs.join(' · ')}</span>`;
-      }
-      item.addEventListener('click', () => {
-        compatChambresState.selectedIndex = i;
-        renderCompatChambres();
+        item.addEventListener('click', () => {
+          compatChambresState.selectedIndex = i;
+          renderCompatChambres();
+        });
+        list.appendChild(item);
       });
-      list.appendChild(item);
-    });
-
-    const selSug = items[compatChambresState.selectedIndex];
-    if (schema) {
-      schema.innerHTML = (mode === 'unit') ? buildUnitSchema(W, H, selSug) : buildTileSchema(W, selSug);
     }
+
+    let selSug = null;
+    if (compatChambresState.activeKind === 'unit') {
+      selSug = unit[compatChambresState.selectedIndex] || null;
+      if (schema && selSug) schema.innerHTML = buildUnitSchema(W, H, selSug);
+    } else if (compatChambresState.activeKind === 'longpan') {
+      const s = longPan[compatChambresState.selectedLongPanIndex] || null;
+      selSug = s ? { ref: s.ref, l: s.L, H: s.H } : null;
+      if (schema && selSug) schema.innerHTML = buildUnitSchema(W, H, selSug);
+    } else {
+      selSug = tiling[compatChambresState.selectedIndex] || null;
+      if (schema && selSug) schema.innerHTML = buildTileSchema(W, selSug);
+    }
+
     // Visualisation canvas : uniquement les tampons (mode maçonné sur mesure)
-    compatChambresState.selected = (mode === 'tile' && selSug)
+    compatChambresState.selected = (compatChambresState.activeKind === 'tile' && selSug)
       ? { N: selSug.N, l: selSug.l, total: selSug.total }
       : null;
-    // Suggestion préformée sélectionnée (mode unit) — réf + cotes applicables
-    compatChambresState.selectedUnit = (mode === 'unit' && selSug)
+    // Suggestion préformée sélectionnée (pignon ou long-pan) — réf + cotes applicables
+    compatChambresState.selectedUnit = (compatChambresState.activeKind !== 'tile' && selSug)
       ? { ref: selSug.ref, l: selSug.l, H: selSug.H }
       : null;
-    // Bouton « Appliquer » : redimensionne la boîte (unit) ou pose les tampons (tile)
+
+    // Bouton « Appliquer » : redimensionne la boîte (préformé, pignon ou long-pan)
+    // ou pose les tampons (tile) — logique inchangée, déjà générique sur selectedUnit.
     const applyBtn = document.getElementById('compatApplyBtn');
     if (applyBtn) {
-      const unit = compatChambresState.selectedUnit;
+      const unitSel = compatChambresState.selectedUnit;
       const tile = compatChambresState.selected;
-      if (unit) {
+      if (unitSel) {
         applyBtn.style.display = 'block';
         applyBtn.dataset.mode = 'unit';
-        applyBtn.textContent = `Appliquer : ${unit.ref} · ${unit.l} × ${unit.H} mm`;
+        applyBtn.textContent = `Appliquer : ${unitSel.ref} · ${unitSel.l} × ${unitSel.H} mm`;
         applyBtn.classList.remove('is-applied');
       } else if (tile) {
         const ap = compatChambresState.applied;
