@@ -164,3 +164,6 @@ AGENTS.md
 
 # Superpowers scratch (brainstorm visuel, ledger SDD — local only)
 .superpowers/
+
+# Subagent-driven-development isolated workspaces
+.worktrees/
