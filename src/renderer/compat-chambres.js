@@ -26,24 +26,37 @@
   }
 
   // Logique :
-  //  1) chambre PRÉFORMÉE (StradEasy) : la boîte tient dedans (pignon l >= largeur
-  //     ET hauteur H >= hauteur boîte). Une entrée PAR RÉFÉRENCE, triée par marge.
-  //  2) sinon : chambre MAÇONNÉE sur mesure + TAMPONS (couvercles) posés dessus.
-  //     Le tampon ne couvre que le dessus → on ne raisonne que sur la LARGEUR ;
-  //     la hauteur est libre (maçonnerie), donc PAS de filtre hauteur ici.
+  //  1) chambre PRÉFORMÉE par le PIGNON (StradEasy) : la boîte tient dedans (pignon
+  //     l >= largeur ET hauteur H >= hauteur boîte) — entrée en ligne droite, la face
+  //     par laquelle le faisceau traverse la chambre. Une entrée PAR RÉFÉRENCE, triée
+  //     par marge.
+  //  1bis) sinon, chambre PRÉFORMÉE par le LONG-PAN uniquement (pignon trop étroit,
+  //     mais long-pan L >= largeur) : entrée latérale, toujours préférable à du
+  //     maçonné sur mesure. Jamais de doublon avec (1) : m.l < largeur exclut tout
+  //     modèle déjà retenu côté pignon.
+  //  2) sinon (ni pignon ni long-pan) : chambre MAÇONNÉE sur mesure + TAMPONS
+  //     (couvercles) posés dessus. Le tampon ne couvre que le dessus → on ne
+  //     raisonne que sur la LARGEUR ; la hauteur est libre (maçonnerie), donc PAS
+  //     de filtre hauteur ici.
   function computeCompatibleChambers(models, largeur, hauteur, maxN = 3) {
     models = models || [];
 
-    // 1) Chambres préformées compatibles — une entrée par référence (plusieurs
-    //    réfs pouvant partager les mêmes cotes).
+    // 1) Chambres préformées compatibles par le pignon — une entrée par référence
+    //    (plusieurs réfs pouvant partager les mêmes cotes).
     const unit = models
       .filter(m => m.l >= largeur && m.H >= hauteur)
       .map(m => ({ ref: m.ref, l: m.l, H: m.H, marginW: m.l - largeur, marginH: m.H - hauteur }))
       .sort((a, b) => (a.marginW + a.marginH) - (b.marginW + b.marginH) || a.ref.localeCompare(b.ref));
 
-    // 2) Sinon : maçonné sur mesure + tampons (couverture de la largeur)
+    // 1bis) Chambres préformées compatibles par le long-pan uniquement
+    const longPan = models
+      .filter(m => m.l < largeur && m.L >= largeur && m.H >= hauteur)
+      .map(m => ({ ref: m.ref, L: m.L, H: m.H, marginW: m.L - largeur, marginH: m.H - hauteur }))
+      .sort((a, b) => (a.marginW + a.marginH) - (b.marginW + b.marginH) || a.ref.localeCompare(b.ref));
+
+    // 2) Sinon (aucune préformée, ni pignon ni long-pan) : maçonné sur mesure + tampons
     let tiling = [];
-    if (unit.length === 0) {
+    if (unit.length === 0 && longPan.length === 0) {
       const byL = new Map();
       models.forEach(m => {
         const g = byL.get(m.l) || { l: m.l, refs: [] };
@@ -58,7 +71,7 @@
       });
       tiling.sort((a, b) => (a.margin - b.margin) || (a.N - b.N));
     }
-    return { unit, tiling };
+    return { unit, longPan, tiling };
   }
 
   // Schéma chambre unitaire : la boîte (largeur × hauteur) imbriquée dans la

@@ -89,8 +89,8 @@ describe('computeCompatibleChambers — repli tampons (tiling)', () => {
     expect(tiling).toEqual([]);
   });
 
-  test('modèles vides → { unit:[], tiling:[] }', () => {
-    expect(computeCompatibleChambers([], 400, 500, 3)).toEqual({ unit: [], tiling: [] });
+  test('modèles vides → { unit:[], longPan:[], tiling:[] }', () => {
+    expect(computeCompatibleChambers([], 400, 500, 3)).toEqual({ unit: [], longPan: [], tiling: [] });
   });
 });
 
@@ -112,5 +112,44 @@ describe('schémas SVG', () => {
   test('sélection nulle → chaîne vide', () => {
     expect(buildUnitSchema(0, 0, null)).toBe('');
     expect(buildTileSchema(0, null)).toBe('');
+  });
+});
+
+describe('computeCompatibleChambers — préformées par le long-pan (longPan)', () => {
+  const models = getChamberModels(CH);
+
+  test('pignon trop étroit mais long-pan suffisant → présent dans longPan, absent de unit', () => {
+    const { unit, longPan } = computeCompatibleChambers(models, 450, 500, 3);
+    expect(unit.map((u) => u.ref)).not.toContain('L1T');
+    expect(longPan).toHaveLength(1);
+    expect(longPan[0]).toMatchObject({ ref: 'L1T', L: 520, H: 540, marginW: 70, marginH: 40 });
+  });
+
+  test('aucun doublon avec unit : un modèle compatible côté pignon ne réapparaît pas dans longPan', () => {
+    const { unit, longPan } = computeCompatibleChambers(models, 450, 500, 3);
+    const unitRefs = unit.map((u) => u.ref);
+    const longPanRefs = longPan.map((l) => l.ref);
+    expect(longPanRefs.some((ref) => unitRefs.includes(ref))).toBe(false);
+  });
+
+  test('tri par marge croissante au sein de longPan', () => {
+    const { longPan } = computeCompatibleChambers(models, 800, 500, 3);
+    expect(longPan.map((l) => l.ref)).toEqual(['1/2 L4T', 'L3T']);
+    expect(longPan[0]).toMatchObject({ ref: '1/2 L4T', L: 880, H: 540, marginW: 80, marginH: 40 });
+    expect(longPan[1]).toMatchObject({ ref: 'L3T', L: 1380, H: 540, marginW: 580, marginH: 40 });
+  });
+
+  test('tiling reste vide dès que longPan a des entrées, même si unit est vide', () => {
+    const { unit, longPan, tiling } = computeCompatibleChambers(models, 800, 500, 3);
+    expect(unit).toEqual([]);
+    expect(longPan.length).toBeGreaterThan(0);
+    expect(tiling).toEqual([]);
+  });
+
+  test('tiling se déclenche normalement si unit ET longPan sont vides (régression)', () => {
+    const { unit, longPan, tiling } = computeCompatibleChambers(models, 1000, 2000, 3);
+    expect(unit).toEqual([]);
+    expect(longPan).toEqual([]);
+    expect(tiling.length).toBeGreaterThan(0);
   });
 });
