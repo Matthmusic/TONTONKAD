@@ -14,6 +14,15 @@
 
   console.log('Mode Electron activé');
 
+  // Modale custom (script.js) plutôt que alert()/confirm() natifs — repli
+  // défensif si script.js n'a pas encore exposé ses fonctions.
+  function alertBox(message, title) {
+    return (typeof window.customAlert === 'function') ? window.customAlert(message, title) : alert(message);
+  }
+  function confirmBox(message, title) {
+    return (typeof window.customConfirm === 'function') ? window.customConfirm(message, title) : confirm(message);
+  }
+
   // Afficher la version de l'application
   (async () => {
     const versionElement = document.getElementById('version-number');
@@ -66,7 +75,7 @@
       }
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);
-      alert('Erreur lors de la sauvegarde du projet: ' + error.message);
+      await alertBox('Erreur lors de la sauvegarde du projet: ' + error.message, 'Erreur de sauvegarde');
     }
     return false;
   };
@@ -81,7 +90,7 @@
       }
     } catch (error) {
       console.error(`Erreur lors de l'export ${type}:`, error);
-      alert(`Erreur lors de l'export: ${error.message}`);
+      await alertBox(`Erreur lors de l'export: ${error.message}`, 'Erreur d\'export');
     }
     return null;
   };
@@ -100,9 +109,9 @@
   };
 
   // Listeners pour les événements du menu
-  window.electronAPI.onMenuNewProject(() => {
+  window.electronAPI.onMenuNewProject(async () => {
     if (projectModified) {
-      if (confirm('Voulez-vous sauvegarder le projet actuel avant de créer un nouveau projet ?')) {
+      if (await confirmBox('Voulez-vous sauvegarder le projet actuel avant de créer un nouveau projet ?', 'Nouveau projet')) {
         // Trigger save from main script
         const event = new CustomEvent('electron-save-before-new');
         window.dispatchEvent(event);
@@ -326,13 +335,14 @@
         });
       }
 
-      // Styles pour la description box
+      // Styles pour la description box (même traitement de bordure que
+      // .update-version-card ci-dessus — pas d'accent latéral coloré)
       const descBox = modalContent.querySelector('.update-description-box');
       if (descBox) {
         Object.assign(descBox.style, {
           padding: '16px 20px',
           background: isDark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.03)',
-          borderLeft: '3px solid #ff914d',
+          border: '1px solid rgba(255, 145, 77, 0.25)',
           borderRadius: '12px'
         });
       }
