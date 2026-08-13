@@ -21,10 +21,15 @@
   let liaisons = [];
   let selectedIndex = -1;
   let seq = 0;
+  // IDs à animer en entrée (slideInUp, voir style.css) au TOUT PROCHAIN
+  // renderMaster() — jamais rejoué aux rendus suivants. Alimenté par
+  // addLiaison/addReserve/duplicateLiaison/confirmCanecoImport, consommé et
+  // vidé par renderMaster() lui-même.
+  let pendingEntranceIds = null;
 
   // ── Éléments DOM (résolus au DOMContentLoaded) ──
   let paneEl, generateBtn;
-  let tauxInput, tailleMaxSelect, harmonieCheckbox, addLiaisonBtn, addReserveBtn, masterListEl, detailEl, footMsgEl;
+  let tauxInput, tailleMaxSelect, harmonieCheckbox, addLiaisonBtn, addReserveBtn, addLiaisonFootBtn, clearLiaisonsBtn, masterListEl, detailEl, footMsgEl;
 
   // ── Catalogue câbles : familles distinctes + codes d'une famille ──
   function getFamilies() {
@@ -189,11 +194,27 @@
   // ── Rendu MAÎTRE : une liaison par <li> (nom + nb câbles + suppression) ──
   function renderMaster() {
     if (!masterListEl) return;
+    if (clearLiaisonsBtn) clearLiaisonsBtn.disabled = liaisons.length === 0;
     masterListEl.innerHTML = '';
+    // Ne joue qu'à CE rendu : consommé et vidé immédiatement, jamais rejoué
+    // aux rendus suivants (sélection, renommage, etc.).
+    const entranceIds = pendingEntranceIds;
+    pendingEntranceIds = null;
+    // Construit une fois l'ordre d'entrée (id → rang) plutôt que de re-étaler
+    // et rescanner le Set à chaque liaison : O(1) par ligne au lieu de O(k)
+    // (un import Caneco groupé peut faire entrer des dizaines de liaisons).
+    const entranceOrder = entranceIds ? new Map([...entranceIds].map((id, i) => [id, i])) : null;
     liaisons.forEach((liaison, i) => {
       const li = document.createElement('li');
-      li.className = 'bb-liaison-item' + (i === selectedIndex ? ' active' : '') + (liaison.reserve ? ' is-reserve' : '');
+      const isEntering = !!(entranceIds && entranceIds.has(liaison.id));
+      li.className = 'bb-liaison-item' + (i === selectedIndex ? ' active' : '') + (liaison.reserve ? ' is-reserve' : '') + (isEntering ? ' bb-just-added' : '');
       li.dataset.idx = String(i);
+      if (isEntering && entranceIds.size > 1) {
+        // Import groupé (Caneco) : la liste apparaît comme une liste — léger
+        // échelonnement, délai total plafonné pour ne pas traîner en longueur.
+        const order = entranceOrder.get(liaison.id);
+        li.style.animationDelay = Math.min(order * 30, 300) + 'ms';
+      }
 
       const name = document.createElement('span');
       name.className = 'bb-liaison-name';
@@ -307,7 +328,32 @@
     if (!detailEl) return;
     const liaison = liaisons[selectedIndex];
     if (!liaison) {
-      detailEl.innerHTML = '<div class="bb-detail-empty">Sélectionne ou crée une liaison.</div>';
+      // Vide : mêmes actions que l'en-tête (+ Nouvelle / + Réserve), mais à
+      // portée de clic direct — évite l'aller-retour vers le petit bouton
+      // d'en-tête au tout premier usage du panneau.
+      detailEl.innerHTML = '';
+      const empty = document.createElement('div');
+      empty.className = 'bb-detail-empty';
+      empty.appendChild(document.createTextNode('Sélectionne ou crée une liaison.'));
+
+      const actions = document.createElement('div');
+      actions.className = 'bb-detail-empty-actions';
+
+      const newBtn = document.createElement('button');
+      newBtn.type = 'button';
+      newBtn.className = 'bb-empty-primary';
+      newBtn.textContent = '+ Nouvelle liaison';
+      newBtn.addEventListener('click', addLiaison);
+
+      const reserveBtn = document.createElement('button');
+      reserveBtn.type = 'button';
+      reserveBtn.textContent = '+ Réserve';
+      reserveBtn.addEventListener('click', addReserve);
+
+      actions.appendChild(newBtn);
+      actions.appendChild(reserveBtn);
+      empty.appendChild(actions);
+      detailEl.appendChild(empty);
       return;
     }
     detailEl.innerHTML = '';
@@ -506,6 +552,23 @@
     updateMasterCount(selectedIndex);
   }
 
+  // Plus petit numéro libre pour un nom « <prefix> N » : ne regarde QUE les
+  // noms encore présents dans `liaisons`, jamais `seq` (compteur d'id, lui
+  // monotone à vie). Sans ça, créer/supprimer/recréer une liaison affiche
+  // « Liaison 2 » alors qu'il n'en reste qu'une seule.
+  function nextLiaisonNumber(prefix) {
+    const used = new Set();
+    for (const l of liaisons) {
+      if (typeof l.nom !== 'string' || !l.nom.startsWith(prefix + ' ')) continue;
+      const rest = l.nom.slice(prefix.length + 1);
+      const n = parseInt(rest, 10);
+      if (String(n) === rest) used.add(n);
+    }
+    let n = 1;
+    while (used.has(n)) n += 1;
+    return n;
+  }
+
   // Circuit par défaut d'une nouvelle liaison — inerte tant que non complété
   // par resetCodes() (addLiaison) ou jamais lu (addReserve, voir plus bas).
   function makeDefaultCircuit() {
@@ -521,8 +584,10 @@
     seq += 1;
     const circuit = makeDefaultCircuit();
     resetCodes(circuit);
-    liaisons.push({ id: 'L' + seq, nom: 'Liaison ' + seq, circuit, tailleImposee: null, reserve: null });
+    const id = 'L' + seq;
+    liaisons.push({ id, nom: 'Liaison ' + nextLiaisonNumber('Liaison'), circuit, tailleImposee: null, reserve: null });
     selectedIndex = liaisons.length - 1;
+    pendingEntranceIds = new Set([id]);
     renderMaster();
     renderDetail();
   }
@@ -534,25 +599,61 @@
   function addReserve() {
     seq += 1;
     const first = sortFourreauxForDisplay(getFourreauCatalogue())[0];
+    const id = 'L' + seq;
     liaisons.push({
-      id: 'L' + seq, nom: 'Réserve ' + seq, circuit: makeDefaultCircuit(), tailleImposee: null,
+      id, nom: 'Réserve ' + nextLiaisonNumber('Réserve'), circuit: makeDefaultCircuit(), tailleImposee: null,
       reserve: { type: first ? first.type : '', code: first ? first.code : '', qty: 1 },
     });
     selectedIndex = liaisons.length - 1;
+    pendingEntranceIds = new Set([id]);
     renderMaster();
     renderDetail();
   }
 
   function selectLiaison(idx) {
+    const changed = idx !== selectedIndex;
     selectedIndex = idx;
+    renderMaster();
+    renderDetail();
+    // Fondu seulement quand on change RÉELLEMENT de liaison sélectionnée —
+    // jamais sur les re-rendus internes déclenchés par un champ modifié.
+    if (changed && detailEl) {
+      detailEl.classList.remove('bb-detail-swap');
+      void detailEl.offsetWidth; // force un reflow : la classe ré-ajoutée juste après rejoue l'animation même en clics rapides
+      detailEl.classList.add('bb-detail-swap');
+    }
+  }
+
+  // Modale custom (window.customConfirm, script.js) plutôt que confirm()
+  // natif — repli sur confirm() seulement si script.js n'a pas pu s'exposer.
+  // Partagé par clearAllLiaisons et deleteLiaison (seuls appelants).
+  function askConfirm(message, title) {
+    const ask = (typeof window.customConfirm === 'function') ? window.customConfirm : confirm;
+    return ask(message, title);
+  }
+
+  // Vide toute la liste — bouton d'en-tête, pas de bouclage sur deleteLiaison()
+  // (une confirmation par liaison serait absurde pour un « tout supprimer »).
+  // Pas d'historique Ctrl+Z pour les liaisons (contrairement au canvas) :
+  // confirmation obligatoire, le nombre de liaisons perdues est explicite.
+  async function clearAllLiaisons() {
+    if (liaisons.length === 0) return;
+    const confirmed = await askConfirm(
+      `Supprimer les ${liaisons.length} liaison(s) de la liste ?`,
+      'Vider la liste de liaisons'
+    );
+    if (!confirmed) return;
+    liaisons = [];
+    selectedIndex = -1;
     renderMaster();
     renderDetail();
   }
 
-  function deleteLiaison(idx) {
+  async function deleteLiaison(idx) {
     const liaison = liaisons[idx];
     if (!liaison) return;
-    if (!confirm(`Supprimer la liaison « ${liaison.nom} » ?`)) return;
+    const confirmed = await askConfirm(`Supprimer la liaison « ${liaison.nom} » ?`, 'Supprimer la liaison');
+    if (!confirmed) return;
     liaisons.splice(idx, 1);
     if (selectedIndex === idx) selectedIndex = -1;
     else if (selectedIndex > idx) selectedIndex -= 1;
@@ -575,6 +676,7 @@
     };
     liaisons.splice(idx + 1, 0, copie);
     selectedIndex = idx + 1;
+    pendingEntranceIds = new Set([copie.id]);
     renderMaster();
     renderDetail();
   }
@@ -597,7 +699,7 @@
   // fichier (FileReader + SheetJS) et rendu du panneau de sélection restent
   // ici, façon reste du contrôleur DOM. drafts[i] = { rowIndex, nom,
   // selectable, warning, liaison } — voir caneco-import.js pour le détail.
-  let canecoModalEl, canecoFileInputEl, canecoPickFileBtn, canecoFileErrorEl;
+  let canecoModalEl, canecoFileInputEl, canecoPickFileBtn, canecoFileErrorEl, canecoFileLoadingEl;
   let canecoStepFileEl, canecoStepPickEl, canecoPickListEl, canecoPickSummaryEl;
   let canecoImportConfirmBtn, canecoSelectAllBtn, canecoSelectNoneBtn;
   let canecoDrafts = [];
@@ -633,8 +735,15 @@
     canecoDrafts = [];
     if (canecoFileInputEl) canecoFileInputEl.value = '';
     if (canecoFileErrorEl) canecoFileErrorEl.textContent = '';
+    setCanecoLoading(false);
     if (canecoStepFileEl) canecoStepFileEl.classList.remove('hidden');
-    if (canecoStepPickEl) canecoStepPickEl.classList.add('hidden');
+    if (canecoStepPickEl) {
+      canecoStepPickEl.classList.add('hidden');
+      // Retire l'animation d'entrée d'un import précédent : classList.add()
+      // sur une classe déjà présente ne rejoue rien, il faut repartir d'un
+      // état "propre" pour que le prochain import rejoue bien le fondu.
+      canecoStepPickEl.classList.remove('bb-step-enter');
+    }
     if (canecoImportConfirmBtn) canecoImportConfirmBtn.classList.add('hidden');
     canecoModalEl.style.display = 'flex';
     // Démarre le chargement dès l'ouverture (avant même le choix du fichier)
@@ -698,16 +807,29 @@
     if (canecoImportConfirmBtn) canecoImportConfirmBtn.classList.toggle('hidden', selectableCount === 0);
   }
 
+  // Le chargement paresseux de xlsx.full.min.js (première utilisation) et la
+  // lecture/analyse du fichier n'ont rien d'instantané : sans retour visuel,
+  // un clic sur « Choisir un fichier… » semble ne rien faire pendant ce
+  // temps. `canecoPickFileBtn` est aussi désactivé pour éviter un double
+  // déclenchement pendant l'opération.
+  function setCanecoLoading(loading) {
+    if (canecoFileLoadingEl) canecoFileLoadingEl.classList.toggle('hidden', !loading);
+    if (canecoPickFileBtn) canecoPickFileBtn.disabled = loading;
+  }
+
   async function handleCanecoFile(file) {
     if (!file) return;
     if (canecoFileErrorEl) canecoFileErrorEl.textContent = '';
+    setCanecoLoading(true);
     try {
       await loadXlsxLib();
     } catch (err) {
+      setCanecoLoading(false);
       if (canecoFileErrorEl) canecoFileErrorEl.textContent = 'Lecteur de fichier Excel indisponible — rechargez l\'application (Ctrl+R).';
       return;
     }
     if (!window.CanecoImport || typeof window.CanecoImport.parseWorkbook !== 'function') {
+      setCanecoLoading(false);
       if (canecoFileErrorEl) canecoFileErrorEl.textContent = 'Module d\'import Caneco indisponible — rechargez l\'application (Ctrl+R).';
       return;
     }
@@ -726,17 +848,53 @@
         }
 
         if (canecoStepFileEl) canecoStepFileEl.classList.add('hidden');
-        if (canecoStepPickEl) canecoStepPickEl.classList.remove('hidden');
+        if (canecoStepPickEl) {
+          canecoStepPickEl.classList.remove('hidden');
+          canecoStepPickEl.classList.add('bb-step-enter');
+        }
         renderCanecoPickList();
       } catch (err) {
         console.error('[Caneco] échec de lecture du fichier', err);
         if (canecoFileErrorEl) canecoFileErrorEl.textContent = 'Fichier illisible — vérifiez qu\'il s\'agit bien d\'un export Caneco (.xls/.xlsx).';
+      } finally {
+        setCanecoLoading(false);
       }
     };
     reader.onerror = () => {
+      setCanecoLoading(false);
       if (canecoFileErrorEl) canecoFileErrorEl.textContent = 'Échec de lecture du fichier.';
     };
     reader.readAsArrayBuffer(file);
+  }
+
+  // Glisser-déposer sur la zone de choix de fichier — même point d'entrée
+  // que le bouton/l'input caché (handleCanecoFile), aucune logique dupliquée.
+  // Le survol de la modale ENTIÈRE est aussi neutralisé : sans ça, lâcher un
+  // fichier même légèrement à côté de la zone fait naviguer toute la fenêtre
+  // vers ce fichier (comportement par défaut du navigateur/Electron).
+  function wireCanecoDragAndDrop() {
+    if (canecoModalEl) {
+      canecoModalEl.addEventListener('dragover', (e) => e.preventDefault());
+      canecoModalEl.addEventListener('drop', (e) => e.preventDefault());
+    }
+    if (!canecoStepFileEl) return;
+    canecoStepFileEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      canecoStepFileEl.classList.add('caneco-dragover');
+    });
+    canecoStepFileEl.addEventListener('dragleave', (e) => {
+      // dragleave se déclenche aussi en passant d'un enfant à un autre à
+      // l'intérieur de la zone — ne retirer le survol qu'en la quittant vraiment.
+      if (!canecoStepFileEl.contains(e.relatedTarget)) {
+        canecoStepFileEl.classList.remove('caneco-dragover');
+      }
+    });
+    canecoStepFileEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      canecoStepFileEl.classList.remove('caneco-dragover');
+      if (canecoPickFileBtn && canecoPickFileBtn.disabled) return; // chargement/analyse déjà en cours
+      handleCanecoFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+    });
   }
 
   // Chaque liaison importée devient une entrée normale de `liaisons[]` — même
@@ -749,16 +907,20 @@
         .map((cb) => Number(cb.closest('.caneco-pick-item').dataset.idx))
     );
     let importedCount = 0;
+    const importedIds = new Set();
     canecoDrafts.forEach((d, i) => {
       if (!d.selectable || !checked.has(i)) return;
       seq += 1;
-      liaisons.push({ id: 'L' + seq, nom: d.liaison.nom, circuit: d.liaison.circuit, tailleImposee: null, reserve: null });
+      const id = 'L' + seq;
+      liaisons.push({ id, nom: d.liaison.nom, circuit: d.liaison.circuit, tailleImposee: null, reserve: null });
+      importedIds.add(id);
       importedCount += 1;
     });
 
     closeCanecoModal();
     if (importedCount) {
       selectedIndex = liaisons.length - 1;
+      pendingEntranceIds = importedIds;
       renderMaster();
       renderDetail();
       if (typeof window.showToast === 'function') {
@@ -819,7 +981,7 @@
   }
 
   // ── Générer : validation → affectation → création (déléguées) ──
-  function generate() {
+  async function generate() {
     if (!window.BigBrain || !window.CableAssign || !window.Circuit || typeof window.bigBrainGenerate !== 'function') {
       setFootMsg('BIG BRAIN n\'a pas pu démarrer — rechargez l\'application (Ctrl+R).', true);
       return;
@@ -888,9 +1050,14 @@
       return;
     }
 
-    const replace = (typeof window.confirmReplaceOrAdd === 'function')
-      ? window.confirmReplaceOrAdd('la génération BIG BRAIN')
-      : confirm('Remplacer le plan actuel par la génération BIG BRAIN ?\n\nOK = Remplacer le plan\nAnnuler = Ajouter au plan existant');
+    // Canvas déjà vide : rien à écraser, la question Remplacer/Ajouter ne
+    // se pose même pas — même court-circuit que autoPlaceFromInventory()
+    // (script.js). Repli prudent si window.hasExistingPlan est indisponible :
+    // on suppose qu'il PEUT y avoir un plan et on demande, jamais l'inverse.
+    const hasExisting = (typeof window.hasExistingPlan === 'function') ? window.hasExistingPlan() : true;
+    const replace = !hasExisting || ((typeof window.confirmReplaceOrAdd === 'function')
+      ? await window.confirmReplaceOrAdd('la génération BIG BRAIN')
+      : confirm('Remplacer le plan actuel par la génération BIG BRAIN ?\n\nOK = Remplacer le plan\nAnnuler = Ajouter au plan existant'));
 
     const liaisonsById = Object.fromEntries(built.map((l) => [l.id, l.nom]));
     const summary = window.bigBrainGenerate(result, liaisonsById, replace, built);
@@ -920,6 +1087,8 @@
     harmonieCheckbox = document.getElementById('bbHarmonie');
     addLiaisonBtn = document.getElementById('bbAddLiaison');
     addReserveBtn = document.getElementById('bbAddReserve');
+    addLiaisonFootBtn = document.getElementById('bbAddLiaisonFoot');
+    clearLiaisonsBtn = document.getElementById('bbClearLiaisons');
     masterListEl = document.getElementById('bbLiaisonList');
     detailEl = document.getElementById('bbDetail');
     footMsgEl = document.getElementById('bbFootMsg');
@@ -928,6 +1097,7 @@
     canecoFileInputEl = document.getElementById('canecoFileInput');
     canecoPickFileBtn = document.getElementById('canecoPickFileBtn');
     canecoFileErrorEl = document.getElementById('canecoFileError');
+    canecoFileLoadingEl = document.getElementById('canecoFileLoading');
     canecoStepFileEl = document.getElementById('canecoStepFile');
     canecoStepPickEl = document.getElementById('canecoStepPick');
     canecoPickListEl = document.getElementById('canecoPickList');
@@ -950,6 +1120,11 @@
 
     if (addLiaisonBtn) addLiaisonBtn.addEventListener('click', addLiaison);
     if (addReserveBtn) addReserveBtn.addEventListener('click', addReserve);
+    if (clearLiaisonsBtn) clearLiaisonsBtn.addEventListener('click', clearAllLiaisons);
+    // Même action que le bouton d'en-tête, dupliquée juste au-dessus de
+    // « Générer ▶ » — enchaînement naturel juste avant de lancer la
+    // génération, sans remonter en haut d'une liste qui a pu défiler.
+    if (addLiaisonFootBtn) addLiaisonFootBtn.addEventListener('click', addLiaison);
     if (generateBtn) generateBtn.addEventListener('click', generate);
 
     // ── Import Caneco ──
@@ -976,6 +1151,7 @@
         handleCanecoFile(e.target.files && e.target.files[0]);
       });
     }
+    wireCanecoDragAndDrop();
     if (canecoImportConfirmBtn) canecoImportConfirmBtn.addEventListener('click', confirmCanecoImport);
     if (canecoSelectAllBtn) {
       canecoSelectAllBtn.addEventListener('click', () => {

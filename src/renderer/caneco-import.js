@@ -50,32 +50,70 @@
     return entry ? entry.code : null;
   }
 
+  // Un départ continu (PV/photovoltaïque) n'a ni phase ni neutre — le motif
+  // NxMx(1xS) y garde son sens historique (N conducteurs/rôles, M en
+  // parallèle). Rien dans les colonnes Caneco ne distingue continu/alternatif
+  // (même forme de code, même colonne E renseignée) : seul le nom du départ
+  // le dit (confirmé sur un carnet réel — "ARR - PANNEAU PV").
+  function isDcCircuit(nom) {
+    const n = String(nom || '').toUpperCase();
+    // \d* : plusieurs strings PV se nomment "PV1", "PV2"… — un chiffre collé
+    // est un caractère de mot, donc \bPV\b seul les ratait (pas de frontière
+    // entre "V" et "1").
+    return /\bPV\d*\b/.test(n) || n.includes('PHOTOVOLTA');
+  }
+
   // Parse la colonne "Code câble" (+ "Code élémentaire" en colonne E) d'une
   // ligne Caneco. `fam` doit déjà être la famille RÉSOLUE du catalogue (pas
   // le texte brut Caneco) — nécessaire pour la vérification du SKU multi.
-  // Retourne { recognized, mode, parallele, nbConducteurs, codeUnitaire, codeMulti }.
-  function parseCode(codeBrut, codeElementaire, fam, catalogue) {
+  // `nom` sert uniquement à isDcCircuit() (motif NxMx(1xS) — voir plus bas).
+  // Retourne { recognized, mode, parallele, nbConducteurs, codeUnitaire, codeMulti }
+  // ou, pour le motif NxMx(1xS) alternatif : { recognized, mode:'phaseSplit',
+  // parallele, nbPhases, codePhase, neutre, codeNeutre, pe, codePE }.
+  function parseCode(codeBrut, codeElementaire, fam, catalogue, nom) {
     const code = String(codeBrut || '').trim();
     if (!code) return { recognized: false };
 
-    // NxMx(1xS) — ex. "4X3X(1x400)" : N conducteurs, M en parallèle chacun,
-    // section élémentaire en colonne E si renseignée (source la plus fiable),
-    // sinon dérivée de la parenthèse. Toujours des conducteurs unipolaires
-    // séparés (jamais un câble multiconducteur unique) — vérifié en premier
-    // car "4X3X(...)" matcherait sinon partiellement le motif NxS simple.
-    let m = code.match(/^(\d+)X(\d+)X\(1[xX]([\d,.]+)\)$/i);
+    // NxMx(1xS), avec suffixe optionnel "+NnX(1xSn)" pour un neutre séparé —
+    // ex. "4X3X(1x400)" ou "4X3X(1x400)+4X(1x400)". Vérifié en premier car
+    // "4X3X(...)" matcherait sinon partiellement le motif NxS simple.
+    let m = code.match(/^(\d+)X(\d+)X\(1[xX](\d+(?:[.,]\d+)?)\)(?:\s*\+\s*(\d+)X\(1[xX](\d+(?:[.,]\d+)?)\))?$/i);
     if (m) {
-      const nbConducteurs = parseInt(m[1], 10);
-      const parallele = Math.max(1, parseInt(m[2], 10));
-      const codeUnitaire = (codeElementaire && String(codeElementaire).trim()) || `1x${m[3]}`;
-      return { recognized: true, mode: 'mono', parallele, nbConducteurs, codeUnitaire };
+      // Continu (PV...) — lecture historique : N conducteurs/rôles, M en
+      // parallèle chacun, code élémentaire (colE) prioritaire sinon dérivé
+      // de la parenthèse.
+      if (isDcCircuit(nom)) {
+        const nbConducteurs = parseInt(m[1], 10);
+        const parallele = Math.max(1, parseInt(m[2], 10));
+        const codeUnitaire = (codeElementaire && String(codeElementaire).trim()) || `1x${m[3]}`;
+        // Le mode continu (mono) n'a pas d'équivalent au triplet codePhase/
+        // codeNeutre/codePE du mode phaseSplit — pas de champ où loger le
+        // suffixe "+NnX(1xSn)" s'il est présent. Le signaler (suffixIgnore)
+        // plutôt que le perdre en silence : parseRow() le remonte en warning.
+        const suffixIgnore = m[4] !== undefined;
+        return { recognized: true, mode: 'mono', parallele, nbConducteurs, codeUnitaire, suffixIgnore };
+      }
+
+      // Alternatif (confirmé sur un carnet réel) : N = conducteurs PAR PHASE
+      // (en parallèle), M = nombre de phases (3 en pratique). Pas de neutre
+      // sauf suffixe "+NnX(1xSn)" explicite. Le PE vient de la colonne
+      // élémentaire (colE) — UN SEUL conducteur, jamais multiplié par le
+      // parallèle (circuit.js s'en charge déjà, voir circuitToCables).
+      const parallele = Math.max(1, parseInt(m[1], 10));
+      const nbPhases = Math.max(1, parseInt(m[2], 10));
+      const codePhase = `1x${m[3]}`;
+      const neutre = m[4] !== undefined;
+      const codeNeutre = neutre ? `1x${m[5]}` : '';
+      const pe = !!(codeElementaire && String(codeElementaire).trim());
+      const codePE = pe ? String(codeElementaire).trim() : '';
+      return { recognized: true, mode: 'phaseSplit', parallele, nbPhases, codePhase, neutre, codeNeutre, pe, codePE };
     }
 
     // NGS ou NxS avec N > 1 — ex. "3G2,5", "5x4" : désignent tous les deux un
     // câble à N âmes de section S. Multiconducteur SI un SKU exact existe
     // pour cette famille au catalogue (le cas courant — voir findMultiSku),
     // sinon replié en N conducteurs unipolaires séparés de section S.
-    m = code.match(/^(\d+)[xXgG]([\d,.]+)$/);
+    m = code.match(/^(\d+)[xXgG](\d+(?:[.,]\d+)?)$/);
     if (m) {
       const nbConducteurs = parseInt(m[1], 10);
       if (nbConducteurs > 1) {
@@ -122,7 +160,7 @@
     }
 
     const fam = matchFamille(familleBrute, families);
-    const codeInfo = parseCode(codeBrut, codeElementaire, fam, catalogue);
+    const codeInfo = parseCode(codeBrut, codeElementaire, fam, catalogue, nom);
 
     const warnings = [];
     if (!fam) warnings.push('famille non reconnue au catalogue — à choisir manuellement');
@@ -135,6 +173,19 @@
       circuit.mode = 'multi';
       circuit.codeMulti = codeInfo.codeMulti;
       circuit.parallele = codeInfo.parallele;
+    } else if (codeInfo.recognized && codeInfo.mode === 'phaseSplit') {
+      // Répartition déjà résolue par parseCode (NxMx(1xS) alternatif) — pas
+      // de passage par defaultPhaseSplit, qui suppose N conducteurs = N
+      // RÔLES (phase/neutre/PE), alors qu'ici N = conducteurs PAR PHASE.
+      circuit.parallele = codeInfo.parallele;
+      circuit.nbPhases = codeInfo.nbPhases;
+      circuit.neutre = codeInfo.neutre;
+      circuit.pe = codeInfo.pe;
+      circuit.codePhase = codeInfo.codePhase;
+      circuit.codeNeutre = codeInfo.codeNeutre || codeInfo.codePhase;
+      circuit.codePE = codeInfo.codePE;
+      if (codeInfo.nbPhases !== 3) warnings.push(`${codeInfo.nbPhases} phase(s) : répartition inhabituelle, à vérifier`);
+      if (!codeInfo.pe) warnings.push('PE non renseigné (colonne « code élémentaire » vide) — à vérifier/compléter manuellement');
     } else if (codeInfo.recognized) {
       const split = defaultPhaseSplit(codeInfo.nbConducteurs);
       circuit.parallele = codeInfo.parallele;
@@ -145,6 +196,7 @@
       circuit.codeNeutre = codeInfo.codeUnitaire;
       circuit.codePE = codeInfo.codeUnitaire;
       if (split.uncertain) warnings.push(`${codeInfo.nbConducteurs} conducteurs : répartition phase/neutre/PE à vérifier`);
+      if (codeInfo.suffixIgnore) warnings.push('suffixe « +NnX(1xSn) » présent mais ignoré pour un circuit continu — à vérifier manuellement');
     }
 
     return {
@@ -166,7 +218,7 @@
   const api = {
     parseRow,
     parseWorkbook,
-    __test: { normalizeFamille, matchFamille, normalizeCodeForCompare, parseCode, defaultPhaseSplit, isReserve },
+    __test: { normalizeFamille, matchFamille, normalizeCodeForCompare, parseCode, defaultPhaseSplit, isReserve, isDcCircuit },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CanecoImport = api;

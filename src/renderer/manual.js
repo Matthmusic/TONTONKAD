@@ -141,7 +141,7 @@
             title: 'Décrire une liaison',
             items: [
               '<strong>+ Nouvelle</strong> crée une liaison ; l\'icône ⧉ la duplique (utile pour plusieurs circuits identiques ou très proches), 🗑 la supprime',
-              '<strong>📥 Import Caneco</strong> : importe un carnet de câbles Caneco (.xls/.xlsx) — choisissez le fichier, puis cochez les liaisons à importer dans la liste détectée (les réserves non câblées sont exclues d\'office, une ⚠️ signale une famille ou un code à vérifier manuellement)',
+              '<strong>Import Caneco</strong> : importe un carnet de câbles Caneco (.xls/.xlsx) — choisissez le fichier, puis cochez les liaisons à importer dans la liste détectée (les réserves non câblées sont exclues d\'office, une ⚠️ signale une famille ou un code à vérifier manuellement)',
               '<strong>+ Réserve</strong> : ajoute des <strong>fourreaux de réserve vides</strong> (aucun câble) — choisissez juste un type de fourreau et une quantité ; reconnaissables dans la liste par leur contour en pointillés et l\'icône 📦',
               '<strong>Mode Mono</strong> : un câble par conducteur — nombre de phases, section de phase, neutre (oui/non + section), PE (oui/non + section), chacun avec son propre code catalogue',
               '<strong>Mode Multi</strong> : un seul câble multiconducteur (ex. 5G16) qui porte déjà tous les conducteurs',

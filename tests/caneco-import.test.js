@@ -1,6 +1,6 @@
 // tests/caneco-import.test.js
 const { __test, parseRow, parseWorkbook } = require('../src/renderer/caneco-import.js');
-const { normalizeFamille, matchFamille, normalizeCodeForCompare, parseCode, defaultPhaseSplit } = __test;
+const { normalizeFamille, matchFamille, normalizeCodeForCompare, parseCode, defaultPhaseSplit, isDcCircuit } = __test;
 
 // Sous-ensemble du vrai catalogue (data/cables.csv) pertinent pour ces tests.
 // U1000 R2V/AR2V désignent leurs câbles multiconducteurs avec "x" (ex.
@@ -74,19 +74,70 @@ describe('parseCode', () => {
     expect(r).toMatchObject({ recognized: true, mode: 'multi', codeMulti: '3G2.5', parallele: 1 });
   });
 
-  test('« NxMx(1xS) » avec code élémentaire renseigné (colonne E) → mono, parallele=M, code = colonne E', () => {
+  test('« NxMx(1xS) » alternatif (défaut) → phaseSplit, N=parallele/phase, M=nbPhases, PE=colonne E (confirmé sur carnet réel)', () => {
     const r = parseCode('4X3X(1x400)', '1x400', 'U1000 AR2V', CATALOGUE);
-    expect(r).toMatchObject({ recognized: true, mode: 'mono', parallele: 3, nbConducteurs: 4, codeUnitaire: '1x400' });
+    expect(r).toMatchObject({
+      recognized: true, mode: 'phaseSplit', parallele: 4, nbPhases: 3,
+      codePhase: '1x400', neutre: false, codeNeutre: '', pe: true, codePE: '1x400',
+    });
   });
 
-  test('« NxMx(1xS) » sans colonne E → code unitaire dérivé de la parenthèse', () => {
+  test('« NxMx(1xS) » alternatif sans colonne E → pas de PE (pas dérivé de la parenthèse, contrairement à l\'ancien code unitaire)', () => {
     const r = parseCode('4X3X(1x400)', '', 'U1000 AR2V', CATALOGUE);
-    expect(r.codeUnitaire).toBe('1x400');
+    expect(r).toMatchObject({ pe: false, codePE: '' });
+  });
+
+  test('« NxMx(1xS)+NnX(1xSn) » → neutre séparé, sa propre section', () => {
+    const r = parseCode('4X3X(1x400)+4X(1x400)', '1x400', 'U1000 AR2V', CATALOGUE);
+    expect(r).toMatchObject({ recognized: true, mode: 'phaseSplit', neutre: true, codeNeutre: '1x400' });
+  });
+
+  test('« NxMx(1xS) » sur un départ continu (nom contient "PV") → repli sur la lecture historique (N conducteurs/rôles, M en parallèle)', () => {
+    const r = parseCode('2X3X(1x300)', '1x185', 'U1000 R2V', CATALOGUE, 'ARR - PANNEAU PV');
+    expect(r).toMatchObject({ recognized: true, mode: 'mono', parallele: 3, nbConducteurs: 2, codeUnitaire: '1x185' });
+    expect(r.suffixIgnore).toBeFalsy();
+  });
+
+  test('« NxMx(1xS)+NnX(1xSn) » sur un départ continu → le suffixe est signalé (suffixIgnore), pas silencieusement perdu', () => {
+    const r = parseCode('2X3X(1x300)+4X(1x400)', '1x185', 'U1000 R2V', CATALOGUE, 'ARR - PANNEAU PV');
+    expect(r).toMatchObject({ recognized: true, mode: 'mono', parallele: 3, nbConducteurs: 2, codeUnitaire: '1x185', suffixIgnore: true });
   });
 
   test('code vide ou non reconnu → recognized:false, pas de crash', () => {
     expect(parseCode('', '', 'U1000 R2V', CATALOGUE)).toMatchObject({ recognized: false });
     expect(parseCode('???', '', 'U1000 R2V', CATALOGUE)).toMatchObject({ recognized: false });
+  });
+
+  test('section mal formée (séparateurs multiples/en trop) → non reconnu plutôt qu\'un code invalide transmis tel quel', () => {
+    // Virgule finale parasite, deux séparateurs à la suite : jamais un nombre valide.
+    expect(parseCode('4X3X(1x400,)', '', 'U1000 AR2V', CATALOGUE)).toMatchObject({ recognized: false });
+    expect(parseCode('4X3X(1x4,,00)', '', 'U1000 AR2V', CATALOGUE)).toMatchObject({ recognized: false });
+    expect(parseCode('3G2,5,0', '', 'H07RN-F', CATALOGUE)).toMatchObject({ recognized: false });
+  });
+});
+
+describe('isDcCircuit', () => {
+  test('nom contenant "PV" (mot entier) → continu', () => {
+    expect(isDcCircuit('ARR - PANNEAU PV')).toBe(true);
+  });
+  test('nom contenant "PHOTOVOLTAÏQUE"/"PHOTOVOLTAIQUE" (avec ou sans accent) → continu', () => {
+    expect(isDcCircuit('PHOTOVOLTAÏQUE TOITURE')).toBe(true);
+    expect(isDcCircuit('CHAMP PHOTOVOLTAIQUE 2')).toBe(true);
+  });
+  test('"PV" comme sous-chaîne d\'un autre mot → PAS continu (mot entier requis)', () => {
+    expect(isDcCircuit('TPVC ARMOIRE')).toBe(false);
+  });
+  test('"PV" suivi d\'un chiffre collé (plusieurs strings : PV1, PV2…) → continu', () => {
+    expect(isDcCircuit('DEPART PV1')).toBe(true);
+    expect(isDcCircuit('DEPART PV2')).toBe(true);
+    expect(isDcCircuit('PV12 TOITURE')).toBe(true);
+  });
+  test('nom sans indice continu (ex. armoire IRVE) → alternatif', () => {
+    expect(isDcCircuit('P5 - ARM IRBE 1')).toBe(false);
+  });
+  test('vide/absent → alternatif (repli par défaut)', () => {
+    expect(isDcCircuit('')).toBe(false);
+    expect(isDcCircuit(undefined)).toBe(false);
   });
 });
 
@@ -133,13 +184,30 @@ describe('parseRow — bout en bout, sur des lignes réelles du carnet Caneco', 
     expect(d.warning).toBeNull();
   });
 
-  test('ligne complexe réelle (P1 - ALIM ARM IRBE 1, 4X3X(1x400)) → mono 3P+PE, parallele=3', () => {
+  test('ligne complexe réelle (P1 - ALIM ARM IRBE 1, 4X3X(1x400)) → 3 phases × 4 en parallèle + PE simple (confirmé sur carnet réel)', () => {
     const row = ['TGBT', 'P1 - ALIM ARM IRBE 1', '80', '4X3X(1x400)', '1x400', 'U1000AR2V (90°C)'];
     const d = parseRow(row, CATALOGUE);
     expect(d.liaison.circuit).toMatchObject({
-      mode: 'mono', fam: 'U1000 AR2V', nbPhases: 3, neutre: false, pe: true,
-      codePhase: '1x400', codePE: '1x400', parallele: 3,
+      fam: 'U1000 AR2V', nbPhases: 3, neutre: false, pe: true,
+      codePhase: '1x400', codePE: '1x400', parallele: 4,
     });
+    expect(d.warning).toBeNull();
+  });
+
+  test('même motif sur un départ PV (nom contient "PV") → repli continu, PAS de phaseSplit', () => {
+    const row = ['TGBT', 'ARR - PANNEAU PV', '25', '2X3X(1x300)', '1x185', 'U1000R2V (90°C)'];
+    const d = parseRow(row, CATALOGUE);
+    expect(d.liaison.circuit).toMatchObject({ mode: 'mono', parallele: 3, codePhase: '1x185' });
+    // nbConducteurs=2 sort déjà des cas connus de defaultPhaseSplit (3/4/5) →
+    // avertissement pré-existant "à vérifier", sans rapport avec le suffixe.
+    expect(d.warning).not.toMatch(/suffixe/i);
+  });
+
+  test('départ continu avec suffixe « +NnX(1xSn) » → averti (le suffixe n\'est pas représentable en mode continu, jamais perdu en silence)', () => {
+    const row = ['TGBT', 'ARR - PANNEAU PV', '25', '2X3X(1x300)+4X(1x400)', '1x185', 'U1000R2V (90°C)'];
+    const d = parseRow(row, CATALOGUE);
+    expect(d.selectable).toBe(true);
+    expect(d.warning).toMatch(/suffixe/i);
   });
 
   test('famille non reconnue → fam vide + avertissement, mais le reste est importé quand même', () => {

@@ -81,26 +81,30 @@ Besides `packer.js`, several business-logic pieces have been extracted out of `s
 | `circuit.js` | `window.Circuit` | Translates a circuit (phases/neutral/PE) into a flat cable list | `circuit.test.js` |
 | `phase-assign.js` | `window.PhaseAssign` | Assigns L1/L2/L3/N/PE to individual cable units | `phase-assign.test.js` |
 | `cable-assign.js` | `window.CableAssign` | Packs a liaison's cables into fourreaux (built on `packer.js`) | `cable-assign.test.js` |
-| `big-brain.js` | `window.BigBrain` | Pure adapter between `CableAssign` output and the panel | `big-brain.test.js` |
+| `big-brain.js` | `window.BigBrain` | Pure adapter between `CableAssign`/reserve output and the panel | `big-brain.test.js` |
+| `caneco-import.js` | `window.CanecoImport` | Parses raw Caneco cable-schedule rows (`.xls`/`.xlsx`) into BIG BRAIN liaison drafts | `caneco-import.test.js` |
 
 ### BIG BRAIN: Circuit → Cable → Fourreau Pipeline
 
-The "🧠 BIG BRAIN" sidebar tab (3rd tab — `#tabBIGBRAIN` / `#paneBIGBRAIN` in `index.html`) lets a user describe electrical **liaisons** (circuits: phases + neutral + PE, chosen from the cable catalogue) and auto-generates the individual cables and their fourreau placement, instead of placing everything by hand.
+The "🧠 BIG BRAIN" sidebar tab (3rd tab — `#tabBIGBRAIN` / `#paneBIGBRAIN` in `index.html`) lets a user describe electrical **liaisons** and auto-generates the individual cables and their fourreau placement, instead of placing everything by hand. A liaison is one of two mutually-exclusive kinds, flagged by the presence of a `reserve` field:
+
+- **Circuit liaison** (`circuit: {...}`) — phases + neutral + PE chosen from the cable catalogue, translated into cables and packed into fourreaux.
+- **Reserve liaison** (`reserve: { type, code, qty }`) — a fourreau type/size + quantity chosen directly by the user; generates empty fourreaux (no cables, no packing), for spare capacity left in a run.
 
 Pipeline, front to back:
 
-1. **`big-brain-panel.js`** (~640 lines) — DOM controller for the sidebar tab only (IIFE + `DOMContentLoaded`, no business logic), à la `settings-modal.js`. Holds the in-memory list of liaisons for the session.
-2. **`window.BigBrain.validateLiaisons`** — validates the liaison list before generation.
-3. **`window.Circuit.circuitToCables`** — turns one circuit description into `{ fam, code, od, qty, fonction }[]` (`fonction` ∈ `phase | neutre | PE | aucune`).
-4. **`window.PhaseAssign`** — assigns L1/L2/L3/N/PE to individual cable units, cycling phases.
-5. **`window.CableAssign.assignCablesToFourreaux`** — packs the unrolled cables into fourreaux, built on `packer.js`.
-6. **`bigBrainGenerate()`** (`script.js:1704`, exposed as `window.bigBrainGenerate`) — creates and places the resulting fourreaux/cables on the canvas.
+1. **`big-brain-panel.js`** (~1,100 lines) — DOM controller for the sidebar tab only (IIFE + `DOMContentLoaded`, no business logic), à la `settings-modal.js`. Holds the in-memory list of liaisons for the session; liaisons can be created by hand, duplicated, or imported in bulk from a Caneco cable schedule (see below).
+2. Liaisons are split by kind: circuit liaisons go through `window.BigBrain.validateLiaisons` → `window.Circuit.circuitToCables` (one circuit → `{ fam, code, od, qty, fonction }[]`, `fonction` ∈ `phase | neutre | PE | aucune`) → `window.PhaseAssign` (assigns L1/L2/L3/N/PE, cycling phases) → `window.CableAssign.assignCablesToFourreaux` (packs the unrolled cables into fourreaux, built on `packer.js`). Reserve liaisons go through `window.BigBrain.validateReserves` → `window.BigBrain.buildReserveFourreaux` (expands `qty` into that many empty fourreau entries, catalogue spec resolved directly, no packing).
+3. **`window.BigBrain.buildGenerationResult(cableResult, reserveLiaisons, catalogue)`** — merges the two outputs into one `{ fourreaux, nonPlaces }` (reserves never produce `nonPlaces`; they're pre-validated).
+4. **`bigBrainGenerate()`** (`script.js`, exposed as `window.bigBrainGenerate`) — creates and places the resulting fourreaux/cables on the canvas, via the shared `makeFourreauObject()` helper (also used by the inventory's "Placement Auto"). Both this and "Placement Auto" share one Remplacer/Ajouter confirmation (`confirmReplaceOrAdd()`, exposed as `window.confirmReplaceOrAdd`) — never a silent overwrite of an existing plan.
+
+**Caneco import**: the "📥 Import Caneco" button opens a modal that reads a Caneco cable-schedule export (`.xls`/`.xlsx`, no header row), parses it with `window.CanecoImport.parseWorkbook` (pure — no DOM), and lets the user pick which detected rows become new circuit liaisons. SheetJS (`xlsx.full.min.js`, ~860 KB) is **not** loaded eagerly by `index.html`; `big-brain-panel.js` injects it as a `<script>` tag on first use (prefetched when the modal opens, awaited before parsing) so the ~860 KB parser doesn't cost every user on startup for a rarely-used feature.
 
 Tested end-to-end in `tests/big-brain-integration.test.js`, which locks the invariant that L1/L2/L3/N/PE are never mixed even when they share the exact same catalogue code (e.g. an all-1x185 circuit) — the case where a regression indexing by code alone would be invisible.
 
 ### Main Script: Canvas & Physics Engine
 
-**File**: `src/renderer/script.js` (~12,100 lines)
+**File**: `src/renderer/script.js` (~12,200 lines)
 
 This is the core application logic, structured as an IIFE with distinct sections:
 
@@ -226,11 +230,16 @@ npm run bmad:validate  # Validate methodology compliance
 npm run bmad:list      # List available BMAD agents
 ```
 
-For a full release (bumps version, creates git tag, triggers GitHub Actions):
-- Use the `/bump` skill in Claude Code (or manually: edit `package.json`, `cea-app.json`, commit, tag, push)
-- This triggers GitHub Actions to build and publish to Releases
+There is no working `/bump` skill for this repo (that skill targets a different project) — bump manually:
+
+1. Edit `version` in `package.json` and `app.version` + `installation.downloadUrl` in `cea-app.json`, and add a `changelog` entry for the new version in `cea-app.json`.
+2. Commit, then tag `vX.Y.Z` (annotated) on the commit that should ship.
+3. Push **both** the branch and the tag: `git push origin <branch> && git push origin vX.Y.Z`. The CEA App Store update button reads `cea-app.json` from `main` specifically (via raw.githubusercontent.com) — a release whose commits never reach `main` won't show up there even if the GitHub Release itself is published.
+4. `.github/workflows/build.yml` triggers on any `v*.*.*` tag push (not branch-restricted): builds Windows via `npm run build:win`, then publishes a GitHub Release with the installer assets. Watch it with `gh run watch` or `gh release view vX.Y.Z`.
 
 ## BMAD Agent Workflow
+
+> **Status**: `.bmad-core/` and its skills are still installed, but active feature work (BIG BRAIN and everything since) no longer goes through BMAD stories — `docs/stories/` now holds only `README.md` and `archive/`. In practice, design work goes through the `superpowers` brainstorming/writing-plans skills instead, landing in `docs/superpowers/specs/` (design docs) and `docs/superpowers/plans/` (implementation plans). Neither `docs/architecture.md` nor a sharded `docs/architecture/` exist, so the BMAD dev-agent auto-load files below are currently empty/inactive. Treat this section as available-but-legacy rather than the default workflow.
 
 This project uses the [BMAD method](https://github.com/bmadcode) with agents defined in `.bmad-core/`. User stories are stored in `docs/stories/` following the naming convention `{epic}.{story}.{slug}.md` (e.g. `1.4.integration-orchestrator.md`). Epic definitions are in `docs/stories/epic-*.md`.
 
@@ -269,16 +278,17 @@ The file `cea-app.json` at the repo root is the manifest for the CEA App Store (
 
 | File | Purpose | Size | Key Exports/Classes |
 |------|---------|------|-----|
-| `src/renderer/script.js` | Main canvas engine, physics, UI | ~12K lines | Global state, render loop, event handlers, `bigBrainGenerate()` |
+| `src/renderer/script.js` | Main canvas engine, physics, UI | ~12.2K lines | Global state, render loop, event handlers, `bigBrainGenerate()`, `makeFourreauObject()`, `confirmReplaceOrAdd()` |
 | `src/renderer/packer.js` | Bin-packing placement (MaxRects) | ~210 lines | `solve`, `variants`, `anchorLayout` (via `window.PACKER`) |
-| `src/renderer/big-brain-panel.js` | BIG BRAIN sidebar tab (DOM only) | ~640 lines | Liaison list state, wiring to `bigBrainGenerate()` |
-| `src/renderer/cable-assign.js`, `circuit.js`, `phase-assign.js`, `big-brain.js`, `geometry.js`, `csv.js`, `compat-chambres.js`, `pdf-format.js`, `inventory-agg.js` | Pure, DOM-free business logic extracted from `script.js` | 20–210 lines each | See [Pure Core Modules](#pure-core-modules-extracted-packer-style) above |
+| `src/renderer/big-brain-panel.js` | BIG BRAIN sidebar tab (DOM only) | ~1.1K lines | Liaison list state (circuit + reserve), Caneco import modal, wiring to `bigBrainGenerate()` |
+| `src/renderer/cable-assign.js`, `circuit.js`, `phase-assign.js`, `big-brain.js`, `caneco-import.js`, `geometry.js`, `csv.js`, `compat-chambres.js`, `pdf-format.js`, `inventory-agg.js` | Pure, DOM-free business logic extracted from `script.js` | 20–270 lines each | See [Pure Core Modules](#pure-core-modules-extracted-packer-style) above |
 | `src/renderer/konva-fourreaux.js` | Konva rendering overlay | ~275 lines | `init()`, `render()`, `syncTransform()` |
-| `src/renderer/index.html` | DOM structure | ~1.5K lines | `<canvas id="world">`, toolbar, modals, BIG BRAIN tab |
-| `src/renderer/style.css` + `cea-variables.css` | UI styling + CSS variables | ~3.5K lines | theme variables, responsive layout |
+| `src/renderer/titlebar.js` | Custom titlebar controller | ~55 lines | Window controls (Electron-only), "Recharger l'application" button (works in web mode too) |
+| `src/renderer/index.html` | DOM structure | ~1.2K lines | `<canvas id="world">`, toolbar, modals, BIG BRAIN tab |
+| `src/renderer/style.css` + `cea-variables.css` | UI styling + CSS variables | ~7.2K lines | theme variables, responsive layout |
 | `src/renderer/electron-integration.js` | Renderer-side Electron IPC bridge | ~650 lines | Consumes `electronAPI` from `preload.js` (save/load, dev vs. packaged detection) |
-| `src/main/main.js` | Electron main process | ~600 lines | Window creation, IPC handlers, auto-update setup |
-| `src/preload/preload.js` | Secure API bridge | ~150 lines | `electronAPI` context bridge |
+| `src/main/main.js` | Electron main process | ~700 lines | Window creation, IPC handlers, auto-update setup |
+| `src/preload/preload.js` | Secure API bridge | ~65 lines | `electronAPI` context bridge |
 | `data/*.csv` | Embedded reference data | - | cables.csv, fourreaux.csv, chemins_de_cable.csv, chambres_de_tirage.csv |
 
 ## Common Patterns & Conventions
@@ -324,6 +334,10 @@ const { w, h, positions } = PACKER.anchorLayout(layout, { w, h, lockW, lockH });
 
 Fallback: if a layout does not fit under a locked axis, `solve` returns an empty layout and the UI keeps the manual placement.
 
+### Cross-File Communication (`window.*` exports)
+
+`script.js`, `big-brain-panel.js`, `titlebar.js`, and `settings-modal.js` are independent `<script>` files (no bundler, no imports) each with their own IIFE. When one needs to call into another (not into a pure module), the callee exposes a plain function on `window` — e.g. `window.showToast`, `window.bigBrainGenerate`, `window.customConfirm`, `window.confirmReplaceOrAdd` (all defined in `script.js`, consumed by `big-brain-panel.js`/`titlebar.js`). Because `script.js` loads with `defer` after the pure modules but its exports are only ever called from later user-triggered event handlers (never at parse time), load order across files doesn't matter in practice — just check with `typeof window.X === 'function'` before calling from a script that might load first.
+
 ### High-DPI & Zoom Handling
 
 - `window.devicePixelRatio` read once at startup → `basePixelRatio`
@@ -343,6 +357,7 @@ placement effectif repose désormais sur `packer.js` (MaxRects). Voir `docs/stor
 ## Domain Glossary
 
 - **Fourreau** (pl. fourreaux) - Circular conduit/duct (electrical terminology)
+- **Fourreau de réserve** - An empty fourreau (no cables) added for spare future capacity; in BIG BRAIN, a liaison with a `reserve` field instead of a `circuit`
 - **Chemin de câble** - Cable tray / rectangular conduit
 - **Multitubulaire** - Multi-conduit assembly
 - **TPC** - Type code for conduit (e.g., "TPC 200" = 200mm diameter)
