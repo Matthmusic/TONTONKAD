@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.7.0",
+    "version": "2.7.1",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,20 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.7.0.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.7.1.exe"
   },
   "changelog": {
+    "2.7.1": {
+      "date": "2026-08-13",
+      "changes": [
+        "Sidebar droite pour les outils du plan : chambres de tirage compatibles et variantes de placement, un seul panneau ouvert à la fois",
+        "Le bouton Chambres clignote brièvement dès qu'une chambre de tirage devient compatible avec les cotes actuelles",
+        "Import Caneco : reconnaît les circuits continus (PV/photovoltaïque) et le neutre séparé en suffixe dans le code câble",
+        "BIG BRAIN : liste des liaisons plus lisible (animation d'entrée, état vide actionnable, bouton Vider la liste)",
+        "Correction : deux fourreaux qui se touchaient s'accrochaient au lieu de glisser librement l'un contre l'autre",
+        "Modales de confirmation utilisées partout au lieu des boîtes de dialogue natives du navigateur"
+      ]
+    },
     "2.7.0": {
       "date": "2026-08-11",
       "changes": [
