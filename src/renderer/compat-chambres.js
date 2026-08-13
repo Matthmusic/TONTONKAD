@@ -25,6 +25,13 @@
       .map(([ref, m]) => ({ ref, L: m.L, l: (m.l === Infinity ? m.L : m.l), H: m.H }));
   }
 
+  // Tri par marge croissante (surplus de largeur + hauteur), écarts égaux
+  // départagés par référence — partagé entre les listes pignon et long-pan
+  // de computeCompatibleChambers, mêmes cotes de marge dans les deux cas.
+  function sortByMargin(arr) {
+    return arr.sort((a, b) => (a.marginW + a.marginH) - (b.marginW + b.marginH) || a.ref.localeCompare(b.ref));
+  }
+
   // Logique :
   //  1) chambre PRÉFORMÉE par le PIGNON (StradEasy) : la boîte tient dedans (pignon
   //     l >= largeur ET hauteur H >= hauteur boîte) — entrée en ligne droite, la face
@@ -43,16 +50,14 @@
 
     // 1) Chambres préformées compatibles par le pignon — une entrée par référence
     //    (plusieurs réfs pouvant partager les mêmes cotes).
-    const unit = models
+    const unit = sortByMargin(models
       .filter(m => m.l >= largeur && m.H >= hauteur)
-      .map(m => ({ ref: m.ref, l: m.l, H: m.H, marginW: m.l - largeur, marginH: m.H - hauteur }))
-      .sort((a, b) => (a.marginW + a.marginH) - (b.marginW + b.marginH) || a.ref.localeCompare(b.ref));
+      .map(m => ({ ref: m.ref, l: m.l, H: m.H, marginW: m.l - largeur, marginH: m.H - hauteur })));
 
     // 1bis) Chambres préformées compatibles par le long-pan uniquement
-    const longPan = models
+    const longPan = sortByMargin(models
       .filter(m => m.l < largeur && m.L >= largeur && m.H >= hauteur)
-      .map(m => ({ ref: m.ref, L: m.L, H: m.H, marginW: m.L - largeur, marginH: m.H - hauteur }))
-      .sort((a, b) => (a.marginW + a.marginH) - (b.marginW + b.marginH) || a.ref.localeCompare(b.ref));
+      .map(m => ({ ref: m.ref, L: m.L, H: m.H, marginW: m.L - largeur, marginH: m.H - hauteur })));
 
     // 2) Sinon (aucune préformée, ni pignon ni long-pan) : maçonné sur mesure + tampons
     let tiling = [];
@@ -72,6 +77,17 @@
       tiling.sort((a, b) => (a.margin - b.margin) || (a.N - b.N));
     }
     return { unit, longPan, tiling };
+  }
+
+  // Meilleure suggestion UNIQUE (pignon d'abord — entrée en ligne droite —
+  // sinon long-pan), à partir des listes déjà triées par marge que renvoie
+  // computeCompatibleChambers. Règle de priorité centralisée ici : partagée
+  // par tout appelant qui veut UNE suggestion (toast BIG BRAIN, etc.) plutôt
+  // que les listes complètes à parcourir soi-même.
+  function pickBestChamber(unit, longPan) {
+    if (unit && unit.length) return { ref: unit[0].ref, l: unit[0].l, H: unit[0].H, via: 'unit' };
+    if (longPan && longPan.length) return { ref: longPan[0].ref, l: longPan[0].L, H: longPan[0].H, via: 'longpan' };
+    return null;
   }
 
   // Schéma chambre unitaire : la boîte (largeur × hauteur) imbriquée dans la
@@ -120,7 +136,7 @@
     return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img">${tampons}${boxBar}</svg>`;
   }
 
-  const api = { getChamberModels, computeCompatibleChambers, buildUnitSchema, buildTileSchema };
+  const api = { getChamberModels, computeCompatibleChambers, pickBestChamber, buildUnitSchema, buildTileSchema };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
   } else {

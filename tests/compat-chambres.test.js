@@ -2,6 +2,7 @@
 const {
   getChamberModels,
   computeCompatibleChambers,
+  pickBestChamber,
   buildUnitSchema,
   buildTileSchema,
 } = require('../src/renderer/compat-chambres.js');
@@ -151,5 +152,32 @@ describe('computeCompatibleChambers — préformées par le long-pan (longPan)',
     expect(unit).toEqual([]);
     expect(longPan).toEqual([]);
     expect(tiling.length).toBeGreaterThan(0);
+  });
+});
+
+describe('pickBestChamber — une seule suggestion, pignon prioritaire', () => {
+  const models = getChamberModels(CH);
+
+  test('pignon disponible → retourne unit[0] (via: unit)', () => {
+    const { unit, longPan } = computeCompatibleChambers(models, 500, 500, 3);
+    expect(pickBestChamber(unit, longPan)).toEqual({ ref: unit[0].ref, l: unit[0].l, H: unit[0].H, via: 'unit' });
+  });
+
+  test('pignon trop étroit mais long-pan compatible → retourne le long-pan (via: longpan, l = L du modèle)', () => {
+    // largeur=760 : dépasse le pignon (l) de tous les modèles → unit vide ;
+    // 1/2 L4T (L=880) et L3T (L=1380) restent compatibles côté long-pan.
+    const { unit, longPan } = computeCompatibleChambers(models, 760, 500, 3);
+    expect(unit).toEqual([]);
+    expect(pickBestChamber(unit, longPan)).toEqual({ ref: '1/2 L4T', l: 880, H: 540, via: 'longpan' });
+  });
+
+  test('ni pignon ni long-pan (repli tampons) → null', () => {
+    const { unit, longPan } = computeCompatibleChambers(models, 1000, 2000, 3);
+    expect(pickBestChamber(unit, longPan)).toBeNull();
+  });
+
+  test('listes vides/absentes → null (pas de crash)', () => {
+    expect(pickBestChamber([], [])).toBeNull();
+    expect(pickBestChamber(undefined, undefined)).toBeNull();
   });
 });

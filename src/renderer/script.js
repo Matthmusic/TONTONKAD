@@ -16,6 +16,7 @@
   const FRICTION_GROUND = 0.98;
   const MASS_K = 0.02;
   const DYNAMIC_COLLISION_DAMPING = 0.9;
+  const CONTACT_FRICTION = 0.85; // Amortissement tangentiel aux contacts câble-câble / câble-fourreau (voir separateCircles/confineCableInTPC)
   const PHYSICS_ITERATIONS = 8; // Plus d'itérations = plus de précision, moins de chevauchement
   const OSNAP_ALIGN_TOLERANCE = 15; // Distance perpendiculaire max (px) pour déclencher un alignement OSNAP
 
@@ -761,17 +762,26 @@
     fitCanvas(true);
   }
 
-  function computedDisplayScale() {
+  // Base d'échelle avant application du zoom utilisateur — partagée par
+  // computedDisplayScale() et zoomToFit(), pour que les deux ne puissent pas
+  // diverger silencieusement (même définition de "fit", même plafond
+  // VIEWPORT_DEFAULT/targetPxPerMm).
+  function computeBaseDisplayScale() {
     const { width: w, height: h } = getLogicalCanvasDimensions();
     const maxW = canvasWrap.clientWidth - 16, maxH = canvasWrap.clientHeight - 16;
     const fit = Math.min(maxW / w, maxH / h);
     const def = Math.min(VIEWPORT_DEFAULT_W / w, VIEWPORT_DEFAULT_H / h);
-    let s = Math.min(def, fit);
-    let tpp = parseFloat(targetPxPerMmInput.value);
-    if (!isNaN(tpp) && tpp > 0) s = Math.min(s, tpp / MM_TO_PX);
+    let base = Math.min(def, fit);
+    const tpp = parseFloat(targetPxPerMmInput.value);
+    if (!isNaN(tpp) && tpp > 0) base = Math.min(base, tpp / MM_TO_PX);
+    return { w, h, fit, base };
+  }
+
+  function computedDisplayScale() {
+    const { w, h, fit, base } = computeBaseDisplayScale();
     const zr = currentZoom / 100;
     // Le zoom appliqué mais toujours limité par la taille du viewport
-    let out = Math.min(s * zr, fit * zr);
+    let out = Math.min(base * zr, fit * zr);
     // Garder une limite minimale
     out = Math.max(out, MIN_DISPLAY_SIZE / Math.max(w, h));
     return out * .98
@@ -963,6 +973,28 @@
   const areaCircle = d => Geom.areaCircle(d); // impl. pure dans geometry.js (testée)
 
   /* ====== Système de zoom ====== */
+  // Zoom étendu (« zoom extents ») : ajuste le zoom et recentre la vue pour voir
+  // toute la boîte. computedDisplayScale() plafonne normalement l'affichage à une
+  // taille par défaut modeste (VIEWPORT_DEFAULT_W/H, 900×900) même sur un grand
+  // écran ; ici on recalcule le zoom nécessaire pour atteindre le plein cadrage
+  // (fit) dans la fenêtre actuelle, quelle que soit sa taille réelle.
+  function zoomToFit() {
+    const { w, h, fit, base } = computeBaseDisplayScale();
+    if (!(fit > 0) || !(base > 0)) return;
+    // Le plancher MIN_DISPLAY_SIZE (voir computedDisplayScale) peut empêcher
+    // d'atteindre `fit` pile pour une très grande boîte — viser le plus proche
+    // atteignable plutôt que de laisser le plancher pousser l'échelle réelle
+    // au-delà de `fit` sans que le zoom recalculé ici ne le sache (la boîte
+    // déborderait du viewport, à l'exact opposé du but du bouton).
+    const floorScale = MIN_DISPLAY_SIZE / Math.max(w, h);
+    const target = Math.max(fit, floorScale);
+    resetViewPan();
+    // computedDisplayScale() applique currentZoom/100 * base * 0.98 (avant le
+    // plancher) ; on inverse cette formule pour que le résultat rejoigne `target`.
+    setZoom((target / base) * 100 / 0.98);
+  }
+  window.zoomToFit = zoomToFit;
+
   function setZoom(newZoom) {
     currentZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
     fitCanvas(true);
@@ -1716,13 +1748,55 @@
 
   // Confirmation "Remplacer / Ajouter" partagée par tout flux pouvant écraser
   // un plan déjà posé (BIG BRAIN, Placement Auto depuis l'inventaire) —
-  // jamais d'écrasement silencieux : OK = Remplacer, Annuler = Ajouter.
-  function confirmReplaceOrAdd(actionLabel) {
-    return confirm(
-      `Remplacer le plan actuel par ${actionLabel} ?\n\nOK = Remplacer le plan\nAnnuler = Ajouter au plan existant`
+  // jamais d'écrasement silencieux. Boutons nommés explicitement
+  // ("Ajouter" / "Remplacer") plutôt qu'un OK/Annuler générique détourné en
+  // "choisis A ou B" : les DEUX options déclenchent une action réelle, un
+  // "Annuler" y ferait croire à tort qu'il ne se passe rien — dark pattern
+  // signalé et corrigé sur retour utilisateur. Ajouter (sans risque) sur le
+  // bouton principal en vert, Remplacer (destructif) sur le secondaire en
+  // rouge — l'action anodine ne doit jamais porter la couleur d'alerte.
+  // Avertit explicitement du nombre de câbles perdus : "le plan" est ambigu
+  // (est-ce que ça inclut les câbles ?), un décompte chiffré ne l'est pas —
+  // Placement Auto peut être déclenché après une génération BIG BRAIN qui a
+  // rempli des fourreaux de vrais câbles nommés/phasés, pas juste des tubes vides.
+  async function confirmReplaceOrAdd(actionLabel) {
+    const cableWarning = cables.length > 0
+      ? `\n\n⚠️ ${cables.length} câble(s) actuellement posé(s) seront perdus.`
+      : '';
+    const addChosen = await customConfirm(
+      `Remplacer entièrement le plan actuel par ${actionLabel}, ou l'ajouter au plan existant ?${cableWarning}`,
+      'Remplacer ou ajouter ?',
+      'Ajouter', 'Remplacer',
+      'success', 'danger'
     );
+    return !addChosen; // true = Remplacer choisi
   }
   window.confirmReplaceOrAdd = confirmReplaceOrAdd; // big-brain-panel.js — même confirmation, même formulation
+  // Court-circuite la question Remplacer/Ajouter quand il n'y a rien à
+  // écraser — utilisée ici même par autoPlaceFromInventory() ci-dessous, et
+  // exposée pour que big-brain-panel.js applique la même règle.
+  function hasExistingPlan() { return fourreaux.length > 0; }
+  window.hasExistingPlan = hasExistingPlan;
+
+  // Réinitialisation du plan avant un "Remplacer" — partagée par
+  // bigBrainGenerate() et autoPlaceFromInventory(). Efface fourreaux ET
+  // câbles ensemble : effacer l'un sans l'autre laisse des câbles orphelins
+  // (parent pointant vers un fourreau qui n'existe plus), le bug exact que
+  // autoPlaceFromInventory() avait avant cette extraction (elle ne vidait que
+  // `fourreaux`, jamais `cables`).
+  function resetPlanForReplace() {
+    fourreaux.length = 0;
+    cables.length = 0;
+    selected = null;
+    selectedMultiple = [];
+    // Aligné sur le handler du bouton "clear" : la grille virtuelle calculée
+    // pour l'ancien plan ne doit pas rester affichée après un "Remplacer".
+    gridLocked = false;
+    gridOrigin = null;
+    gridSpacing = null;
+    gridFourreauxCount = 0;
+    lastGridCells = [];
+  }
 
   // BIG BRAIN — instancie les fourreaux remplis à partir du résultat moteur, puis
   // laisse le placement existant (packer) les positionner. Une seule entrée d'historique.
@@ -1737,20 +1811,13 @@
       ? window.PhaseAssign.buildPhaseQueues(liaisons)
       : {};
     const phaseCursors = {};
+    // Avant le reset : ce qui existait sur le canvas AVANT ce "Remplacer" —
+    // sert à corriger (pas juste ignorer) le total inventaire des types qui
+    // disparaissent de cette génération, sans effacer une réserve manuelle
+    // ajoutée par ailleurs pour ce même type.
+    const priorCounts = replace ? window.InventoryAgg.countGroups(fourreaux, []).fc : null;
     saveStateToHistory();
-    if (replace) {
-      fourreaux.length = 0;
-      cables.length = 0;
-      selected = null;
-      selectedMultiple = [];
-      // Aligné sur le handler du bouton "clear" : la grille virtuelle calculée
-      // pour l'ancien plan ne doit pas rester affichée après un "Remplacer".
-      gridLocked = false;
-      gridOrigin = null;
-      gridSpacing = null;
-      gridFourreauxCount = 0;
-      lastGridCells = [];
-    }
+    if (replace) resetPlanForReplace();
     const cx = WORLD_W / 2, cy = WORLD_H / 2;
     const createdIds = [];
     objs.fourreaux.forEach((fo, i) => {
@@ -1800,21 +1867,85 @@
       });
       parent.children.push(id);
     });
-    if (fourreaux.length > 0 && typeof arrangeConduitGrid === 'function') arrangeConduitGrid();
-    updateStats();
-    updateInventory();
-    redraw();
+
+    // Reflète la génération dans l'inventaire « Placement Auto » — même geste
+    // que placer un fourreau à la main (addFourreauAt → addToInventory),
+    // sinon les fourreaux créés par BIG BRAIN restent invisibles du panneau.
+    // En mode « Remplacer », le total est FIXÉ (pas cumulé) : le canvas vient
+    // d'être entièrement reconstruit pour ces types, un cumul ferait gonfler
+    // le total à chaque régénération de la même liaison.
+    // skipRender=true : un recalcul + rebuild DOM par type généré serait
+    // aussitôt écrasé par le type suivant — une seule passe après la boucle
+    // (et la correction ci-dessous) suffit.
+    const invCounts = window.InventoryAgg.countGroups(objs.fourreaux, []).fc;
+    Object.entries(invCounts).forEach(([key, qty]) => {
+      const [type, code] = key.split('|');
+      addToInventory(type, code, qty, true, replace, true);
+    });
+    // Les types qui existaient AVANT ce "Remplacer" mais que cette génération
+    // ne recrée pas ont disparu du canvas (resetPlanForReplace) sans que la
+    // boucle ci-dessus ne les touche : leur `total` resterait figé alors que
+    // `placed` retombe à 0 (recalculé depuis le canvas réel) — une réserve
+    // fantôme jamais demandée. On corrige d'autant, jamais sous 0, sans
+    // toucher une réserve manuelle ajoutée en plus de ce qui était placé.
+    if (priorCounts) { // non-null seulement quand replace est vrai (voir sa déclaration ci-dessus)
+      Object.entries(priorCounts).forEach(([key, priorQty]) => {
+        if (Object.prototype.hasOwnProperty.call(invCounts, key)) return;
+        const [type, code] = key.split('|');
+        const item = inventoryItems.find((i) => i.type === type && i.code === code);
+        if (item) item.total = Math.max(0, item.total - priorQty);
+      });
+    }
+    updateInventoryPlacedCount();
+    renderPlanInventory();
+
+    // reduceToMinimum() et arrangeConduitGrid() finalisent déjà chacun (via
+    // applyDimensions() + leur propre updateStats()/redraw() de fin) : pas
+    // besoin de refaire ce travail juste après — seul le repli où aucun des
+    // deux n'a tourné (pas de fourreau posé, ou fonction indisponible) doit
+    // encore rafraîchir lui-même stats/inventaire/canvas.
+    let placementHandled = false;
+    if (fourreaux.length > 0) {
+      // "Remplacer" part d'un plan vide : la boîte doit épouser la nouvelle
+      // nappe (grandir OU rétrécir), pas garder une taille héritée d'un plan
+      // précédent sans rapport — reduceToMinimum() (le bouton "Réduire") fait
+      // exactement ça en une passe : packer + ancrage serré (axes libres à 0,
+      // jamais juste "grandir si besoin" comme arrangeConduitGrid seul) +
+      // rotation paysage automatique si le résultat est portrait. En mode
+      // "Ajouter", arrangeConduitGrid() seul reste le bon choix : une boîte
+      // déjà en place ne doit jamais rétrécir toute seule.
+      if (replace && typeof reduceToMinimum === 'function') {
+        reduceToMinimum();
+        placementHandled = true;
+      } else if (typeof arrangeConduitGrid === 'function') {
+        arrangeConduitGrid();
+        placementHandled = true;
+      }
+    }
+    if (!placementHandled) {
+      updateStats();
+      updateInventory();
+      redraw();
+    }
 
     // Suggestion INFORMATIVE de chambre de tirage (rien n'est appliqué).
+    // Pignon d'abord (entrée en ligne droite) ; à défaut, long-pan (entrée
+    // latérale) — sinon une boîte qui ne convient QUE par le long-pan ne
+    // recevait jamais de suggestion, alors que le panneau en montre une.
     try {
       if (SHAPE === 'rect' && window.CompatChambres && typeof showToast === 'function') {
         const models = window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE);
-        const { unit } = window.CompatChambres.computeCompatibleChambers(
+        const { unit, longPan } = window.CompatChambres.computeCompatibleChambers(
           models, Math.round(WORLD_W_MM), Math.round(WORLD_H_MM), 3
         );
-        if (unit && unit.length) {
-          const b = unit[0];
-          showToast(`Chambre ${b.ref} compatible (${b.l} × ${b.H} mm) — voir « Chambres compatibles »`, 'info', 6000);
+        const b = window.CompatChambres.pickBestChamber(unit, longPan);
+        if (b) {
+          const viaSuffix = b.via === 'longpan' ? ' (long-pan)' : '';
+          showToast(
+            `Chambre ${b.ref}${viaSuffix} compatible (${b.l} × ${b.H} mm) — cliquer pour l'appliquer`,
+            'info', 10000,
+            () => applyCompatChamberSuggestion(b)
+          );
         }
       }
     } catch (e) {
@@ -2542,10 +2673,15 @@
   }
 
   function showLayoutPreviewPanel() {
-    const panel = document.getElementById('layoutPreviewPanel');
+    const railBtn = document.getElementById('layoutPreviewRailBtn');
     const cardsEl = document.getElementById('layoutPreviewCards');
-    if (!panel || !cardsEl || lastLayoutVariants.length <= 1) {
-      if (panel) panel.style.display = 'none';
+    // Montrer toutes les variantes disponibles (max 5)
+    const visibleVariants = lastLayoutVariants
+      .map((v, originalIdx) => ({ v, originalIdx }))
+      .slice(0, 5);
+
+    if (!railBtn || !cardsEl || visibleVariants.length <= 1) {
+      hideLayoutPreviewPanel();
       return;
     }
 
@@ -2555,16 +2691,6 @@
       rect43:   'Rectangle 4/3',
       locked:   'Ajusté',
     };
-
-    // Montrer toutes les variantes disponibles (max 5)
-    const visibleVariants = lastLayoutVariants
-      .map((v, originalIdx) => ({ v, originalIdx }))
-      .slice(0, 5);
-
-    if (visibleVariants.length <= 1) {
-      panel.style.display = 'none';
-      return;
-    }
 
     const CARD_LABELS  = ['COMPACT', 'OPTIMISÉ', 'RECTANGLE'];
     const CARD_DESCS   = ['Boîte serrée', 'Meilleur score', 'Grille basique'];
@@ -2586,7 +2712,8 @@
       </div>`;
     }).join('');
 
-    panel.style.display = 'block';
+    railBtn.style.display = 'flex';
+    openRightToolsPane('variantes'); // toujours ouvert à l'ouverture d'un nouveau placement
 
     cardsEl.querySelectorAll('.layout-preview-card').forEach(card => {
       card.addEventListener('click', () => {
@@ -2601,14 +2728,15 @@
           applyLayoutVariant(idx);
         }
         // Fermer le panel une fois le choix appliqué (il rouvre au prochain placement)
-        hideLayoutPreviewPanel();
+        closeRightToolsPane();
       });
     });
   }
 
   function hideLayoutPreviewPanel() {
-    const panel = document.getElementById('layoutPreviewPanel');
-    if (panel) panel.style.display = 'none';
+    const railBtn = document.getElementById('layoutPreviewRailBtn');
+    if (railBtn) railBtn.style.display = 'none';
+    if (rightToolsState.active === 'variantes') closeRightToolsPane();
   }
 
   function buildNappeVariants(configs, boxW, boxH, input) {
@@ -3157,7 +3285,7 @@
     redraw();
   }
 
-  function autoPlaceFromInventory() {
+  async function autoPlaceFromInventory() {
     if (inventoryItems.length === 0) {
       showToast('Ajoutez des fourreaux à l\'inventaire d\'abord');
       return;
@@ -3205,22 +3333,37 @@
       // JAMAIS être effacé silencieusement par ce bouton : Ajouter est le
       // choix par défaut (Annuler ci-dessous) — Remplacer est une décision
       // explicite, même pattern que la génération BIG BRAIN.
-      const hasExisting = fourreaux.length > 0;
-      const replace = !hasExisting || confirmReplaceOrAdd('le placement automatique depuis l\'inventaire');
-
-      // Sauver l'état AVANT de modifier le canvas
-      saveStateToHistory();
+      const hasExisting = hasExistingPlan();
+      const replace = !hasExisting || await confirmReplaceOrAdd('le placement automatique depuis l\'inventaire');
 
       if (!replace) {
-        // Ajouter : les nouveaux fourreaux rejoignent ceux déjà présents (au
-        // centre, comme tout fourreau nouvellement créé), puis TOUT le plan
-        // (existant + nouveaux) est réarrangé ensemble — même logique que
-        // BIG BRAIN en mode « Ajouter » (arrangeConduitGrid() repacke déjà
-        // l'intégralité de `fourreaux`, quelle que soit son origine).
+        // Ajouter : ne poser que ce qui MANQUE encore (total - déjà placé),
+        // jamais le total complet — sinon un type déjà entièrement représenté
+        // sur le canvas (ex. par une génération BIG BRAIN, qui alimente aussi
+        // ce total) se voit dupliqué en fourreau(x) vide(s) à chaque clic, un
+        // fourreau bien REMPLI de câbles à côté d'un doublon vide qui ne l'est
+        // pas — jamais de perte de câbles, mais une confusion sérieuse.
+        // Fraîcheur garantie : recalculé juste avant, pas la valeur capturée
+        // plus haut (une suppression manuelle entre-temps la rendrait stale).
+        updateInventoryPlacedCount();
+        // Calculé AVANT de sauver l'état : un clic qui ne pose rien (inventaire
+        // déjà entièrement placé) ne doit pas polluer la pile d'annulation.
+        const itemsToAdd = inventoryItems
+          .map((item) => ({
+            spec: FOURREAUX.find(f => f.type === item.type && f.code === item.code),
+            remaining: Math.max(0, item.total - item.placed),
+          }))
+          .filter(({ spec, remaining }) => spec && remaining > 0);
+        if (itemsToAdd.length === 0) {
+          showToast('Rien à ajouter — l\'inventaire est déjà entièrement placé');
+          return;
+        }
+        saveStateToHistory();
         const cx = WORLD_W / 2, cy = WORLD_H / 2;
-        expandedInput.forEach((f) => {
-          const spec = idToSpec[f.id];
-          fourreaux.push(makeFourreauObject(f.id, cx, cy, spec, ''));
+        itemsToAdd.forEach(({ spec, remaining }) => {
+          for (let i = 0; i < remaining; i++) {
+            fourreaux.push(makeFourreauObject(nextId++, cx, cy, spec, ''));
+          }
         });
         if (typeof arrangeConduitGrid === 'function') arrangeConduitGrid();
         updateInventoryPlacedCount();
@@ -3229,6 +3372,9 @@
         redraw();
         return;
       }
+
+      // Sauver l'état AVANT de remplacer le canvas (branche "Remplacer").
+      saveStateToHistory();
 
       const lockWidth  = document.getElementById('lockWidth')?.checked;
       const lockHeight = document.getElementById('lockHeight')?.checked;
@@ -3242,11 +3388,15 @@
 
       const bestConfig = window.solve(tubes, optsPacker);
 
-      // Remplacer tous les fourreaux du canvas par ceux du moteur (choix
-      // explicite ci-dessus, ou canvas déjà vide). Boîte réduite au layout
-      // (w/h = 0 : les axes libres épousent la nappe), ancrage cohérent avec
-      // les autres flux (nappe posée sur le lit de pose).
-      fourreaux.length = 0;
+      // Remplacer tout le plan (fourreaux ET câbles, voir resetPlanForReplace)
+      // par le résultat du moteur (choix explicite ci-dessus, ou canvas déjà
+      // vide). Avant cette correction, seul `fourreaux` était vidé ici : les
+      // câbles d'un plan précédent (posés à la main ou par BIG BRAIN)
+      // devenaient orphelins — `parent` pointant vers un fourreau qui
+      // n'existe plus — au lieu d'être proprement effacés. Boîte réduite au
+      // layout (w/h = 0 : les axes libres épousent la nappe), ancrage
+      // cohérent avec les autres flux (nappe posée sur le lit de pose).
+      resetPlanForReplace();
 
       const anchored = window.PACKER.anchorLayout(bestConfig, {
         w: lockWidth ? boxWidth : 0, h: lockHeight ? boxHeight : 0,
@@ -5796,16 +5946,29 @@
 
   // ─── Hub Inventaire ──────────────────────────────────────────────────────────
 
-  function addToInventory(type, code, qty, silent = false) {
+  // setTotal : true → le total est REMPLACÉ (pas additionné) par qty. Sert au
+  // seul cas où l'appelant vient de reconstruire tout le canvas pour ce type
+  // (BIG BRAIN en mode « Remplacer ») : sans ça, régénérer plusieurs fois la
+  // même liaison ferait gonfler le total à l'infini alors que « placed » (lui
+  // recalculé depuis le canvas réel) resterait correct — même symptôme que
+  // les libellés de liaison qui n'arrêtaient pas de s'incrémenter.
+  // skipRender : true → n'écrit que inventoryItems, sans recalculer placed ni
+  // reconstruire la liste. Réservé aux appels en boucle (ex. un type par
+  // fourreau généré) : l'appelant doit alors appeler updateInventoryPlacedCount()
+  // + renderPlanInventory() lui-même UNE SEULE fois après la boucle, plutôt que
+  // de payer le recalcul + le rebuild DOM une fois par type généré pour un
+  // résultat aussitôt écrasé par l'itération suivante.
+  function addToInventory(type, code, qty, silent = false, setTotal = false, skipRender = false) {
     if (!type || !code) return;
     const spec = FOURREAUX ? FOURREAUX.find(f => f.type === type && f.code === code) : null;
     const diameter = spec ? spec.od : 0;
     const existing = inventoryItems.find(i => i.type === type && i.code === code);
     if (existing) {
-      existing.total += qty;
+      existing.total = setTotal ? qty : existing.total + qty;
     } else {
       inventoryItems.push({ type, code, diameter, total: qty, placed: 0 });
     }
+    if (skipRender) return;
     updateInventoryPlacedCount();
     renderPlanInventory();
     if (!silent) pulseInventoryFeedback(type, code);
@@ -6317,9 +6480,42 @@
 
   }
 
-  // Fonction de confirmation personnalisée
-  function customConfirm(message, title = 'Confirmation') {
-    return new Promise((resolve) => {
+  // Bascule la classe de couleur d'un bouton de #confirmDialog. variant ∈
+  // 'success' | 'danger' | null (null → classe par défaut du bouton). Classes
+  // toujours retirées puis réappliquées — jamais de couleur qui fuite d'une
+  // confirmation précédente, la modale étant partagée par tous les appels.
+  function applyConfirmBtnVariant(btn, variant, defaultClass) {
+    btn.classList.remove('btn-primary', 'btn-secondary', 'btn-success', 'btn-danger');
+    btn.classList.add(variant === 'success' ? 'btn-success' : variant === 'danger' ? 'btn-danger' : defaultClass);
+  }
+
+  // #confirmDialog est un unique élément DOM partagé par customConfirm() et
+  // customAlert() — sans cette file, un second appel avant résolution du
+  // premier empilerait deux jeux de listeners sur les mêmes boutons #confirmOk
+  // /#confirmCancel : un seul clic déclencherait alors les DEUX résolutions en
+  // même temps, chacune avec sa propre suite (ex. deux suppressions enchaînées
+  // sur un index désormais obsolète). runQueuedDialog() garantit qu'un nouveau
+  // dialogue n'est construit/affiché qu'une fois le précédent résolu.
+  let confirmDialogQueue = Promise.resolve();
+  function runQueuedDialog(factory) {
+    const run = () => new Promise((resolve) => factory(resolve));
+    const result = confirmDialogQueue.then(run, run);
+    confirmDialogQueue = result.catch(() => {}); // une erreur ne doit jamais bloquer la file
+    return result;
+  }
+
+  // Fonction de confirmation personnalisée. okLabel/cancelLabel permettent de
+  // nommer les boutons explicitement — au-delà d'un vrai oui/non ("Supprimer"
+  // / "Annuler"), le couple OK/Annuler générique devient un dark pattern dès
+  // que les DEUX boutons déclenchent une action réelle (ex. Remplacer vs
+  // Ajouter) : "Annuler" y suggère à tort "ne rien faire", alors qu'il en
+  // fait une autre. okVariant/cancelVariant colorent le bouton correspondant
+  // ('success'|'danger'|null = couleur par défaut) — ex. vert pour un ajout
+  // sans risque, rouge pour une action destructive. Toujours réécrits à
+  // chaque appel (jamais de libellé/couleur qui fuite d'une confirmation
+  // précédente).
+  function customConfirm(message, title = 'Confirmation', okLabel = 'OK', cancelLabel = 'Annuler', okVariant = null, cancelVariant = null) {
+    return runQueuedDialog((resolve) => {
       const dialog = document.getElementById('confirmDialog');
       const titleEl = document.getElementById('confirmTitle');
       const messageEl = document.getElementById('confirmMessage');
@@ -6329,6 +6525,10 @@
       // Remplir le contenu
       titleEl.textContent = title;
       messageEl.textContent = message;
+      okBtn.textContent = okLabel;
+      cancelBtn.textContent = cancelLabel;
+      applyConfirmBtnVariant(okBtn, okVariant, 'btn-primary');
+      applyConfirmBtnVariant(cancelBtn, cancelVariant, 'btn-secondary');
 
       // Afficher la modale
       document.body.appendChild(dialog);
@@ -6366,9 +6566,11 @@
     });
   }
 
-  // Boîte d'alerte simple (réutilise le même gabarit que customConfirm)
+  // Boîte d'alerte simple (réutilise le même gabarit que customConfirm) —
+  // passe par la même file (runQueuedDialog) que customConfirm(), le dialogue
+  // DOM étant partagé entre les deux.
   function customAlert(message, title = 'Information') {
-    return new Promise((resolve) => {
+    return runQueuedDialog((resolve) => {
       const dialog = document.getElementById('confirmDialog');
       const titleEl = document.getElementById('confirmTitle');
       const messageEl = document.getElementById('confirmMessage');
@@ -6379,9 +6581,14 @@
       const previousCancelDisplay = cancelBtn.style.display;
       cancelBtn.style.display = 'none';
 
-      // Remplir le contenu
+      // Remplir le contenu — okBtn réécrit en 'OK' (libellé ET couleur) à
+      // chaque fois : la modale est partagée avec customConfirm(), qui peut
+      // lui avoir laissé un libellé/variant d'action précédent (ex.
+      // "Remplacer" en rouge, "Ajouter" en vert).
       titleEl.textContent = title;
       messageEl.textContent = message;
+      okBtn.textContent = 'OK';
+      applyConfirmBtnVariant(okBtn, null, 'btn-primary');
 
       // Afficher la modale
       document.body.appendChild(dialog);
@@ -7212,11 +7419,110 @@
   window.addFourreauAt = addFourreauAt;
   window.showToast = showToast; // BIG BRAIN — notifications depuis le contrôleur DOM
   window.customConfirm = customConfirm; // titlebar.js — confirmation avant rechargement de l'application
+  window.customAlert = customAlert; // electron-integration.js — erreurs de sauvegarde/export au style de l'app
 
   /* ====== Suggestion de chambres de tirage compatibles ====== */
-  const compatChambresState = { open: false, selectedIndex: 0, selectedLongPanIndex: 0, activeKind: null, selected: null, selectedUnit: null, applied: null, appliedUnit: null };
+  // Pas de champ "open" ici : entièrement dérivable de rightToolsState.active
+  // === 'chambres' (seule source de vérité, voir openRightToolsPane/closeRightToolsPane
+  // plus bas) — sinon les deux ne feraient que maintenir un état dupliqué à synchroniser.
+  const compatChambresState = { selectedIndex: 0, selectedLongPanIndex: 0, activeKind: null, selected: null, selectedUnit: null, applied: null, appliedUnit: null };
   // Sous-zone (fractions) de la boîte dans l'image PDF capturée (pour les cotes)
   let lastCanvasBoxFrac = { fx: 0, fy: 0, fw: 1, fh: 1 };
+
+  // Sidebar droite des outils du plan : un seul outil À CONTENU actif à la
+  // fois (chambres compatibles OU variantes de placement), affiché dans la
+  // colonne .right-tools-content partagée — jamais les deux en même temps.
+  // Le verrou et le zoom étendu vivent dans le même rail mais restent des
+  // actions/toggles directs, sans passer par cet état (rien à « afficher »).
+  const rightToolsState = { active: null }; // null | 'chambres' | 'variantes'
+
+  function openRightToolsPane(kind) {
+    const content = document.getElementById('rightToolsContent');
+    const compatBtn = document.getElementById('compatChambresBtn');
+    const compatPanel = document.getElementById('compatChambresPanel');
+    const variantesBtn = document.getElementById('layoutPreviewRailBtn');
+    const variantesPanel = document.getElementById('layoutPreviewPanel');
+    if (!content) return;
+    // La colonne a une largeur fixe (300px) quel que soit l'outil affiché à
+    // l'intérieur : seule une vraie transition fermé→ouvert change la largeur
+    // dispo pour le canvas. Basculer chambres↔variantes pendant qu'elle est
+    // déjà ouverte n'en a pas besoin.
+    const wasClosed = content.style.display !== 'flex';
+    rightToolsState.active = kind;
+    content.style.display = 'flex';
+    compatBtn?.classList.toggle('active', kind === 'chambres');
+    compatBtn?.setAttribute('aria-expanded', String(kind === 'chambres'));
+    // Ouvrir le panneau répond à l'appel du clignotement : plus la peine
+    // d'attirer l'attention une fois que l'utilisateur regarde déjà.
+    if (kind === 'chambres') compatBtn?.classList.remove('pulse');
+    if (compatPanel) compatPanel.style.display = kind === 'chambres' ? 'flex' : 'none';
+    variantesBtn?.classList.toggle('active', kind === 'variantes');
+    variantesBtn?.setAttribute('aria-expanded', String(kind === 'variantes'));
+    if (variantesPanel) variantesPanel.style.display = kind === 'variantes' ? 'flex' : 'none';
+    if (wasClosed) {
+      // La colonne de contenu vient d'apparaître : le canvas dispose de moins
+      // de largeur, il doit se réajuster tout de suite (fitCanvas redessine).
+      if (typeof fitCanvas === 'function') fitCanvas(true);
+    } else if (typeof redraw === 'function') {
+      // Largeur inchangée, mais le tampon dessiné sur le canvas dépend de
+      // l'outil actif (getCompatTampon) : un simple redraw suffit, pas besoin
+      // de refaire tout le recalcul de résolution/transform de fitCanvas.
+      redraw();
+    }
+  }
+
+  function closeRightToolsPane() {
+    const content = document.getElementById('rightToolsContent');
+    const compatBtn = document.getElementById('compatChambresBtn');
+    const compatPanel = document.getElementById('compatChambresPanel');
+    const variantesBtn = document.getElementById('layoutPreviewRailBtn');
+    const variantesPanel = document.getElementById('layoutPreviewPanel');
+    rightToolsState.active = null;
+    compatChambresState.selected = null;
+    if (content) content.style.display = 'none';
+    compatBtn?.classList.remove('active');
+    compatBtn?.setAttribute('aria-expanded', 'false');
+    if (compatPanel) compatPanel.style.display = 'none';
+    variantesBtn?.classList.remove('active');
+    variantesBtn?.setAttribute('aria-expanded', 'false');
+    if (variantesPanel) variantesPanel.style.display = 'none';
+    // fitCanvas(true) redessine déjà (voir sa def.) : pas besoin d'un 2e redraw().
+    if (typeof fitCanvas === 'function') fitCanvas(true);
+  }
+
+  // Verrouille/déverrouille une cote via sa checkbox cachée (déclenche le change
+  // handler : désactive l'input, met à jour l'icône cadenas, recalcule). Partagé entre
+  // le panneau (bouton Appliquer) et la notification BIG BRAIN (clic direct).
+  function lockBoxDimension(id, locked) {
+    const cb = document.getElementById(id);
+    if (!cb || cb.checked === locked) return;
+    cb.checked = locked;
+    cb.dispatchEvent(new Event('change'));
+  }
+
+  // Applique une suggestion de chambre préformée (pignon ou long-pan) à la boîte —
+  // même logique que le bouton « Appliquer » du panneau, réutilisée par la
+  // notification de suggestion affichée après une génération BIG BRAIN.
+  function applyCompatChamberSuggestion(chamber) {
+    saveStateToHistory(); // pour Ctrl+Z
+    compatChambresState.applied = null;
+    // `via` qualifie le libellé (« (long-pan) ») sans changer le format de sauvegarde :
+    // non persisté, reperdu après un rechargement de projet (redevient "Chambre REF" simple).
+    // Fixé AVANT applyDimensions() : ce dernier appelle updateCompatChambresUI(),
+    // qui lit appliedUnit pour savoir s'il doit encore faire clignoter le bouton.
+    compatChambresState.appliedUnit = { ref: chamber.ref, l: chamber.l, H: chamber.H, via: chamber.via || 'unit' };
+    applyDimensions({ anchorContents: true, width: chamber.l, height: chamber.H });
+    // Une chambre préformée a des cotes FIXES → verrouiller largeur ET hauteur.
+    lockBoxDimension('lockWidth', true);
+    lockBoxDimension('lockHeight', true);
+    const viaSuffix = chamber.via === 'longpan' ? ' (long-pan)' : '';
+    showToast(`Chambre ${chamber.ref}${viaSuffix} appliquée : ${chamber.l} × ${chamber.H} mm`);
+    // Si le panneau est resté ouvert (ex. appliqué via la notification pendant
+    // que le panneau était déjà affiché), le rafraîchir : sinon il continue de
+    // montrer les suggestions/schéma calculés pour les anciennes cotes de boîte.
+    if (rightToolsState.active === 'chambres' && typeof renderCompatChambres === 'function') renderCompatChambres();
+    if (typeof redraw === 'function') redraw();
+  }
 
   // Cœur "chambres compatibles" extrait dans compat-chambres.js (pur, testé).
   // Wrappers fins : adaptent la globale CHAMBRES_TIRAGE à l'API pure et
@@ -7237,7 +7543,7 @@
   // Tampon effectif à dessiner : aperçu (panneau ouvert) sinon appliqué (persisté).
   function getCompatTampon() {
     if (SHAPE !== 'rect') return null;
-    const t = compatChambresState.open ? compatChambresState.selected : compatChambresState.applied;
+    const t = rightToolsState.active === 'chambres' ? compatChambresState.selected : compatChambresState.applied;
     return (t && t.N && t.l) ? t : null;
   }
 
@@ -7321,6 +7627,24 @@
     ctx.restore();
   }
 
+  // Facteur commun aux 3 listes de renderCompatChambres (pignon / long-pan /
+  // tampons) : même construction de bouton, même pattern classe active +
+  // clic → mise à jour d'état + re-rendu. Seuls le libellé HTML et la
+  // condition "actif" changent d'une liste à l'autre.
+  function renderCompatItems(list, items, { isActive, html, onSelect }) {
+    items.forEach((s, i) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'compat-item' + (isActive(i) ? ' active' : '');
+      item.innerHTML = html(s);
+      item.addEventListener('click', () => {
+        onSelect(i);
+        renderCompatChambres();
+      });
+      list.appendChild(item);
+    });
+  }
+
   function renderCompatChambres() {
     const list = document.getElementById('compatList');
     const subtitle = document.getElementById('compatSubtitle');
@@ -7328,7 +7652,10 @@
     if (!list) return;
     const W = Math.round(WORLD_W_MM || 0);
     const H = Math.round(WORLD_H_MM || 0);
-    if (subtitle) subtitle.textContent = `Boîte ${W} × ${H} mm`;
+    // W/H sont toujours des nombres arrondis (jamais du texte utilisateur) :
+    // innerHTML sûr ici. Valeur mesurée en cuivre, même registre "afficheur"
+    // que la pastille Écart/Lit de la barre du bas (.ctrl-settings-pill strong).
+    if (subtitle) subtitle.innerHTML = `Boîte <strong>${W} × ${H}</strong> mm`;
     const { unit, longPan, tiling } = computeCompatibleChambers(W, H, 3);
     list.innerHTML = '';
     if (schema) schema.innerHTML = '';
@@ -7341,7 +7668,7 @@
       const applyBtnEmpty = document.getElementById('compatApplyBtn');
       if (applyBtnEmpty) applyBtnEmpty.style.display = 'none';
       if (typeof redraw === 'function') redraw();
-      return;
+      return { unit, longPan, tiling };
     }
 
     // Section active (celle qui pilote schéma/bouton Appliquer) : conservée d'un
@@ -7361,19 +7688,12 @@
         list.appendChild(note);
       }
       if (compatChambresState.selectedIndex >= unit.length) compatChambresState.selectedIndex = 0;
-      unit.forEach((s, i) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'compat-item' + (compatChambresState.activeKind === 'unit' && i === compatChambresState.selectedIndex ? ' active' : '');
-        item.innerHTML =
+      renderCompatItems(list, unit, {
+        isActive: (i) => compatChambresState.activeKind === 'unit' && i === compatChambresState.selectedIndex,
+        html: (s) =>
           `<span class="compat-item-main"><span>${s.ref} — ${s.l} × ${s.H} mm</span>` +
-          `<span class="compat-item-margin">L+${s.marginW} · H+${s.marginH}</span></span>`;
-        item.addEventListener('click', () => {
-          compatChambresState.activeKind = 'unit';
-          compatChambresState.selectedIndex = i;
-          renderCompatChambres();
-        });
-        list.appendChild(item);
+          `<span class="compat-item-margin">L+${s.marginW} · H+${s.marginH}</span></span>`,
+        onSelect: (i) => { compatChambresState.activeKind = 'unit'; compatChambresState.selectedIndex = i; },
       });
     }
 
@@ -7383,19 +7703,12 @@
       note.textContent = 'Compatible par le long-pan (entrée latérale) :';
       list.appendChild(note);
       if (compatChambresState.selectedLongPanIndex >= longPan.length) compatChambresState.selectedLongPanIndex = 0;
-      longPan.forEach((s, i) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'compat-item' + (compatChambresState.activeKind === 'longpan' && i === compatChambresState.selectedLongPanIndex ? ' active' : '');
-        item.innerHTML =
+      renderCompatItems(list, longPan, {
+        isActive: (i) => compatChambresState.activeKind === 'longpan' && i === compatChambresState.selectedLongPanIndex,
+        html: (s) =>
           `<span class="compat-item-main"><span>${s.ref} — ${s.L} × ${s.H} mm</span>` +
-          `<span class="compat-item-margin">L+${s.marginW} · H+${s.marginH}</span></span>`;
-        item.addEventListener('click', () => {
-          compatChambresState.activeKind = 'longpan';
-          compatChambresState.selectedLongPanIndex = i;
-          renderCompatChambres();
-        });
-        list.appendChild(item);
+          `<span class="compat-item-margin">L+${s.marginW} · H+${s.marginH}</span></span>`,
+        onSelect: (i) => { compatChambresState.activeKind = 'longpan'; compatChambresState.selectedLongPanIndex = i; },
       });
     }
 
@@ -7405,19 +7718,13 @@
       note.textContent = `Aucune chambre préformée compatible → chambre maçonnée sur mesure + tampons :`;
       list.appendChild(note);
       if (compatChambresState.selectedIndex >= tiling.length) compatChambresState.selectedIndex = 0;
-      tiling.forEach((s, i) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'compat-item' + (i === compatChambresState.selectedIndex ? ' active' : '');
-        item.innerHTML =
+      renderCompatItems(list, tiling, {
+        isActive: (i) => i === compatChambresState.selectedIndex,
+        html: (s) =>
           `<span class="compat-item-main"><span>${s.N}× tampon ${s.l} → ${s.total} mm</span>` +
           `<span class="compat-item-margin">+${s.margin}</span></span>` +
-          `<span class="compat-item-refs">${s.refs.join(' · ')}</span>`;
-        item.addEventListener('click', () => {
-          compatChambresState.selectedIndex = i;
-          renderCompatChambres();
-        });
-        list.appendChild(item);
+          `<span class="compat-item-refs">${s.refs.join(' · ')}</span>`,
+        onSelect: (i) => { compatChambresState.selectedIndex = i; },
       });
     }
 
@@ -7468,26 +7775,42 @@
       }
     }
     if (typeof redraw === 'function') redraw();
+    return { unit, longPan, tiling };
   }
 
+  // Visibilité/état du bouton rail Chambres + rafraîchissement de son contenu
+  // si le panneau est déjà ouvert. L'ouverture/fermeture elle-même passe par
+  // openRightToolsPane/closeRightToolsPane (état + classes + aria + fitCanvas
+  // gérés à un seul endroit pour tous les outils de la sidebar droite).
   function updateCompatChambresUI() {
     const btn = document.getElementById('compatChambresBtn');
-    const panel = document.getElementById('compatChambresPanel');
     if (!btn) return;
     const isRect = (SHAPE === 'rect');
-    btn.style.display = isRect ? 'inline-flex' : 'none';
+    btn.style.display = isRect ? 'flex' : 'none';
     if (!isRect) {
-      if (panel) panel.style.display = 'none';
-      compatChambresState.open = false;
+      if (rightToolsState.active === 'chambres') closeRightToolsPane();
       compatChambresState.selected = null;
       compatChambresState.applied = null;
       compatChambresState.appliedUnit = null;
+      btn.classList.remove('pulse');
       return;
     }
-    if (compatChambresState.open && panel) {
-      panel.style.display = 'flex';
-      renderCompatChambres();
-    }
+    // Clignote (halo orange) tant qu'une chambre préformée — pignon ou
+    // long-pan — est compatible avec les cotes actuelles : sinon la
+    // suggestion passe inaperçue derrière un simple bouton d'icône. S'arrête
+    // dès que le panneau s'ouvre (openRightToolsPane) ou qu'une chambre a
+    // déjà été appliquée — plus la peine d'attirer l'attention.
+    // Panneau déjà ouvert : renderCompatChambres() calcule les mêmes cotes,
+    // on réutilise son résultat au lieu de relancer computeCompatibleChambers().
+    let compat = null;
+    try {
+      compat = (rightToolsState.active === 'chambres')
+        ? renderCompatChambres()
+        : computeCompatibleChambers(Math.round(WORLD_W_MM), Math.round(WORLD_H_MM), 3);
+    } catch (e) { /* catalogue indisponible, etc. — pas de clignotement, tant pis */ }
+    const hasCompat = !!(compat && ((compat.unit && compat.unit.length) || (compat.longPan && compat.longPan.length)));
+    const shouldPulse = hasCompat && rightToolsState.active !== 'chambres' && !compatChambresState.appliedUnit;
+    btn.classList.toggle('pulse', shouldPulse);
   }
 
   function setupCompatChambres() {
@@ -7496,54 +7819,20 @@
     const closeBtn = document.getElementById('compatChambresClose');
     if (!btn || !panel) return;
     btn.addEventListener('click', () => {
-      compatChambresState.open = !compatChambresState.open;
-      if (compatChambresState.open) {
-        panel.style.display = 'flex';
-        renderCompatChambres();
-      } else {
-        panel.style.display = 'none';
-        compatChambresState.selected = null;
-        if (typeof redraw === 'function') redraw();
-      }
+      if (rightToolsState.active === 'chambres') { closeRightToolsPane(); return; }
+      openRightToolsPane('chambres');
+      renderCompatChambres();
     });
-    closeBtn?.addEventListener('click', () => {
-      compatChambresState.open = false;
-      panel.style.display = 'none';
-      compatChambresState.selected = null;
-      if (typeof redraw === 'function') redraw();
-    });
-    // Verrouille/déverrouille une cote via sa checkbox cachée (déclenche le change
-    // handler : désactive l'input, met à jour l'icône cadenas, recalcule).
-    const lockBoxDimension = (id, locked) => {
-      const cb = document.getElementById(id);
-      if (!cb || cb.checked === locked) return;
-      cb.checked = locked;
-      cb.dispatchEvent(new Event('change'));
-    };
+    closeBtn?.addEventListener('click', closeRightToolsPane);
     const applyBtn = document.getElementById('compatApplyBtn');
     applyBtn?.addEventListener('click', () => {
       // Mode unit : redimensionner la boîte aux cotes de la chambre préformée.
       if (applyBtn.dataset.mode === 'unit') {
         const unit = compatChambresState.selectedUnit;
         if (!unit) return;
-        saveStateToHistory(); // pour Ctrl+Z
-        // La boîte devient une chambre préformée fermée : retirer tout overlay tampons.
-        compatChambresState.applied = null;
-        applyDimensions({ anchorContents: true, width: unit.l, height: unit.H });
-        // Mémoriser la chambre appliquée → label affiché sur le canvas / PDF. `via` qualifie
-        // le libellé (« (long-pan) ») sans changer le format de sauvegarde : non persisté,
-        // reperdu après un rechargement de projet (redevient "Chambre REF" simple).
-        compatChambresState.appliedUnit = { ref: unit.ref, l: unit.l, H: unit.H, via: unit.via };
-        // Une chambre préformée a des cotes FIXES → verrouiller largeur ET hauteur.
-        lockBoxDimension('lockWidth', true);
-        lockBoxDimension('lockHeight', true);
-        const viaSuffix = unit.via === 'longpan' ? ' (long-pan)' : '';
-        showToast(`Chambre ${unit.ref}${viaSuffix} appliquée : ${unit.l} × ${unit.H} mm`);
+        applyCompatChamberSuggestion(unit);
         // Fermer le panneau après application.
-        compatChambresState.open = false;
-        compatChambresState.selected = null;
-        panel.style.display = 'none';
-        if (typeof redraw === 'function') redraw();
+        closeRightToolsPane();
         return;
       }
       // Mode tile : poser / retirer les tampons (overlay non destructif).
@@ -7670,6 +7959,22 @@
     }
   }
 
+  // Frottement tangentiel au contact — partagé entre un contact à deux corps
+  // (separateCircles, cercle-cercle) et un contact contre une paroi fixe
+  // (confineCableInTPC, câble-fourreau) : sans lui, rien ne s'oppose au
+  // glissement le long de la surface de contact — un câble coincé entre ses
+  // voisins (ex. posé en équilibre instable sur deux autres) glisse
+  // indéfiniment sous la gravité au lieu de se stabiliser, d'où un
+  // tressaillement perpétuel à l'écran. Ne calcule que la part tangentielle
+  // amortie (perpendiculaire à la normale (nx,ny)) ; la réponse normale reste
+  // gérée séparément par chaque appelant, à qui revient de répartir le
+  // résultat entre les corps concernés.
+  function tangentialFriction(nx, ny, relVx, relVy) {
+    const tx = -ny, ty = nx;
+    const fric = (relVx * tx + relVy * ty) * (1 - CONTACT_FRICTION);
+    return { fricX: fric * tx, fricY: fric * ty };
+  }
+
   function separateCircles(a, ra, b, rb) {
     const dx = b.x - a.x, dy = b.y - a.y;
     let d = Math.hypot(dx, dy);
@@ -7704,12 +8009,35 @@
         if (!aStatic) { a.vx -= impulseX * invMassA; a.vy -= impulseY * invMassA; }
         if (!bStatic) { b.vx += impulseX * invMassB; b.vy += impulseY * invMassB; }
       }
+
+      // Frottement tangentiel au contact (voir tangentialFriction) — réparti à
+      // 50/50 entre les deux corps non figés. Uniquement si au moins un câble
+      // est impliqué : c'est LUI qui jitterait sans ce frottement (nombreux,
+      // légers, coincés en équilibre instable entre voisins dans un même
+      // fourreau). Deux fourreaux entre eux n'ont jamais eu ce problème et
+      // doivent au contraire glisser librement l'un contre l'autre pendant
+      // qu'ils se rangent (drag, grille auto, réduction) — leur appliquer le
+      // même frottement les fait "accrocher" au lieu de se stabiliser.
+      const involvesCable = ('fam' in a) || ('fam' in b);
+      if (involvesCable) {
+        const { fricX, fricY } = tangentialFriction(nx, ny, b.vx - a.vx, b.vy - a.vy);
+        if (!aStatic) { a.vx += fricX * 0.5; a.vy += fricY * 0.5; }
+        if (!bStatic) { b.vx -= fricX * 0.5; b.vy -= fricY * 0.5; }
+      }
     }
   }
 
   function confineCableInTPC(c, r, t) {
     const ri = t.idm * MM_TO_PX / 2 - r, dx = c.x - t.x, dy = c.y - t.y, d = Math.hypot(dx, dy);
-    if (d > ri) { const nx = dx / (d || 1), ny = dy / (d || 1); c.x = t.x + nx * ri; c.y = t.y + ny * ri; const vn = c.vx * nx + c.vy * ny; if (vn > 0) { c.vx -= (1 + RESTITUTION) * vn * nx; c.vy -= (1 + RESTITUTION) * vn * ny; } }
+    if (d > ri) {
+      const nx = dx / (d || 1), ny = dy / (d || 1); c.x = t.x + nx * ri; c.y = t.y + ny * ri;
+      const vn = c.vx * nx + c.vy * ny;
+      if (vn > 0) { c.vx -= (1 + RESTITUTION) * vn * nx; c.vy -= (1 + RESTITUTION) * vn * ny; }
+      // Frottement tangentiel contre la paroi du fourreau (voir tangentialFriction)
+      const { fricX, fricY } = tangentialFriction(nx, ny, c.vx, c.vy);
+      c.vx -= fricX;
+      c.vy -= fricY;
+    }
   }
 
   function stepPhysics() {
@@ -9043,6 +9371,7 @@
     initSearchableLists();
     setupShapeDropdown();
     setupCompatChambres();
+    document.getElementById('zoomFitBtn')?.addEventListener('click', zoomToFit);
 
     // 3. Attacher les écouteurs d'événements
     addEventListener("resize", () => fitCanvas(true));
@@ -9239,9 +9568,25 @@
     }
 
     const closePreviewBtn = document.getElementById('closeLayoutPreview');
-    if (closePreviewBtn) {
-      closePreviewBtn.addEventListener('click', hideLayoutPreviewPanel);
-    }
+    closePreviewBtn?.addEventListener('click', closeRightToolsPane);
+
+    // Bouton rail « Variantes de placement » : bascule ouverture/fermeture,
+    // même logique que le bouton Chambres (setupCompatChambres) — un seul
+    // outil actif à la fois dans la colonne de contenu partagée.
+    const layoutPreviewRailBtn = document.getElementById('layoutPreviewRailBtn');
+    layoutPreviewRailBtn?.addEventListener('click', () => {
+      if (rightToolsState.active === 'variantes') { closeRightToolsPane(); return; }
+      openRightToolsPane('variantes');
+    });
+
+    // Clic en dehors de la sidebar droite (rail + colonne de contenu) → ferme
+    // l'outil actif, qu'il s'agisse des chambres ou des variantes.
+    document.addEventListener('mousedown', e => {
+      if (!rightToolsState.active) return;
+      const sidebar = document.querySelector('.right-tools');
+      if (sidebar && sidebar.contains(e.target)) return;
+      closeRightToolsPane();
+    }, true);
     canvas.addEventListener('mousedown', e => {
       // Ctrl+clic molette : pan de la vue (prioritaire sur tout le reste)
       if (e.button === 1 && (e.ctrlKey || e.metaKey)) {
@@ -9249,7 +9594,6 @@
         startViewPan(e);
         return;
       }
-      hideLayoutPreviewPanel();
       const p = canvasCoords(e);
       // Mode déplacement groupe (touche D) : intercepte les clics
       if (moveMode) {
@@ -11513,7 +11857,7 @@
       }
     }
 
-    saveNewProject() {
+    async saveNewProject() {
       const name = this.newProjectName.value.trim();
       const folderName = this.projectFolder.value || null;
 
@@ -11535,7 +11879,7 @@
 
       if (existingProject) {
         const location = folderName ? `dans "${folderName}"` : 'à la racine';
-        const confirmOverwrite = confirm(`Le projet "${name}" existe déjà ${location}.\nVoulez-vous l'écraser ?`);
+        const confirmOverwrite = await customConfirm(`Le projet "${name}" existe déjà ${location}.\nVoulez-vous l'écraser ?`, 'Écraser le projet ?');
         if (!confirmOverwrite) {
           this.newProjectName.focus();
           return;

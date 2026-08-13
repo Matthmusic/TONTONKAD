@@ -313,7 +313,6 @@ html, body {
 
 /* Staggered reveal des panels */
 .wrap > .panel:nth-child(1) { animation-delay: 0s; }
-.wrap > .panel-canvas:nth-child(2) { animation-delay: 0.15s; }
 
 /* Corner accents technique sur les panels */
 .panel::before,
@@ -395,6 +394,7 @@ html, body {
     flex: 1;
     min-height: 0;
     min-width: 0;
+    gap: 8px;
 }
 
 /* ==========================================================================
@@ -661,12 +661,6 @@ button:disabled {
     padding: var(--spacing-xs) 0;
 }
 
-.row-inline {
-    display: flex;
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-sm);
-}
-
 .inline-input {
     flex: 1;
     display: flex;
@@ -692,7 +686,7 @@ input[type=text] {
     background: var(--input-bg);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
-    padding: 10px 14px;
+    padding: 10px var(--spacing-md);
     font-size: 14px;
     color: var(--text-primary);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -823,13 +817,11 @@ select::-webkit-scrollbar-thumb {
    SEARCHABLE SELECT
    ========================================================================== */
 
-.search-select-container,
 .searchable-select-container {
     position: relative;
     flex: 1;
 }
 
-.search-select-input,
 .searchable-input {
     width: 100%;
     background-color: var(--bg-card);
@@ -847,13 +839,11 @@ select::-webkit-scrollbar-thumb {
     background-size: 16px 16px;
 }
 
-.search-select-input:hover,
 .searchable-input:hover {
     border-color: var(--primary-orange);
     box-shadow: 0 0 0 3px rgba(255, 145, 77, 0.1);
 }
 
-.search-select-input:focus,
 .searchable-input:focus {
     outline: none;
     border-color: var(--primary-orange);
@@ -861,14 +851,12 @@ select::-webkit-scrollbar-thumb {
 }
 
 /* Anneau de focus net pour la navigation clavier (le glow seul est trop discret) */
-.search-select-input:focus-visible,
 .searchable-input:focus-visible {
     outline: 2px solid var(--accent-color);
     outline-offset: 2px;
 }
 
-.searchable-list,
-.search-dropdown {
+.searchable-list {
     position: absolute;
     top: 100%;
     left: 0;
@@ -892,42 +880,35 @@ select::-webkit-scrollbar-thumb {
     scrollbar-color: var(--primary-orange) transparent;
 }
 
-.searchable-list.show,
-.search-dropdown.show {
+.searchable-list.show {
     display: block;
     opacity: 1;
     visibility: visible;
     animation: fadeIn 0.2s ease;
 }
 
-.searchable-list::-webkit-scrollbar,
-.search-dropdown::-webkit-scrollbar {
+.searchable-list::-webkit-scrollbar {
     width: 8px;
 }
 
-.searchable-list::-webkit-scrollbar-track,
-.search-dropdown::-webkit-scrollbar-track {
+.searchable-list::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.searchable-list::-webkit-scrollbar-thumb,
-.search-dropdown::-webkit-scrollbar-thumb {
+.searchable-list::-webkit-scrollbar-thumb {
     background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
     border-radius: var(--radius-full);
 }
 
-.searchable-group,
-.search-dropdown-group {
+.searchable-group {
     border-bottom: 1px solid var(--border-color);
 }
 
-.searchable-group:last-child,
-.search-dropdown-group:last-child {
+.searchable-group:last-child {
     border-bottom: none;
 }
 
-.searchable-group-label,
-.search-dropdown-group-label {
+.searchable-group-label {
     background: var(--bg-secondary);
     color: var(--text-secondary);
     font-weight: 600;
@@ -938,8 +919,7 @@ select::-webkit-scrollbar-thumb {
     border-bottom: 1px solid var(--border-color);
 }
 
-.searchable-option,
-.search-dropdown-option {
+.searchable-option {
     background: transparent;
     color: var(--text-primary);
     padding: 10px 12px;
@@ -948,33 +928,22 @@ select::-webkit-scrollbar-thumb {
     border-bottom: 1px solid var(--border-color);
 }
 
-.searchable-option:last-child,
-.search-dropdown-option:last-child {
+.searchable-option:last-child {
     border-bottom: none;
 }
 
-.searchable-option:hover,
-.search-dropdown-option:hover {
+.searchable-option:hover {
     background: rgba(255, 145, 77, 0.1);
     color: var(--primary-orange);
 }
 
-.searchable-option.selected,
-.search-dropdown-option.selected {
+.searchable-option.selected {
     background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
     color: white;
     font-weight: 500;
 }
 
-.search-no-results {
-    padding: 16px 12px;
-    text-align: center;
-    color: var(--text-muted);
-    font-style: italic;
-}
-
-.searchable-select-container.dropdown-open,
-.search-select-container:has(.searchable-list.show) {
+.searchable-select-container.dropdown-open {
     z-index: var(--z-dropdown);
 }
 
@@ -1062,27 +1031,6 @@ select::-webkit-scrollbar-thumb {
     background: linear-gradient(135deg, var(--primary-orange-dark), var(--primary-brown));
 }
 
-.btn-danger {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-}
-
-.btn-danger:hover {
-    background: linear-gradient(135deg, #dc2626, #b91c1c);
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
-}
-
-.btn-warning {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: white;
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-}
-
-.btn-warning:hover {
-    background: linear-gradient(135deg, #d97706, #b45309);
-    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
-}
-
 .btn-compact {
     padding: 6px 12px;
     font-size: 13px;
@@ -1094,140 +1042,15 @@ select::-webkit-scrollbar-thumb {
 }
 
 /* Export Buttons - Tech Industrial Refined */
-.btn-icon-only {
-    position: relative;
-    width: 48px;
-    height: 48px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 48px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.06),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
-}
-
-.btn-icon-only::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        135deg,
-        transparent 0%,
-        rgba(255, 145, 77, 0.03) 50%,
-        transparent 100%
-    );
-    opacity: 0;
-    transition: opacity 0.35s ease;
-}
-
-.btn-icon-only::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg,
-        transparent,
-        var(--primary-orange),
-        transparent
-    );
-    transform: translateX(-50%);
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.btn-icon-only:hover:not(:disabled) {
-    background: var(--bg-card);
-    border-color: rgba(255, 145, 77, 0.3);
-    transform: translateY(-3px);
-    box-shadow:
-        0 8px 24px rgba(255, 145, 77, 0.15),
-        0 4px 12px rgba(0, 0, 0, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.btn-icon-only:hover::before {
-    opacity: 1;
-}
-
-.btn-icon-only:hover::after {
-    width: 80%;
-}
-
-.btn-icon-only:active:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow:
-        0 4px 12px rgba(255, 145, 77, 0.1),
-        0 2px 6px rgba(0, 0, 0, 0.06);
-}
-
-.btn-icon-only img,
-.btn-icon-only .icon {
-    position: relative;
-    z-index: 1;
-    margin: 0;
-    width: 24px;
-    height: 24px;
-    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
-}
-
-.btn-icon-only:hover img,
-.btn-icon-only:hover .icon {
-    transform: scale(1.1) rotate(2deg);
-    filter: drop-shadow(0 2px 4px rgba(255, 145, 77, 0.3));
-}
 
 /* Export group styling */
 [data-group="export"] {
     gap: 8px;
 }
 
-[data-group="export"] .group-label {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-    position: relative;
-    padding-left: 8px;
-}
-
-[data-group="export"] .group-label::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 12px;
-    background: linear-gradient(180deg, var(--primary-orange), var(--primary-orange-dark));
-    border-radius: 2px;
-}
-
-.btns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-md);
-}
-
 /* ==========================================================================
    APPLY DIMENSIONS BUTTON
    ========================================================================== */
-
-.apply-dimensions-container {
-    margin-top: var(--spacing-sm);
-    display: flex;
-    justify-content: center;
-}
 
 .apply-btn {
     background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
@@ -1251,64 +1074,6 @@ select::-webkit-scrollbar-thumb {
     width: 16px;
     height: 16px;
     stroke-width: 2.5;
-}
-
-.resize-handles-lock-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 50;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    border: 1.5px solid transparent;
-    cursor: pointer;
-    transition: all var(--transition-base);
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(4px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    padding: 0;
-}
-
-.resize-handles-lock-btn .lock-svg {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-    pointer-events: none;
-}
-
-/* Locked : icône cadenas fermé visible, ouvert caché */
-.resize-handles-lock-btn.locked {
-    color: var(--text-muted, #64748b);
-    border-color: var(--border-color, #e2e8f0);
-}
-.resize-handles-lock-btn.locked .lock-closed { display: block; }
-.resize-handles-lock-btn.locked .lock-open   { display: none;  }
-
-.resize-handles-lock-btn.locked:hover {
-    color: var(--primary-orange, #ff914d);
-    border-color: var(--primary-orange, #ff914d);
-    background: rgba(255, 255, 255, 0.95);
-    transform: scale(1.1);
-    box-shadow: 0 4px 14px rgba(255, 145, 77, 0.3);
-}
-
-/* Unlocked : icône cadenas ouvert visible, fermé caché */
-.resize-handles-lock-btn.unlocked {
-    color: var(--primary-orange, #ff914d);
-    border-color: var(--primary-orange, #ff914d);
-    background: rgba(255, 145, 77, 0.08);
-}
-.resize-handles-lock-btn.unlocked .lock-closed { display: none;  }
-.resize-handles-lock-btn.unlocked .lock-open   { display: block; }
-
-.resize-handles-lock-btn.unlocked:hover {
-    background: rgba(255, 145, 77, 0.18);
-    transform: scale(1.1);
-    box-shadow: 0 4px 14px rgba(255, 145, 77, 0.3);
 }
 
 .apply-btn:hover {
@@ -1488,177 +1253,6 @@ select::-webkit-scrollbar-thumb {
    TOOLS & CONTROLS
    ========================================================================== */
 
-.tools {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
-}
-
-.control-group {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: 6px 12px;
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-backdrop);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-color);
-}
-
-.group-label {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 10px;
-    color: var(--text-muted);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-right: var(--spacing-sm);
-    white-space: nowrap;
-    opacity: 0.8;
-    transition: opacity 0.3s ease;
-    position: relative;
-    padding-bottom: 4px;
-}
-
-.group-label::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--primary-orange), transparent);
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.control-group:hover .group-label,
-.control-group-vertical:hover .group-label {
-    opacity: 1;
-    color: var(--text-secondary);
-}
-
-.control-group:hover .group-label::after,
-.control-group-vertical:hover .group-label::after {
-    width: 100%;
-}
-
-.control-group .btn {
-    margin: 0;
-    min-width: auto;
-    white-space: nowrap;
-    padding: 6px 12px;
-    font-size: 13px;
-}
-
-.control-group-vertical {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-md);
-    padding: 16px 12px;
-    min-width: 140px;
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-backdrop);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-    box-shadow: var(--glass-shadow);
-}
-
-.control-group-vertical .group-label {
-    font-size: 11px;
-    color: var(--text-secondary);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--spacing-sm);
-    text-align: center;
-}
-
-.control-group-vertical .btn {
-    width: 100%;
-    text-align: center;
-    justify-content: center;
-    padding: 8px 12px;
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-.canvas-controls-row {
-    display: flex;
-    gap: var(--spacing-sm);
-    flex-wrap: wrap;
-}
-
-.canvas-controls {
-    display: flex;
-    max-width: 700px;
-    flex-direction: column;
-    gap: var(--spacing-lg);
-    padding: var(--spacing-lg) var(--spacing-xl);
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-backdrop);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    box-shadow: var(--glass-shadow);
-}
-
-.canvas-controls-left {
-    display: flex;
-    gap: var(--spacing-sm);
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-}
-
-.canvas-controls-right {
-    display: flex;
-    gap: var(--spacing-md);
-    justify-content: flex-end;
-    align-items: stretch;
-}
-
-.canvas-controls-help {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 12px;
-    background: var(--bg-card);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-color);
-    margin-top: 6px;
-    font-size: 11px;
-}
-
-.help-section {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-}
-
-.mouse-action {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.mouse-icon {
-    font-size: 12px;
-}
-
-.keyboard-shortcuts {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    font-size: 11px;
-    color: var(--text-secondary);
-}
-
-.keyboard-shortcuts strong {
-    color: var(--text-primary);
-    font-size: 10px;
-}
-
 .shortcut {
     padding: 1px 4px;
     background: rgba(255, 145, 77, 0.1);
@@ -1667,37 +1261,6 @@ select::-webkit-scrollbar-thumb {
     color: var(--primary-orange);
     font-weight: 500;
     font-size: 10px;
-}
-
-.mouse-actions-cards {
-    display: flex;
-    gap: var(--spacing-sm);
-    margin-right: var(--spacing-lg);
-}
-
-.mouse-card {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    padding: 8px 12px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    pointer-events: none;
-    user-select: none;
-}
-
-.mouse-card .icon {
-    height: 14px;
-    width: 14px;
-}
-
-.canvas-project-controls-wrapper {
-    display: flex;
-    gap: var(--spacing-xl);
-    align-items: stretch;
 }
 
 /* ==========================================================================
@@ -1716,199 +1279,27 @@ select::-webkit-scrollbar-thumb {
 }
 
 /* Command Modules - Base Styling */
-.command-module {
-    background: linear-gradient(135deg, rgba(255,255,255,0.72) 0%, var(--glass-bg-solid) 100%);
-    backdrop-filter: var(--glass-backdrop);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-lg);
-    padding: 10px;
-    box-shadow:
-        var(--glass-shadow),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    position: relative;
-    overflow: hidden;
-}
 
 /* Corner accent for modules */
-.command-module::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, transparent 50%, rgba(255, 145, 77, 0.05) 50%);
-    border-bottom-left-radius: 100%;
-    pointer-events: none;
-}
 
 /* Primary Module - Largest, main controls */
-.primary-module {
-    min-width: 0;
-    opacity: 0;
-    animation: revealStagger 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.4s forwards;
-}
 
 /* Secondary Module - Project & Export */
-.secondary-module {
-    min-width: 0;
-    opacity: 0;
-    animation: revealStagger 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.8s forwards;
-}
 
 /* Help Module - Compact shortcuts */
-.help-module {
-    min-width: 0;
-    opacity: 0;
-    animation: revealStagger 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s forwards;
-}
 
 /* Module Headers */
-.module-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid rgba(255, 145, 77, 0.2);
-    position: relative;
-}
-
-.module-header::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    width: 60px;
-    height: 2px;
-    background: linear-gradient(90deg, var(--primary-orange), transparent);
-    box-shadow: 0 0 8px rgba(255, 145, 77, 0.6);
-}
-
-.module-status-indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--primary-orange);
-    box-shadow:
-        0 0 8px rgba(255, 145, 77, 0.8),
-        0 0 16px rgba(255, 145, 77, 0.4);
-    animation: statusPulse 2s ease-in-out infinite;
-}
 
 @keyframes statusPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.6; transform: scale(0.9); }
 }
 
-.module-title {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-}
-
 /* Subgroups within modules */
-.command-subgroup {
-    margin-bottom: 8px;
-}
-
-.command-subgroup:last-child {
-    margin-bottom: 0;
-}
-
-.subgroup-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 6px;
-    padding-left: 4px;
-}
-
-.subgroup-icon {
-    font-size: 14px;
-    color: var(--primary-orange);
-    opacity: 0.7;
-}
-
-.danger-zone .subgroup-icon {
-    color: #f56565;
-}
 
 /* Command Buttons Row */
-.command-buttons-row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
 
 /* Gap Control Slider */
-.gap-control-container {
-    margin-top: 8px;
-    padding: 8px 10px;
-    background: rgba(255, 145, 77, 0.05);
-    border: 1px solid rgba(255, 145, 77, 0.2);
-    border-radius: 8px;
-}
-
-.gap-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-    cursor: default;
-}
-
-.gap-icon {
-    font-size: 16px;
-}
-
-.gap-label strong {
-    color: var(--primary-orange);
-    font-weight: 600;
-}
-
-.select-control {
-    width: 100%;
-    min-height: 34px;
-    padding: 7px 34px 7px 10px;
-    border-radius: 7px;
-    border: 1px solid rgba(255, 145, 77, 0.24);
-    background-color: var(--bg-card);
-    color: var(--text-primary);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.25;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-.select-control:hover {
-    border-color: rgba(255, 145, 77, 0.55);
-    background-color: var(--bg-secondary);
-    box-shadow: 0 0 0 3px rgba(255, 145, 77, 0.08);
-}
-
-.select-control:focus {
-    border-color: var(--primary-orange);
-    box-shadow:
-        0 0 0 3px rgba(255, 145, 77, 0.18),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.select-control option {
-    font-size: 13px;
-    font-weight: 500;
-}
 
 .gap-slider {
     width: 100%;
@@ -1971,278 +1362,14 @@ select::-webkit-scrollbar-thumb {
 }
 
 /* Command Button Base */
-.cmd-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-sm);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-}
-
-.cmd-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s ease;
-}
-
-.cmd-btn:hover::before {
-    left: 100%;
-}
-
-.cmd-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 145, 77, 0.2);
-    border-color: rgba(255, 145, 77, 0.4);
-}
-
-.cmd-btn:active {
-    transform: translateY(0);
-}
-
-.cmd-btn .icon {
-    width: 16px;
-    height: 16px;
-    flex-shrink: 0;
-}
-
-.btn-label {
-    flex: 1;
-    white-space: nowrap;
-}
-
-.btn-shortcut {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 6px;
-    background: rgba(255, 145, 77, 0.15);
-    border: 1px solid rgba(255, 145, 77, 0.3);
-    border-radius: 4px;
-    color: var(--primary-orange);
-    opacity: 0.8;
-}
 
 /* Button Variants */
-.cmd-btn-primary {
-    background: linear-gradient(135deg, rgba(255, 145, 77, 0.15), rgba(255, 145, 77, 0.05));
-    border-color: rgba(255, 145, 77, 0.3);
-}
-
-.cmd-btn-primary:hover {
-    background: linear-gradient(135deg, rgba(255, 145, 77, 0.25), rgba(255, 145, 77, 0.15));
-    box-shadow: 0 6px 20px rgba(255, 145, 77, 0.3);
-}
-
-.cmd-btn-secondary {
-    background: var(--glass-bg);
-}
-
-.cmd-btn-danger {
-    background: linear-gradient(135deg, rgba(245, 101, 101, 0.15), rgba(245, 101, 101, 0.05));
-    border-color: rgba(245, 101, 101, 0.3);
-    color: #f56565;
-}
-
-.cmd-btn-danger:hover {
-    background: linear-gradient(135deg, rgba(245, 101, 101, 0.25), rgba(245, 101, 101, 0.15));
-    box-shadow: 0 6px 20px rgba(245, 101, 101, 0.3);
-}
-
-.cmd-btn-warning {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
-    border-color: rgba(245, 158, 11, 0.3);
-    color: #f59e0b;
-}
-
-.cmd-btn-warning:hover {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(245, 158, 11, 0.15));
-    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.3);
-}
-
-.cmd-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    pointer-events: none;
-}
 
 /* Project & Export Module */
-.command-module-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.command-action-block {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.cmd-btn-project {
-    width: 100%;
-    justify-content: center;
-    padding: 10px 14px;
-    background: linear-gradient(135deg, #ff914d, #ff751f) !important;
-    border: none !important;
-    color: white !important;
-    font-weight: 600;
-    box-shadow: 0 4px 12px rgba(255, 145, 77, 0.4);
-}
-
-.cmd-btn-project:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(255, 145, 77, 0.5);
-    background: linear-gradient(135deg, #ff751f, #ff914d) !important;
-}
 
 /* Export Block */
-.export-block {
-    padding: 9px;
-    background: rgba(255, 145, 77, 0.05);
-    border: 1px dashed rgba(255, 145, 77, 0.2);
-    border-radius: var(--radius-md);
-}
-
-.export-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-    padding-left: 4px;
-}
-
-.export-buttons {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 7px;
-}
-
-.cmd-btn-export {
-    width: 100%;
-    min-width: 0;
-    height: 64px;
-    padding: 8px 6px 7px;
-    background: var(--glass-bg-solid);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-md);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    position: relative;
-    overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.cmd-btn-export img {
-    width: 31px;
-    height: 31px;
-    object-fit: contain;
-    transition: transform 0.3s ease;
-}
-
-.cmd-btn-export .icon {
-    width: 31px;
-    height: 31px;
-}
-
-.cmd-btn-export span {
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-
-.cmd-btn-export::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--primary-orange), transparent);
-    transform: translateX(-50%);
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.cmd-btn-export:hover {
-    transform: translateY(-4px) scale(1.05);
-    box-shadow: 0 8px 20px rgba(255, 145, 77, 0.3);
-    border-color: rgba(255, 145, 77, 0.5);
-}
-
-.cmd-btn-export:hover::after {
-    width: 80%;
-}
-
-.cmd-btn-export:hover img {
-    transform: scale(1.1) rotate(2deg);
-}
 
 /* Shortcuts Module */
-.help-module .module-header.collapsed {
-    margin-bottom: 12px;
-}
-
-.shortcuts-compact {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 5px;
-}
-
-.shortcut-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 5px 7px;
-    background: var(--glass-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    font-size: 10px;
-    transition: all 0.2s ease;
-}
-
-.shortcut-item:hover {
-    background: rgba(255, 145, 77, 0.08);
-    border-color: rgba(255, 145, 77, 0.3);
-}
-
-.shortcut-key {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 7px;
-    background: rgba(255, 145, 77, 0.15);
-    border: 1px solid rgba(255, 145, 77, 0.3);
-    border-radius: 4px;
-    color: var(--primary-orange);
-}
-
-.shortcut-desc {
-    color: var(--text-secondary);
-    font-weight: 500;
-}
 
 /* ==========================================================================
    CONTRÔLES PRINCIPAUX — Barre d'état compacte (Direction A)
@@ -2250,91 +1377,12 @@ select::-webkit-scrollbar-thumb {
 
 /* Le module devient un bandeau fin ; overflow visible pour laisser sortir
    le pop-over de réglages, et on neutralise l'accent d'angle (clip). */
-.ctrl-bar-module {
-    overflow: visible;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    padding: 12px;
-}
-.ctrl-bar-module::before { display: none; }
-
-.ctrl-bar-heading {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 9px;
-    padding: 0 2px 8px;
-    border-bottom: 1px solid rgba(255, 145, 77, 0.18);
-}
-
-.ctrl-bar-title {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-}
-
-.ctrl-bar-subtitle {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    white-space: nowrap;
-}
 
 /* La barre occupe toute la hauteur restante et centre ses boutons */
-.ctrl-bar {
-    flex: 1 1 auto;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: stretch;
-    gap: 8px;
-    overflow-x: visible;
-    overflow-y: visible;
-    padding-bottom: 2px;
-}
-
-.ctrl-group-block {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px;
-    border: 1px solid rgba(255, 145, 77, 0.16);
-    border-radius: var(--radius-md, 10px);
-    background: rgba(255, 255, 255, 0.35);
-    min-width: 0;
-}
-
-.ctrl-group-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    line-height: 1;
-}
-
-.ctrl-cluster {
-    display: flex;
-    align-items: stretch;
-    gap: 6px;
-}
 
 /* Séparateur fin entre clusters (vocabulaire "barre d'état" AutoCAD) */
-.ctrl-sep {
-    width: 1px;
-    align-self: center;
-    height: 52px;
-    background: linear-gradient(180deg, transparent, rgba(255, 145, 77, 0.3), transparent);
-    margin: 0 4px;
-}
 
 /* Pousse le danger zone à droite quand la place le permet */
-.ctrl-spacer { flex: 1 1 auto; min-width: 8px; }
 
 /* Bouton de base de la barre : icône au-dessus, libellé en dessous */
 .ctrl-btn {
@@ -2345,7 +1393,7 @@ select::-webkit-scrollbar-thumb {
     gap: 5px;
     min-width: 58px;
     height: 54px;
-    padding: 7px 8px;
+    padding: var(--spacing-sm) 8px;
     background: rgba(255,255,255,0.56);
     border: 1px solid var(--glass-border);
     border-radius: 8px;
@@ -2465,7 +1513,7 @@ select::-webkit-scrollbar-thumb {
 .ctrl-settings { position: relative; display: inline-flex; }
 .ctrl-settings-pill {
     flex-direction: row;
-    gap: 7px;
+    gap: var(--spacing-sm);
     min-width: 164px;
     padding: 0 11px;
     font-size: 11px;
@@ -2487,7 +1535,7 @@ select::-webkit-scrollbar-thumb {
     left: 0;
     z-index: 200;
     min-width: 248px;
-    padding: 12px 14px;
+    padding: 12px var(--spacing-md);
     background: linear-gradient(135deg, var(--glass-bg-solid, var(--bg-card)) 0%, var(--bg-card) 100%);
     backdrop-filter: var(--glass-backdrop);
     border: 1px solid rgba(255, 145, 77, 0.35);
@@ -2518,7 +1566,7 @@ select::-webkit-scrollbar-thumb {
     justify-content: space-between;
     font-size: 12px;
     color: var(--text-primary);
-    margin-bottom: 7px;
+    margin-bottom: var(--spacing-sm);
 }
 .ctrl-popover-label input[type="checkbox"] {
     margin-right: 5px;
@@ -2662,18 +1710,6 @@ select::-webkit-scrollbar-thumb {
         overflow-y: auto;
     }
     .ctrl-settings-pill .ctrl-pill-text { display: none; }
-    .ctrl-bar {
-        grid-template-columns: 1fr;
-        overflow-x: visible;
-    }
-    .ctrl-bar-heading {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 2px;
-    }
-    .ctrl-cluster {
-        flex-wrap: wrap;
-    }
     .ctrl-btn {
         flex: 1 1 64px;
     }
@@ -2704,15 +1740,6 @@ select::-webkit-scrollbar-thumb {
 }
 
 @media (min-width: 721px) {
-    .help-module .shortcuts-compact {
-        grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-    }
-
-    .secondary-module .command-module-grid {
-        display: grid;
-        grid-template-columns: 180px 1fr;
-        align-items: stretch;
-    }
 }
 
 @media (min-width: 721px) and (max-width: 1360px) {
@@ -2734,10 +1761,6 @@ select::-webkit-scrollbar-thumb {
 }
 
 /* Dark Mode Adjustments */
-[data-theme="dark"] .command-module {
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.2));
-}
-[data-theme="dark"] .ctrl-group-block { background: rgba(0, 0, 0, 0.18); }
 [data-theme="dark"] .ctrl-btn { background: rgba(0, 0, 0, 0.3); }
 [data-theme="dark"] .control-strip {
     background:
@@ -2749,18 +1772,6 @@ select::-webkit-scrollbar-thumb {
 }
 [data-theme="dark"] .ctrl-popover {
     background: linear-gradient(135deg, rgba(20, 20, 24, 0.98), rgba(12, 12, 16, 0.98));
-}
-
-[data-theme="dark"] .cmd-btn {
-    background: rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="dark"] .cmd-btn-export {
-    background: rgba(0, 0, 0, 0.4);
-}
-
-[data-theme="dark"] .export-block {
-    background: rgba(255, 145, 77, 0.08);
 }
 
 /* ==========================================================================
@@ -2856,22 +1867,6 @@ select::-webkit-scrollbar-thumb {
     gap: var(--spacing-md);
 }
 
-.flex-center {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.flex-center-v {
-    display: flex;
-    align-items: center;
-}
-
-.flex-center-h {
-    display: flex;
-    justify-content: center;
-}
-
 /* ==========================================================================
    TOAST NOTIFICATIONS
    ========================================================================== */
@@ -2896,10 +1891,9 @@ body.electron-mode .notification-container {
 .notification {
     background: var(--glass-bg-solid);
     backdrop-filter: var(--glass-backdrop);
-    border: 1px solid var(--border-color);
-    border-left: 4px solid var(--primary-orange);
+    border: 1px solid var(--primary-orange);
     color: var(--text-primary);
-    padding: 14px 18px 14px 14px;
+    padding: var(--spacing-md) 18px var(--spacing-md) var(--spacing-md);
     border-radius: var(--radius-md);
     font-size: 14px;
     font-weight: 500;
@@ -2939,21 +1933,22 @@ body.electron-mode .notification-container {
     min-width: 0;
 }
 
-/* Types de notifications */
+/* Types de notifications — l'icône (✅/❌/⚠️/ℹ️, voir showToast()) porte déjà
+   le type sans ambiguïté ; la bordure ne fait que le renforcer visuellement. */
 .notification.success {
-    border-left-color: var(--success-color);
+    border-color: var(--success-color);
 }
 
 .notification.error {
-    border-left-color: var(--error-color);
+    border-color: var(--error-color);
 }
 
 .notification.warning {
-    border-left-color: var(--warning-color);
+    border-color: var(--warning-color);
 }
 
 .notification.info {
-    border-left-color: var(--info-color);
+    border-color: var(--info-color);
 }
 
 @keyframes notificationSlideIn {
@@ -3056,13 +2051,6 @@ body.electron-mode .notification-container {
 /* ==========================================================================
    PANEL SECTIONS
    ========================================================================== */
-
-.panel-controls {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-}
 
 .panel-middle {
     flex: 1 1 auto;
@@ -3222,7 +2210,7 @@ body.electron-mode .notification-container {
 .box-config .apply-btn {
     flex: 1 1 100%;
     width: 100%;
-    padding: 8px 14px;
+    padding: 8px var(--spacing-md);
     margin-top: 2px;
     justify-content: center;
     white-space: nowrap;
@@ -3290,7 +2278,7 @@ body.electron-mode .notification-container {
     width: auto;
     flex: 0 0 auto;
     white-space: nowrap;
-    padding: 8px 14px;
+    padding: 8px var(--spacing-md);
 }
 
 /* Select câble : pleine largeur sur sa propre ligne (pas de quantité/ajout) */
@@ -3452,26 +2440,6 @@ body.electron-mode .notification-container {
     flex: 1;
 }
 
-.lock-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    user-select: none;
-    transition: color var(--transition-base);
-}
-
-.lock-checkbox:hover {
-    color: var(--text-primary);
-}
-
-.lock-checkbox input[type="checkbox"] {
-    margin: 0;
-    cursor: pointer;
-}
-
 .lock-icon {
     cursor: pointer;
     /* Zone cliquable ≥ 24px autour de l'icône 20px (WCAG 2.5.8) */
@@ -3494,21 +2462,11 @@ body.electron-mode .notification-container {
     filter: invert(17%) sepia(90%) saturate(7471%) hue-rotate(3deg) brightness(97%) contrast(118%);
 }
 
-.lock-checkbox input[type="checkbox"]:checked ~ .lock-text {
-    color: #059669;
-    font-weight: 500;
-}
-
 .input-lock-group input[type="number"]:disabled {
     background-color: var(--bg-card);
     color: var(--text-muted);
     cursor: not-allowed;
     opacity: 0.6;
-}
-
-.lock-text {
-    font-size: 0.8rem;
-    transition: color var(--transition-base);
 }
 
 /* ==========================================================================
@@ -3531,19 +2489,6 @@ body.electron-mode .notification-container {
 .edit-popup[style*="display: flex"],
 .edit-popup.is-visible {
     display: flex !important; /* Force un alignement centré même si l'ouverture se fait en block */
-}
-
-.edit-popup-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
 }
 
 .edit-popup-content {
@@ -3867,76 +2812,182 @@ body.electron-mode .notification-container {
 }
 
 /* ==========================================================================
-   CHAMBRES DE TIRAGE COMPATIBLES (overlay canvas, panneau à droite)
+   SIDEBAR DROITE DES OUTILS — vraie sidebar dans le flux (comme .panel à
+   gauche), pas un flottant : le canvas se redimensionne avec elle. Un rail
+   d'icônes toujours visible (zoom étendu, verrou, puis les outils à contenu),
+   et une colonne de contenu qui n'affiche qu'UN outil à la fois.
    ========================================================================== */
-.compat-chambres-btn {
-    position: absolute;
-    top: 8px;
-    right: 48px;
-    z-index: 55;
-    display: inline-flex;
+/* Carte flottante arrondie — même langage visuel que .control-strip (la barre
+   de contrôle du bas) : bordure orange, dégradé translucide, ombre portée.
+   overflow:hidden sur la carte elle-même suffit à arrondir le rail et la
+   colonne de contenu ensemble, sans dupliquer fond/ombre sur chacun. */
+.right-tools {
+    display: flex;
+    flex: 0 0 auto;
+    align-self: stretch;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 145, 77, 0.22);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.42)),
+        var(--glass-bg-solid);
+    box-shadow:
+        0 12px 28px rgba(20, 24, 31, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    overflow: hidden;
+}
+
+[data-theme="dark"] .right-tools {
+    background:
+        linear-gradient(180deg, rgba(30, 31, 36, 0.78), rgba(12, 12, 16, 0.7)),
+        rgba(0, 0, 0, 0.22);
+}
+
+.right-tools-rail {
+    display: flex;
+    flex-direction: column;
     align-items: center;
+    flex-shrink: 0;
+    /* 48px = bouton 32px + 8px de marge de chaque côté (le rythme du système :
+       32px = spacing.xl, 48px = spacing.2xl) — la marge tient vraiment,
+       au lieu d'un bouton plus large que son espace déclaré. */
+    width: 48px;
+    padding: 12px 8px;
     gap: 6px;
-    padding: 8px 14px;
-    min-height: 36px;
-    box-sizing: border-box;
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-full);
-    background: var(--glass-bg-solid);
-    backdrop-filter: var(--glass-backdrop);
-    color: var(--text-primary);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 12px;
-    font-weight: 600;
+}
+
+.rail-btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    background: none;
+    color: var(--text-muted);
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    padding: 0;
     transition: all var(--transition-base);
 }
 
-.compat-chambres-btn:hover {
-    border-color: var(--primary-orange);
+.rail-btn:hover {
     color: var(--primary-orange);
-    box-shadow: 0 4px 16px rgba(255, 145, 77, 0.3);
+    border-color: var(--primary-orange);
+    background: rgba(255, 145, 77, 0.08);
 }
 
-.compat-chambres-btn svg { flex: 0 0 auto; }
+/* Retour visuel quand l'outil est actif (son panneau ouvert dans la colonne
+   de contenu) — sans lui, rien ne distingue le bouton actif d'un simple
+   survol, et le panneau semble surgir sans rapport avec ce qu'on a cliqué. */
+.rail-btn.active {
+    color: var(--primary-orange);
+    background: rgba(255, 145, 77, 0.12);
+    border-color: var(--primary-orange);
+}
 
-.compat-chambres-panel {
-    position: absolute;
-    top: 48px;
-    right: 8px;
-    z-index: 60;
-    width: min(300px, calc(100% - 16px));
-    max-height: calc(100% - 56px);
+/* Halo qui respire pour signaler une suggestion disponible sans qu'on ait
+   encore ouvert le panneau (ex. chambre de tirage compatible) — même
+   animation que .layout-preview-card.card-optimized, même usage : attirer
+   l'œil sur un choix disponible, pas décorer. S'arrête dès qu'on ouvre
+   (retire .pulse) ou que .active prend le relais (survol/sélection).
+   3 cycles puis arrêt (pas "infinite") : un bouton toujours visible du rail
+   ne doit jamais pulser en permanence (voir DESIGN.md, règle boutons
+   persistant/transitoire) — la bordure cuivre reste ensuite, statique,
+   comme rappel discret qu'une suggestion est toujours disponible. */
+.rail-btn.pulse {
+    animation: pulse-border 2s ease-in-out 3;
+    border-color: var(--primary-orange);
+}
+
+.rail-btn svg { flex: 0 0 auto; }
+
+.rail-divider {
+    width: 24px;
+    height: 1px;
+    background: var(--glass-border);
+    margin: 4px 0;
+    flex-shrink: 0;
+}
+
+.resize-handles-lock-btn .lock-svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+/* Locked : icône cadenas fermé visible, ouvert caché */
+.resize-handles-lock-btn.locked {
+    color: var(--text-muted);
+    border-color: var(--border-color);
+}
+.resize-handles-lock-btn.locked .lock-closed { display: block; }
+.resize-handles-lock-btn.locked .lock-open   { display: none;  }
+
+.resize-handles-lock-btn.locked:hover {
+    color: var(--primary-orange, #ff914d);
+    border-color: var(--primary-orange, #ff914d);
+    background: rgba(255, 145, 77, 0.08);
+}
+
+/* Unlocked : icône cadenas ouvert visible, fermé caché */
+.resize-handles-lock-btn.unlocked {
+    color: var(--primary-orange, #ff914d);
+    border-color: var(--primary-orange, #ff914d);
+    background: rgba(255, 145, 77, 0.12);
+}
+.resize-handles-lock-btn.unlocked .lock-closed { display: none;  }
+.resize-handles-lock-btn.unlocked .lock-open   { display: block; }
+
+/* Colonne de contenu : un seul outil affiché à la fois (chambres OU
+   variantes), masquée entièrement quand aucun n'est actif — le rail seul
+   reste visible, la largeur reprise par le canvas. */
+.right-tools-content {
+    flex-shrink: 0;
+    width: 300px;
+    max-width: 40vw;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid rgba(255, 145, 77, 0.22);
+    overflow: hidden;
+}
+
+.right-tools-pane {
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
     padding: var(--spacing-md);
-    background: var(--modal-bg-solid);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
     overflow: hidden;
+    min-height: 0;
     color: var(--text-secondary);
-    animation: modalPopIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.compat-header {
+.pane-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--spacing-sm);
+    flex-shrink: 0;
 }
 
-.compat-title {
+.pane-title {
     font-size: 12px;
     font-weight: 700;
     color: var(--text-primary);
     text-transform: uppercase;
     letter-spacing: 0.02em;
+    /* Défensif : « Chambres de tirage compatibles » est un des libellés les
+       plus longs de l'app dans une colonne de 300px — tronque proprement au
+       lieu de pousser/chevaucher le bouton fermer si jamais ça ne tient pas. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
-.compat-close {
+.pane-close {
     background: none;
     border: none;
     color: var(--text-secondary);
@@ -3947,13 +2998,17 @@ body.electron-mode .notification-container {
     border-radius: var(--radius-sm);
 }
 
-.compat-close:hover { color: var(--primary-orange); background: rgba(255, 145, 77, 0.12); }
+.pane-close:hover { color: var(--primary-orange); background: rgba(255, 145, 77, 0.12); }
 
 .compat-subtitle {
     font-size: 11px;
     color: var(--text-secondary);
     font-family: 'JetBrains Mono', monospace;
 }
+/* Règle de l'Afficheur (DESIGN.md) : la cote mesurée se détache en cuivre au
+   sein de la légende — même motif que .ctrl-settings-pill strong (Écart/Lit
+   dans la barre du bas), pas de couleur en dur pour rester correct en dark. */
+.compat-subtitle strong { color: var(--primary-orange); font-weight: 700; }
 
 .compat-list {
     display: flex;
@@ -4196,30 +3251,6 @@ body.electron-mode .notification-container {
     }
 }
 
-.modal-content {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--glass-bg-solid);
-    backdrop-filter: var(--glass-backdrop);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 0;
-    min-width: 400px;
-    max-width: 600px;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-    z-index: calc(var(--z-modal) + 1);
-    color: var(--text-primary);
-    scrollbar-width: thin;
-    scrollbar-color: var(--primary-orange) transparent;
-    opacity: 0;
-    animation: modalSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
 @keyframes modalSlideUp {
     0% {
         opacity: 0;
@@ -4232,33 +3263,6 @@ body.electron-mode .notification-container {
         opacity: 1;
         transform: translate(-50%, -50%) scale(1);
     }
-}
-
-.modal-content::-webkit-scrollbar {
-    width: 8px;
-}
-
-.modal-content::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.modal-content::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg,
-        var(--primary-orange),
-        var(--primary-orange-dark)
-    );
-    border-radius: var(--radius-full);
-    border: 2px solid transparent;
-    background-clip: padding-box;
-}
-
-.modal-content::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg,
-        var(--primary-orange-dark),
-        var(--primary-brown)
-    );
-    background-clip: padding-box;
-    box-shadow: 0 0 6px rgba(255, 145, 77, 0.5);
 }
 
 .modal-header {
@@ -4278,28 +3282,7 @@ body.electron-mode .notification-container {
     color: var(--text-primary);
 }
 
-.modal-close {
-    background: none;
-    border: none;
-    font-size: 24px;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 4px;
-    border-radius: var(--radius-sm);
-    transition: all var(--transition-base);
-}
-
-.modal-close:hover {
-    background: rgba(255, 145, 77, 0.1);
-    color: var(--primary-orange);
-}
-
-.modal-body {
-    padding: var(--spacing-xl);
-}
-
-.modal-actions,
-.modal-footer {
+.modal-actions {
     padding: var(--spacing-lg) var(--spacing-xl);
     border-top: 1px solid var(--border-color);
     display: flex;
@@ -4469,7 +3452,7 @@ body.electron-mode .notification-container {
 
 .custom-path-input {
     flex: 1;
-    padding: 10px 14px;
+    padding: 10px var(--spacing-md);
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -4722,7 +3705,7 @@ body.electron-mode .notification-container {
 .pdf-input,
 .pdf-textarea {
     width: 100%;
-    padding: 10px 14px;
+    padding: 10px var(--spacing-md);
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -4986,12 +3969,6 @@ body.electron-mode .notification-container {
     outline: none;
     border-color: var(--primary-orange);
     box-shadow: 0 0 0 3px rgba(255, 145, 77, 0.2);
-}
-
-.folder-creation {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-md);
 }
 
 .folder-field {
@@ -5437,6 +4414,28 @@ body.electron-mode .notification-container {
     background: var(--primary-orange-dark);
 }
 
+/* Variantes sémantiques (voir customConfirm(), script.js) — ex. la
+   confirmation "Remplacer ou ajouter ?" : Ajouter (sans risque) en vert,
+   Remplacer (destructif) en rouge, plutôt que la paire primaire/secondaire
+   cuivre par défaut qui ne distingue pas "sûr" de "destructif". Assombri au
+   survol via brightness() plutôt qu'une 2ᵉ teinte codée en dur : les jetons
+   --success-color/--error-color ont déjà leur propre valeur par thème
+   (clair/sombre), pas de paire "-dark" toute faite à réutiliser ici. */
+.confirm-actions .btn-success {
+    background: var(--success-color);
+    color: white;
+}
+.confirm-actions .btn-success:hover {
+    filter: brightness(0.9);
+}
+.confirm-actions .btn-danger {
+    background: var(--error-color);
+    color: white;
+}
+.confirm-actions .btn-danger:hover {
+    filter: brightness(0.9);
+}
+
 /* ==========================================================================
    DRAG & DROP
    ========================================================================== */
@@ -5513,10 +4512,6 @@ body.electron-mode .notification-container {
     }
 }
 
-.drop-zone.drop-success {
-    animation: dropSuccess 0.6s ease;
-}
-
 .project-item.dragging .project-actions {
     opacity: 0.3;
     pointer-events: none;
@@ -5567,28 +4562,9 @@ body.electron-mode .notification-container {
     line-height: 1.4;
 }
 
-.auto-save-indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #22c55e;
-    animation: pulse 2s infinite;
-}
-
-.auto-save-indicator.inactive {
-    background: var(--text-secondary);
-    animation: none;
-}
-
 /* ==========================================================================
    IMPORT/EXPORT CONTROLS
    ========================================================================== */
-
-.import-export-controls {
-    display: flex;
-    gap: var(--spacing-md);
-    flex-wrap: wrap;
-}
 
 .btn-primary {
     background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
@@ -5718,83 +4694,6 @@ body.electron-mode .notification-container {
    PDF EXPORT MODAL
    ========================================================================== */
 
-.export-form {
-    padding: 0;
-}
-
-.form-group {
-    margin-bottom: var(--spacing-lg);
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: var(--spacing-sm);
-    font-weight: 600;
-    color: var(--text-primary);
-    font-size: 14px;
-}
-
-.form-group input[type="text"],
-.form-group textarea {
-    width: 100%;
-    padding: 12px 16px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    font-family: 'IBM Plex Sans', sans-serif;
-    transition: all var(--transition-base);
-    box-sizing: border-box;
-    background: var(--bg-card);
-    color: var(--text-primary);
-}
-
-.form-group input[type="text"]:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: var(--primary-orange);
-    box-shadow: 0 0 0 3px rgba(255, 145, 77, 0.2);
-}
-
-.form-group textarea {
-    resize: vertical;
-    min-height: 80px;
-}
-
-.form-group input[type="checkbox"] {
-    margin-right: var(--spacing-sm);
-    transform: scale(1.1);
-    cursor: pointer;
-}
-
-.form-group label[for="pdfIncludeStats"] {
-    display: flex;
-    align-items: center;
-    font-weight: normal;
-    cursor: pointer;
-    padding: var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    transition: background-color var(--transition-base);
-}
-
-.form-group label[for="pdfIncludeStats"]:hover {
-    background: rgba(255, 145, 77, 0.1);
-}
-
-#tontonkadPdfExportModal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(5px);
-    z-index: var(--z-modal);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.2s ease-out;
-}
-
 @keyframes modalFadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -5862,148 +4761,6 @@ body.electron-mode .notification-container {
     border-radius: var(--radius-full);
 }
 
-.pdf-export-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-xl);
-}
-
-.pdf-export-grid .form-group {
-    margin-bottom: 0;
-    text-align: left;
-    position: relative;
-    z-index: 5;
-}
-
-.pdf-export-grid .form-group-span-2 {
-    grid-column: span 2;
-    position: relative;
-    z-index: 1;
-}
-
-.pdf-export-grid .form-group label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    margin-bottom: 6px;
-}
-
-.pdf-export-grid .form-group input[type="text"],
-.pdf-export-grid .form-group textarea {
-    width: 100%;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    pointer-events: auto !important;
-    position: relative;
-    z-index: 10;
-}
-
-.pdf-export-grid .form-group input[type="text"]:focus,
-.pdf-export-grid .form-group textarea:focus {
-    background: var(--bg-secondary);
-    outline: 2px solid var(--accent);
-}
-
-.pdf-export-modal-content .checkbox-group {
-    margin-top: var(--spacing-xl);
-}
-
-.pdf-export-modal-content .checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--text-primary);
-}
-
-.pdf-export-modal-content .checkbox-label input[type="checkbox"] {
-    accent-color: var(--primary-orange);
-    width: 16px;
-    height: 16px;
-}
-
-.pdf-export-modal-content .modal-footer {
-    padding: var(--spacing-lg) var(--spacing-xl);
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--spacing-md);
-    background: var(--bg-secondary);
-    flex-shrink: 0;
-}
-
-.image-drop-zone {
-    border: 2px dashed var(--border-color);
-    border-radius: var(--radius-sm);
-    padding: var(--spacing-xl);
-    text-align: center;
-    cursor: pointer;
-    transition: all var(--transition-base);
-    background: var(--bg-card);
-}
-
-.image-drop-zone.dragover {
-    border-color: var(--primary-orange);
-    background: rgba(255, 145, 77, 0.1);
-}
-
-.image-drop-zone .drop-text {
-    color: var(--text-secondary);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-sm);
-}
-
-.image-drop-zone .drop-icon {
-    font-size: 24px;
-    color: var(--primary-orange);
-}
-
-.image-drop-zone .drop-text small {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-.image-preview {
-    display: none;
-    position: relative;
-}
-
-.image-preview .preview-img {
-    max-width: 100%;
-    max-height: 120px;
-    border-radius: var(--radius-sm);
-    object-fit: contain;
-}
-
-.image-preview .remove-img-btn {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    background: linear-gradient(135deg, #dc2626, #b91c1c);
-    color: white;
-    border: 2px solid var(--bg-card);
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all var(--transition-base);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.image-preview .remove-img-btn:hover {
-    transform: scale(1.1);
-    background: linear-gradient(135deg, #b91c1c, #991b1b);
-}
-
 /* ==========================================================================
    SETTINGS BUTTON
    ========================================================================== */
@@ -6016,28 +4773,6 @@ body.electron-mode .notification-container {
    avant .info-button:hover, faisant avaler par erreur ~400 lignes de CSS
    suivantes par un parseur tolérant (postcss, et vraisemblablement les
    moteurs de rendu réels) — corrigé en même temps que ce nettoyage. */
-
-.dev-helper-btn {
-    padding: 6px 10px;
-    border-radius: 12px;
-    border: 1px dashed var(--border-color);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 11px;
-    letter-spacing: 0.2px;
-    cursor: pointer;
-    transition: all var(--transition-base);
-}
-
-.dev-helper-btn:hover {
-    border-color: var(--primary-orange);
-    color: var(--primary-orange);
-    background: rgba(255, 145, 77, 0.08);
-}
-
-.dev-helper-btn:active {
-    transform: translateY(1px);
-}
 
 /* ==========================================================================
    UPDATE MODAL
@@ -6348,55 +5083,18 @@ body.electron-mode .notification-container {
 }
 
 
-/* ── Layout Preview Panel ──────────────────────────────────────────── */
-.layout-preview-panel {
-    position: fixed;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: auto;
-    max-width: 90vw;
-    min-width: 320px;
-    background: var(--surface-primary, #fff);
-    border: 1px solid var(--glass-border, #e0e0e0);
-    border-radius: var(--radius-md, 8px);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-    padding: 10px 12px 12px;
-    box-sizing: border-box;
-    pointer-events: all;
-    z-index: 1200;
-}
-.layout-preview-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
-}
-.layout-preview-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary, #666);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-.layout-preview-close {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--text-secondary, #999);
-    padding: 2px 6px;
-    border-radius: 4px;
-    line-height: 1;
-}
-.layout-preview-close:hover { background: var(--surface-hover, #f0f0f0); }
+/* ── Layout Preview Panel — vit maintenant dans la sidebar droite partagée
+   (.right-tools-content), comme .compat-chambres-panel : plus de position ni
+   de chrome (fond/bordure/rayon/ombre/en-tête) propres, tout vient de
+   .right-tools-pane/.pane-header (voir plus haut). Seul le contenu propre
+   aux variantes (les cartes) reste défini ici. ─────────────────────────── */
 .layout-preview-cards {
     display: flex;
-    gap: 10px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
     scrollbar-width: thin;
+    scrollbar-color: var(--primary-orange) transparent;
 }
 .layout-preview-card {
     display: flex;
@@ -6404,21 +5102,16 @@ body.electron-mode .notification-container {
     align-items: center;
     gap: 5px;
     cursor: pointer;
-    padding: 6px 8px;
-    border-radius: var(--radius-sm, 6px);
-    border: 2px solid transparent;
-    background: var(--surface-secondary, #f8f8f8);
-    transition: border-color 0.15s, background 0.15s;
-    min-width: 90px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: var(--bg-card);
+    transition: all 0.15s ease;
+    width: 100%;
+    box-sizing: border-box;
 }
-.layout-preview-card:hover {
-    border-color: var(--accent-primary, #ff914d);
-    background: var(--surface-hover, #fff5ee);
-}
-.layout-preview-card.active {
-    border-color: var(--accent-primary, #ff914d);
-    background: var(--surface-hover, #fff5ee);
-}
+.layout-preview-card:hover { border-color: var(--primary-orange); }
+.layout-preview-card.active { border-color: var(--primary-orange); box-shadow: inset 0 0 0 1px var(--primary-orange); }
 .layout-preview-card svg { display: block; border-radius: 3px; }
 .layout-preview-card-name {
     font-size: 10px;
@@ -6427,7 +5120,6 @@ body.electron-mode .notification-container {
     text-align: center;
     white-space: nowrap;
 }
-.layout-preview-card-score { font-size: 10px; color: var(--text-secondary, #888); }
 /* Bouton Redimensionner remplacé par le panel 3 cards */
 #reduceButtonContainer { display: none !important; }
 
@@ -6436,15 +5128,19 @@ body.electron-mode .notification-container {
     0%, 100% { box-shadow: 0 0 0 0 rgba(255, 145, 77, 0.4); }
     50%       { box-shadow: 0 0 0 6px rgba(255, 145, 77, 0.0); }
 }
+/* Fond en aplat semi-transparent orange (pas un token de surface plein) :
+   fonctionne à l'identique dans les deux thèmes, aucune règle [data-theme]
+   séparée à maintenir — la carte "recommandée" reste la seule à porter un
+   fond, pour rester repérable au milieu des autres cartes sans fond. */
 .layout-preview-card.card-optimized {
     animation: pulse-border 2s ease-in-out infinite;
-    border-color: var(--accent, #3b82f6);
-    background: var(--surface-hover, #f0f6ff);
+    border-color: var(--primary-orange);
+    background: rgba(255, 145, 77, 0.08);
 }
 .layout-preview-card.card-optimized.active {
     animation: none;
-    border-color: var(--accent, #3b82f6);
-    background: var(--surface-hover, #e0edff);
+    border-color: var(--primary-orange);
+    background: rgba(255, 145, 77, 0.14);
 }
 .card-optimized-badge {
     font-size: 11px;
@@ -6456,21 +5152,11 @@ body.electron-mode .notification-container {
 .layout-preview-card-label {
     font-size: 9px;
     font-weight: 700;
-    color: var(--text-secondary, #888);
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     text-align: center;
 }
-
-[data-theme="dark"] .layout-preview-panel {
-    background: var(--surface-primary, #1e1e1e);
-    border-color: var(--glass-border, #333);
-}
-[data-theme="dark"] .layout-preview-card { background: var(--surface-secondary, #2a2a2a); }
-[data-theme="dark"] .layout-preview-card.active,
-[data-theme="dark"] .layout-preview-card:hover { background: #3a2a1e; }
-[data-theme="dark"] .layout-preview-card.card-optimized { background: rgba(255, 145, 77, 0.08); }
-[data-theme="dark"] .layout-preview-card.card-optimized.active { background: rgba(255, 145, 77, 0.14); }
 
 /* ─── Hub Inventaire ──────────────────────────────────────────────────────── */
 .fourreau-add-row {
@@ -6529,15 +5215,16 @@ body.electron-mode .notification-container {
     align-items: center;
     justify-content: space-between;
     padding: 4px 6px;
+    border: 1px solid transparent;
     border-radius: 4px;
     cursor: pointer;
     font-size: 11px;
-    transition: background 0.12s;
+    transition: background 0.12s, border-color 0.12s;
 }
 .plan-inventory-item:hover { background: var(--surface-hover, #f5f5f5); }
 .plan-inventory-item.mode-c-active {
     background: var(--accent-light, #e0edff);
-    border-left: 3px solid var(--accent, #3b82f6);
+    border-color: var(--accent, #3b82f6);
 }
 .plan-item-label { font-weight: 600; color: var(--text-primary, #333); flex: 1; }
 .plan-item-right { display: flex; align-items: center; gap: 4px; }
@@ -6555,20 +5242,11 @@ body.electron-mode .notification-container {
 [data-theme="dark"] .qty-btn { background: #333; border-color: #555; color: #eee; }
 [data-theme="dark"] .qty-input { background: #2a2a2a; border-color: #555; color: #eee; }
 [data-theme="dark"] .plan-inventory-item:hover { background: #2a2a2a; }
-[data-theme="dark"] .plan-inventory-item.mode-c-active { background: rgba(255, 145, 77, 0.10); border-left-color: var(--accent); }
+/* border-color (les 4 côtés) vient déjà de la règle .mode-c-active non thémée
+   ci-dessus, appliquée aussi en dark — seul le fond change ici. */
+[data-theme="dark"] .plan-inventory-item.mode-c-active { background: rgba(255, 145, 77, 0.10); }
 
 /* Void fill suggestions */
-.void-fill-section { margin-top: 10px; border-top: 1px solid var(--border, #e5e7eb); padding-top: 8px; }
-.void-fill-title { font-size: 11px; font-weight: 600; color: var(--text-secondary, #6b7280); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
-.void-fill-item { display: flex; align-items: center; gap: 6px; padding: 4px 0; flex-wrap: wrap; }
-.void-fill-desc { flex: 1; font-size: 11px; color: var(--text-primary, #111); }
-.btn-apply-fill { background: var(--accent, #3b82f6); color: #fff; border: none; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
-.btn-apply-fill:hover { opacity: 0.85; }
-.btn-ignore-fill { background: transparent; color: var(--text-secondary, #6b7280); border: 1px solid var(--border, #e5e7eb); font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
-.btn-ignore-fill:hover { background: var(--surface-secondary, #f3f4f6); }
-[data-theme="dark"] .void-fill-desc { color: #ddd; }
-[data-theme="dark"] .btn-ignore-fill { border-color: #555; color: #aaa; }
-[data-theme="dark"] .btn-ignore-fill:hover { background: #333; }
 
 /* ==========================================================================
    ÉCRANS PEU HAUTS (1080p et moins) — mode compact de la colonne latérale
@@ -6704,23 +5382,70 @@ body.electron-mode .notification-container {
     font-size: 13px;
     color: var(--text-secondary);
 }
-.bb-liaison-head button {
+/* Base commune aux boutons d'action BIG BRAIN (en-tête « Liaisons » et état
+   vide ci-dessous, .bb-detail-empty-actions) — seuls padding/font-size
+   diffèrent par contexte (l'état vide est volontairement plus visible). */
+.bb-liaison-head button,
+.bb-detail-empty-actions button {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    padding: 4px 10px;
-    font-size: 12px;
     cursor: pointer;
     transition: all var(--transition-base);
 }
-.bb-liaison-head button:hover {
+.bb-liaison-head button:hover,
+.bb-detail-empty-actions button:hover {
     border-color: var(--primary-orange);
     color: var(--primary-orange);
+}
+.bb-liaison-head button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+.bb-liaison-head button svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
 }
 .bb-liaison-head-actions {
     display: flex;
     gap: 6px;
+}
+
+/* Vider : seule action destructive de la rangée, placée à l'opposé de
+   + Nouvelle (le bouton le plus utilisé) pour limiter les clics accidentels.
+   Survol rouge — même vocabulaire que .ctrl-btn-danger (canvas) — jamais
+   cuivre, réservé aux actions d'ajout de cette même rangée. Désactivé (pas
+   masqué : la rangée ne doit pas sauter) quand la liste est déjà vide.
+   Confirmation obligatoire côté JS : contrairement au canvas, la liste de
+   liaisons n'a pas d'historique Ctrl+Z. */
+#bbClearLiaisons:hover {
+    background: rgba(245, 101, 101, 0.14);
+    border-color: #f56565;
+    color: #f56565;
+}
+#bbClearLiaisons:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* + Nouvelle : seule action réellement primaire du trio (Import/Réserve sont
+   occasionnelles) — bordure teintée cuivre au repos, plein cuivre au survol.
+   Pas de fond plein en permanence : .bb-go (Générer, en pied de panneau)
+   reste le seul cuivre plein TOUJOURS visible de la vue — la Règle du
+   Cuivre Rare veut un seul repère fort, pas trois. */
+#bbAddLiaison {
+    border-color: rgba(255, 145, 77, 0.4);
+    color: var(--primary-orange);
+}
+#bbAddLiaison:hover {
+    background: var(--primary-orange);
+    border-color: var(--primary-orange);
+    color: #fff;
 }
 
 /* Liste des liaisons — PAS de scroll propre : #paneBIGBRAIN scrolle déjà tout
@@ -6752,6 +5477,16 @@ body.electron-mode .notification-container {
 .bb-liaison-item:hover {
     border-color: var(--primary-orange);
 }
+/* Liaison(s) qui viennent d'apparaître (+ Nouvelle / + Réserve / Dupliquer /
+   import Caneco) : confirme l'action et aide à repérer la nouveauté dans une
+   liste déjà longue — jamais rejoué au rendu suivant (classe retirée par
+   big-brain-panel.js après un seul passage). Réutilise slideInUp (déjà
+   présent dans la feuille de style) et la décélération "arrivée confiante"
+   déjà utilisée par le modal de mise à jour, pas le ressort des grands
+   panneaux — un changement d'état routinier, pas un moment de marque. */
+.bb-liaison-item.bb-just-added {
+    animation: slideInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 .bb-liaison-item.active {
     border-color: var(--primary-orange);
     background: var(--accent-light);
@@ -6762,6 +5497,7 @@ body.electron-mode .notification-container {
 .bb-liaison-item.is-reserve {
     border-style: dashed;
 }
+
 .bb-liaison-item .bb-liaison-name {
     font-weight: 600;
     overflow: hidden;
@@ -6776,7 +5512,8 @@ body.electron-mode .notification-container {
     flex: 0 0 auto;
 }
 .bb-liaison-item .bb-liaison-rename,
-.bb-liaison-item .bb-liaison-dup {
+.bb-liaison-item .bb-liaison-dup,
+.bb-liaison-item .bb-liaison-del {
     flex: 0 0 auto;
     background: none;
     border: none;
@@ -6791,16 +5528,6 @@ body.electron-mode .notification-container {
     color: var(--primary-orange);
     background: var(--accent-light);
 }
-.bb-liaison-item .bb-liaison-del {
-    flex: 0 0 auto;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 14px;
-    padding: 2px 4px;
-    border-radius: var(--radius-sm);
-}
 .bb-liaison-item .bb-liaison-del:hover {
     color: var(--error-color);
     background: var(--error-bg);
@@ -6813,12 +5540,45 @@ body.electron-mode .notification-container {
     background: var(--bg-secondary);
     padding: var(--spacing-md);
 }
+/* Changement de LIAISON sélectionnée uniquement (pas les re-rendus internes
+   déclenchés par un simple champ modifié — mode/famille/neutre/PE — qui
+   arrivent en pleine frappe et ne doivent jamais clignoter). Posée par
+   selectLiaison() (big-brain-panel.js) sur le contenu déjà reconstruit. */
+.bb-detail.bb-detail-swap {
+    animation: dropdownFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 
 .bb-detail-empty {
     color: var(--text-muted);
     font-size: 13px;
     text-align: center;
     padding: var(--spacing-md) 0;
+}
+
+/* Actions de l'état vide — mêmes boutons que l'en-tête « Liaisons »
+   (.bb-liaison-head button), à portée de clic direct. */
+.bb-detail-empty-actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+}
+.bb-detail-empty-actions button {
+    padding: 6px 14px;
+    font-size: 13px;
+}
+/* + Nouvelle liaison : action suggérée (usage principal de BIG BRAIN,
+   la réserve est le cas secondaire) — même traitement plein-cuivre que
+   .confirm-actions .btn-primary. */
+.bb-detail-empty-actions button.bb-empty-primary {
+    background: var(--primary-orange);
+    border-color: var(--primary-orange);
+    color: white;
+}
+.bb-detail-empty-actions button.bb-empty-primary:hover {
+    background: var(--primary-orange-dark);
+    border-color: var(--primary-orange-dark);
+    color: white;
 }
 
 .bb-detail-name {
@@ -7000,6 +5760,37 @@ body.electron-mode .notification-container {
     font-weight: 400;
 }
 
+/* « + Nouvelle liaison » juste au-dessus de Générer — même action que le
+   bouton d'en-tête, mais toujours à portée une fois la liste longue et
+   défilée. Volontairement SANS bordure/fond au repos, ligne fantôme qui ne
+   se révèle qu'à l'interaction : .bb-go (Générer) juste en dessous reste le
+   seul repère fort de cette rangée. */
+.bb-liaison-add-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+.bb-liaison-add-btn:hover {
+    border-color: var(--primary-orange);
+    color: var(--primary-orange);
+    background: rgba(255, 145, 77, 0.05);
+}
+.bb-liaison-add-btn svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+}
+
 /* Pied de panneau : message de statut / erreurs. */
 .bb-foot-msg {
     font-size: 12px;
@@ -7048,6 +5839,15 @@ body.electron-mode .notification-container {
     animation: modalPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+/* Passage de l'étape "choix du fichier" à l'étape "sélection des liaisons" :
+   confirme que l'analyse a abouti et fait la continuité entre les deux
+   écrans du même modal (pas rejouée à l'ouverture du modal — déjà couvert
+   par modalPopIn sur .caneco-modal-content — seulement à ce changement
+   d'étape précis, posé par handleCanecoFile()). */
+.caneco-step.bb-step-enter {
+    animation: dropdownFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .caneco-modal-body {
     padding: var(--spacing-xl);
     overflow-y: auto;
@@ -7055,11 +5855,90 @@ body.electron-mode .notification-container {
     scrollbar-color: var(--primary-orange) transparent;
 }
 
+/* #canecoStepFile est la zone de glisser-déposer (dragover/dragleave/drop
+   câblés dans big-brain-panel.js) — icône + intitulé explicite, pas qu'un
+   cadre en tirets : le puits (fond + tirets) se voit au repos, le cuivre
+   n'apparaît QU'au survol actif (Règle du Cuivre Rare — le sursaut de
+   couleur EST le signal « lâchez ici », pas une décoration permanente). */
+#canecoStepFile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    padding: var(--spacing-xl) var(--spacing-lg);
+    text-align: center;
+    transition: border-color var(--transition-base), background var(--transition-base), transform var(--transition-base);
+}
+
+.caneco-dropzone-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.caneco-dropzone-icon {
+    color: var(--text-muted);
+    transition: color var(--transition-base), transform var(--transition-base);
+}
+
+.caneco-dropzone-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.caneco-dropzone-formats {
+    display: flex;
+    gap: 6px;
+}
+
+.caneco-dropzone-sep {
+    margin: var(--spacing-md) 0 var(--spacing-sm);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* État actif du glisser : bordure pleine + fond cuivre + icône cuivre qui se
+   soulève légèrement — même grammaire que .btn-secondary:hover
+   (translateY + couleur), pas le ressort d'entrée (revealStagger/modalPopIn) :
+   ce n'est pas une apparition, c'est un état qui va/vient plusieurs fois
+   pendant le survol. */
+#canecoStepFile.caneco-dragover {
+    border-style: solid;
+    border-color: var(--primary-orange);
+    background: rgba(255, 145, 77, 0.08);
+    transform: scale(1.01);
+}
+#canecoStepFile.caneco-dragover .caneco-dropzone-icon {
+    color: var(--primary-orange);
+    transform: translateY(-3px) scale(1.1);
+}
+
+/* Spécificité (id + classe) volontaire : gagne sur .caneco-help ci-dessous
+   sans dépendre de l'ordre des règles dans le fichier. */
+#canecoStepFile .caneco-help {
+    margin: var(--spacing-md) 0 0;
+    max-width: 380px;
+}
+
 .caneco-help {
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.5;
     margin: 0 0 var(--spacing-lg);
+}
+
+.caneco-file-loading {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: var(--spacing-md);
 }
 
 .caneco-file-error {
