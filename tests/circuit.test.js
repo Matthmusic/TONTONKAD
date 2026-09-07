@@ -60,6 +60,34 @@ describe('circuitToCables', () => {
   });
 });
 
+describe('circuitToCables — PEN (neutre+PE combiné)', () => {
+  test('pen actif → une seule entrée PEN, qty = parallele (comme le neutre)', () => {
+    const r = circuitToCables({ ...base, pen: true, codePEN: '1x185', parallele: 2 }, resolveOd);
+    expect(r).toEqual([
+      { fam: 'U1000-AR2V', code: '1x185', od: 25.5, qty: 6, fonction: 'phase' },
+      { fam: 'U1000-AR2V', code: '1x185', od: 25.5, qty: 2, fonction: 'PEN' },
+    ]);
+  });
+
+  test('pen actif → neutre et PE ignorés même si renseignés (mutuellement exclusifs)', () => {
+    const r = circuitToCables({ ...base, pen: true, codePEN: '1x185' }, resolveOd);
+    expect(r.some((c) => c.fonction === 'neutre')).toBe(false);
+    expect(r.some((c) => c.fonction === 'PE')).toBe(false);
+    expect(r.filter((c) => c.fonction === 'PEN')).toHaveLength(1);
+  });
+
+  test('section du PEN respectée indépendamment de codeNeutre/codePE', () => {
+    const r = circuitToCables({ ...base, pen: true, codePEN: '1x95' }, resolveOd);
+    const pen = r.find((c) => c.fonction === 'PEN');
+    expect(pen).toMatchObject({ code: '1x95', od: 19 });
+  });
+
+  test('pen sans codePEN → aucune entrée PEN (comme neutre/PE sans code)', () => {
+    const r = circuitToCables({ ...base, pen: true, codePEN: '' }, resolveOd);
+    expect(r.some((c) => c.fonction === 'PEN')).toBe(false);
+  });
+});
+
 describe('circuitToCables — mode multi', () => {
   // base porte 3 phases + neutre + PE : en multi ils doivent être IGNORÉS,
   // le câble multiconducteur portant déjà tous les conducteurs.

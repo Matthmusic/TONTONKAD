@@ -49,6 +49,22 @@ describe('BIG BRAIN — circuit → phases, bout en bout', () => {
     expect(queues['L1|1x185|PE']).toEqual(['PE']);
   });
 
+  test('PEN en MÊME section (1x185) que les phases ne se mélange pas avec elles', () => {
+    const circuit = {
+      fam: 'U1000-AR2V', nbPhases: 3, codePhase: '1x185',
+      pen: true, codePEN: '1x185', parallele: 1,
+    };
+    const cables = circuitToCables(circuit, resolveOd);
+    const liaison = { id: 'L1', nom: 'TGBT → GE', cables };
+
+    expect(assignPhases(cables)).toEqual(['L1', 'L2', 'L3', 'PEN']);
+
+    const queues = buildPhaseQueues([liaison]);
+    expect(queues['L1|1x185|phase']).toEqual(['L1', 'L2', 'L3']);
+    expect(queues['L1|1x185|PEN']).toEqual(['PEN']);
+    expect(Object.keys(queues)).toHaveLength(2);
+  });
+
   test('liaison en multi : un seul câble par circuit, aucune phase attribuée', () => {
     const circuit = {
       mode: 'multi', fam: 'U1000-AR2V', codeMulti: '5x16',

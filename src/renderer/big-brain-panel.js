@@ -83,6 +83,7 @@
     circuit.codePhase = uni;
     circuit.codeNeutre = uni;
     circuit.codePE = uni;
+    circuit.codePEN = uni;
     circuit.codeMulti = getCodesForMode(circuit.fam, 'multi')[0] || '';
   }
 
@@ -98,6 +99,7 @@
       circuit.codePhase = uni;
       if (!circuit.codeNeutre) circuit.codeNeutre = uni;
       if (!circuit.codePE) circuit.codePE = uni;
+      if (!circuit.codePEN) circuit.codePEN = uni;
     }
   }
 
@@ -126,7 +128,7 @@
         ? 'Aucun câble — choisis un câble multiconducteur.'
         : 'Aucun câble — renseigne au moins les phases.';
     }
-    const suffixe = { neutre: ' (N)', PE: ' (PE)' };
+    const suffixe = { neutre: ' (N)', PE: ' (PE)', PEN: ' (PEN)' };
     const parts = cables.map((c) => `${c.qty}×${c.code}${suffixe[c.fonction] || ''}`);
     const total = cables.reduce((s, c) => s + c.qty, 0);
     return `${parts.join(' + ')} → ${total} câble(s)`;
@@ -390,6 +392,7 @@
         circuit.codePhase = inList(circuit.codePhase);
         circuit.codeNeutre = inList(circuit.codeNeutre);
         circuit.codePE = inList(circuit.codePE);
+        circuit.codePEN = inList(circuit.codePEN);
       }
     }
 
@@ -456,29 +459,44 @@
 
       grid.appendChild(buildCircuitRow('Phases', [nbPhasesInput, timesSpan, codePhaseSelect]));
 
-      // Neutre : présence + section
+      // Neutre : présence + section — désactivé si PEN combiné actif (exclusifs)
       const neutreCheck = document.createElement('input');
       neutreCheck.type = 'checkbox';
       neutreCheck.className = 'bb-circuit-neutre';
       neutreCheck.checked = !!circuit.neutre;
+      neutreCheck.disabled = !!circuit.pen;
       neutreCheck.setAttribute('aria-label', 'Présence d’un neutre');
 
       const codeNeutreSelect = buildCodeSelect('bb-circuit-codeneutre', 'Section du neutre', codes, circuit.codeNeutre);
-      codeNeutreSelect.disabled = !circuit.neutre;
+      codeNeutreSelect.disabled = !circuit.neutre || !!circuit.pen;
 
       grid.appendChild(buildCircuitRow('Neutre', [neutreCheck, codeNeutreSelect]));
 
-      // PE : présence + section
+      // PE : présence + section — désactivé si PEN combiné actif (exclusifs)
       const peCheck = document.createElement('input');
       peCheck.type = 'checkbox';
       peCheck.className = 'bb-circuit-pe';
       peCheck.checked = !!circuit.pe;
+      peCheck.disabled = !!circuit.pen;
       peCheck.setAttribute('aria-label', 'Présence d’un PE');
 
       const codePESelect = buildCodeSelect('bb-circuit-codepe', 'Section du PE', codes, circuit.codePE);
-      codePESelect.disabled = !circuit.pe;
+      codePESelect.disabled = !circuit.pe || !!circuit.pen;
 
       grid.appendChild(buildCircuitRow('PE', [peCheck, codePESelect]));
+
+      // PEN : conducteur combiné neutre+PE — mutuellement exclusif avec
+      // Neutre/PE séparés (le cocher les désactive et les décoche ci-dessus).
+      const penCheck = document.createElement('input');
+      penCheck.type = 'checkbox';
+      penCheck.className = 'bb-circuit-pen';
+      penCheck.checked = !!circuit.pen;
+      penCheck.setAttribute('aria-label', 'Conducteur PEN combiné (remplace neutre + PE séparés)');
+
+      const codePENSelect = buildCodeSelect('bb-circuit-codepen', 'Section du PEN', codes, circuit.codePEN);
+      codePENSelect.disabled = !circuit.pen;
+
+      grid.appendChild(buildCircuitRow('PEN', [penCheck, codePENSelect]));
     }
 
     // Circuits en parallèle
@@ -575,6 +593,7 @@
     return {
       mode: 'mono', fam: getFamilies()[0] || '',
       nbPhases: 3, codePhase: '', neutre: true, codeNeutre: '', pe: true, codePE: '',
+      pen: false, codePEN: '',
       codeMulti: '', parallele: 1,
     };
   }
@@ -1246,6 +1265,12 @@
         } else if (target.classList.contains('bb-circuit-pe')) {
           circuit.pe = target.checked;
           renderDetail();
+        } else if (target.classList.contains('bb-circuit-pen')) {
+          circuit.pen = target.checked;
+          // Exclusif avec Neutre/PE séparés : les décocher évite un état
+          // incohérent si l'utilisateur recoche PEN après les avoir réactivés.
+          if (circuit.pen) { circuit.neutre = false; circuit.pe = false; }
+          renderDetail();
         } else if (target.classList.contains('bb-circuit-codephase')) {
           circuit.codePhase = target.value;
           updateRecap();
@@ -1254,6 +1279,9 @@
           updateRecap();
         } else if (target.classList.contains('bb-circuit-codepe')) {
           circuit.codePE = target.value;
+          updateRecap();
+        } else if (target.classList.contains('bb-circuit-codepen')) {
+          circuit.codePEN = target.value;
           updateRecap();
         } else if (target.classList.contains('bb-detail-taille-imposee')) {
           if (!target.value) {

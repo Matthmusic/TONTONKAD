@@ -98,6 +98,13 @@ describe('interleaveCore', () => {
     expect(interleaveCore([])).toEqual([]);
   });
 
+  test('PEN traité comme un neutre (entrelacé avec les phases, jamais isolé comme le PE)', () => {
+    const phases = [u('phase', 0), u('phase', 1), u('phase', 2)];
+    const pen = [u('PEN', 0)];
+    const out = interleaveCore([...phases, ...pen]);
+    expect(out.map((c) => c.fonction)).toEqual(['phase', 'phase', 'phase', 'PEN']);
+  });
+
   test('reliquat non entier réparti sans perte (7 phases pour 2 neutres)', () => {
     const phases = Array.from({ length: 7 }, (_, i) => u('phase', i));
     const neutres = [u('neutre', 0), u('neutre', 1)];

@@ -33,6 +33,13 @@ describe('assignPhases — fonction explicite', () => {
       { code: '1x185', qty: 1, fonction: 'aucune' },
     ])).toEqual(['N', 'PE', null]);
   });
+  test('PEN → PEN, distinct de N et de PE, ne consomme pas le cycle des phases', () => {
+    expect(assignPhases([
+      { code: '1x185', qty: 1 },
+      { code: '1x185', qty: 1, fonction: 'PEN' },
+      { code: '1x185', qty: 1 },
+    ])).toEqual(['L1', 'PEN', 'L2']);
+  });
   test('phase forcée sur un multipolaire prend quand même le cycle', () => {
     expect(assignPhases([{ code: '4x25', qty: 2, fonction: 'phase' }])).toEqual(['L1', 'L2']);
   });

@@ -79,10 +79,13 @@
   // n'est plus magnétiquement équilibré — risque d'échauffement par
   // induction dans un fourreau métallique. Seul le PE (géré à part, jamais
   // ici) peut être isolé sans ce risque.
+  // PEN (neutre+PE combiné) transporte du courant de service comme un
+  // neutre — contrairement au PE seul — donc il doit être entrelacé au même
+  // titre que 'neutre', jamais laissé de côté dans `others`.
   function interleaveCore(core) {
     const phases = core.filter((c) => c.fonction === 'phase');
-    const neutres = core.filter((c) => c.fonction === 'neutre');
-    const others = core.filter((c) => c.fonction !== 'phase' && c.fonction !== 'neutre');
+    const neutres = core.filter((c) => c.fonction === 'neutre' || c.fonction === 'PEN');
+    const others = core.filter((c) => c.fonction !== 'phase' && c.fonction !== 'neutre' && c.fonction !== 'PEN');
     if (!phases.length || !neutres.length) return [...core]; // rien à entrelacer (ex. multi, ou pas de neutre)
     const ratio = phases.length / neutres.length;
     const out = [];

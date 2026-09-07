@@ -11,7 +11,9 @@
   }
 
   // cables : câbles d'UNE liaison [{ code, qty, fonction }]. fonction ∈
-  // 'auto' (défaut) | 'phase' | 'neutre' | 'PE' | 'aucune'.
+  // 'auto' (défaut) | 'phase' | 'neutre' | 'PE' | 'PEN' | 'aucune'.
+  // PEN = conducteur combiné neutre+PE (mutuellement exclusif avec neutre/PE
+  // séparés en amont, dans circuit.js) — traité à part, jamais recyclé comme N ou PE.
   // Retourne une phase (ou null) par câble-unité, qty déplié. Le cycle L1→L2→L3
   // est local à l'appel (donc à la liaison) ; les null ne le consomment pas.
   function assignPhases(cables) {
@@ -23,6 +25,7 @@
       for (let i = 0; i < n; i++) {
         if (fonction === 'neutre') { out.push('N'); continue; }
         if (fonction === 'PE') { out.push('PE'); continue; }
+        if (fonction === 'PEN') { out.push('PEN'); continue; }
         if (fonction === 'aucune') { out.push(null); continue; }
         const estPhase = (fonction === 'phase') || (fonction === 'auto' && isUnipolaire(c.code));
         if (!estPhase) { out.push(null); continue; }
