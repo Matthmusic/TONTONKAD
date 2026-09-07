@@ -933,7 +933,16 @@
     ph2: COLOR_SYSTEM.getByACI(8).hex,  // Gris
     ph3: COLOR_SYSTEM.getByACI(250).hex, // Noir
     n: COLOR_SYSTEM.getByACI(5).hex,    // Bleu
-    pe: COLOR_SYSTEM.getByACI(3).hex    // Vert
+    pe: COLOR_SYSTEM.getByACI(3).hex,   // Vert
+    // PEN (neutre+PE combiné) : bicolore, pas de teinte ACI unique — le rendu
+    // canvas (drawCable) dessine moitié bleu/moitié vert via .n/.pe ci-dessus.
+    // Cette teinte sarcelle n'est qu'un repli « couleur plate » pour les contextes qui
+    // ne savent afficher qu'une seule couleur (aperçu <input type=color>,
+    // swatch d'inventaire, export DXF) — volontairement distinct de toute
+    // couleur ACI existante pour ne jamais être ré-identifié comme N ou PE
+    // par getPhaseFromColor (voir getCablePhaseLabel, qui repose sur
+    // selectedPhase pour PEN, jamais sur cette couleur).
+    pen: '#008080'
   };
 
   const withAlpha = (hsl, a) => hsl.includes("/") ? hsl : hsl.replace(")", ` / ${a})`);
@@ -1833,13 +1842,19 @@
       // Indexée par signature (liaisonId|code|fonction), pas par ordre de
       // rencontre : robuste au tri/split de cable-assign.js.
       let phaseColor = null;
+      let phaseKey = null; // 'pen' pour déclencher le rendu bicolore (drawCable)
       const sig = `${co.liaisonId}|${co.code}|${co.fonction || 'auto'}`;
       const queue = phaseQueues[sig];
       if (queue) {
         const k = phaseCursors[sig] || 0;
         phaseCursors[sig] = k + 1;
         const phase = queue[k];
-        if (phase && typeof COLOR_SYSTEM !== 'undefined') {
+        if (phase === 'PEN') {
+          // Pas de couleur ACI unique pour PEN (bicolore) : repli visuel +
+          // selectedPhase, même convention que la popup d'édition manuelle.
+          phaseColor = PHASE_COLORS.pen;
+          phaseKey = 'pen';
+        } else if (phase && typeof COLOR_SYSTEM !== 'undefined') {
           const col = COLOR_SYSTEM.getByPhase(phase);
           if (col) phaseColor = col.hex;
         }
@@ -1864,6 +1879,7 @@
         color: colorForCable(co.fam, co.code), customColor: phaseColor, label: co.label || '',
         fam: co.fam, code: co.code, vx: 0, vy: 0, dragging: false, frozen: false,
         _frozenByUser: false, _frozenByMode: false, _px: x0, _py: y0,
+        selectedPhase: phaseKey,
       });
       parent.children.push(id);
     });
@@ -4778,7 +4794,6 @@
 
     const r = c.od * MM_TO_PX / 2;
     ctx.save();
-    ctx.fillStyle = c.customColor || c.color;
     ctx.strokeStyle = "#0b0f14";
     // Trait extérieur adaptatif : plus fin sur les petits câbles
     const baseStroke = Math.max(0.5, Math.min(r * 0.08, 1.8));
@@ -4787,12 +4802,35 @@
     // Coordonnées entières pour éviter le flou
     const x = Math.round(c.x), y = Math.round(c.y);
 
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.stroke();
+    if (c.selectedPhase === 'pen') {
+      // PEN (neutre+PE combiné) : moitié bleu (N) / moitié vert (PE) plutôt
+      // qu'un disque plein — seul câble à recevoir un remplissage bicolore.
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, r, -Math.PI / 2, Math.PI / 2); // moitié droite
+      ctx.closePath();
+      ctx.fillStyle = PHASE_COLORS.pe;
+      ctx.fill();
 
-    const phaseText = c.customColor ? getPhaseFromColor(c.customColor) : null;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, r, Math.PI / 2, -Math.PI / 2); // moitié gauche
+      ctx.closePath();
+      ctx.fillStyle = PHASE_COLORS.n;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, 2 * Math.PI);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = c.customColor || c.color;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    const phaseText = getCablePhaseLabel(c);
     const cableLabel = showInfo && c.label && c.label.trim() ? c.label.trim() : '';
     const maxLabelWidth = (r * 2) - getScaledLineWidth(6); // garder un léger padding interne
 
@@ -5231,6 +5269,27 @@
     return COLOR_SYSTEM.getPhaseFromHex(hexColor);
   }
 
+  // Libellé de phase à afficher pour un câble — SOURCE UNIQUE utilisée par le
+  // canvas (drawCable), l'export DXF (generateCableLayerName) et le tableau
+  // d'inventaire du PDF, pour qu'ils restent cohérents entre eux.
+  // Priorité à customColor (couleurs ACI communes à BIG BRAIN et à la popup
+  // d'édition) ; repli sur selectedPhase pour les câbles dont la couleur ne
+  // correspond à aucune ACI de phase — notamment PEN, bicolore, qui n'a
+  // délibérément PAS de couleur ACI unique (voir PHASE_COLORS.pen).
+  // Retourne null si aucune phase ne peut être déterminée.
+  const CABLE_PHASE_LABELS = { ph1: 'L1', ph2: 'L2', ph3: 'L3', n: 'N', pe: 'PE', pen: 'PEN' };
+  function getCablePhaseLabel(cable) {
+    if (!cable) return null;
+    if (cable.customColor) {
+      const fromColor = getPhaseFromColor(cable.customColor);
+      if (fromColor) return fromColor;
+    }
+    if (cable.selectedPhase && cable.selectedPhase !== 'none') {
+      return CABLE_PHASE_LABELS[cable.selectedPhase] || null;
+    }
+    return null;
+  }
+
   // Fonction pour générer le nom de calque logique pour un câble
   function generateCableLayerName(cable) {
     // Nettoyer le nom de famille et code pour AutoCAD
@@ -5240,16 +5299,7 @@
     // Déterminer la phase
     let phase = 'STANDARD';
     if (cable.customColor) {
-      const phaseFromColor = getPhaseFromColor(cable.customColor);
-      if (phaseFromColor) {
-        phase = phaseFromColor;
-      } else if (cable.selectedPhase && cable.selectedPhase !== 'none') {
-        // Mapper les phases internes vers les noms de calques
-        const phaseMap = { 'ph1': 'L1', 'ph2': 'L2', 'ph3': 'L3', 'n': 'N', 'pe': 'PE' };
-        phase = phaseMap[cable.selectedPhase] || 'CUSTOM';
-      } else {
-        phase = 'CUSTOM';
-      }
+      phase = getCablePhaseLabel(cable) || 'CUSTOM';
     }
 
     return `_CEAI_CABLE_${cleanFam}_${cleanCode}_${phase}`;
@@ -5299,7 +5349,13 @@
       layerNameMap.set(rawLayerName, layerName);
       if (!layerColorMap.has(layerName)) {
         let color = (index % 6) + 10;
-        if (c.customColor) {
+        if (getCablePhaseLabel(c) === 'PEN') {
+          // PEN n'a pas de hex ACI unique (PHASE_COLORS.pen est un simple
+          // repli visuel) : convertHexToDXFColor ne le retrouverait pas et
+          // retomberait sur du blanc. ACI 5 (bleu) — cohérent avec la moitié
+          // N du conducteur combiné à l'écran.
+          color = 5;
+        } else if (c.customColor) {
           color = convertHexToDXFColor(c.customColor);
         } else {
           const phase = layerName.split('_').pop();
@@ -9095,13 +9151,7 @@
             currentX += colWidths.localisation;
 
             pdf.rect(currentX, currentY, colWidths.phase, rowHeight);
-            let phaseText = 'N/A';
-            if (c.customColor) {
-              const phaseFromColor = getPhaseFromColor(c.customColor);
-              if (phaseFromColor) {
-                phaseText = phaseFromColor;
-              }
-            }
+            const phaseText = getCablePhaseLabel(c) || 'N/A';
             pdf.text(phaseText, currentX + 2, currentY + 4);
 
             currentY += rowHeight;
@@ -9748,10 +9798,18 @@
         e.preventDefault();
         const pick = pickAt(p.x, p.y);
         if (pick) {
-          selected = pick;
-          selectedMultiple = []; // Réinitialiser sélection multiple
-          updateSelectedInfo();
-          redraw();
+          // Ne réinitialiser la sélection multiple que si l'objet cliqué n'en
+          // fait pas déjà partie — sinon clic droit sur un élément d'un groupe
+          // sélectionné écrasait le groupe et n'éditait plus que cet élément.
+          const alreadyInMultiSelection = selectedMultiple.some(
+            sel => sel.type === pick.type && sel.id === pick.id
+          );
+          if (!alreadyInMultiSelection) {
+            selected = pick;
+            selectedMultiple = []; // Réinitialiser sélection multiple
+            updateSelectedInfo();
+            redraw();
+          }
           // Ouvrir la popup d'édition aux coordonnées du clic
           openEditPopup(e.clientX, e.clientY);
         }
@@ -10526,6 +10584,14 @@
     document.getElementById('editPopup').addEventListener('click', (e) => {
       // Fermer si on clique sur le fond transparent du popup (pas sur le contenu)
       if (e.target.id === 'editPopup') {
+        // Si le dropdown de couleurs AutoCAD est ouvert, un clic dehors ne
+        // doit fermer QUE lui (il peut déborder du cadre de la popup) — pas
+        // toute la popup d'édition.
+        const dropdown = document.getElementById('colorDropdown');
+        if (dropdown && dropdown.classList.contains('show')) {
+          closeColorDropdown();
+          return;
+        }
         closeEditPopup();
       }
     });
