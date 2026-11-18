@@ -13,6 +13,7 @@ const CableAssign = require('../../src/renderer/cable-assign.js');
 const BigBrain = require('../../src/renderer/big-brain.js');
 const PACKER = require('../../src/renderer/packer.js');
 const { trancheeNormee } = require('./normes.js');
+const CompatChambres = require('../../src/renderer/compat-chambres.js');
 
 const DEFAULTS = {
   ecart: 30,          // mm, bord à bord entre fourreaux (tranchée)
@@ -28,7 +29,37 @@ const DEFAULTS = {
   recouvrementMm: null, // surcharge du recouvrement minimal de la zone
   grillageAuDessusMm: null,
   profondeurFouilleMm: null,
+  chambre: null,        // réf. imposée (ex. "L2T") ; sinon choix automatique
 };
+
+// Chambre de tirage pour ce masque : même règle que l'application
+// (compat-chambres.js) — pignon d'abord (entrée en ligne droite), sinon
+// long-pan, sinon chambre maçonnée + tampons. Cotes INTÉRIEURES uniquement.
+function choisirChambre(W, H, cat, refImposee) {
+  const models = CompatChambres.getChamberModels(cat.chambres || []);
+  if (!models.length) return null;
+  const build = (m, via) => {
+    const pignon = via === 'pignon';
+    const face = { largeur: pignon ? m.l : m.L, hauteur: m.H };
+    return {
+      ref: m.ref, entree: via, L: m.L, l: m.l, H: m.H, face,
+      profondeur: pignon ? m.L : m.l, // dimension perpendiculaire à la face d'entrée
+      marge: { largeur: face.largeur - W, hauteur: face.hauteur - H },
+      tient: face.largeur >= W && face.hauteur >= H,
+      source: 'Cotes intérieures du catalogue TONTONKAD (chambres Stradal). Épaisseur des parois et tampon non représentés.',
+    };
+  };
+  if (refImposee) {
+    const m = models.find((x) => x.ref.toUpperCase() === String(refImposee).toUpperCase());
+    if (!m) return { erreur: `Chambre « ${refImposee} » inconnue (catalogue : ${models.map((x) => x.ref).join(', ')})` };
+    return build(m, m.l >= W ? 'pignon' : 'long-pan');
+  }
+  const { unit, longPan, tiling } = CompatChambres.computeCompatibleChambers(models, W, H, 3);
+  const best = CompatChambres.pickBestChamber(unit, longPan);
+  if (best) return build(models.find((x) => x.ref === best.ref), best.via === 'unit' ? 'pignon' : 'long-pan');
+  const t = tiling[0];
+  return { aucune: true, maconnee: t ? { tampons: t.N, refs: t.refs, largeurTotale: t.total } : null };
+}
 
 // Exécute fn avec GEO réglé, puis restaure (GEO est partagé par le packer).
 function withGeo(gap, margin, fn) {
@@ -168,10 +199,20 @@ function buildMasque({ nom, liaisons = [], reserves = [], options = {} }, cat) {
     tranchee.conformite.filter((c) => !c.ok).forEach((c) => avertissements.push(`Non conforme : ${c.regle} (${c.detail})`));
   }
 
+  // 6. chambre de tirage (tranchée seulement)
+  let chambre = null;
+  if (o.forme !== 'circ') {
+    chambre = choisirChambre(W, H, cat, o.chambre);
+    if (chambre && chambre.erreur) { avertissements.push(chambre.erreur); chambre = null; }
+    else if (chambre && chambre.aucune) avertissements.push('Aucune chambre préformée ne convient : chambre maçonnée sur mesure à prévoir');
+    else if (chambre && !chambre.tient) avertissements.push(`La nappe (${W} × ${H} mm) ne tient pas dans la face ${chambre.entree} de la ${chambre.ref} (${chambre.face.largeur} × ${chambre.face.hauteur} mm)`);
+  }
+
   return {
     nom, ok: true,
     forme: o.forme,
     tranchee,
+    chambre,
     largeur: W, hauteur: H, // diamètre = largeur pour un conduit
     reglages: { ecart: o.forme === 'circ' ? 0 : o.ecart, litDePose: o.litDePose, tauxMax: o.tauxMax, typesAutorises: o.typesAutorises },
     occupation,

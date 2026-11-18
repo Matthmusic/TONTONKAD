@@ -109,6 +109,13 @@ avertisseur, parois de la tranchée ; longueur réglable avec `longueur3dMm`,
 1,5 m par défaut), la légende des fourreaux, la profondeur et les contrôles de
 conformité. La vue 3D est un dessin, pas un modèle 3D manipulable.
 
+Pour une tranchée, une **page « chambre de tirage »** suit : la chambre Stradal
+choisie comme dans l'application (`compat-chambres.js` : entrée par le pignon
+d'abord, sinon par le long-pan), dessinée en volume intérieur, avec les
+fourreaux du masque qui arrivent sur la face d'entrée. Option `chambre` pour
+imposer une référence (ex. `"L2T"`). Seules les cotes intérieures du catalogue
+sont connues : épaisseur des parois, cadre et tampon ne sont pas dessinés.
+
 ### DXF
 
 R12 (AC1009), calques identiques à l'export de l'application (`_CEAI_BOITE`,

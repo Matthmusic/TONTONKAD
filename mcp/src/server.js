@@ -101,6 +101,7 @@ const optionsSchema = z.object({
   recouvrementMm: z.number().optional().describe('Recouvrement minimal imposé (surcharge la zone)'),
   grillageAuDessusMm: z.number().optional().describe('Hauteur du grillage au-dessus des fourreaux (défaut 200)'),
   profondeurFouilleMm: z.number().optional().describe('Profondeur de fouille imposée (fond → terrain fini)'),
+  chambre: z.string().optional().describe('Chambre de tirage imposée (ex. "L2T") ; sinon choisie automatiquement'),
 }).optional();
 
 server.registerTool('lire_note_calcul', {

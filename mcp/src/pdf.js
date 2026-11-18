@@ -178,6 +178,88 @@ function pageMasque(m, i, total, opts) {
   return p.toString();
 }
 
+// Page « chambre de tirage » : volume INTÉRIEUR de la chambre (cotes du
+// catalogue) en perspective cavalière, ouvert en partie haute, la face
+// d'entrée au premier plan avec les fourreaux du masque qui y arrivent.
+function pageChambre(m, i, total) {
+  const p = new Page();
+  const ch = m.chambre;
+  p.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — chambre de tirage ${ch.ref}`, { bold: true });
+  p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `TONTONKAD — masque ${i + 1}/${total}`, { align: 'right' });
+  p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+
+  const Fw = ch.face.largeur, H = ch.face.hauteur, D = ch.profondeur;
+  const ang = Math.PI / 6, red = 0.5;
+  const cx = Math.cos(ang) * red, cy = Math.sin(ang) * red;
+  const sortie = Math.max(400, D * 0.6); // longueur de fourreau dessinée hors chambre
+  const minX = -sortie * cx, maxX = Fw + D * cx, minY = -sortie * cy, maxY = H + D * cy;
+  const zx = MARGE + 20, zy = 120, zw = 520, zh = PAGE_H - MARGE - 60 - zy;
+  const s = fit(maxX - minX, maxY - minY, zw, zh);
+  const ox = zx + (zw - (maxX - minX) * s) / 2 - minX * s, oy = zy - minY * s;
+  // projection : (x sur la face, y hauteur, z profondeur vers l'arrière)
+  const P = (x, y, z) => [ox + (x + z * cx) * s, oy + (y + z * cy) * s];
+
+  // faces intérieures visibles : radier, paroi gauche, paroi du fond
+  p.width(0.8).rgb([0.35, 0.35, 0.35]);
+  p.rgb([0.82, 0.82, 0.80], false).poly([P(0, 0, 0), P(Fw, 0, 0), P(Fw, 0, D), P(0, 0, D)], 'B');
+  p.rgb([0.88, 0.88, 0.86], false).poly([P(0, 0, 0), P(0, 0, D), P(0, H, D), P(0, H, 0)], 'B');
+  p.rgb([0.92, 0.92, 0.90], false).poly([P(0, 0, D), P(Fw, 0, D), P(Fw, H, D), P(0, H, D)], 'B');
+  // arêtes restantes (paroi droite, ouverture haute en tirets = tampon)
+  p.line(...P(Fw, 0, 0), ...P(Fw, H, 0)).line(...P(Fw, H, 0), ...P(Fw, H, D));
+  p.dash(true).poly([P(0, H, 0), P(Fw, H, 0), P(Fw, H, D), P(0, H, D)], 'S').dash(false);
+
+  // face d'entrée (au premier plan) avec les réservations des fourreaux
+  const dxNappe = (Fw - m.largeur) / 2;
+  const fx = (f) => dxNappe + f.x;
+  p.rgb([0.15, 0.15, 0.15]).width(1.2).poly([P(0, 0, 0), P(Fw, 0, 0), P(Fw, H, 0), P(0, H, 0)], 'S');
+  // fourreaux : du fond vers l'avant-plan, ils sortent vers le spectateur
+  const order = [...m.fourreaux].sort((a, b) => (b.y - a.y) || (b.x - a.x));
+  for (const f of order) {
+    const r = f.od / 2 * s, [ax, ay] = P(fx(f), f.y, 0), [bx, by] = P(fx(f), f.y, -sortie);
+    const n = [-Math.sin(ang) * r, Math.cos(ang) * r];
+    p.rgb([0.98, 0.8, 0.6], false).rgb([0.75, 0.35, 0.05]).width(0.6);
+    p.poly([[ax + n[0], ay + n[1]], [bx + n[0], by + n[1]], [bx - n[0], by - n[1]], [ax - n[0], ay - n[1]]], 'B');
+    p.circle(ax, ay, r, 'B');
+    p.rgb([1, 0.9, 0.8], false).circle(bx, by, r, 'B');
+    p.rgb([1, 1, 1], false).circle(bx, by, f.di / 2 * s, 'B');
+    p.rgb([0, 0, 0], false).text(bx, by - r - 9, 7, f.id, { align: 'center', bold: true });
+  }
+  for (const c of m.cables) {
+    const f = m.fourreaux.find((x) => x.id === c.fourreau);
+    const [bx, by] = P(dxNappe + c.x, c.y, -sortie);
+    p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(bx, by, Math.max(0.6, c.od / 2 * s), 'B');
+    void f;
+  }
+  // cotes
+  p.rgb([0.8, 0, 0], false);
+  const [a1x, a1y] = P(Fw / 2, 0, 0);
+  p.text(a1x, a1y - 22, 8, `${ch.entree === 'pignon' ? 'pignon' : 'long-pan'} ${Fw} mm (intérieur)`, { align: 'center' });
+  const [a2x, a2y] = P(0, H / 2, 0);
+  p.text(a2x - 6, a2y, 8, `H ${H} mm`, { align: 'right' });
+  const [a3x, a3y] = P(Fw, 0, D / 2);
+  p.text(a3x + 6, a3y - 4, 8, `${D} mm`);
+  p.rgb([0, 0, 0], false);
+
+  // informations
+  let y = PAGE_H - MARGE - 50;
+  const x = 590;
+  p.text(x, y, 11, `Chambre ${ch.ref}`, { bold: true }); y -= 16;
+  for (const l of [
+    `Intérieur : ${ch.L} × ${ch.l} mm, H ${ch.H} mm`,
+    `Entrée par le ${ch.entree} (${ch.face.largeur} × ${ch.face.hauteur} mm)`,
+    `Nappe : ${m.largeur} × ${m.hauteur} mm`,
+    `Marge : ${ch.marge.largeur} mm en largeur, ${ch.marge.hauteur} mm en hauteur`,
+    `${m.fourreaux.length} fourreau(x), centrés sur la face, posés au fond`,
+  ]) { p.text(x, y, 8, l); y -= 12; }
+  y -= 6;
+  p.rgb(ch.tient ? [0.1, 0.5, 0.2] : [0.8, 0.1, 0.1], false).text(x, y, 9, ch.tient ? 'La nappe passe dans la chambre' : 'La nappe ne passe PAS dans cette chambre', { bold: true });
+  p.rgb([0.4, 0.4, 0.4], false);
+  y -= 22;
+  for (const l of ['Cotes intérieures du catalogue TONTONKAD', '(chambres Stradal). Épaisseur des parois,', 'cadre et tampon non représentés : à compléter', 'avec la fiche technique du fabricant.']) { p.text(x, y, 7, l); y -= 10; }
+  p.rgb([0, 0, 0], false);
+  return p.toString();
+}
+
 /** @returns {Buffer} un PDF, une page par masque réussi */
 function masquesToPdf(masques, opts = {}) {
   const ok = masques.filter((m) => m && m.ok);
@@ -188,10 +270,14 @@ function masquesToPdf(masques, opts = {}) {
   const font1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   const font2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
   const kids = [];
-  ok.forEach((m, i) => {
-    const content = Buffer.from(pageMasque(m, i, ok.length, opts), 'latin1');
+  const addPage = (text) => {
+    const content = Buffer.from(text, 'latin1');
     const cid = add(`<< /Length ${content.length} >>\nstream\n${content.toString('latin1')}\nendstream`);
     kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> >> /Contents ${cid} 0 R >>`));
+  };
+  ok.forEach((m, i) => {
+    addPage(pageMasque(m, i, ok.length, opts));
+    if (m.chambre && m.chambre.face && opts.chambre !== false) addPage(pageChambre(m, i, ok.length));
   });
   objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
   objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;

@@ -158,8 +158,8 @@ describe('MCP — planche PDF avec vue 3D', () => {
     const pdf = masquesToPdf([m1, m2]).toString('latin1');
     expect(pdf.startsWith('%PDF-1.4')).toBe(true);
     expect(pdf.trim().endsWith('%%EOF')).toBe(true);
-    expect(pdf).toMatch(/\/Count 2/);
-    expect((pdf.match(/\/MediaBox \[0 0 842 595\]/g) || []).length).toBe(2);
+    expect(pdf).toMatch(/\/Count 3/); // 2 masques + 1 page chambre (le conduit n en a pas)
+    expect((pdf.match(/\/MediaBox \[0 0 842 595\]/g) || []).length).toBe(3);
     // xref : chaque offset pointe bien sur « n 0 obj »
     const start = Number(pdf.match(/startxref\n(\d+)/)[1]);
     const offs = pdf.slice(start).split('\n').filter((l) => / 00000 n $/.test(l)).map((l) => Number(l.slice(0, 10)));
@@ -174,5 +174,31 @@ describe('MCP — planche PDF avec vue 3D', () => {
 
   test('aucun masque réussi → erreur', () => {
     expect(() => masquesToPdf([{ ok: false }])).toThrow(/Aucun masque/);
+  });
+});
+
+describe('MCP — chambre de tirage', () => {
+  const tr = findLiaisons(liaisons, { origine: 'TGBT', destination: 'COFFRET 1' });
+
+  test('choix automatique comme l\'application : pignon d\'abord, la nappe tient', () => {
+    const m = buildMasque({ nom: 'x', liaisons: tr }, cat);
+    expect(m.chambre.entree).toBe('pignon');
+    expect(m.chambre.tient).toBe(true);
+    expect(m.chambre.face.largeur).toBeGreaterThanOrEqual(m.largeur);
+    expect(m.chambre.face.hauteur).toBeGreaterThanOrEqual(m.hauteur);
+  });
+
+  test('chambre imposée ; référence inconnue signalée', () => {
+    expect(buildMasque({ nom: 'x', liaisons: tr, options: { chambre: 'L2T' } }, cat).chambre.ref).toBe('L2T');
+    const k = buildMasque({ nom: 'x', liaisons: tr, options: { chambre: 'ZZZ' } }, cat);
+    expect(k.chambre).toBeNull();
+    expect(k.avertissements.join(' ')).toMatch(/ZZZ.*inconnue/);
+  });
+
+  test('le PDF ajoute une page chambre par masque', () => {
+    const { masquesToPdf } = require('../mcp/src/pdf.js');
+    const m = buildMasque({ nom: 'x', liaisons: tr }, cat);
+    expect(masquesToPdf([m]).toString('latin1')).toMatch(/\/Count 2/);
+    expect(masquesToPdf([m], { chambre: false }).toString('latin1')).toMatch(/\/Count 1/);
   });
 });
