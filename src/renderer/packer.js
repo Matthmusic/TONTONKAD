@@ -16,7 +16,7 @@
   //
   // Repère moteur : Y=0 en bas (Y-up), origine bas-gauche, en mm.
 
-  // Défauts à 0 : l'écart (entraxe) et le lit de pose sont réglés par
+  // Défauts à 0 : l'écart (bord à bord) et le lit de pose sont réglés par
   // l'utilisateur via le pop-over de la barre de contrôle (gapSlider /
   // litDePoseSlider), qui mute GEO. Doit rester cohérent avec index.html.
   const GEO = { gap: 0, margin: 0 };
