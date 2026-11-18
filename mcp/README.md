@@ -44,10 +44,28 @@ Dans `claude_desktop_config.json` :
 Variable facultative : `TONTONKAD_DATA` = dossier des catalogues, si ce n'est
 pas `data/` du dépôt.
 
+## Comment Claude mène l'étude
+
+Le serveur fournit à Claude des **instructions** (lues dès qu'il est branché) et
+une commande **`etude_masques`** (dans Claude Code : `/mcp__tontonkad__etude_masques`).
+Dans les deux cas, Claude :
+
+1. appelle `preparer_etude` avec ce qu'il sait déjà ;
+2. pose dans le chat, **en un seul message**, les questions qui manquent :
+   notes de calcul (NDC), tronçons, rendu souhaité, plan, zone de la tranchée ;
+3. rappelle `preparer_etude` avec les réponses, jusqu'à `pret = true` ;
+4. montre les liaisons retenues par tronçon et attend la validation ;
+5. génère les masques et résume dimensions, profondeur, contrôles de conformité.
+
+Rendus : AutoCAD, ZWCAD et DXF sont disponibles ; MultiCAD (masques posés sur le
+plan DWG) passe par le MCP MultiCAD s'il est branché ; Revit et PDF avec vue 3D
+sont prévus et signalés comme indisponibles pour l'instant.
+
 ## Outils
 
 | Outil | Rôle |
 |---|---|
+| `preparer_etude` | À appeler en premier : vérifie les fichiers et les tronçons fournis, renvoie les questions à poser pour ce qui manque. |
 | `lire_note_calcul` | Liste les liaisons d'une note Caneco (.xls/.xlsx) : référence `L<n° de ligne>`, origine, destination, câble, longueur. Filtres possibles. |
 | `generer_masques` | Un masque par tronçon : choix et placement des fourreaux, répartition des câbles avec leurs phases, profondeur de fouille et grillage avertisseur. Renvoie la **géométrie** (mm) et écrit un **DXF** si `sortieDxf` est donné. |
 | `regles_normes` | Affiche les règles normatives appliquées et leurs sources. |

@@ -15,6 +15,7 @@ const { readNote, findLiaisons } = require('./note.js');
 const { buildMasque, DEFAULTS } = require('./masque.js');
 const { masquesToDxf } = require('./dxf.js');
 const normes = require('./normes.js');
+const { preparerEtude, RENDUS } = require('./etude.js');
 
 const cat = loadCatalogues();
 const notes = new Map(); // chemin absolu → { mtime, liaisons }
@@ -37,7 +38,45 @@ const resume = (l) => ({
 const ok = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
 const fail = (msg) => ({ isError: true, content: [{ type: 'text', text: msg }] });
 
-const server = new McpServer({ name: 'tontonkad', version: '0.1.0' });
+const INSTRUCTIONS = `TONTONKAD produit les masques de liaisons électriques (coupes de tranchée ou de conduit) à partir des notes de calcul Caneco.
+Avant toute génération, réunis dans le chat : la ou les notes de calcul (NDC), les tronçons voulus, le rendu souhaité (AutoCAD, ZWCAD, MultiCAD sur le plan DWG, Revit, PDF avec vue 3D), le plan si les masques doivent y être posés, et la zone (chaussée, trottoir…).
+Appelle preparer_etude avec ce que tu sais ; s'il manque quelque chose, pose TOUTES ses questions à l'utilisateur en un seul message, puis rappelle-le avec les réponses. Ne devine jamais un fichier ou une liaison.
+Quand preparer_etude répond pret=true : montre les liaisons retenues par tronçon, fais-les valider, puis appelle generer_masques. Relaie toujours les avertissements et les contrôles de conformité, en rappelant que les règles normatives sont à valider.`;
+
+const server = new McpServer({ name: 'tontonkad', version: '0.2.0' }, { instructions: INSTRUCTIONS });
+
+server.registerTool('preparer_etude', {
+  title: 'Préparer une étude de masques',
+  description: 'À appeler EN PREMIER. Vérifie ce que l\'utilisateur a fourni (notes de calcul, plans, tronçons, rendus, zone) et renvoie la liste des questions à lui poser pour ce qui manque, ainsi que les liaisons trouvées pour chaque tronçon. Rappeler après chaque réponse jusqu\'à pret=true.',
+  inputSchema: {
+    notesCalcul: z.array(z.string()).optional().describe('Chemins des notes de calcul (NDC) Caneco .xls/.xlsx'),
+    plans: z.array(z.string()).optional().describe('Chemins des plans DWG/DXF/PDF/RVT'),
+    surPlan: z.boolean().optional().describe('Les masques doivent-ils être posés sur un plan ?'),
+    troncons: z.array(z.object({
+      nom: z.string().optional(), origine: z.string().optional(), destination: z.string().optional(),
+      refs: z.array(z.string()).optional(), texte: z.string().optional(),
+    })).optional().describe('Tronçons voulus, ex. [{nom:"TGBT → COFFRET 1", origine:"TGBT", destination:"COFFRET 1"}]'),
+    rendus: z.array(z.string()).optional().describe(`Rendus souhaités : ${Object.keys(RENDUS).join(', ')}`),
+    zone: z.string().optional().describe('chaussee | trottoir | espace_vert | prive'),
+  },
+}, async (args) => {
+  try { return ok(preparerEtude(args, cat)); } catch (e) { return fail(String(e.message || e)); }
+});
+
+server.registerPrompt('etude_masques', {
+  title: 'Nouvelle étude de masques',
+  description: 'Lance une étude : Claude demande les notes de calcul, les plans, les tronçons et le rendu souhaité, puis génère les masques.',
+  argsSchema: { demande: z.string().optional().describe('Ce que tu veux, en une phrase (facultatif)') },
+}, ({ demande }) => ({
+  messages: [{ role: 'user', content: { type: 'text', text:
+`Je veux préparer des masques de liaisons avec TONTONKAD.${demande ? `\nMa demande : ${demande}` : ''}
+
+Mène l'étude ainsi :
+1. Appelle preparer_etude avec ce que tu sais déjà de ma demande.
+2. S'il manque des éléments, pose-moi toutes ses questions en un seul message, de façon simple : notes de calcul (NDC), plans, tronçons, rendu souhaité (AutoCAD, ZWCAD, MultiCAD sur le plan DWG, Revit, PDF avec vue 3D), zone de la tranchée. Dis-moi aussi quels rendus ne sont pas encore disponibles.
+3. Quand tout est prêt, montre-moi les liaisons retenues pour chaque tronçon et attends ma validation.
+4. Génère les masques avec generer_masques, puis résume : dimensions, fourreaux, profondeur, contrôles de conformité (à valider) et avertissements.` } }],
+}));
 
 const critereSchema = z.object({
   refs: z.array(z.string()).optional().describe('Références exactes renvoyées par lire_note_calcul (ex. ["L12","L13"])'),

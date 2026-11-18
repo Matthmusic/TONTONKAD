@@ -16,6 +16,28 @@ const { makeNote } = require('./fixtures/make-note.js');
   const tools = await client.listTools();
   console.log('OUTILS', tools.tools.map((t) => t.name).join(', '));
 
+  console.log('INSTRUCTIONS', (client.getInstructions() || '').split('\n')[0]);
+  const prompts = await client.listPrompts();
+  console.log('PROMPTS', prompts.prompts.map((p) => p.name).join(', '));
+  const pr = await client.getPrompt({ name: 'etude_masques', arguments: { demande: 'masques TGBT vers COFFRET 1' } });
+  console.log('PROMPT OK', pr.messages[0].content.text.includes('preparer_etude'));
+
+  const vide = JSON.parse((await client.callTool({ name: 'preparer_etude', arguments: {} })).content[0].text);
+  console.log('ETUDE VIDE pret=', vide.pret);
+  vide.manquant.forEach((m) => console.log(`  ${m.obligatoire ? '*' : ' '} [${m.champ}] ${m.question}`));
+  const partiel = JSON.parse((await client.callTool({ name: 'preparer_etude', arguments: {
+    notesCalcul: [note], troncons: [{ nom: 'TGBT → COFFRET 1', origine: 'TGBT', destination: 'COFFRET 1' }, { nom: 'X', origine: 'TGBT', destination: 'PIT 9' }],
+    rendus: ['zwcad', 'pdf'],
+  } })).content[0].text);
+  console.log('ETUDE PARTIELLE pret=', partiel.pret, 'troncons', partiel.fourni.troncons.map((t) => `${t.nom}:${t.liaisonsTrouvees}`).join(' '));
+  partiel.manquant.forEach((m) => console.log(`  ${m.obligatoire ? '*' : ' '} [${m.champ}] ${m.question}`));
+  console.log('  aSignaler', partiel.aSignaler);
+  const complet = JSON.parse((await client.callTool({ name: 'preparer_etude', arguments: {
+    notesCalcul: [note], troncons: [{ nom: 'TGBT → COFFRET 1', origine: 'TGBT', destination: 'COFFRET 1' }],
+    rendus: ['autocad'], surPlan: false, zone: 'trottoir',
+  } })).content[0].text);
+  console.log('ETUDE COMPLETE pret=', complet.pret, complet.prochaineEtape);
+
   const lu = await client.callTool({ name: 'lire_note_calcul', arguments: { chemin: note } });
   console.log('NOTE', lu.content[0].text);
 

@@ -108,3 +108,41 @@ describe('MCP — normes', () => {
     expect(() => trancheeNormee({ largeur: 400, hauteur: 300, hautNappe: 250 }, { zone: 'lune' })).toThrow(/Zone inconnue/);
   });
 });
+
+describe('MCP — préparation d\'étude (questions à poser dans le chat)', () => {
+  const { preparerEtude } = require('../mcp/src/etude.js');
+  const note = path.join(dir, 'note.xlsx');
+
+  test('rien de fourni : NDC, tronçons et rendu obligatoires ; plan et zone en option', () => {
+    const r = preparerEtude({}, cat);
+    expect(r.pret).toBe(false);
+    expect(r.manquant.filter((m) => m.obligatoire).map((m) => m.champ)).toEqual(['notesCalcul', 'troncons', 'rendus']);
+    expect(r.manquant.filter((m) => !m.obligatoire).map((m) => m.champ)).toEqual(['plans', 'zone']);
+  });
+
+  test('fichier absent ou mauvais format signalé', () => {
+    const r = preparerEtude({ notesCalcul: [path.join(dir, 'absente.xlsx'), path.join(dir, 'note.txt')] }, cat);
+    expect(r.manquant.filter((m) => m.champ === 'notesCalcul')).toHaveLength(2);
+  });
+
+  test('tronçon introuvable dans la note → question ; tronçon trouvé → références', () => {
+    const r = preparerEtude({ notesCalcul: [note], rendus: ['autocad'], troncons: [
+      { nom: 'ok', origine: 'TGBT', destination: 'COFFRET 1' }, { nom: 'ko', origine: 'TGBT', destination: 'PIT 9' }] }, cat);
+    expect(r.fourni.troncons[0].refs).toEqual(['L1', 'L2', 'L3']);
+    expect(r.manquant.some((m) => m.champ === 'troncons' && m.question.includes('ko'))).toBe(true);
+    expect(r.pret).toBe(false);
+  });
+
+  test('MultiCAD ou Revit : le plan devient obligatoire ; PDF 3D et Revit signalés indisponibles', () => {
+    const r = preparerEtude({ notesCalcul: [note], rendus: ['MultiCAD', 'revit', 'pdf'], troncons: [{ origine: 'TGBT', destination: 'COFFRET 1' }] }, cat);
+    expect(r.manquant.some((m) => m.champ === 'plans' && m.obligatoire)).toBe(true);
+    expect(r.aSignaler).toHaveLength(2);
+  });
+
+  test('tout fourni → prêt', () => {
+    const r = preparerEtude({ notesCalcul: [note], rendus: ['zwcad'], surPlan: false, zone: 'chaussee',
+      troncons: [{ origine: 'COFFRET 1', destination: 'PIT 1' }] }, cat);
+    expect(r.pret).toBe(true);
+    expect(r.manquant).toHaveLength(0);
+  });
+});
