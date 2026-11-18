@@ -188,11 +188,14 @@ function pageChambre(m, i, total) {
   p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `TONTONKAD — masque ${i + 1}/${total}`, { align: 'right' });
   p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
 
-  const Fw = ch.face.largeur, H = ch.face.hauteur, D = ch.profondeur;
+  const Fw = ch.face.largeur, Hu = ch.face.hauteur, D = ch.profondeur;
+  const inf = ch.infos || {};
+  const H = Hu + (inf.reserveHauteur || 0); // hauteur intérieure totale (indicative)
+  const e = inf.paroi || 0;                  // épaisseur de paroi (indicative)
   const ang = Math.PI / 6, red = 0.5;
   const cx = Math.cos(ang) * red, cy = Math.sin(ang) * red;
   const sortie = Math.max(400, D * 0.6); // longueur de fourreau dessinée hors chambre
-  const minX = -sortie * cx, maxX = Fw + D * cx, minY = -sortie * cy, maxY = H + D * cy;
+  const minX = -sortie * cx - e, maxX = Fw + e + (D + e) * cx, minY = -sortie * cy, maxY = H + (D + e) * cy;
   const zx = MARGE + 20, zy = 120, zw = 520, zh = PAGE_H - MARGE - 60 - zy;
   const s = fit(maxX - minX, maxY - minY, zw, zh);
   const ox = zx + (zw - (maxX - minX) * s) / 2 - minX * s, oy = zy - minY * s;
@@ -208,6 +211,25 @@ function pageChambre(m, i, total) {
   p.line(...P(Fw, 0, 0), ...P(Fw, H, 0)).line(...P(Fw, H, 0), ...P(Fw, H, D));
   p.dash(true).poly([P(0, H, 0), P(Fw, H, 0), P(Fw, H, D), P(0, H, D)], 'S').dash(false);
 
+  // hauteur utile TONTONKAD (sous cadre + tampon) en tirets
+  if (H > Hu) {
+    p.rgb([0.2, 0.4, 0.8]).width(0.6).dash(true).poly([P(0, Hu, 0), P(Fw, Hu, 0), P(Fw, Hu, D), P(0, Hu, D)], 'S').dash(false);
+  }
+  // tampons : l'ouverture du dessus partagée en N le long de la grande longueur
+  if (inf.tampons > 1) {
+    p.rgb([0.35, 0.35, 0.35]).width(0.5);
+    for (let k = 1; k < inf.tampons; k++) {
+      if (ch.entree === 'pignon') p.line(...P(0, H, D * k / inf.tampons), ...P(Fw, H, D * k / inf.tampons));
+      else p.line(...P(Fw * k / inf.tampons, H, 0), ...P(Fw * k / inf.tampons, H, D));
+    }
+  }
+  // parois (épaisseur indicative) : contour extérieur
+  if (e) {
+    p.rgb([0.45, 0.45, 0.45]).width(0.6);
+    p.poly([P(-e, 0, 0), P(Fw + e, 0, 0), P(Fw + e, H, 0), P(-e, H, 0)], 'S');
+    p.line(...P(Fw + e, 0, 0), ...P(Fw + e, 0, D + e)).line(...P(Fw + e, 0, D + e), ...P(Fw + e, H, D + e));
+    p.line(...P(Fw + e, H, 0), ...P(Fw + e, H, D + e)).line(...P(Fw + e, H, D + e), ...P(-e, H, D + e)).line(...P(-e, H, D + e), ...P(-e, H, 0));
+  }
   // face d'entrée (au premier plan) avec les réservations des fourreaux
   const dxNappe = (Fw - m.largeur) / 2;
   const fx = (f) => dxNappe + f.x;
@@ -233,9 +255,9 @@ function pageChambre(m, i, total) {
   // cotes
   p.rgb([0.8, 0, 0], false);
   const [a1x, a1y] = P(Fw / 2, 0, 0);
-  p.text(a1x, a1y - 22, 8, `${ch.entree === 'pignon' ? 'pignon' : 'long-pan'} ${Fw} mm (intérieur)`, { align: 'center' });
+  p.text(a1x, a1y - 34, 8, `${ch.entree === 'pignon' ? 'pignon' : 'long-pan'} ${Fw} mm (intérieur)`, { align: 'center' });
   const [a2x, a2y] = P(0, H / 2, 0);
-  p.text(a2x - 6, a2y, 8, `H ${H} mm`, { align: 'right' });
+  p.text(a2x - 6 - e * s, a2y, 8, H > Hu ? `H ${H} mm (utile ${Hu})` : `H ${H} mm`, { align: 'right' });
   const [a3x, a3y] = P(Fw, 0, D / 2);
   p.text(a3x + 6, a3y - 4, 8, `${D} mm`);
   p.rgb([0, 0, 0], false);
@@ -255,7 +277,14 @@ function pageChambre(m, i, total) {
   p.rgb(ch.tient ? [0.1, 0.5, 0.2] : [0.8, 0.1, 0.1], false).text(x, y, 9, ch.tient ? 'La nappe passe dans la chambre' : 'La nappe ne passe PAS dans cette chambre', { bold: true });
   p.rgb([0.4, 0.4, 0.4], false);
   y -= 22;
-  for (const l of ['Cotes intérieures du catalogue TONTONKAD', '(chambres Stradal). Épaisseur des parois,', 'cadre et tampon non représentés : à compléter', 'avec la fiche technique du fabricant.']) { p.text(x, y, 7, l); y -= 10; }
+  const notes = ch.infos ? [
+    'Largeur, longueur, hauteur utile : catalogue TONTONKAD.',
+    `Hauteur totale${inf.paroi ? ', parois ' + inf.paroi + ' mm' : ''}${inf.tampons ? ', ' + inf.tampons + ' tampon(s)' : ''} :`,
+    'indicatif, sources publiques (pas une fiche fabricant).',
+    'Hauteur utile en tirets bleus.',
+    ...(inf.aVerifier ? [`À vérifier : ${inf.aVerifier}.`] : []),
+  ] : ['Cotes intérieures du catalogue TONTONKAD.', 'Parois, cadre et tampon non représentés.'];
+  for (const l of notes) { p.text(x, y, 7, l.slice(0, 70)); y -= 10; }
   p.rgb([0, 0, 0], false);
   return p.toString();
 }

@@ -14,6 +14,7 @@ const BigBrain = require('../../src/renderer/big-brain.js');
 const PACKER = require('../../src/renderer/packer.js');
 const { trancheeNormee } = require('./normes.js');
 const CompatChambres = require('../../src/renderer/compat-chambres.js');
+const { infosChambre } = require('./chambres-infos.js');
 
 const DEFAULTS = {
   ecart: 30,          // mm, bord à bord entre fourreaux (tranchée)
@@ -46,6 +47,7 @@ function choisirChambre(W, H, cat, refImposee) {
       profondeur: pignon ? m.L : m.l, // dimension perpendiculaire à la face d'entrée
       marge: { largeur: face.largeur - W, hauteur: face.hauteur - H },
       tient: face.largeur >= W && face.hauteur >= H,
+      infos: infosChambre(m.ref), // parois, tampons, hauteur totale : indicatif
       source: 'Cotes intérieures du catalogue TONTONKAD (chambres Stradal). Épaisseur des parois et tampon non représentés.',
     };
   };
@@ -205,7 +207,8 @@ function buildMasque({ nom, liaisons = [], reserves = [], options = {} }, cat) {
     chambre = choisirChambre(W, H, cat, o.chambre);
     if (chambre && chambre.erreur) { avertissements.push(chambre.erreur); chambre = null; }
     else if (chambre && chambre.aucune) avertissements.push('Aucune chambre préformée ne convient : chambre maçonnée sur mesure à prévoir');
-    else if (chambre && !chambre.tient) avertissements.push(`La nappe (${W} × ${H} mm) ne tient pas dans la face ${chambre.entree} de la ${chambre.ref} (${chambre.face.largeur} × ${chambre.face.hauteur} mm)`);
+    if (chambre && chambre.infos && chambre.infos.aVerifier) avertissements.push(`Chambre ${chambre.ref} : ${chambre.infos.aVerifier}`);
+    if (chambre && chambre.aucune) { /* déjà signalé */ } else if (chambre && !chambre.tient) avertissements.push(`La nappe (${W} × ${H} mm) ne tient pas dans la face ${chambre.entree} de la ${chambre.ref} (${chambre.face.largeur} × ${chambre.face.hauteur} mm)`);
   }
 
   return {

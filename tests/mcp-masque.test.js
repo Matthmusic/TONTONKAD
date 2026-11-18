@@ -202,3 +202,19 @@ describe('MCP — chambre de tirage', () => {
     expect(masquesToPdf([m], { chambre: false }).toString('latin1')).toMatch(/\/Count 1/);
   });
 });
+
+describe('MCP — compléments indicatifs des chambres', () => {
+  const { infosChambre, INFOS } = require('../mcp/src/chambres-infos.js');
+  test('toutes les chambres du catalogue TONTONKAD ont une fiche, marquée indicative', () => {
+    const CompatChambres = require('../src/renderer/compat-chambres.js');
+    for (const m of CompatChambres.getChamberModels(cat.chambres)) {
+      expect(INFOS[m.ref]).toBeDefined();
+      expect(infosChambre(m.ref).source).toMatch(/Indicatif/);
+    }
+  });
+  test('écarts connus avec les sources publiques signalés dans le masque', () => {
+    const tr = findLiaisons(liaisons, { origine: 'TGBT', destination: 'COFFRET 1' });
+    const m = buildMasque({ nom: 'x', liaisons: tr, options: { chambre: 'L4T' } }, cat);
+    expect(m.avertissements.join(' ')).toMatch(/L4T.*1670.*1870/);
+  });
+});
