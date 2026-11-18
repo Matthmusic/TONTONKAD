@@ -38,8 +38,62 @@ class Page {
     this.ops.push(`BT /${bold ? 'F2' : 'F1'} ${f(size)} Tf ${f(x + dx)} ${f(y)} Td ${pdfStr(s)} Tj ET`);
     return this;
   }
+  // Dessine fn() à l'intérieur du polygone seulement.
+  clip(pts, fn) {
+    this.ops.push('q', pts.map(([x, y], i) => `${f(x)} ${f(y)} ${i ? 'l' : 'm'}`).join(' ') + ' h W n');
+    fn(); this.ops.push('Q'); return this;
+  }
+  // Polygone rempli d'une matière : fond + grains aléatoires (graine fixe → même rendu).
+  texture(pts, base, { grains = 0.35, taille = 0.9, contraste = 0.12, seed = 1, contour = null } = {}) {
+    this.rgb(base, false).poly(pts, 'f');
+    const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const n = Math.min(1800, Math.round((x1 - x0) * (y1 - y0) * grains / 10));
+    let r = seed * 9301 + 49297;
+    const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+    this.clip(pts, () => {
+      for (let k = 0; k < n; k++) {
+        const d = (rnd() - 0.5) * 2 * contraste;
+        this.rgb(base.map((c) => Math.max(0, Math.min(1, c + d))), false);
+        const t = taille * (0.4 + rnd());
+        this.ops.push(`${f(x0 + rnd() * (x1 - x0))} ${f(y0 + rnd() * (y1 - y0))} ${f(t)} ${f(t)} re f`);
+      }
+    });
+    if (contour) this.rgb(contour).poly(pts, 'S');
+    return this;
+  }
+  // Cylindre ombré de a (face avant) vers b (arrière) : bandes de teinte
+  // (reflet en haut à gauche), extrémité avant creuse.
+  cylindre(ax, ay, bx, by, r, ri, base) {
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    const n = [-(by - ay) / len, (bx - ax) / len]; // normale à l'axe
+    const shade = (k) => base.map((c) => Math.max(0, Math.min(1, c * k + (k > 1 ? (k - 1) * 0.6 : 0))));
+    this.rgb(shade(0.55), false).circle(bx, by, r, 'f');
+    const K = 14;
+    for (let i = 0; i < K; i++) {
+      const t0 = -1 + 2 * i / K, t1 = -1 + 2 * (i + 1) / K, tm = (t0 + t1) / 2;
+      const light = 0.55 + 0.75 * Math.max(0, Math.cos((tm - 0.45) * 1.4)); // reflet décalé
+      const q = (t) => [n[0] * t * r, n[1] * t * r];
+      const [p0x, p0y] = q(t0), [p1x, p1y] = q(t1);
+      this.rgb(shade(light), false).poly([[ax + p0x, ay + p0y], [bx + p0x, by + p0y], [bx + p1x, by + p1y], [ax + p1x, ay + p1y]], 'f');
+    }
+    this.rgb(shade(0.45)).width(0.4);
+    this.line(ax + n[0] * r, ay + n[1] * r, bx + n[0] * r, by + n[1] * r).line(ax - n[0] * r, ay - n[1] * r, bx - n[0] * r, by - n[1] * r);
+    // face avant : couronne claire + intérieur sombre (creux)
+    this.rgb(shade(1.15), false).circle(ax, ay, r, 'B');
+    this.rgb([0.18, 0.16, 0.15], false).circle(ax, ay, ri, 'f');
+    this.rgb([0.32, 0.29, 0.27], false).circle(ax + r * 0.08, ay - r * 0.08, ri * 0.82, 'f');
+    return this;
+  }
   toString() { return this.ops.join('\n'); }
 }
+
+// Matières (RVB 0-1)
+const MAT = {
+  terre: [0.52, 0.39, 0.27], sable: [0.86, 0.77, 0.56], beton: [0.72, 0.71, 0.68],
+  betonClair: [0.80, 0.79, 0.76], betonSombre: [0.62, 0.61, 0.58], tpc: [0.80, 0.14, 0.10],
+  surface: { chaussee: [0.30, 0.30, 0.32], trottoir: [0.68, 0.66, 0.62], espace_vert: [0.38, 0.58, 0.28], prive: [0.55, 0.62, 0.40] },
+};
 
 // Échelle qui fait tenir une boîte (mm) dans un cadre (pt).
 const fit = (wMm, hMm, wPt, hPt) => Math.min(wPt / wMm, hPt / hMm);
@@ -85,8 +139,10 @@ function draw3D(p, m, x0, y0, wPt, hPt, longueurMm) {
   const top = m.tranchee ? m.tranchee.profondeur : m.hauteur;
   const ang = Math.PI / 6, red = 0.5; // 30°, réduction 0.5 sur la fuyante
   const dx = Math.cos(ang) * red * longueurMm, dy = Math.sin(ang) * red * longueurMm;
-  const s = fit(m.largeur + dx, top + dy, wPt, hPt);
-  const ox = x0 + (wPt - (m.largeur + dx) * s) / 2, oy = y0;
+  // bloc de terre autour de la tranchée : 35 % de largeur de chaque côté, 18 % sous le fond
+  const MG = m.forme === 'circ' ? 0 : 0.35, SG = m.forme === 'circ' ? 0 : 0.18;
+  const s = fit(m.largeur * (1 + 2 * MG) + dx, top * (1 + SG) + dy, wPt, hPt);
+  const ox = x0 + (wPt - (m.largeur * (1 + 2 * MG) + dx) * s) / 2 + m.largeur * MG * s, oy = y0 + top * SG * s;
   const X = (x) => ox + x * s, Y = (y) => oy + y * s;
   const ex = dx * s, ey = dy * s;
   const W = m.largeur * s, H = top * s;
@@ -98,12 +154,21 @@ function draw3D(p, m, x0, y0, wPt, hPt, longueurMm) {
     p.line(cx + n[0] * r, cy + n[1] * r, cx + n[0] * r + ex, cy + n[1] * r + ey);
     p.line(cx - n[0] * r, cy - n[1] * r, cx - n[0] * r + ex, cy - n[1] * r + ey);
   } else {
-    // terrain : faces de la tranchée (fond, paroi droite, terrain fini)
-    p.rgb([0.92, 0.88, 0.78], false).rgb([0.3, 0.3, 0.3]);
-    p.poly([[X(0), Y(0)], [X(0) + ex, Y(0) + ey], [X(0) + W + ex, Y(0) + ey], [X(0) + W, Y(0)]], 'B');
-    p.poly([[X(0) + W, Y(0)], [X(0) + W + ex, Y(0) + ey], [X(0) + W + ex, Y(0) + H + ey], [X(0) + W, Y(0) + H]], 'B');
-    p.rgb([0.85, 0.85, 0.85], false).poly([[X(0), Y(0) + H], [X(0) + ex, Y(0) + H + ey], [X(0) + W + ex, Y(0) + H + ey], [X(0) + W, Y(0) + H]], 'S');
-    p.line(X(0), Y(0), X(0), Y(0) + H).line(X(0) + ex, Y(0) + ey, X(0) + ex, Y(0) + H + ey);
+    // terrain coupé : bloc de terre autour de la tranchée, vu de face et de dessus
+    const M = W * MG, sol = H * SG;                    // marge de terre autour (pt)
+    const x0 = X(0), y0 = Y(0), lit = (m.reglages.litDePose || 0) * s;
+    const surf = MAT.surface[(m.tranchee && m.tranchee.zone) || 'trottoir'] || MAT.surface.trottoir;
+    // dessus du terrain (gauche et droite de la tranchée)
+    p.texture([[x0 - M, y0 + H], [x0 - M + ex, y0 + H + ey], [x0 + ex, y0 + H + ey], [x0, y0 + H]], surf, { seed: 3, contraste: 0.08 });
+    p.texture([[x0 + W, y0 + H], [x0 + W + ex, y0 + H + ey], [x0 + W + M + ex, y0 + H + ey], [x0 + W + M, y0 + H]], surf, { seed: 4, contraste: 0.08 });
+    // fond et paroi droite intérieurs de la tranchée (terre), lit de sable au fond
+    p.texture([[x0 + W, y0], [x0 + W + ex, y0 + ey], [x0 + W + ex, y0 + H + ey], [x0 + W, y0 + H]], MAT.terre.map((c) => c * 0.85), { seed: 5 });
+    p.texture([[x0, y0], [x0 + ex, y0 + ey], [x0 + W + ex, y0 + ey], [x0 + W, y0]], MAT.sable, { seed: 6, taille: 0.7 });
+    if (lit > 0) p.texture([[x0 + W, y0], [x0 + W + ex, y0 + ey], [x0 + W + ex, y0 + ey + lit], [x0 + W, y0 + lit]], MAT.sable.map((c) => c * 0.92), { seed: 7, taille: 0.7 });
+    // face avant coupée du terrain (avec le trou de la tranchée)
+    p.texture([[x0 - M, y0 - sol], [x0 + W + M, y0 - sol], [x0 + W + M, y0 + H], [x0 + W, y0 + H], [x0 + W, y0], [x0, y0], [x0, y0 + H], [x0 - M, y0 + H]], MAT.terre, { seed: 8, contour: [0.3, 0.22, 0.15] });
+    p.texture([[x0, y0], [x0 + W, y0], [x0 + W, y0 - Math.min(lit, sol)], [x0, y0 - Math.min(lit, sol)]], MAT.sable, { seed: 9, taille: 0.7 });
+    p.rgb([0.3, 0.22, 0.15]).width(0.6).line(x0 + W, y0, x0 + W + ex, y0 + ey).line(x0 + W + ex, y0 + ey, x0 + W + ex, y0 + H + ey);
     if (m.tranchee) {
       const g = m.tranchee.grillage;
       p.rgb(GRILLAGE_RGB[g.couleur] || [0.85, 0.1, 0.1], false).rgb(GRILLAGE_RGB[g.couleur] || [0.85, 0.1, 0.1]).width(0.4);
@@ -117,12 +182,8 @@ function draw3D(p, m, x0, y0, wPt, hPt, longueurMm) {
   const order = [...m.fourreaux].sort((a, b) => (b.y - a.y) || (b.x - a.x));
   for (const fo of order) {
     const r = fo.od / 2 * s, cx = X(fo.x), cy = Y(fo.y);
-    // corps du cylindre (rempli pour masquer ce qui est derrière)
-    p.rgb([0.98, 0.8, 0.6], false).rgb([0.75, 0.35, 0.05]).width(0.6);
-    p.poly([[cx + n[0] * r, cy + n[1] * r], [cx + n[0] * r + ex, cy + n[1] * r + ey], [cx - n[0] * r + ex, cy - n[1] * r + ey], [cx - n[0] * r, cy - n[1] * r]], 'B');
-    p.circle(cx + ex, cy + ey, r, 'B');
-    p.rgb([1, 0.9, 0.8], false).circle(cx, cy, r, 'B');
-    p.rgb([1, 1, 1], false).circle(cx, cy, fo.di / 2 * s, 'B');
+    void n;
+    p.cylindre(cx, cy, cx + ex, cy + ey, r, fo.di / 2 * s, MAT.tpc);
   }
   for (const c of m.cables) {
     p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), 'B');
@@ -202,11 +263,26 @@ function pageChambre(m, i, total) {
   // projection : (x sur la face, y hauteur, z profondeur vers l'arrière)
   const P = (x, y, z) => [ox + (x + z * cx) * s, oy + (y + z * cy) * s];
 
-  // faces intérieures visibles : radier, paroi gauche, paroi du fond
-  p.width(0.8).rgb([0.35, 0.35, 0.35]);
-  p.rgb([0.82, 0.82, 0.80], false).poly([P(0, 0, 0), P(Fw, 0, 0), P(Fw, 0, D), P(0, 0, D)], 'B');
-  p.rgb([0.88, 0.88, 0.86], false).poly([P(0, 0, 0), P(0, 0, D), P(0, H, D), P(0, H, 0)], 'B');
-  p.rgb([0.92, 0.92, 0.90], false).poly([P(0, 0, D), P(Fw, 0, D), P(Fw, H, D), P(0, H, D)], 'B');
+  // béton : extérieur (paroi droite, dessus des parois), puis intérieur
+  const cont = [0.35, 0.35, 0.33];
+  if (e) {
+    p.texture([P(Fw + e, 0, 0), P(Fw + e, 0, D + e), P(Fw + e, H, D + e), P(Fw + e, H, 0)], MAT.betonSombre, { seed: 11, contour: cont });
+    // couronne du dessus (tranche des parois autour de l'ouverture)
+    p.texture([P(-e, H, 0), P(Fw + e, H, 0), P(Fw + e, H, D + e), P(-e, H, D + e)], MAT.betonClair, { seed: 12, contour: cont });
+  }
+  p.texture([P(0, 0, 0), P(Fw, 0, 0), P(Fw, 0, D), P(0, 0, D)], MAT.betonSombre, { seed: 13, contour: cont });
+  p.texture([P(0, 0, 0), P(0, 0, D), P(0, H, D), P(0, H, 0)], MAT.beton, { seed: 14, contour: cont });
+  p.texture([P(0, 0, D), P(Fw, 0, D), P(Fw, H, D), P(0, H, D)], MAT.betonClair, { seed: 15, contour: cont });
+  // ombre portée dans l'angle du radier
+  p.rgb([0, 0, 0], false).ops.push('q /GS1 gs');
+  p.poly([P(0, 0, 0), P(Fw * 0.25, 0, 0), P(Fw * 0.25, 0, D), P(0, 0, D)], 'f');
+  p.ops.push('Q');
+  // tranche des parois coupées sur la face d'entrée (béton en coupe)
+  if (e) {
+    p.texture([P(-e, 0, 0), P(0, 0, 0), P(0, H, 0), P(-e, H, 0)], MAT.betonSombre.map((c) => c * 0.9), { seed: 16, contour: cont });
+    p.texture([P(Fw, 0, 0), P(Fw + e, 0, 0), P(Fw + e, H, 0), P(Fw, H, 0)], MAT.betonSombre.map((c) => c * 0.9), { seed: 17, contour: cont });
+  }
+  p.width(0.8).rgb(cont);
   // arêtes restantes (paroi droite, ouverture haute en tirets = tampon)
   p.line(...P(Fw, 0, 0), ...P(Fw, H, 0)).line(...P(Fw, H, 0), ...P(Fw, H, D));
   p.dash(true).poly([P(0, H, 0), P(Fw, H, 0), P(Fw, H, D), P(0, H, D)], 'S').dash(false);
@@ -239,11 +315,8 @@ function pageChambre(m, i, total) {
   for (const f of order) {
     const r = f.od / 2 * s, [ax, ay] = P(fx(f), f.y, 0), [bx, by] = P(fx(f), f.y, -sortie);
     const n = [-Math.sin(ang) * r, Math.cos(ang) * r];
-    p.rgb([0.98, 0.8, 0.6], false).rgb([0.75, 0.35, 0.05]).width(0.6);
-    p.poly([[ax + n[0], ay + n[1]], [bx + n[0], by + n[1]], [bx - n[0], by - n[1]], [ax - n[0], ay - n[1]]], 'B');
-    p.circle(ax, ay, r, 'B');
-    p.rgb([1, 0.9, 0.8], false).circle(bx, by, r, 'B');
-    p.rgb([1, 1, 1], false).circle(bx, by, f.di / 2 * s, 'B');
+    void n;
+    p.cylindre(bx, by, ax, ay, r, f.di / 2 * s, MAT.tpc);
     p.rgb([0, 0, 0], false).text(bx, by - r - 9, 7, f.id, { align: 'center', bold: true });
   }
   for (const c of m.cables) {
@@ -302,7 +375,7 @@ function masquesToPdf(masques, opts = {}) {
   const addPage = (text) => {
     const content = Buffer.from(text, 'latin1');
     const cid = add(`<< /Length ${content.length} >>\nstream\n${content.toString('latin1')}\nendstream`);
-    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> >> /Contents ${cid} 0 R >>`));
+    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /ExtGState << /GS1 << /ca 0.12 /CA 0.12 >> >> >> /Contents ${cid} 0 R >>`));
   };
   ok.forEach((m, i) => {
     addPage(pageMasque(m, i, ok.length, opts));
