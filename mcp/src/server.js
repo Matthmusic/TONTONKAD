@@ -17,6 +17,9 @@ const { masquesToDxf } = require('./dxf.js');
 const { masquesToPdf } = require('./pdf.js');
 const normes = require('./normes.js');
 const { preparerEtude, RENDUS } = require('./etude.js');
+const ChambreFaces = require('../../src/renderer/chambre-faces.js');
+const CompatChambres = require('../../src/renderer/compat-chambres.js');
+const { infosChambre } = require('./chambres-infos.js');
 
 const cat = loadCatalogues();
 const notes = new Map(); // chemin absolu → { mtime, liaisons }
@@ -42,6 +45,7 @@ const fail = (msg) => ({ isError: true, content: [{ type: 'text', text: msg }] }
 const INSTRUCTIONS = `TONTONKAD produit les masques de liaisons électriques (coupes de tranchée ou de conduit) à partir des notes de calcul Caneco.
 Avant toute génération, réunis dans le chat : la ou les notes de calcul (NDC), les tronçons voulus, le rendu souhaité (AutoCAD, ZWCAD, MultiCAD sur le plan DWG, Revit, PDF avec vue 3D), le plan si les masques doivent y être posés, et la zone (chaussée, trottoir…).
 Appelle preparer_etude avec ce que tu sais ; s'il manque quelque chose, pose TOUTES ses questions à l'utilisateur en un seul message, puis rappelle-le avec les réponses. Ne devine jamais un fichier ou une liaison.
+Si plusieurs masques arrivent dans une même chambre de tirage, demande quelle face reçoit quel masque (pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut, vu de dessus) et passe-les dans le paramètre chambres de generer_masques : la chambre est choisie pour recevoir toutes les faces et les traversées sont déduites.
 Quand preparer_etude répond pret=true : montre les liaisons retenues par tronçon, fais-les valider, puis appelle generer_masques. Relaie toujours les avertissements et les contrôles de conformité, en rappelant que les règles normatives sont à valider.`;
 
 const server = new McpServer({ name: 'tontonkad', version: '0.2.0' }, { instructions: INSTRUCTIONS });
@@ -129,13 +133,21 @@ server.registerTool('generer_masques', {
       options: optionsSchema,
     })).min(1),
     options: optionsSchema.describe('Options communes à tous les masques (surchargées par celles de chaque masque)'),
+    chambres: z.array(z.object({
+      nom: z.string().describe('Nom de la chambre, ex. "Chambre C1 (coffret 1)"'),
+      ref: z.string().optional().describe('Modèle imposé (ex. "L3T") ; sinon le plus petit qui reçoit toutes les faces'),
+      faces: z.object({
+        pignonA: z.string().optional(), pignonB: z.string().optional(),
+        longPanA: z.string().optional(), longPanB: z.string().optional(),
+      }).describe('Nom du masque arrivant sur chaque face. Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Une liaison présente dans deux masques traverse la chambre.'),
+    })).optional().describe('Chambres de tirage à étudier (plusieurs faces, traversées) — ajoute une vue de dessus au PDF'),
     sortieDxf: z.string().optional().describe('Chemin du fichier .dxf à écrire (jamais un plan existant : un nouveau fichier)'),
     sortiePdf: z.string().optional().describe('Chemin du fichier .pdf à écrire : une page par masque, coupe + vue 3D + conformité'),
     longueur3dMm: z.number().optional().describe('Longueur du tronçon montré dans la vue 3D du PDF (défaut 1500 mm)'),
     unite: z.enum(['mm', 'm']).optional().describe('Unité du DXF (défaut mm)'),
     origine: z.object({ x: z.number(), y: z.number() }).optional().describe('Point d\'insertion du premier masque dans le DXF, dans son unité'),
   },
-}, async ({ noteCalcul, masques, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine }) => {
+}, async ({ noteCalcul, masques, chambres, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine }) => {
   try {
     const all = getNote(noteCalcul);
     const out = masques.map((m) => {
@@ -150,6 +162,20 @@ server.registerTool('generer_masques', {
       res.liaisonsRetenues = liaisons.map(resume);
       return res;
     });
+    // Chambres multi-faces : chaque face reçoit un masque déjà généré (par son nom)
+    const etudes = (chambres || []).map((c) => {
+      const faces = {}, manquants = [];
+      for (const [k, nomMasque] of Object.entries(c.faces || {})) {
+        if (!nomMasque) continue;
+        const mq = out.find((m) => m.ok && m.nom === nomMasque);
+        if (mq) faces[k] = mq; else manquants.push(nomMasque);
+      }
+      const e = ChambreFaces.etudierChambre(faces, cat.chambres, CompatChambres, { ref: c.ref, infos: infosChambre });
+      e.nom = c.nom;
+      if (manquants.length) (e.avertissements = e.avertissements || []).unshift(`Masque(s) introuvable(s) : ${manquants.join(', ')} (utiliser le nom exact d'un masque de cette demande)`);
+      e._masques = faces;
+      return e;
+    });
     let dxf = null;
     if (sortieDxf) {
       const abs = path.resolve(sortieDxf);
@@ -163,10 +189,10 @@ server.registerTool('generer_masques', {
       const abs = path.resolve(sortiePdf);
       if (!/\.pdf$/i.test(abs)) throw new Error('sortiePdf doit se terminer par .pdf');
       if (fs.existsSync(abs)) throw new Error(`${abs} existe déjà : choisis un nouveau nom (aucun fichier n'est écrasé)`);
-      fs.writeFileSync(abs, masquesToPdf(out, { longueur3dMm }));
+      fs.writeFileSync(abs, masquesToPdf(out, { longueur3dMm, etudesChambres: etudes }));
       pdf = abs;
     }
-    return ok({ dxf, pdf, masques: out });
+    return ok({ dxf, pdf, masques: out, chambres: etudes.map(({ _masques, ...e }) => e) });
   } catch (e) { return fail(String(e.message || e)); }
 });
 

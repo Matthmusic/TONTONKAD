@@ -116,6 +116,28 @@ fourreaux du masque qui arrivent sur la face d'entrée. Option `chambre` pour
 imposer une référence (ex. `"L2T"`). Seules les cotes intérieures du catalogue
 sont connues : épaisseur des parois, cadre et tampon ne sont pas dessinés.
 
+### Chambre à plusieurs faces (traversées)
+
+Le paramètre `chambres` de `generer_masques` décrit quel masque arrive sur
+quelle face d'une chambre, vue de dessus : `pignonA` (gauche), `pignonB`
+(droite), `longPanA` (bas), `longPanB` (haut).
+
+```json
+"chambres": [{ "nom": "Chambre C1",
+  "faces": { "pignonA": "Arrivée TGBT", "pignonB": "Vers COFFRET 1", "longPanB": "Vers COFFRET 2" } }]
+```
+
+- la chambre retenue est la plus petite où **chaque masque tient dans sa face**
+  (largeur du pignon ou du long-pan, hauteur utile) ; `ref` pour l'imposer ;
+- une liaison présente dans deux masques **traverse** la chambre : en ligne
+  droite (faces opposées) ou en angle (rayon de courbure à vérifier) ; un
+  changement de diamètre de fourreau est indiqué ;
+- une liaison présente sur une seule face **s'arrête** dans la chambre ;
+- le PDF ajoute une **vue de dessus** : fourreaux sur chaque face, traversées
+  numérotées et colorées, légende.
+
+Démo : `node test/chambre-demo.js sortie.pdf`.
+
 ### DXF
 
 R12 (AC1009), calques identiques à l'export de l'application (`_CEAI_BOITE`,

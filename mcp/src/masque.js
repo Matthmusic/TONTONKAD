@@ -135,6 +135,11 @@ function buildMasque({ nom, liaisons = [], reserves = [], options = {} }, cat) {
       id: `F${p.id + 1}`, type: f.type, code: String(f.code), od: f.od, di: f.idm,
       x: round(p.x), y: round(p.yUp),
       libelle: f.label || '', taux: round(f.tauxOccupation * 100, 1),
+      // liste complète des liaisons portées (le libellé est abrégé en « X +2 »)
+      liaisons: (() => {
+        const noms = [...new Set(objs.cables.filter((c) => c.parentIndex === p.id).map((c) => namesById[c.liaisonId] || c.liaisonId))];
+        return noms.length ? noms : [f.label || ''];
+      })(),
     };
   }).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
 

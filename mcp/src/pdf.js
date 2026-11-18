@@ -3,7 +3,7 @@
 // (coupe, vue 3D, légende, conformité) + une page chambre de tirage.
 // Le dessin est dans src/renderer/vue3d.js, partagé avec l'application ;
 // ici seulement la mise en page et l'écriture du fichier PDF.
-const { Page, fit, drawCoupe, draw3D, drawChambre3D, PAGE_W, PAGE_H, MARGE } = require('../../src/renderer/vue3d.js');
+const { Page, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, PAGE_W, PAGE_H, MARGE } = require('../../src/renderer/vue3d.js');
 void fit;
 
 function pageMasque(m, i, total, opts) {
@@ -93,6 +93,45 @@ function pageChambre(m, i, total) {
   return p.toString();
 }
 
+// Page « chambre vue de dessus » : faces, fourreaux par face, traversées.
+function pageChambreDessus(e) {
+  const p = new Page();
+  p.text(MARGE, PAGE_H - MARGE - 4, 16, `${e.nom || 'Chambre'} — ${e.ok ? e.ref : 'aucune chambre'} — vue de dessus`, { bold: true });
+  p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, 'TONTONKAD — étude de chambre', { align: 'right' });
+  p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+  const x = 560;
+  let y = PAGE_H - MARGE - 40;
+  if (!e.ok) {
+    for (const l of e.erreurs || []) { p.rgb([0.8, 0.1, 0.1], false).text(MARGE, y, 10, l, { bold: true }); y -= 14; }
+    return p.toString();
+  }
+  const couleurs = drawChambreDessus(p, e, e._masques || {}, MARGE, 60, 500, PAGE_H - MARGE - 60 - 60);
+  p.rgb([0, 0, 0], false).text(x, y, 11, `Chambre ${e.ref}`, { bold: true }); y -= 14;
+  p.text(x, y, 8, `Intérieur ${e.L} × ${e.l} mm, H ${e.H} mm (utile)`); y -= 18;
+  p.text(x, y, 9, 'Faces', { bold: true }); y -= 12;
+  for (const f of Object.values(e.faces)) {
+    p.rgb(f.tient ? [0.1, 0.5, 0.2] : [0.8, 0.1, 0.1], false).text(x, y, 8, `${f.tient ? 'OK' : 'NON'}  ${f.face} : ${f.masque}`, { bold: true }); y -= 10;
+    p.rgb([0.35, 0.35, 0.35], false).text(x + 14, y, 7, `masque ${f.largeurMasque} × ${f.hauteurMasque} dans ${f.largeurFace} × ${f.hauteurFace} mm`); y -= 12;
+  }
+  y -= 4;
+  p.rgb([0, 0, 0], false).text(x, y, 9, 'Traversées', { bold: true }); y -= 12;
+  if (!e.traversees.length) { p.text(x, y, 8, 'aucune'); y -= 11; }
+  e.traversees.forEach((t, i) => {
+    p.rgb(couleurs.get(t.liaison) || [0, 0, 0], false).text(x, y, 8, `${i + 1}. ${t.liaison}`.slice(0, 48), { bold: true }); y -= 10;
+    p.rgb([0.2, 0.2, 0.2], false).text(x + 12, y, 7, `entre ${t.entree}, sort ${t.sortie} (${t.type})${t.changementFourreau ? ', fourreau ' + t.changementFourreau : ''}`); y -= 11;
+  });
+  if (e.arrets.length) {
+    y -= 4; p.rgb([0, 0, 0], false).text(x, y, 9, 'Liaisons qui s\'arrêtent dans la chambre', { bold: true }); y -= 12;
+    for (const a of e.arrets.slice(0, 8)) { p.rgb(couleurs.get(a.liaison) || [0, 0, 0], false).text(x, y, 7, `• ${a.liaison} (${a.face})`.slice(0, 60)); y -= 10; }
+  }
+  if (e.avertissements && e.avertissements.length) {
+    y -= 4; p.rgb([0, 0, 0], false).text(x, y, 9, 'À vérifier', { bold: true }); y -= 12;
+    for (const a of e.avertissements.slice(0, 6)) { p.rgb([0.6, 0.2, 0.1], false).text(x, y, 7, `• ${a}`.slice(0, 62)); y -= 10; }
+  }
+  p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, 'Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Positions des fourreaux le long de chaque face reprises des masques (centrés).');
+  return p.toString();
+}
+
 /** @returns {Buffer} un PDF, une page par masque réussi */
 function masquesToPdf(masques, opts = {}) {
   const ok = masques.filter((m) => m && m.ok);
@@ -112,6 +151,7 @@ function masquesToPdf(masques, opts = {}) {
     addPage(pageMasque(m, i, ok.length, opts));
     if (m.chambre && m.chambre.face && opts.chambre !== false) addPage(pageChambre(m, i, ok.length));
   });
+  for (const e of opts.etudesChambres || []) addPage(pageChambreDessus(e));
   objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
   objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;
 
