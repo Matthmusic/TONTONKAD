@@ -1,0 +1,110 @@
+// Serveur MCP TONTONKAD — cœur métier (sans le protocole) : note Caneco →
+// liaisons → masque → DXF. Le serveur lui-même est testé par mcp/test/smoke.js.
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { loadCatalogues } = require('../mcp/src/catalogue.js');
+const { readNote, findLiaisons } = require('../mcp/src/note.js');
+const { buildMasque } = require('../mcp/src/masque.js');
+const { masquesToDxf } = require('../mcp/src/dxf.js');
+const { trancheeNormee } = require('../mcp/src/normes.js');
+const { makeNote } = require('../mcp/test/fixtures/make-note.js');
+
+const cat = loadCatalogues();
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ttk-mcp-test-'));
+const liaisons = readNote(makeNote(path.join(dir, 'note.xlsx')), cat.cables);
+
+describe('MCP — lecture de la note de calcul', () => {
+  test('toutes les lignes, avec origine et destination', () => {
+    expect(liaisons).toHaveLength(7);
+    expect(liaisons[0]).toMatchObject({ ref: 'L1', origine: 'TGBT', nom: 'COFFRET 1', selectable: true });
+    expect(liaisons[6].selectable).toBe(false); // ligne de réserve Caneco
+  });
+
+  test('recherche par mots entiers : COFFRET 1 ne trouve pas COFFRET 10, origine stricte', () => {
+    const L = [
+      { ref: 'a', origine: 'TGBT', nom: 'COFFRET 1' },
+      { ref: 'b', origine: 'TGBT', nom: 'COFFRET 10' },
+      { ref: 'c', origine: 'tgbt', nom: 'Coffret 1 éclairage' },
+      { ref: 'd', origine: 'TGBT-2', nom: 'COFFRET 1' },
+    ];
+    expect(findLiaisons(L, { origine: 'TGBT', destination: 'coffret 1' }).map((l) => l.ref)).toEqual(['a', 'c']);
+    expect(findLiaisons(L, { refs: ['B'] }).map((l) => l.ref)).toEqual(['b']);
+  });
+});
+
+describe('MCP — masque', () => {
+  const tronçon = findLiaisons(liaisons, { origine: 'TGBT', destination: 'COFFRET 1' });
+  const m = buildMasque({ nom: 'TGBT → COFFRET 1', liaisons: tronçon, reserves: [{ type: 'TPC', code: '160', qty: 1 }] }, cat);
+
+  test('fourreaux et câbles produits, tous les câbles dans leur fourreau', () => {
+    expect(m.ok).toBe(true);
+    expect(m.liaisons).toHaveLength(4); // 3 circuits + 1 réserve
+    expect(m.cables).toHaveLength(3);
+    for (const c of m.cables) {
+      const f = m.fourreaux.find((x) => x.id === c.fourreau);
+      expect(Math.hypot(c.x - f.x, c.y - f.y) + c.od / 2).toBeLessThanOrEqual(f.di / 2 + 0.05);
+    }
+  });
+
+  test('fourreaux dans la tranchée, sans chevauchement, lit de pose respecté', () => {
+    for (const f of m.fourreaux) {
+      expect(f.x - f.od / 2).toBeGreaterThanOrEqual(40 - 1e-6);
+      expect(f.y - f.od / 2).toBeGreaterThanOrEqual(40 - 1e-6);
+      expect(f.x + f.od / 2).toBeLessThanOrEqual(m.largeur - 40 + 1e-6);
+    }
+    for (let i = 0; i < m.fourreaux.length; i++) for (let j = i + 1; j < m.fourreaux.length; j++) {
+      const a = m.fourreaux[i], b = m.fourreaux[j];
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual((a.od + b.od) / 2 + 30 - 1e-6);
+    }
+  });
+
+  test('tranchée normée : recouvrement de la zone et grillage avertisseur', () => {
+    const haut = Math.max(...m.fourreaux.map((f) => f.y + f.od / 2));
+    expect(m.tranchee.profondeur - haut).toBeGreaterThanOrEqual(600); // trottoir par défaut
+    expect(m.tranchee.grillage.y - haut).toBe(200);
+    expect(m.tranchee.grillage.couleur).toBe('rouge');
+    expect(m.tranchee.conformite.every((c) => c.ok && c.aValider)).toBe(true);
+  });
+
+  test('sous chaussée le recouvrement minimal passe à 800 mm', () => {
+    const c = buildMasque({ nom: 'x', liaisons: tronçon, options: { zone: 'chaussee' } }, cat);
+    const haut = Math.max(...c.fourreaux.map((f) => f.y + f.od / 2));
+    expect(c.tranchee.profondeur - haut).toBeGreaterThanOrEqual(800);
+  });
+
+  test('profondeur imposée trop faible : signalée non conforme', () => {
+    const c = buildMasque({ nom: 'x', liaisons: tronçon, options: { profondeurFouilleMm: 500 } }, cat);
+    expect(c.tranchee.conformite.some((r) => !r.ok)).toBe(true);
+    expect(c.avertissements.some((a) => a.startsWith('Non conforme'))).toBe(true);
+  });
+
+  test('aucune liaison utilisable → erreur explicite, pas de masque vide', () => {
+    const c = buildMasque({ nom: 'vide', liaisons: [liaisons[6]] }, cat);
+    expect(c.ok).toBe(false);
+    expect(c.erreurs.join(' ')).toMatch(/Aucune liaison/);
+  });
+
+  test('conduit circulaire : pas de tranchée, fourreaux dans le cercle', () => {
+    const c = buildMasque({ nom: 'conduit', liaisons: tronçon, options: { forme: 'circ', litDePose: 0 } }, cat);
+    expect(c.tranchee).toBeNull();
+    for (const f of c.fourreaux) {
+      expect(Math.hypot(f.x - c.largeur / 2, f.y - c.largeur / 2) + f.od / 2).toBeLessThanOrEqual(c.largeur / 2 + 1e-3);
+    }
+  });
+
+  test('DXF R12 : calques de l\'application, une entité CIRCLE par fourreau (×2) et par câble', () => {
+    const dxf = masquesToDxf([m]);
+    expect(dxf).toMatch(/\$ACADVER\n1\nAC1009/);
+    expect(dxf).toMatch(/_CEAI_FOURREAU_TPC_160/);
+    expect(dxf).toMatch(/_CEAI_GRILLAGE_ROUGE/);
+    expect((dxf.match(/\nCIRCLE\n/g) || []).length).toBe(m.fourreaux.length * 2 + m.cables.length);
+    expect(dxf.trim().endsWith('EOF')).toBe(true);
+  });
+});
+
+describe('MCP — normes', () => {
+  test('zone inconnue refusée', () => {
+    expect(() => trancheeNormee({ largeur: 400, hauteur: 300, hautNappe: 250 }, { zone: 'lune' })).toThrow(/Zone inconnue/);
+  });
+});
