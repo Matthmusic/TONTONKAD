@@ -14,6 +14,7 @@ const { loadCatalogues } = require('./catalogue.js');
 const { readNote, findLiaisons } = require('./note.js');
 const { buildMasque, DEFAULTS } = require('./masque.js');
 const { masquesToDxf } = require('./dxf.js');
+const { masquesToPdf } = require('./pdf.js');
 const normes = require('./normes.js');
 const { preparerEtude, RENDUS } = require('./etude.js');
 
@@ -116,7 +117,7 @@ server.registerTool('lire_note_calcul', {
 
 server.registerTool('generer_masques', {
   title: 'Générer des masques de liaisons',
-  description: 'Génère un masque (coupe de tranchée ou de conduit) par tronçon : fourreaux choisis et placés, câbles répartis avec leurs phases, profondeur et grillage avertisseur selon les normes. Renvoie la géométrie en mm (Y vers le haut, origine = coin bas-gauche du masque) pour la dessiner en CAO, et écrit un DXF si sortieDxf est fourni.',
+  description: 'Génère un masque (coupe de tranchée ou de conduit) par tronçon : fourreaux choisis et placés, câbles répartis avec leurs phases, profondeur et grillage avertisseur selon les normes. Renvoie la géométrie en mm (Y vers le haut, origine = coin bas-gauche du masque) pour la dessiner en CAO, et écrit un DXF (sortieDxf) et/ou une planche PDF avec vue 3D (sortiePdf).',
   inputSchema: {
     noteCalcul: z.string().describe('Chemin de la note de calcul Caneco'),
     masques: z.array(z.object({
@@ -128,10 +129,12 @@ server.registerTool('generer_masques', {
     })).min(1),
     options: optionsSchema.describe('Options communes à tous les masques (surchargées par celles de chaque masque)'),
     sortieDxf: z.string().optional().describe('Chemin du fichier .dxf à écrire (jamais un plan existant : un nouveau fichier)'),
+    sortiePdf: z.string().optional().describe('Chemin du fichier .pdf à écrire : une page par masque, coupe + vue 3D + conformité'),
+    longueur3dMm: z.number().optional().describe('Longueur du tronçon montré dans la vue 3D du PDF (défaut 1500 mm)'),
     unite: z.enum(['mm', 'm']).optional().describe('Unité du DXF (défaut mm)'),
     origine: z.object({ x: z.number(), y: z.number() }).optional().describe('Point d\'insertion du premier masque dans le DXF, dans son unité'),
   },
-}, async ({ noteCalcul, masques, options, sortieDxf, unite, origine }) => {
+}, async ({ noteCalcul, masques, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine }) => {
   try {
     const all = getNote(noteCalcul);
     const out = masques.map((m) => {
@@ -154,7 +157,15 @@ server.registerTool('generer_masques', {
       fs.writeFileSync(abs, masquesToDxf(out, { unite, origine }), 'latin1');
       dxf = abs;
     }
-    return ok({ dxf, masques: out });
+    let pdf = null;
+    if (sortiePdf) {
+      const abs = path.resolve(sortiePdf);
+      if (!/\.pdf$/i.test(abs)) throw new Error('sortiePdf doit se terminer par .pdf');
+      if (fs.existsSync(abs)) throw new Error(`${abs} existe déjà : choisis un nouveau nom (aucun fichier n'est écrasé)`);
+      fs.writeFileSync(abs, masquesToPdf(out, { longueur3dMm }));
+      pdf = abs;
+    }
+    return ok({ dxf, pdf, masques: out });
   } catch (e) { return fail(String(e.message || e)); }
 });
 

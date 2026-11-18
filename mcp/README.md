@@ -57,9 +57,9 @@ Dans les deux cas, Claude :
 4. montre les liaisons retenues par tronçon et attend la validation ;
 5. génère les masques et résume dimensions, profondeur, contrôles de conformité.
 
-Rendus : AutoCAD, ZWCAD et DXF sont disponibles ; MultiCAD (masques posés sur le
-plan DWG) passe par le MCP MultiCAD s'il est branché ; Revit et PDF avec vue 3D
-sont prévus et signalés comme indisponibles pour l'instant.
+Rendus : AutoCAD, ZWCAD, DXF et PDF avec vue 3D sont disponibles ; MultiCAD
+(masques posés sur le plan DWG) passe par le MCP MultiCAD s'il est branché ;
+Revit est prévu et signalé comme indisponible pour l'instant.
 
 ## Outils
 
@@ -100,6 +100,14 @@ masque
 C'est ce format qu'un MCP de CAO (MultiCAD / nanoCAD) dessine : cercles
 `od`/`di` pour chaque fourreau, un cercle par câble, une ligne pour le grillage,
 le cadre de la tranchée, translatés au point d'insertion repéré sur le plan.
+
+### PDF avec vue 3D
+
+`sortiePdf` écrit une planche A4 paysage par masque : la coupe à l'échelle, une
+vue 3D du tronçon en perspective cavalière (fourreaux en cylindres, grillage
+avertisseur, parois de la tranchée ; longueur réglable avec `longueur3dMm`,
+1,5 m par défaut), la légende des fourreaux, la profondeur et les contrôles de
+conformité. La vue 3D est un dessin, pas un modèle 3D manipulable.
 
 ### DXF
 

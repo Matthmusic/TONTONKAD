@@ -14,7 +14,7 @@ const RENDUS = {
   dxf: { libelle: 'DXF seul', disponible: true, comment: 'Fichier DXF R12, lisible par tous les logiciels de CAO.' },
   multicad: { libelle: 'MultiCAD / nanoCAD (sur le plan DWG)', disponible: 'mcp', comment: 'Géométrie de generer_masques dessinée par le MCP MultiCAD, s\'il est branché, au repère posé sur le plan.' },
   revit: { libelle: 'Revit (maquette 3D)', disponible: false, comment: 'Prévu : familles .rfa des chambres + conduits, via un MCP Revit. Pas encore disponible.' },
-  pdf3d: { libelle: 'PDF avec vue 3D', disponible: false, comment: 'Prévu : planche PDF des masques avec une vue 3D de la chambre. Pas encore disponible.' },
+  pdf3d: { libelle: 'PDF avec vue 3D', disponible: true, comment: 'Planche PDF (generer_masques, sortiePdf) : coupe, vue 3D du tronçon en perspective cavalière, conformité.' },
 };
 const ALIAS = { 'autocad': 'autocad', 'acad': 'autocad', 'zwcad': 'zwcad', 'dxf': 'dxf', 'multicad': 'multicad', 'nanocad': 'multicad',
   'revit': 'revit', 'pdf': 'pdf3d', 'pdf3d': 'pdf3d', 'pdf 3d': 'pdf3d', '3d': 'pdf3d' };

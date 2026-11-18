@@ -133,10 +133,11 @@ describe('MCP — préparation d\'étude (questions à poser dans le chat)', () 
     expect(r.pret).toBe(false);
   });
 
-  test('MultiCAD ou Revit : le plan devient obligatoire ; PDF 3D et Revit signalés indisponibles', () => {
+  test('MultiCAD ou Revit : le plan devient obligatoire ; seul Revit est signalé indisponible', () => {
     const r = preparerEtude({ notesCalcul: [note], rendus: ['MultiCAD', 'revit', 'pdf'], troncons: [{ origine: 'TGBT', destination: 'COFFRET 1' }] }, cat);
     expect(r.manquant.some((m) => m.champ === 'plans' && m.obligatoire)).toBe(true);
-    expect(r.aSignaler).toHaveLength(2);
+    expect(r.aSignaler).toHaveLength(1);
+    expect(r.aSignaler[0]).toMatch(/^Revit/);
   });
 
   test('tout fourni → prêt', () => {
@@ -144,5 +145,34 @@ describe('MCP — préparation d\'étude (questions à poser dans le chat)', () 
       troncons: [{ origine: 'COFFRET 1', destination: 'PIT 1' }] }, cat);
     expect(r.pret).toBe(true);
     expect(r.manquant).toHaveLength(0);
+  });
+});
+
+describe('MCP — planche PDF avec vue 3D', () => {
+  const { masquesToPdf } = require('../mcp/src/pdf.js');
+  const tr = findLiaisons(liaisons, { origine: 'TGBT', destination: 'COFFRET 1' });
+  const m1 = buildMasque({ nom: 'TGBT → COFFRET 1', liaisons: tr }, cat);
+  const m2 = buildMasque({ nom: 'conduit', liaisons: tr, options: { forme: 'circ', litDePose: 0 } }, cat);
+
+  test('une page A4 paysage par masque, PDF bien formé', () => {
+    const pdf = masquesToPdf([m1, m2]).toString('latin1');
+    expect(pdf.startsWith('%PDF-1.4')).toBe(true);
+    expect(pdf.trim().endsWith('%%EOF')).toBe(true);
+    expect(pdf).toMatch(/\/Count 2/);
+    expect((pdf.match(/\/MediaBox \[0 0 842 595\]/g) || []).length).toBe(2);
+    // xref : chaque offset pointe bien sur « n 0 obj »
+    const start = Number(pdf.match(/startxref\n(\d+)/)[1]);
+    const offs = pdf.slice(start).split('\n').filter((l) => / 00000 n $/.test(l)).map((l) => Number(l.slice(0, 10)));
+    offs.forEach((o, i) => expect(pdf.slice(o, o + 12).startsWith(`${i + 1} 0 obj`)).toBe(true));
+  });
+
+  test('texte en WinAnsi : tiret long et flèche convertis, pas de « ? »', () => {
+    const pdf = masquesToPdf([m1]).toString('latin1');
+    expect(pdf).toContain('(TGBT -> COFFRET 1)');
+    expect(pdf).toContain('\x97'); // tiret long
+  });
+
+  test('aucun masque réussi → erreur', () => {
+    expect(() => masquesToPdf([{ ok: false }])).toThrow(/Aucun masque/);
   });
 });

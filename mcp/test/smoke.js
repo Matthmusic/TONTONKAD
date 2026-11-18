@@ -48,7 +48,7 @@ const { makeNote } = require('./fixtures/make-note.js');
       { nom: 'TGBT → COFFRET 1', liaisons: [{ origine: 'TGBT', destination: 'COFFRET 1' }], reserves: [{ type: 'TPC', code: '160', qty: 1 }] },
       { nom: 'COFFRET 1 → PIT 1', liaisons: [{ origine: 'COFFRET 1', destination: 'PIT 1' }], options: { zone: 'chaussee' } },
     ],
-    sortieDxf: dxf,
+    sortieDxf: dxf, sortiePdf: path.join(dir, 'masques.pdf'),
   } });
   if (gen.isError) { console.error('ERREUR', gen.content[0].text); process.exit(1); }
   const res = JSON.parse(gen.content[0].text);
@@ -62,6 +62,7 @@ const { makeNote } = require('./fixtures/make-note.js');
     console.log('  avertissements', m.avertissements);
   }
   console.log('\nDXF', res.dxf, fs.statSync(res.dxf).size, 'octets');
+  console.log('PDF', res.pdf, fs.statSync(res.pdf).size, 'octets');
   const again = await client.callTool({ name: 'generer_masques', arguments: { noteCalcul: note, masques: [{ nom: 'x', liaisons: [{ texte: 'COFFRET 2' }] }], sortieDxf: dxf } });
   console.log('REECRITURE REFUSEE', again.isError === true, again.content[0].text.slice(0, 80));
   await client.close();
