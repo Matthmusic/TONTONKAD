@@ -1,67 +1,174 @@
 'use strict';
 (function (root) {
-  const MRP = (typeof module !== 'undefined' && module.exports)
-    ? require('maxrects-packer')
-    : root.MaxRectsPacker;
-  const MaxRectsPacker = MRP.MaxRectsPacker;
-  const PACKING_LOGIC  = MRP.PACKING_LOGIC;
+  // ─── Moteur de placement des fourreaux ─────────────────────────────────
+  //
+  // Boîte / tranchée rectangulaire : rangement PAR GROUPES DE DIAMÈTRE.
+  //   Les fourreaux d'un même diamètre forment un bloc compact (grille, la
+  //   rangée incomplète en haut et centrée). Les blocs sont posés du plus gros
+  //   diamètre au plus petit, chacun à l'endroit le plus bas possible, sur le
+  //   fond ou bien à plat sur un bloc déjà posé (centré dessus). On balaie la
+  //   largeur pour choisir la forme de la nappe.
+  //
+  // Conduit circulaire : pas d'écart entre fourreaux, rangement en nid
+  //   d'abeille (chaque fourreau vient se loger contre deux autres, au plus
+  //   près du centre). Une grille carrée est aussi essayée : on garde celle
+  //   qui donne le plus petit diamètre.
+  //
+  // Repère moteur : Y=0 en bas (Y-up), origine bas-gauche, en mm.
 
   // Défauts à 0 : l'écart (entraxe) et le lit de pose sont réglés par
   // l'utilisateur via le pop-over de la barre de contrôle (gapSlider /
   // litDePoseSlider), qui mute GEO. Doit rester cohérent avec index.html.
-  const GEO  = { gap: 0, margin: 0 };
-  const OPTS = { smart: true, pot: false, square: false, allowRotation: false, border: 0, logic: PACKING_LOGIC.MAX_EDGE };
-  const EPS  = 1e-6; // tolérance flottante pour les comparaisons de dimensions
+  const GEO = { gap: 0, margin: 0 };
+  const EPS = 1e-6; // tolérance flottante pour les comparaisons de dimensions
 
   const cell = (d) => d + GEO.gap;
-
-  // Somme des cellules = borne "tout sur une ligne/colonne" (axe non contraint).
-  // On l'utilise plutôt qu'une borne infinie : maxrects empaquette différemment
-  // selon les bornes, et une borne énorme (1e6) le fait empiler en portrait.
   const span = (tubes) => tubes.reduce((s, t) => s + cell(t.d), 0);
 
   function sortTubes(tubes) {
     return [...tubes].sort((a, b) => (b.d - a.d) || String(a.id).localeCompare(String(b.id)));
   }
 
-  // Empaquette les cellules dans une boîte (maxW × maxH).
-  // Pour étaler en LARGEUR : contraindre maxH, laisser maxW = span.
-  // Pour étaler en HAUTEUR : contraindre maxW, laisser maxH = span.
-  // Retourne le contenu en Y-up (origine bas-gauche) ; null si ça ne tient pas.
-  // stable=false : gravité seule (rapide), pour le balayage ; la stabilisation
-  // complète n'est faite que sur le(s) layout(s) retenu(s), voir finalize().
-  function packBox(tubes, maxW, maxH, stable = true) {
-    const packer = new MaxRectsPacker(maxW, maxH, 0, OPTS);
-    for (const t of tubes) { const c = cell(t.d); packer.add(c, c, { id: t.id, d: t.d }); }
-    if (packer.bins.length !== 1) return null; // contenu trop grand pour la contrainte
-    const bin = packer.bins[0];
-    if (!bin) return null;
-    // maxrects-packer (smart:true) ne fait pas toujours grandir bins.length quand le
-    // contenu dépasse la borne demandée sur le 2e axe (observé : un bin peut dépasser
-    // maxH tout en restant bins.length===1) : on vérifie donc les dimensions réelles
-    // du bin plutôt que de faire confiance à bins.length seul.
-    if (bin.width > maxW + EPS || bin.height > maxH + EPS) return null;
-    const placed = settle(bin.rects.map(r => ({
-      id: r.data.id, d: r.data.d,
-      x: r.x,   // maxrects place les gros en premier près de l'origine
-      y: r.y,   // origine = bas-gauche (Y-up) → gros fourreaux posés en bas (gravité)
-    })), maxW, maxH, stable);
+  // ─── Rectangle : blocs par diamètre sur une ligne d'horizon ────────────
+
+  function groupsOf(list) {
+    const groups = [];
+    for (const t of list) {
+      const g = groups[groups.length - 1];
+      if (g && Math.abs(g.d - t.d) < EPS) g.tubes.push(t);
+      else groups.push({ d: t.d, tubes: [t] });
+    }
+    return groups;
+  }
+
+  // Ligne d'horizon : segments contigus [x, x+w) de hauteur y, couvrant [0, W).
+  function skyHeight(sky, x0, x1) {
+    let h = 0, flat = true, first = null;
+    for (const s of sky) {
+      if (s.x + s.w <= x0 + EPS || s.x >= x1 - EPS) continue;
+      if (first === null) first = s.y;
+      else if (Math.abs(s.y - first) > EPS) flat = false;
+      if (s.y > h) h = s.y;
+    }
+    return { h, flat };
+  }
+
+  function skyRaise(sky, x0, x1, y) {
+    const out = [];
+    for (const s of sky) {
+      const a = s.x, b = s.x + s.w;
+      if (b <= x0 + EPS || a >= x1 - EPS) { out.push(s); continue; }
+      if (a < x0 - EPS) out.push({ x: a, w: x0 - a, y: s.y });
+      const lo = Math.max(a, x0), hi = Math.min(b, x1);
+      out.push({ x: lo, w: hi - lo, y: Math.max(s.y, y) });
+      if (b > x1 + EPS) out.push({ x: x1, w: b - x1, y: s.y });
+    }
+    // fusion des voisins de même hauteur
+    const merged = [];
+    for (const s of out) {
+      const p = merged[merged.length - 1];
+      if (p && Math.abs(p.y - s.y) < EPS && Math.abs(p.x + p.w - s.x) < EPS) p.w += s.w;
+      else merged.push({ ...s });
+    }
+    return merged;
+  }
+
+  // Positions candidates pour un bloc de largeur bw : bords de chaque
+  // segment, et centre de chaque plateau (suite de segments de même hauteur).
+  function candidateXs(sky, bw, W) {
+    const xs = new Set([0, W - bw]);
+    for (let i = 0; i < sky.length; i++) {
+      const s = sky[i];
+      xs.add(s.x); xs.add(s.x + s.w - bw);
+      let j = i, end = s.x + s.w;
+      while (j + 1 < sky.length && Math.abs(sky[j + 1].y - s.y) < EPS) { j++; end = sky[j].x + sky[j].w; }
+      xs.add(s.x + (end - s.x - bw) / 2);
+    }
+    return [...xs].filter(x => x > -EPS && x + bw < W + EPS).map(x => Math.max(0, x));
+  }
+
+  // Centre du plateau qui porte un bloc posé en [x, x+bw) à la hauteur y.
+  function plateauCenter(sky, x, bw, y) {
+    let lo = x, hi = x + bw;
+    for (const s of sky) if (Math.abs(s.y - y) < EPS && s.x <= lo + EPS && s.x + s.w >= lo - EPS) lo = Math.min(lo, s.x);
+    // étend à gauche / à droite tant que la hauteur est la même
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const s of sky) {
+        if (Math.abs(s.y - y) > EPS) continue;
+        if (Math.abs(s.x + s.w - lo) < EPS) { lo = s.x; changed = true; }
+        if (Math.abs(s.x - hi) < EPS) { hi = s.x + s.w; changed = true; }
+        if (s.x < hi - EPS && s.x + s.w > hi + EPS) { hi = s.x + s.w; changed = true; }
+      }
+    }
+    return (lo + hi) / 2;
+  }
+
+  // Place tous les groupes dans une largeur W (et une hauteur maxH).
+  // Retourne { cw, ch, placed } en Y-up sans marge, ou null.
+  function groupLayout(list, W, maxH = Infinity) {
+    let sky = [{ x: 0, w: W, y: 0 }];
+    const placed = [];
+    for (const g of groupsOf(list)) {
+      const c = cell(g.d), n = g.tubes.length;
+      const maxCols = Math.min(n, Math.floor(W / c + EPS));
+      if (maxCols < 1) return null;
+      let best = null;
+      for (const pass of [true, false]) { // 1er passage : seulement à plat
+        for (let cols = 1; cols <= maxCols; cols++) {
+          const rows = Math.ceil(n / cols), bw = cols * c, bh = rows * c;
+          for (const x of candidateXs(sky, bw, W)) {
+            const { h: y, flat } = skyHeight(sky, x, x + bw);
+            if (pass && !flat) continue;
+            if (y + bh > maxH + EPS) continue;
+            // posé sur un bloc : on préfère être centré sur le plateau
+            const off = y > EPS ? Math.abs(x + bw / 2 - plateauCenter(sky, x, bw, y)) : x;
+            const key = [y + bh, y, off, cols];
+            if (!best || lexLess(key, best.key)) {
+              best = { key, x, y, cols, rows, bw, bh };
+            }
+          }
+        }
+        if (best) break;
+      }
+      if (!best) return null;
+      // tubes du bloc : rangées pleines en bas, rangée incomplète en haut, centrée
+      let k = 0;
+      for (let r = 0; r < best.rows; r++) {
+        const inRow = r < best.rows - 1 ? best.cols : n - best.cols * (best.rows - 1);
+        const offset = (best.cols - inRow) * c / 2;
+        for (let i = 0; i < inRow; i++) {
+          const t = g.tubes[k++];
+          placed.push({ id: t.id, d: t.d, x: best.x + offset + i * c, y: best.y + r * c });
+        }
+      }
+      // l'horizon suit chaque colonne (la rangée incomplète laisse des creux)
+      for (const p of placed.slice(placed.length - n)) sky = skyRaise(sky, p.x, p.x + c, p.y + c);
+    }
+    settle(placed, W, maxH);
     let cw = 0, ch = 0;
     for (const p of placed) {
       const c = cell(p.d);
       if (p.x + c > cw) cw = p.x + c;
       if (p.y + c > ch) ch = p.y + c;
     }
+    if (ch > maxH + EPS) return null;
     return { cw, ch, placed };
   }
 
-  // Gravité : maxrects remplit des trous rectangulaires sans regarder ce qu'il
-  // y a dessous, d'où des fourreaux « en l'air » (rien sous eux sur toute leur
-  // largeur). On les fait descendre un par un, du bas vers le haut, jusqu'au
-  // premier appui (fourreau déjà posé dont la cellule recouvre leur largeur, ou
-  // le lit de pose). Ne fait que descendre → aucun chevauchement créé, et la
-  // hauteur de la nappe ne peut que diminuer.
-  function settle(placed, maxW = Infinity, maxH = Infinity, stable = true) {
+  function lexLess(a, b) {
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] < b[i] - EPS) return true;
+      if (a[i] > b[i] + EPS) return false;
+    }
+    return false;
+  }
+
+  // Gravité de sécurité : un fourreau sans rien dessous descend jusqu'au
+  // premier appui. Avec des blocs posés à plat il ne se passe rien ; ça ne
+  // sert que si un bloc a dû être posé sur un horizon inégal.
+  function settle(placed, maxW = Infinity, maxH = Infinity) {
     const order = [...placed].sort((a, b) => (a.y - b.y) || (a.x - b.x));
     const done = [];
     for (const p of order) {
@@ -69,12 +176,12 @@
       let y = 0;
       for (const q of done) {
         const cq = cell(q.d);
-        if (q.x < p.x + c - EPS && q.x + cq > p.x + EPS && q.y + cq > y) y = q.y + cq;
+        if (overlapX(p, c, q, cq) && q.y + cq > y) y = q.y + cq;
       }
       p.y = y;
       done.push(p);
     }
-    return stable ? stabilize(placed, maxW, maxH) : placed;
+    return stabilize(placed, maxW, maxH);
   }
 
   const overlapX = (a, ca, b, cb) => a.x < b.x + cb - EPS && b.x < a.x + ca - EPS;
@@ -97,9 +204,8 @@
   }
 
   // Déplace chaque fourreau instable vers la position stable la plus basse
-  // (puis la plus proche) dans l'emprise actuelle de la nappe. S'il n'y en a
-  // aucune, on accepte d'élargir/rehausser la nappe dans la limite de la boîte
-  // (maxW × maxH) ; sinon il reste où il est.
+  // (puis la plus proche) dans l'emprise actuelle ; à défaut dans la limite
+  // de la boîte (maxW × maxH) ; sinon il reste où il est.
   function stabilize(placed, maxW = Infinity, maxH = Infinity) {
     let W = 0, H = 0;
     for (const p of placed) { const c = cell(p.d); W = Math.max(W, p.x + c); H = Math.max(H, p.y + c); }
@@ -114,21 +220,21 @@
         for (const q of others) { const cq = cell(q.d); xs.add(q.x); xs.add(q.x + cq); xs.add(q.x + cq - c); xs.add(q.x - c); xs.add(q.x + cq / 2 - c / 2); }
         let best = null;
         for (const [lw, lh] of [[W, H], [maxW, maxH]]) {
-        if (best) break;
-        for (const x of xs) {
-          if (x < -EPS || x + c > lw + EPS) continue;
-          const ys = new Set([0]);
-          for (const q of others) { const cq = cell(q.d); if (overlapX({ x }, c, q, cq)) ys.add(q.y + cq); }
-          for (const y of [...ys].sort((a, b) => a - b)) {
-            if (y > p.y + EPS || y + c > lh + EPS) break;
-            if (best && (y > best.y + EPS || (Math.abs(y - best.y) <= EPS && Math.abs(x - p.x) >= Math.abs(best.x - p.x)))) break;
-            const cand = { x, y, d: p.d };
-            if (others.some(q => overlap(cand, c, q, cell(q.d)))) continue;
-            if (!isStable(cand, others)) continue;
-            best = { x, y };
-            break;
+          if (best) break;
+          for (const x of xs) {
+            if (x < -EPS || x + c > lw + EPS) continue;
+            const ys = new Set([0]);
+            for (const q of others) { const cq = cell(q.d); if (overlapX({ x }, c, q, cq)) ys.add(q.y + cq); }
+            for (const y of [...ys].sort((a, b) => a - b)) {
+              if (y > p.y + EPS || y + c > lh + EPS) break;
+              if (best && (y > best.y + EPS || (Math.abs(y - best.y) <= EPS && Math.abs(x - p.x) >= Math.abs(best.x - p.x)))) break;
+              const cand = { x, y, d: p.d };
+              if (others.some(q => overlap(cand, c, q, cell(q.d)))) continue;
+              if (!isStable(cand, others)) continue;
+              best = { x, y };
+              break;
+            }
           }
-        }
         }
         if (best) {
           p.x = best.x; p.y = best.y; changed = true;
@@ -136,7 +242,6 @@
         }
       }
       if (!changed) break;
-      // Ce qui reposait sur un fourreau déplacé peut maintenant descendre.
       const order2 = [...placed].sort((a, b) => (a.y - b.y) || (a.x - b.x));
       const done = [];
       for (const p of order2) {
@@ -149,10 +254,18 @@
     return placed;
   }
 
-  // Largeur imposée → on étale en hauteur (maxW = innerW).
-  function packWidth(tubes, innerW) { return packBox(tubes, innerW, span(tubes)); }
-  // Hauteur imposée → on étale en largeur (maxH = innerH).
-  function packHeight(tubes, innerH, stable = true) { return packBox(tubes, span(tubes), innerH, stable); }
+  // Largeur imposée → la nappe monte autant que nécessaire.
+  function packWidth(tubes, innerW) { return groupLayout(tubes, innerW, Infinity); }
+  // Hauteur imposée → la nappe la plus ÉTROITE qui tient dans cette hauteur.
+  function packHeight(tubes, innerH) {
+    let best = null;
+    for (const w of candidateSizes(tubes)) {
+      const pk = groupLayout(tubes, w, innerH);
+      if (pk && (!best || pk.cw < best.cw - EPS)) best = pk;
+    }
+    return best;
+  }
+  function packBox(tubes, innerW, innerH) { return groupLayout(tubes, innerW, innerH); }
 
   function toLayout(pack, tag, outW, outH) {
     const w = outW != null ? outW : pack.cw + 2 * GEO.margin;
@@ -162,7 +275,7 @@
     return { w, h, items, ratio: w / h, fill: cellArea / (w * h), tag };
   }
 
-  // Tailles candidates (de la plus grande cellule à la somme), N pas fixes → déterministe.
+  // Tailles candidates (de la plus grande cellule à la somme), pas fixes → déterministe.
   function candidateSizes(tubes) {
     const cells = tubes.map(t => cell(t.d));
     const lo = Math.max(...cells);
@@ -170,6 +283,8 @@
     if (hi <= lo) return [lo];
     const N = 40, set = new Set();
     for (let i = 0; i <= N; i++) set.add(Math.round(lo + (hi - lo) * i / N));
+    // largeurs « justes » : k cellules du plus gros diamètre
+    for (let k = 1; k * lo <= hi; k++) set.add(k * lo);
     return [...set].sort((a, b) => a - b);
   }
 
@@ -177,34 +292,28 @@
     return { w: 2 * GEO.margin, h: 2 * GEO.margin, items: [], ratio: 1, fill: 0, tag: 'empty' };
   }
 
-  // Balaye les hauteurs candidates → produit une gamme de layouts (plat → carré).
-  function sweepByHeight(list, tag) {
-    const out = [];
-    for (const ih of candidateSizes(list)) {
-      const pk = packHeight(list, ih, false);
-      if (pk) out.push({ ...toLayout(pk, tag, null, null), ih });
+  // Balaye les largeurs candidates → une gamme de layouts (haut → plat).
+  function sweep(list, tag) {
+    const out = [], seen = new Set();
+    for (const w of candidateSizes(list)) {
+      const pk = groupLayout(list, w);
+      if (!pk) continue;
+      const L = toLayout(pk, tag, null, null);
+      const k = `${Math.round(L.w)}x${Math.round(L.h)}|` + L.items.map(i => `${Math.round(i.x)},${Math.round(i.y)}`).join(';');
+      if (seen.has(k)) continue;
+      seen.add(k); out.push(L);
     }
     return out;
   }
 
-  // Refait le layout retenu par le balayage avec la stabilisation complète.
-  function finalize(list, L) {
-    if (L.ih == null) return L;
-    const pk = packHeight(list, L.ih, true);
-    if (!pk) return L;
-    const { ih, ...rest } = L;
-    return { ...rest, ...toLayout(pk, L.tag, null, null) };
-  }
-
-  // Mode libre : on veut une nappe "tranchée" (large : w >= h), compacte.
+  // Mode libre : nappe "tranchée" (large : w >= h), compacte.
   function solveFree(list) {
-    const all = sweepByHeight(list, 'compact');
+    const all = sweep(list, 'compact');
     if (!all.length) return emptyLayout();
-    // Idéal tranchée : 1 <= ratio <= 2 (ni portrait, ni trop plat) ; sinon w >= h ; sinon tout.
     const good = all.filter(L => L.ratio >= 1 && L.ratio <= 2);
     const wide = all.filter(L => L.w >= L.h);
     const pool = good.length ? good : (wide.length ? wide : all);
-    return finalize(list, pool.reduce((best, L) => (L.fill > best.fill ? L : best)));
+    return pool.reduce((best, L) => (L.fill > best.fill + EPS ? L : best));
   }
 
   function solve(tubes, opts) {
@@ -226,22 +335,19 @@
   function variants(tubes, opts) {
     const list = sortTubes(tubes);
     if (list.length === 0) return [];
-    if (opts && opts.lock && opts.shape !== 'circ') return [solve(tubes, opts)];
+    if (opts && opts.shape === 'circ') return [solveCircle(list)];
+    if (opts && opts.lock) return [solve(tubes, opts)];
 
-    const all = sweepByHeight(list, '');
+    const all = sweep(list, '');
     if (!all.length) return [];
-
-    const pickMin = (arr, f) => arr.reduce((b, L) => (f(L) < f(b) ? L : b));
-
+    const pickMin = (arr, f) => arr.reduce((b, L) => (f(L) < f(b) - EPS ? L : b));
     const wide = all.filter(L => L.w >= L.h);
     const out = [];
-    // compact : le même layout que solve() en mode libre — la carte « compact »
-    // du panneau doit correspondre à ce qui est posé par défaut.
+    // compact : le même layout que solve() — la carte « compact » du panneau
+    // doit correspondre à ce qui est posé par défaut.
     out.push({ ...solveFree(list), tag: 'compact' });
-    // tranchee : ratio proche de 1.4 (large équilibré)
-    if (wide.length) out.push(finalize(list, { ...pickMin(wide, L => Math.abs(L.ratio - 1.4)), tag: 'tranchee' }));
-    // rect43 : ratio proche de 4/3
-    out.push(finalize(list, { ...pickMin(all, L => Math.abs(L.ratio - 4 / 3)), tag: 'rect43' }));
+    if (wide.length) out.push({ ...pickMin(wide, L => Math.abs(L.ratio - 1.4)), tag: 'tranchee' });
+    out.push({ ...pickMin(all, L => Math.abs(L.ratio - 4 / 3)), tag: 'rect43' });
 
     const seen = new Set();
     return out.filter(L => {
@@ -251,14 +357,11 @@
     });
   }
 
-  // ── Conduit circulaire ────────────────────────────────────────────────
-  // Un layout rectangulaire ne tient PAS dans le cercle de diamètre max(w, h) :
-  // les fourreaux des coins dépassent. On calcule le vrai diamètre requis :
-  // D = 2·(max des |centre fourreau − centre| + cellule/2) + 2·lit de pose,
-  // le centre étant optimisé (problème convexe : recherche par motif).
-  function circleFit(items) {
-    if (!items.length) return { D: 2 * GEO.margin, cx: 0, cy: 0 };
-    const pts = items.map(it => { const c = cell(it.d); return { x: it.x + c / 2, y: it.y + c / 2, r: c / 2 }; });
+  // ─── Conduit circulaire : nid d'abeille, sans écart ────────────────────
+
+  // Plus petit cercle (centre optimisé) contenant des disques {x, y, r}.
+  function enclose(pts) {
+    if (!pts.length) return { R: 0, cx: 0, cy: 0 };
     const radius = (cx, cy) => pts.reduce((m, p) => Math.max(m, Math.hypot(p.x - cx, p.y - cy) + p.r), 0);
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of pts) {
@@ -276,46 +379,90 @@
       }
       if (!moved) step /= 2;
     }
-    return { D: 2 * (best + GEO.margin), cx, cy };
+    return { R: best, cx, cy };
   }
 
-  // Meilleur layout pour un conduit circulaire : celui qui minimise D.
-  function solveCircle(list) {
-    const all = sweepByHeight(list, 'cercle');
-    if (!all.length) return emptyLayout();
-    let best = null;
-    for (const L of all) {
-      const D = circleFit(L.items).D;
-      if (!best || D < best.D - EPS) best = { L, D };
+  // Glouton : chaque fourreau (du plus gros au plus petit) se loge contre deux
+  // fourreaux déjà posés, à la place qui agrandit le moins l'ensemble.
+  function honeycomb(list) {
+    const P = [];
+    for (const t of list) {
+      const r = t.d / 2;
+      if (!P.length) { P.push({ id: t.id, d: t.d, x: 0, y: 0, r }); continue; }
+      const cands = [];
+      if (P.length === 1) cands.push({ x: P[0].r + r, y: 0 });
+      for (let i = 0; i < P.length; i++) {
+        for (let j = i + 1; j < P.length; j++) {
+          const A = P[i], B = P[j];
+          const ra = A.r + r, rb = B.r + r;
+          const dx = B.x - A.x, dy = B.y - A.y, dd = Math.hypot(dx, dy);
+          if (dd > ra + rb + EPS || dd < Math.abs(ra - rb) - EPS || dd < EPS) continue;
+          const a = (ra * ra - rb * rb + dd * dd) / (2 * dd);
+          const h = Math.sqrt(Math.max(0, ra * ra - a * a));
+          const mx = A.x + a * dx / dd, my = A.y + a * dy / dd;
+          cands.push({ x: mx + h * dy / dd, y: my - h * dx / dd }, { x: mx - h * dy / dd, y: my + h * dx / dd });
+        }
+      }
+      // repère : centre de gravité (pondéré par la surface) des fourreaux posés
+      let sw = 0, gx = 0, gy = 0;
+      for (const p of P) { const w = p.r * p.r; sw += w; gx += p.x * w; gy += p.y * w; }
+      gx /= sw; gy /= sw;
+      let best = null;
+      for (const c of cands) {
+        if (P.some(p => Math.hypot(p.x - c.x, p.y - c.y) < p.r + r - 1e-4)) continue;
+        const ext = Math.hypot(c.x - gx, c.y - gy) + r;
+        if (!best || ext < best.ext - EPS || (Math.abs(ext - best.ext) <= EPS && (c.y < best.c.y - EPS || (Math.abs(c.y - best.c.y) <= EPS && c.x < best.c.x)))) best = { c, ext };
+      }
+      if (!best) { // ne devrait pas arriver : on pose à l'extérieur
+        const R = enclose(P).R;
+        best = { c: { x: R + r, y: 0 } };
+      }
+      P.push({ id: t.id, d: t.d, x: best.c.x, y: best.c.y, r });
     }
-    const L = finalize(list, best.L);
-    best.D = circleFit(L.items).D;
-    const cellArea = L.items.reduce((s, p) => s + cell(p.d) * cell(p.d), 0);
-    return { ...L, w: best.D, h: best.D, ratio: 1, fill: cellArea / (Math.PI * best.D * best.D / 4), tag: 'cercle' };
+    return P;
   }
 
-  // Ancrage dans un conduit circulaire de diamètre box.w (= box.h) : nappe
-  // centrée sur le centre optimal ; le diamètre n'est agrandi que si besoin.
+  // Grille carrée sans écart (meilleure que le nid d'abeille pour 4 fourreaux
+  // identiques, par exemple) : on balaie les largeurs.
+  function squareGrids(list) {
+    const saved = GEO.gap;
+    GEO.gap = 0;
+    try {
+      return sweep(list, '').map(L => L.items.map(it => ({ id: it.id, d: it.d, x: it.x + it.d / 2, y: it.y + it.d / 2, r: it.d / 2 })));
+    } finally { GEO.gap = saved; }
+  }
+
+  function solveCircle(list) {
+    if (!list.length) return emptyLayout();
+    let best = null;
+    for (const pts of [honeycomb(list), ...squareGrids(list)]) {
+      const e = enclose(pts);
+      if (!best || e.R < best.e.R - EPS) best = { pts, e };
+    }
+    const D = 2 * (best.e.R + GEO.margin);
+    const items = best.pts.map(p => ({ id: p.id, d: p.d, cx: p.x - best.e.cx, cy: p.y - best.e.cy }));
+    const area = items.reduce((s, p) => s + Math.PI * p.d * p.d / 4, 0);
+    return { w: D, h: D, ratio: 1, fill: area / (Math.PI * D * D / 4), tag: 'cercle', circle: true, items };
+  }
+
+  // Ancrage dans un conduit circulaire de diamètre box.w (= box.h) : ensemble
+  // centré ; le diamètre n'est agrandi que si besoin. Un layout rectangulaire
+  // reçu ici est recalculé pour le cercle.
   function anchorCircle(cfg, box) {
     const round5 = (v) => Math.ceil(v / 5) * 5;
+    if (!cfg.circle) cfg = solveCircle(sortTubes(cfg.items.map(it => ({ id: it.id, d: it.d }))));
     const locked = !!(box.lockW || box.lockH);
     const boxD = Math.max(box.w || 0, box.h || 0);
-    let items = cfg.items;
-    let fit = circleFit(items);
-    // Diamètre verrouillé dépassé : on retente avec le layout optimal pour un cercle.
-    if (items.length && locked && fit.D > boxD + EPS) {
-      const alt = solveCircle(sortTubes(items.map(it => ({ id: it.id, d: it.d }))));
-      const altFit = circleFit(alt.items);
-      if (altFit.D < fit.D) { items = alt.items; fit = altFit; }
-    }
-    const D = (locked && fit.D <= boxD + EPS) ? boxD : Math.max(boxD, round5(fit.D));
-    const positions = items.map(it => {
-      const c = cell(it.d);
-      const yUp = D / 2 + (it.y + c / 2 - fit.cy);
-      return { id: it.id, d: it.d, x: D / 2 + (it.x + c / 2 - fit.cx), y: D - yUp, yUp };
+    const need = cfg.items.length ? cfg.w : 0;
+    const D = (locked && need <= boxD + EPS) ? boxD : Math.max(boxD, round5(need));
+    const positions = cfg.items.map(it => {
+      const yUp = D / 2 + it.cy;
+      return { id: it.id, d: it.d, x: D / 2 + it.cx, y: D - yUp, yUp };
     });
     return { w: D, h: D, positions };
   }
+
+  // ─── Ancrage dans une boîte rectangulaire ──────────────────────────────
 
   // Bornes (Y-up, marge incluse) de la nappe la plus à droite / en haut.
   function contentBounds(items) {
@@ -338,15 +485,15 @@
   function anchorLayout(cfg, box) {
     if (box.shape === 'circ') return anchorCircle(cfg, box);
     const round5 = (v) => Math.ceil(v / 5) * 5;
-    let items = cfg.items;
+    let items = cfg.circle ? [] : cfg.items;
+    if (cfg.circle) {
+      cfg = solveFree(sortTubes(cfg.items.map(it => ({ id: it.id, d: it.d }))));
+      items = cfg.items;
+    }
     let { contentW, contentH } = contentBounds(items);
 
-    // Un axe VERROUILLÉ doit contenir la nappe. Si cfg vient d'un layout LIBRE
-    // plus grand (ex. une variante choisie alors qu'un axe est verrouillé sur
-    // une boîte plus étroite), la nappe ne rentre pas dans la boîte affichée :
-    // on recalcule le placement pour respecter la boîte plutôt que de garder
-    // des positions qui déborderaient (fourreaux dessinés hors du chemin de
-    // câble, sans aucun signal).
+    // Un axe VERROUILLÉ doit contenir la nappe : sinon on recalcule le
+    // placement pour cette boîte plutôt que de dessiner hors du chemin de câble.
     if (items.length && ((box.lockW && contentW > box.w + EPS) || (box.lockH && contentH > box.h + EPS))) {
       const tubes = sortTubes(items.map((it) => ({ id: it.id, d: it.d })));
       let pk = null;
@@ -357,10 +504,8 @@
         items = toLayout(pk, cfg.tag, box.lockW ? box.w : null, box.lockH ? box.h : null).items;
         ({ contentW, contentH } = contentBounds(items));
       }
-      // Sinon (même un placement dédié à cette boîte ne tient pas — ex. un seul
-      // fourreau plus gros que l'axe verrouillé) : on ne perd pas les fourreaux
-      // pour autant, ils restent visibles au prix d'un dépassement de CET axe
-      // (fitsW/fitsH ci-dessous retombent alors sur la croissance normale).
+      // Sinon (ex. un seul fourreau plus gros que l'axe verrouillé) : les
+      // fourreaux restent visibles au prix d'un dépassement de CET axe.
     }
 
     const fitsW = contentW <= box.w + EPS;
@@ -378,7 +523,7 @@
 
   const api = {
     GEO, cell, solve, variants, anchorLayout,
-    __test: { sortTubes, packWidth, packHeight, packAt: packWidth, toLayout, candidateSizes, settle, isStable, circleFit },
+    __test: { sortTubes, packWidth, packHeight, packAt: packWidth, toLayout, candidateSizes, settle, isStable, groupLayout, honeycomb, enclose },
   };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;

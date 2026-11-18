@@ -41,8 +41,7 @@
     "dxf-writer": "^1.18.4",
     "electron-updater": "^6.6.2",
     "interactjs": "^1.10.27",
-    "konva": "^10.2.3",
-    "maxrects-packer": "2.7.3"
+    "konva": "^10.2.3"
   },
   "build": {
     "appId": "com.tontonkad.app",

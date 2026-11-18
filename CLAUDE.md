@@ -54,14 +54,17 @@ The renderer uses a **hybrid rendering approach**:
 
 ### Business Logic: Placement Engine (packer)
 
-**File**: `src/renderer/packer.js` (~210 lines) — built on the `maxrects-packer` library (`maxrects-packer.min.js`). Tested in `tests/packer.test.js`.
+**File**: `src/renderer/packer.js` — own engine, no dependency. Tested in `tests/packer.test.js`.
 
-Optimized placement uses bin-packing (MaxRects), not a bespoke engine. API exposed via `window.PACKER`:
+- **Rectangular box / trench**: tubes are grouped by diameter; each group is a compact block (grid, incomplete row on top and centered). Blocks are laid from the largest diameter to the smallest, each at the lowest spot on a skyline: on the floor, or flat on an already placed block (centered on it). A width sweep picks the shape. A safety pass (`settle` / `stabilize`) guarantees no tube is left unsupported.
+- **Circular conduit** (`opts.shape = 'circ'`): no gap between tubes (`GEO.gap` ignored), honeycomb greedy packing (each tube nests against two others, as close to the centre as possible); a square grid is also tried and the smaller diameter wins.
 
-- **`solve(tubes, opts)`** - computes one layout. Free mode favors a "trench" shape (width ≥ height, ratio 1–2) that is as compact as possible; locked mode (`opts.lock = 'w' | 'h'`) preserves the imposed axis.
-- **`variants(tubes, opts)`** - up to 3 candidate layouts, tagged (`compact`, `tranchee`, `rect43`) and de-duplicated.
-- **`anchorLayout(cfg, box)`** - anchors a layout into an existing box: laid at the BOTTOM (lit de pose), centered horizontally; a free axis is only grown (to the next multiple of 5) if the layout does not fit. Converts to canvas coordinates (circle centers, mm).
-- **`GEO`** (`{ gap, margin }`) - entraxe and lit de pose, driven by the control-bar sliders in the UI.
+API exposed via `window.PACKER`:
+
+- **`solve(tubes, opts)`** - computes one layout. Free mode favors a "trench" shape (width ≥ height, ratio 1–2) that is as compact as possible; locked mode (`opts.lock = 'w' | 'h'`) preserves the imposed axis (locked height → narrowest layout that fits); `opts.shape = 'circ'` → circular conduit layout.
+- **`variants(tubes, opts)`** - up to 3 candidate layouts, tagged (`compact` = same as `solve`, `tranchee`, `rect43`) and de-duplicated.
+- **`anchorLayout(cfg, box)`** - anchors a layout into an existing box: laid at the BOTTOM (lit de pose), centered horizontally; a free axis is only grown (to the next multiple of 5) if the layout does not fit. With `box.shape = 'circ'`, centred in the conduit and the diameter grown only if needed. Converts to canvas coordinates (circle centers, mm).
+- **`GEO`** (`{ gap, margin }`) - écart between tubes and lit de pose, driven by the control-bar sliders in the UI.
 
 Business principle: the largest conduits sit at the bottom (gravity); a trench is dug wide rather than deep.
 
@@ -279,7 +282,7 @@ The file `cea-app.json` at the repo root is the manifest for the CEA App Store (
 | File | Purpose | Size | Key Exports/Classes |
 |------|---------|------|-----|
 | `src/renderer/script.js` | Main canvas engine, physics, UI | ~12.2K lines | Global state, render loop, event handlers, `bigBrainGenerate()`, `makeFourreauObject()`, `confirmReplaceOrAdd()` |
-| `src/renderer/packer.js` | Bin-packing placement (MaxRects) | ~210 lines | `solve`, `variants`, `anchorLayout` (via `window.PACKER`) |
+| `src/renderer/packer.js` | Fourreau placement (groups by diameter, honeycomb in conduits) | ~500 lines | `solve`, `variants`, `anchorLayout` (via `window.PACKER`) |
 | `src/renderer/big-brain-panel.js` | BIG BRAIN sidebar tab (DOM only) | ~1.1K lines | Liaison list state (circuit + reserve), Caneco import modal, wiring to `bigBrainGenerate()` |
 | `src/renderer/cable-assign.js`, `circuit.js`, `phase-assign.js`, `big-brain.js`, `caneco-import.js`, `geometry.js`, `csv.js`, `compat-chambres.js`, `pdf-format.js`, `inventory-agg.js` | Pure, DOM-free business logic extracted from `script.js` | 20–270 lines each | See [Pure Core Modules](#pure-core-modules-extracted-packer-style) above |
 | `src/renderer/konva-fourreaux.js` | Konva rendering overlay | ~275 lines | `init()`, `render()`, `syncTransform()` |
@@ -352,7 +355,7 @@ Fallback: if a layout does not fit under a locked axis, `solve` returns an empty
 Le suivi par epics/stories (méthode BMAD) n'est plus le fil directeur du projet.
 Les anciens plans (moteur maison `placement-engine.js`, agent RL TensorFlow.js,
 epics 001–003) sont archivés dans `docs/stories/archive/` à titre historique — le
-placement effectif repose désormais sur `packer.js` (MaxRects). Voir `docs/stories/README.md`.
+placement effectif repose désormais sur `packer.js` (moteur maison par groupes de diamètre ; MaxRects abandonné après revue des placements). Voir `docs/stories/README.md`.
 
 ## Domain Glossary
 
