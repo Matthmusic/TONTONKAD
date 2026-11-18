@@ -14,7 +14,7 @@ const BigBrain = require('../../src/renderer/big-brain.js');
 const PACKER = require('../../src/renderer/packer.js');
 const { trancheeNormee } = require('./normes.js');
 const CompatChambres = require('../../src/renderer/compat-chambres.js');
-const { infosChambre } = require('./chambres-infos.js');
+const { chambrePourNappe } = require('./chambres-infos.js');
 
 const DEFAULTS = {
   ecart: 30,          // mm, bord à bord entre fourreaux (tranchée)
@@ -33,37 +33,12 @@ const DEFAULTS = {
   chambre: null,        // réf. imposée (ex. "L2T") ; sinon choix automatique
 };
 
-// Chambre de tirage pour ce masque : même règle que l'application
-// (compat-chambres.js) — pignon d'abord (entrée en ligne droite), sinon
-// long-pan, sinon chambre maçonnée + tampons. Cotes INTÉRIEURES uniquement.
+// Chambre de tirage pour ce masque : règle partagée avec l'application
+// (src/renderer/chambres-infos.js → compat-chambres.js).
 function choisirChambre(W, H, cat, refImposee) {
-  const models = CompatChambres.getChamberModels(cat.chambres || []);
-  if (!models.length) return null;
-  const build = (m, via) => {
-    const pignon = via === 'pignon';
-    const face = { largeur: pignon ? m.l : m.L, hauteur: m.H };
-    return {
-      ref: m.ref, entree: via, L: m.L, l: m.l, H: m.H, face,
-      profondeur: pignon ? m.L : m.l, // dimension perpendiculaire à la face d'entrée
-      marge: { largeur: face.largeur - W, hauteur: face.hauteur - H },
-      tient: face.largeur >= W && face.hauteur >= H,
-      infos: infosChambre(m.ref), // parois, tampons, hauteur totale : indicatif
-      source: 'Cotes intérieures du catalogue TONTONKAD (chambres Stradal). Épaisseur des parois et tampon non représentés.',
-    };
-  };
-  if (refImposee) {
-    const m = models.find((x) => x.ref.toUpperCase() === String(refImposee).toUpperCase());
-    if (!m) return { erreur: `Chambre « ${refImposee} » inconnue (catalogue : ${models.map((x) => x.ref).join(', ')})` };
-    return build(m, m.l >= W ? 'pignon' : 'long-pan');
-  }
-  const { unit, longPan, tiling } = CompatChambres.computeCompatibleChambers(models, W, H, 3);
-  const best = CompatChambres.pickBestChamber(unit, longPan);
-  if (best) return build(models.find((x) => x.ref === best.ref), best.via === 'unit' ? 'pignon' : 'long-pan');
-  const t = tiling[0];
-  return { aucune: true, maconnee: t ? { tampons: t.N, refs: t.refs, largeurTotale: t.total } : null };
+  return chambrePourNappe(W, H, cat.chambres, CompatChambres, refImposee);
 }
 
-// Exécute fn avec GEO réglé, puis restaure (GEO est partagé par le packer).
 function withGeo(gap, margin, fn) {
   const saved = { ...PACKER.GEO };
   PACKER.GEO.gap = gap; PACKER.GEO.margin = margin;

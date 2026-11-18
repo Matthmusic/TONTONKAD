@@ -86,6 +86,8 @@ Besides `packer.js`, several business-logic pieces have been extracted out of `s
 | `cable-assign.js` | `window.CableAssign` | Packs a liaison's cables into fourreaux (built on `packer.js`) | `cable-assign.test.js` |
 | `big-brain.js` | `window.BigBrain` | Pure adapter between `CableAssign`/reserve output and the panel | `big-brain.test.js` |
 | `caneco-import.js` | `window.CanecoImport` | Parses raw Caneco cable-schedule rows (`.xls`/`.xlsx`) into BIG BRAIN liaison drafts | `caneco-import.test.js` |
+| `chambres-infos.js` | `window.ChambresInfos` | Chamber choice for a W × H nappe (`chambrePourNappe`, same rule as `compat-chambres.js`) + indicative walls/covers/total height per model | `vue3d.test.js`, `mcp-masque.test.js` |
+| `vue3d.js` | `window.Vue3D` | 3D views (cavalier perspective, textured) as raw PDF operators: section, trench, draw-pit. Shared by the app's PDF export (jsPDF `internal.write`) and the MCP server | `vue3d.test.js` |
 
 ### BIG BRAIN: Circuit → Cable → Fourreau Pipeline
 

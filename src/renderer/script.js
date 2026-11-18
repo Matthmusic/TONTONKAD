@@ -7496,6 +7496,101 @@
     return dataUrl;
   }
 
+
+  /* ── Vue 3D dans l'export PDF (dessin partagé avec le MCP : vue3d.js) ── */
+
+  // Plan courant → « masque » au format de vue3d.js (mm, Y vers le haut).
+  function buildMasqueFromPlan(titre) {
+    const isCirc = SHAPE === 'circ';
+    if (SHAPE !== 'rect' && !isCirc) return null; // chemin de câble : pas de vue 3D
+    const W = isCirc ? WORLD_D_MM : WORLD_W_MM, H = isCirc ? WORLD_D_MM : WORLD_H_MM;
+    const valid = fourreaux.filter(f => Number.isFinite(f.x) && Number.isFinite(f.y) && f.od > 0);
+    if (!valid.length || !(W > 0 && H > 0)) return null;
+    const ids = new Map();
+    const fo = valid.map((f, i) => {
+      const id = `F${i + 1}`;
+      ids.set(f.id, id);
+      return { id, type: f.type || '', code: String(f.code || ''), od: f.od, di: f.idm > 0 ? f.idm : f.od * 0.8,
+        x: f.x / MM_TO_PX, y: H - f.y / MM_TO_PX, libelle: f.label || '' };
+    });
+    const cb = cables.filter(c => ids.has(c.parent) && c.od > 0).map(c => ({
+      fourreau: ids.get(c.parent), od: c.od, x: c.x / MM_TO_PX, y: H - c.y / MM_TO_PX, phase: getCablePhaseLabel(c) || null,
+    }));
+    let chambre = null;
+    if (!isCirc && window.ChambresInfos && window.CompatChambres) {
+      chambre = window.ChambresInfos.chambrePourNappe(Math.round(W), Math.round(H), CHAMBRES_TIRAGE, window.CompatChambres);
+      if (chambre && !chambre.face) chambre = null; // aucune préformée : pas de page chambre
+    }
+    return {
+      nom: String(titre || 'Plan').replace(/→/g, '->'), ok: true, forme: isCirc ? 'circ' : 'rect',
+      largeur: W, hauteur: H, tranchee: null, chambre, fourreaux: fo, cables: cb,
+      reglages: { ecart: FOURREAU_GAP, litDePose: (window.PACKER && window.PACKER.GEO.margin) || 0 },
+    };
+  }
+
+  // Écrit une page Vue3D (opérateurs bruts) dans jsPDF, textes via l'API jsPDF.
+  function writeVue3DPage(pdf, page) {
+    const V = window.Vue3D, k = 25.4 / 72; // pt → mm
+    pdf.addPage('a4', 'landscape');
+    pdf.internal.write('q');
+    pdf.internal.write(page.ops.join('\n'));
+    pdf.internal.write('Q');
+    for (const l of page.labels) {
+      pdf.setFont('helvetica', l.bold ? 'bold' : 'normal');
+      pdf.setFontSize(l.size);
+      pdf.setTextColor(Math.round(l.rgb[0] * 255), Math.round(l.rgb[1] * 255), Math.round(l.rgb[2] * 255));
+      pdf.text(l.text.replace(/→/g, '->').replace(/≥/g, '>='), l.x * k, (V.PAGE_H - l.y) * k, { align: l.align });
+    }
+    pdf.setTextColor(0, 0, 0);
+  }
+
+  function addVue3DPages(pdf, titre) {
+    const V = window.Vue3D;
+    if (!V) return;
+    const m = buildMasqueFromPlan(titre);
+    if (!m) return;
+    const { PAGE_W, PAGE_H, MARGE } = V;
+    // Page 1 : coupe + vue 3D + légende
+    const p = new V.Page({ emitText: false, ombre: false });
+    p.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — vue 3D`, { bold: true });
+    p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+    const zoneY = 175, zoneH = PAGE_H - MARGE - 40 - zoneY;
+    p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
+    V.drawCoupe(p, m, MARGE + 50, zoneY, 300, zoneH - 10);
+    p.text(440, zoneY + zoneH + 10, 9, 'Vue 3D (tronçon de 1.5 m, perspective cavalière)', { bold: true });
+    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500);
+    let y = 140;
+    p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
+    p.text(MARGE, y, 9, 'Fourreaux', { bold: true }); y -= 13;
+    const parId = new Map();
+    m.cables.forEach(c => parId.set(c.fourreau, (parId.get(c.fourreau) || 0) + 1));
+    for (const f of m.fourreaux.slice(0, 8)) {
+      p.text(MARGE, y, 8, `${f.id}  ${f.type} ${f.code}  (Øint ${f.di})  ${f.libelle}  ${parId.get(f.id) || 0} câble(s)`); y -= 11;
+    }
+    if (m.fourreaux.length > 8) p.text(MARGE, y, 8, `… et ${m.fourreaux.length - 8} autres (voir le tableau du rapport)`);
+    writeVue3DPage(pdf, p);
+    // Page 2 : chambre de tirage compatible
+    if (m.chambre) {
+      const c = new V.Page({ emitText: false, ombre: false });
+      const ch = m.chambre;
+      c.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — chambre de tirage ${ch.ref}`, { bold: true });
+      c.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+      V.drawChambre3D(c, m, MARGE + 20, 120, 520, PAGE_H - MARGE - 60 - 120);
+      let yy = PAGE_H - MARGE - 50;
+      c.rgb([0, 0, 0], false).text(590, yy, 11, `Chambre ${ch.ref}`, { bold: true }); yy -= 16;
+      for (const l of [
+        `Intérieur : ${ch.L} × ${ch.l} mm, H ${ch.H} mm`,
+        `Entrée par le ${ch.entree} (${ch.face.largeur} × ${ch.face.hauteur} mm)`,
+        `Boîte : ${Math.round(m.largeur)} × ${Math.round(m.hauteur)} mm`,
+        `Marge : ${Math.round(ch.marge.largeur)} mm en largeur, ${Math.round(ch.marge.hauteur)} mm en hauteur`,
+      ]) { c.text(590, yy, 8, l); yy -= 12; }
+      yy -= 6;
+      c.rgb([0.4, 0.4, 0.4], false);
+      for (const l of ['Chambre suggérée (rien n\'est appliqué au plan).', 'Parois, tampons, hauteur totale : indicatifs,', 'sources publiques, pas une fiche fabricant.']) { c.text(590, yy, 7, l); yy -= 10; }
+      writeVue3DPage(pdf, c);
+    }
+  }
+
   async function exportToPDF() {
     // Pour compatibilité avec l'ancienne modal HTML
     const formData = {
@@ -7504,7 +7599,8 @@
       author: document.getElementById('pdfAuthor')?.value || 'TontonKAD',
       client: document.getElementById('pdfClient')?.value || '',
       description: document.getElementById('pdfDescription')?.value || '',
-      includeStats: document.getElementById('pdfIncludeStats')?.checked || true
+      includeStats: document.getElementById('pdfIncludeStats')?.checked || true,
+      include3D: document.getElementById('pdfInclude3D')?.checked !== false
     };
 
     return exportToPDFWithData(formData);
@@ -8315,6 +8411,12 @@
           pdf.setFont('helvetica', 'bold');
           pdf.text(`Total: ${fourreaux.length} fourreau(x)`, margin, currentY);
         }
+      }
+
+      // Vue 3D (coupe en perspective + chambre de tirage compatible)
+      if (formData.include3D) {
+        try { addVue3DPages(pdf, formData.projectName); }
+        catch (err) { errorPdf('vue 3D impossible', err); }
       }
 
       // Sauvegarder le PDF avec horodatage

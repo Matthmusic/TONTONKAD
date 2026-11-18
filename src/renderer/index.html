@@ -877,6 +877,8 @@
   <script src="pdf-format.js"></script>
   <script src="inventory-agg.js"></script>
   <script src="compat-chambres.js"></script>
+  <script src="chambres-infos.js"></script>
+  <script src="vue3d.js"></script>
   <script src="script.js" defer></script>
   <script src="dimension-button-handler.js" defer></script>
   <script src="electron-integration.js" defer></script>
@@ -1199,6 +1201,13 @@
                 <div class="pdf-checkbox-content">
                   <div class="pdf-checkbox-title">📊 Inclure les statistiques détaillées</div>
                   <div class="pdf-checkbox-subtitle">Ajoute un tableau récapitulatif des câbles et fourreaux</div>
+                </div>
+              </label>
+              <label class="pdf-checkbox-label">
+                <input type="checkbox" id="pdfInclude3D" checked class="pdf-checkbox">
+                <div class="pdf-checkbox-content">
+                  <div class="pdf-checkbox-title">🧊 Inclure la vue 3D</div>
+                  <div class="pdf-checkbox-subtitle">Ajoute la coupe en 3D du plan et la chambre de tirage compatible</div>
                 </div>
               </label>
             </div>
