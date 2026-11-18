@@ -404,7 +404,94 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
   return couleur;
 }
 
-const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+// Page « chambre vue de dessus » : faces, fourreaux par face, traversées.
+function dessinerEtudeChambre(p, e, masques) {
+  p.text(MARGE, PAGE_H - MARGE - 4, 16, `${e.nom || 'Chambre'} — ${e.ok ? e.ref : 'aucune chambre'} — vue de dessus`, { bold: true });
+  p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, 'TONTONKAD — étude de chambre', { align: 'right' });
+  p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+  const x = 560;
+  let y = PAGE_H - MARGE - 40;
+  if (!e.ok) {
+    for (const l of e.erreurs || []) { p.rgb([0.8, 0.1, 0.1], false).text(MARGE, y, 10, l, { bold: true }); y -= 14; }
+    return p;
+  }
+  const couleurs = drawChambreDessus(p, e, masques || {}, MARGE, 60, 500, PAGE_H - MARGE - 60 - 60);
+  p.rgb([0, 0, 0], false).text(x, y, 11, `Chambre ${e.ref}`, { bold: true }); y -= 14;
+  p.text(x, y, 8, `Intérieur ${e.L} × ${e.l} mm, H ${e.H} mm (utile)`); y -= 18;
+  p.text(x, y, 9, 'Faces', { bold: true }); y -= 12;
+  for (const f of Object.values(e.faces)) {
+    p.rgb(f.tient ? [0.1, 0.5, 0.2] : [0.8, 0.1, 0.1], false).text(x, y, 8, `${f.tient ? 'OK' : 'NON'}  ${f.face} : ${f.masque}`, { bold: true }); y -= 10;
+    p.rgb([0.35, 0.35, 0.35], false).text(x + 14, y, 7, `masque ${f.largeurMasque} × ${f.hauteurMasque} dans ${f.largeurFace} × ${f.hauteurFace} mm`); y -= 12;
+  }
+  y -= 4;
+  p.rgb([0, 0, 0], false).text(x, y, 9, 'Traversées', { bold: true }); y -= 12;
+  if (!e.traversees.length) { p.text(x, y, 8, 'aucune'); y -= 11; }
+  e.traversees.forEach((t, i) => {
+    p.rgb(couleurs.get(t.liaison) || [0, 0, 0], false).text(x, y, 8, `${i + 1}. ${t.liaison}`.slice(0, 48), { bold: true }); y -= 10;
+    p.rgb([0.2, 0.2, 0.2], false).text(x + 12, y, 7, `entre ${t.entree}, sort ${t.sortie} (${t.type})${t.changementFourreau ? ', fourreau ' + t.changementFourreau : ''}`); y -= 11;
+  });
+  if (e.arrets.length) {
+    y -= 4; p.rgb([0, 0, 0], false).text(x, y, 9, 'Liaisons qui s\'arrêtent dans la chambre', { bold: true }); y -= 12;
+    for (const a of e.arrets.slice(0, 8)) { p.rgb(couleurs.get(a.liaison) || [0, 0, 0], false).text(x, y, 7, `• ${a.liaison} (${a.face})`.slice(0, 60)); y -= 10; }
+  }
+  if (e.avertissements && e.avertissements.length) {
+    y -= 4; p.rgb([0, 0, 0], false).text(x, y, 9, 'À vérifier', { bold: true }); y -= 12;
+    for (const a of e.avertissements.slice(0, 6)) { p.rgb([0.6, 0.2, 0.1], false).text(x, y, 7, `• ${a}`.slice(0, 62)); y -= 10; }
+  }
+  p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, 'Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Positions des fourreaux le long de chaque face reprises des masques (centrés).');
+  return p;
+}
+
+// Rejoue une Page (opérateurs PDF + labels) sur un canvas 2D d'écran :
+// même dessin à l'écran et dans le PDF. hauteurPt = hauteur du repère PDF.
+function rejouerSurCanvas(ctx, page, hauteurPt) {
+  ctx.save();
+  ctx.transform(1, 0, 0, -1, 0, hauteurPt); // repère PDF (Y vers le haut)
+  const rgb = (a) => `rgb(${Math.round(a[0] * 255)},${Math.round(a[1] * 255)},${Math.round(a[2] * 255)})`;
+  let pile = [];
+  ctx.beginPath();
+  for (const ligne of page.ops) {
+    if (/^\[.*\] 0 d$/.test(ligne)) { ctx.setLineDash(ligne.startsWith('[]') ? [] : [3, 2]); continue; }
+    for (const tok of ligne.split(/\s+/)) {
+      if (tok === '') continue;
+      if (/^-?[\d.]+$/.test(tok)) { pile.push(Number(tok)); continue; }
+      if (tok.startsWith('/')) { pile.push(tok); continue; }
+      const n = pile;
+      switch (tok) {
+        case 'RG': ctx.strokeStyle = rgb(n.slice(-3)); break;
+        case 'rg': ctx.fillStyle = rgb(n.slice(-3)); break;
+        case 'w': ctx.lineWidth = n[n.length - 1]; break;
+        case 'm': ctx.moveTo(n[0], n[1]); break;
+        case 'l': ctx.lineTo(n[0], n[1]); break;
+        case 'c': ctx.bezierCurveTo(n[0], n[1], n[2], n[3], n[4], n[5]); break;
+        case 're': ctx.rect(n[0], n[1], n[2], n[3]); break;
+        case 'h': ctx.closePath(); break;
+        case 'S': ctx.stroke(); ctx.beginPath(); break;
+        case 'f': ctx.fill(); ctx.beginPath(); break;
+        case 'B': ctx.fill(); ctx.stroke(); ctx.beginPath(); break;
+        case 'W': ctx.clip(); break;
+        case 'n': ctx.beginPath(); break;
+        case 'q': ctx.save(); break;
+        case 'Q': ctx.restore(); break;
+        case 'gs': ctx.globalAlpha = 0.12; break;
+        default: break;
+      }
+      pile = [];
+    }
+  }
+  ctx.restore();
+  // textes
+  for (const l of page.labels) {
+    ctx.save();
+    ctx.fillStyle = rgb(l.rgb);
+    ctx.font = `${l.bold ? 'bold ' : ''}${l.size}px Helvetica, Arial, sans-serif`;
+    ctx.textAlign = l.align === 'center' ? 'center' : l.align === 'right' ? 'right' : 'left';
+    ctx.fillText(l.text, l.x, hauteurPt - l.y);
+    ctx.restore();
+  }
+}
+
+const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Vue3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1762,6 +1762,8 @@
       cables.push({
         id, x: x0, y: y0, od: co.od, parent: parentId,
         color: colorForCable(co.fam, co.code), customColor: phaseColor, label: co.label || '',
+        // nom de la liaison (étude de chambre : traversées entre faces)
+        liaison: (liaisonsById && liaisonsById[co.liaisonId]) || null,
         fam: co.fam, code: co.code, vx: 0, vy: 0, dragging: false, frozen: false,
         _frozenByUser: false, _frozenByMode: false, _px: x0, _py: y0,
         selectedPhase: phaseKey,
@@ -7497,36 +7499,260 @@
   }
 
 
+
+  /* ── Mode chambre : un projet = une chambre à 4 faces (une coupe par face) ── */
+  // chambreProjet = { nom, ref (null = automatique), faceActive, faces: { cle: état sauvegardé | null } }
+  // La face ACTIVE vit dans le plan affiché (fourreaux/câbles/boîte) ; les autres
+  // faces sont des états complets (même format qu'un projet enregistré).
+  let chambreProjet = null;
+  const FACES_CHAMBRE = ['pignonA', 'pignonB', 'longPanA', 'longPanB'];
+
+  function exporterChambre() {
+    if (!chambreProjet) return undefined;
+    return { nom: chambreProjet.nom, ref: chambreProjet.ref, faceActive: chambreProjet.faceActive,
+      faces: { ...chambreProjet.faces, [chambreProjet.faceActive]: null } };
+  }
+  function importerChambre(c) {
+    if (!c || !c.faces) { chambreProjet = null; return; }
+    const faces = {};
+    FACES_CHAMBRE.forEach(k => { faces[k] = c.faces[k] || null; });
+    chambreProjet = { nom: c.nom || 'Chambre', ref: c.ref || null, faceActive: FACES_CHAMBRE.includes(c.faceActive) ? c.faceActive : 'pignonA', faces };
+  }
+  function etatFace(k) {
+    if (!chambreProjet) return null;
+    return k === chambreProjet.faceActive ? etatPlanCourant() : (chambreProjet.faces[k] ? etatDepuisSauvegarde(chambreProjet.faces[k]) : null);
+  }
+  function compterFourreaux(k) { const st = etatFace(k); return st ? st.fourreaux.length : 0; }
+
+  // Étude de la chambre (chambre-faces.js) à partir des faces renseignées.
+  function etudeChambreCourante() {
+    if (!chambreProjet || !window.ChambreFaces) return null;
+    const masques = {};
+    FACES_CHAMBRE.forEach(k => {
+      const st = etatFace(k);
+      if (!st || !st.fourreaux.length) return;
+      const n = st.fourreaux.length;
+      const m = buildMasqueFromState(st, `${n} fourreau${n > 1 ? 'x' : ''}`, false);
+      if (m && m.forme === 'rect') masques[k] = m;
+    });
+    if (!Object.keys(masques).length) return null;
+    const etude = window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres,
+      { ref: chambreProjet.ref || undefined, infos: window.ChambresInfos && window.ChambresInfos.infosChambre });
+    return { etude, masques };
+  }
+
+  function activerChambre() {
+    if (!chambreProjet) {
+      chambreProjet = { nom: 'Chambre', ref: null, faceActive: 'pignonA', faces: { pignonA: null, pignonB: null, longPanA: null, longPanB: null } };
+      showToast('Mode chambre : le plan actuel devient la face pignon A');
+    }
+    afficherVueChambre();
+  }
+
+  // Passe sur une autre face : la face courante est enregistrée, la cible chargée.
+  function ouvrirFace(k) {
+    if (!chambreProjet || !FACES_CHAMBRE.includes(k)) return;
+    if (k !== chambreProjet.faceActive) {
+      const pm = window.projectManager;
+      const courant = pm.captureCurrentState();
+      delete courant.chambre;
+      chambreProjet.faces[chambreProjet.faceActive] = courant;
+      const cible = chambreProjet.faces[k];
+      chambreProjet.faceActive = k;
+      chambreProjet.faces[k] = null;
+      if (cible) pm.restoreState(cible, { garderChambre: true });
+      else {
+        fourreaux.length = 0; cables.length = 0;
+        updateStats(); updateInventory(); updateSelectedInfo(); redraw();
+      }
+      actionHistory.length = 0; // pas d'annulation d'une face à l'autre
+    }
+    masquerVueChambre();
+    showToast(`Face ${window.ChambreFaces.LIBELLE[k]} : dessinez ou générez sa coupe`);
+  }
+
+  function quitterChambre() {
+    chambreProjet = null;
+    masquerVueChambre();
+    majBandeauChambre();
+    showToast('Mode chambre désactivé : le plan reste la face qui était ouverte');
+  }
+
+  function majBandeauChambre() {
+    let b = document.getElementById('chambreBandeau');
+    if (!chambreProjet) { if (b) b.hidden = true; return; }
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'chambreBandeau';
+      b.className = 'chambre-bandeau';
+      document.querySelector('.canvas-wrap')?.appendChild(b);
+    }
+    b.hidden = false;
+    b.innerHTML = '';
+    const t = document.createElement('span');
+    t.textContent = `${chambreProjet.nom} — face ${window.ChambreFaces.LIBELLE[chambreProjet.faceActive]}`;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'chambre-btn'; btn.textContent = 'Vue chambre';
+    btn.addEventListener('click', afficherVueChambre);
+    b.append(t, btn);
+  }
+
+  function construireVueChambre() {
+    let o = document.getElementById('chambreOverlay');
+    if (o) return o;
+    o = document.createElement('div');
+    o.id = 'chambreOverlay';
+    o.className = 'chambre-overlay';
+    o.hidden = true;
+    o.innerHTML = `
+      <div class="chambre-dessin"><canvas id="chambreCanvas" aria-label="Vue de dessus de la chambre de tirage"></canvas></div>
+      <aside class="chambre-panneau">
+        <h3>Chambre de tirage</h3>
+        <label class="chambre-champ">Nom <input id="chambreNom" type="text" maxlength="40"></label>
+        <label class="chambre-champ">Modèle <select id="chambreRef"></select></label>
+        <div class="chambre-faces" id="chambreFaces"></div>
+        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Une liaison présente sur deux faces traverse la chambre.</p>
+        <div class="chambre-actions">
+          <button type="button" class="chambre-btn" id="chambreRetour">Retour à la coupe</button>
+          <button type="button" class="chambre-btn chambre-btn-discret" id="chambreQuitter">Quitter le mode chambre</button>
+        </div>
+      </aside>`;
+    document.querySelector('.canvas-wrap')?.appendChild(o);
+    o.querySelector('#chambreRetour').addEventListener('click', masquerVueChambre);
+    o.querySelector('#chambreQuitter').addEventListener('click', quitterChambre);
+    o.querySelector('#chambreNom').addEventListener('input', (e) => { if (chambreProjet) { chambreProjet.nom = e.target.value || 'Chambre'; dessinerVueChambre(); majBandeauChambre(); } });
+    o.querySelector('#chambreRef').addEventListener('change', (e) => { if (chambreProjet) { chambreProjet.ref = e.target.value || null; dessinerVueChambre(); } });
+    window.addEventListener('resize', () => { if (!o.hidden) dessinerVueChambre(); });
+    return o;
+  }
+
+  function afficherVueChambre() {
+    if (!chambreProjet) return;
+    const o = construireVueChambre();
+    const sel = o.querySelector('#chambreRef');
+    const models = window.CompatChambres ? window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE) : [];
+    sel.innerHTML = '<option value="">Automatique (la plus petite qui convient)</option>' +
+      models.map(m => `<option value="${m.ref}">${m.ref} — ${m.L} × ${m.l} mm</option>`).join('');
+    sel.value = chambreProjet.ref || '';
+    o.querySelector('#chambreNom').value = chambreProjet.nom;
+    o.hidden = false;
+    dessinerVueChambre();
+    majBandeauChambre();
+  }
+  function masquerVueChambre() {
+    const o = document.getElementById('chambreOverlay');
+    if (o) o.hidden = true;
+    majBandeauChambre();
+  }
+
+  function dessinerVueChambre() {
+    const o = document.getElementById('chambreOverlay');
+    if (!o || o.hidden || !chambreProjet) return;
+    // boutons de face
+    const box = o.querySelector('#chambreFaces');
+    box.innerHTML = '';
+    FACES_CHAMBRE.forEach(k => {
+      const n = compterFourreaux(k);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chambre-face' + (k === chambreProjet.faceActive ? ' active' : '');
+      b.innerHTML = `<strong></strong><span></span>`;
+      b.querySelector('strong').textContent = window.ChambreFaces.LIBELLE[k];
+      b.querySelector('span').textContent = n ? `${n} fourreau${n > 1 ? 'x' : ''} — ouvrir` : 'vide — dessiner';
+      b.addEventListener('click', () => ouvrirFace(k));
+      box.appendChild(b);
+    });
+    // dessin (même rendu que la page PDF)
+    const cv = o.querySelector('#chambreCanvas');
+    const zone = cv.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
+    cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const V = window.Vue3D;
+    const r = etudeChambreCourante();
+    const W = zone.width, H = zone.height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const res = o.querySelector('#chambreResultat') || (() => {
+      const d = document.createElement('div'); d.id = 'chambreResultat'; d.className = 'chambre-resultat';
+      o.querySelector('.chambre-aide').before(d); return d;
+    })();
+    res.innerHTML = '';
+    if (!r) {
+      ctx.fillStyle = '#555'; ctx.font = '15px Helvetica, Arial, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Aucune face renseignée : ouvrez une face et dessinez ou générez sa coupe.', W / 2, H / 2);
+      return;
+    }
+    const e = r.etude;
+    if (!e.ok) {
+      ctx.fillStyle = '#b3261e'; ctx.font = 'bold 15px Helvetica, Arial, sans-serif'; ctx.textAlign = 'center';
+      (e.erreurs || []).forEach((t, i) => ctx.fillText(t, W / 2, H / 2 + i * 20));
+      return;
+    }
+    // dessin plein cadre (même tracé que la page PDF)
+    const page = new V.Page({ emitText: false, ombre: false });
+    const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 16, W - 32, H - 32);
+    V.rejouerSurCanvas(ctx, page, H);
+    // résultat dans le panneau
+    const ligne = (txt, cls, couleur) => { const p = document.createElement('div'); p.className = cls; p.textContent = txt; if (couleur) p.style.color = couleur; res.appendChild(p); };
+    const css = (c) => c ? `rgb(${c.map(v => Math.round(v * 255)).join(',')})` : '';
+    ligne(`Chambre ${e.ref} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
+    Object.values(e.faces).forEach(f => ligne(`${f.tient ? '✓' : '✗'} ${f.face} : ${f.largeurMasque} × ${f.hauteurMasque} dans ${f.largeurFace} × ${f.hauteurFace}`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
+    if (e.traversees.length) ligne('Traversées', 'chambre-res-titre');
+    e.traversees.forEach((t, i) => ligne(`${i + 1}. ${t.liaison} — ${t.entree} → ${t.sortie} (${t.type})${t.changementFourreau ? ', ' + t.changementFourreau : ''}`, 'chambre-res-ligne', css(couleurs.get(t.liaison))));
+    if (e.arrets.length) ligne('S\'arrêtent dans la chambre', 'chambre-res-titre');
+    e.arrets.forEach(a => ligne(`• ${a.liaison} (${a.face})`, 'chambre-res-ligne', css(couleurs.get(a.liaison))));
+    (e.avertissements || []).forEach(a => ligne(`⚠ ${a}`, 'chambre-res-ko'));
+  }
+
+  window.chambre = { activer: activerChambre, ouvrirFace, quitter: quitterChambre, etude: etudeChambreCourante };
+
   /* ── Vue 3D dans l'export PDF (dessin partagé avec le MCP : vue3d.js) ── */
 
-  // Plan courant → « masque » au format de vue3d.js (mm, Y vers le haut).
-  function buildMasqueFromPlan(titre) {
-    const isCirc = SHAPE === 'circ';
-    if (SHAPE !== 'rect' && !isCirc) return null; // chemin de câble : pas de vue 3D
-    const W = isCirc ? WORLD_D_MM : WORLD_W_MM, H = isCirc ? WORLD_D_MM : WORLD_H_MM;
-    const valid = fourreaux.filter(f => Number.isFinite(f.x) && Number.isFinite(f.y) && f.od > 0);
+  // État d'un plan : le plan affiché, ou une face de chambre enregistrée.
+  function etatPlanCourant() {
+    return { shape: SHAPE, width: WORLD_W_MM, height: WORLD_H_MM, diameter: WORLD_D_MM, fourreaux, cables };
+  }
+  function etatDepuisSauvegarde(d) {
+    const c = (d && d.container) || {};
+    return { shape: c.shape || 'rect', width: c.width, height: c.height, diameter: c.diameter,
+      fourreaux: (d && d.fourreaux) || [], cables: (d && d.cables) || [] };
+  }
+
+  // État de plan → « masque » au format de vue3d.js (mm, Y vers le haut).
+  function buildMasqueFromState(st, titre, avecChambre = true) {
+    const isCirc = st.shape === 'circ';
+    if (st.shape === 'chemin_de_cable') return null; // chemin de câble : pas de vue 3D
+    const W = isCirc ? st.diameter : st.width, H = isCirc ? st.diameter : st.height;
+    const valid = (st.fourreaux || []).filter(f => Number.isFinite(f.x) && Number.isFinite(f.y) && f.od > 0);
     if (!valid.length || !(W > 0 && H > 0)) return null;
     const ids = new Map();
     const fo = valid.map((f, i) => {
       const id = `F${i + 1}`;
       ids.set(f.id, id);
+      const noms = [...new Set((st.cables || []).filter(c => c.parent === f.id && c.liaison).map(c => c.liaison))];
       return { id, type: f.type || '', code: String(f.code || ''), od: f.od, di: f.idm > 0 ? f.idm : f.od * 0.8,
-        x: f.x / MM_TO_PX, y: H - f.y / MM_TO_PX, libelle: f.label || '' };
+        x: f.x / MM_TO_PX, y: H - f.y / MM_TO_PX, libelle: f.label || '',
+        liaisons: noms.length ? noms : (f.label ? [f.label] : []) };
     });
-    const cb = cables.filter(c => ids.has(c.parent) && c.od > 0).map(c => ({
+    const cb = (st.cables || []).filter(c => ids.has(c.parent) && c.od > 0).map(c => ({
       fourreau: ids.get(c.parent), od: c.od, x: c.x / MM_TO_PX, y: H - c.y / MM_TO_PX, phase: getCablePhaseLabel(c) || null,
     }));
     let chambre = null;
-    if (!isCirc && window.ChambresInfos && window.CompatChambres) {
+    if (avecChambre && !isCirc && window.ChambresInfos && window.CompatChambres) {
       chambre = window.ChambresInfos.chambrePourNappe(Math.round(W), Math.round(H), CHAMBRES_TIRAGE, window.CompatChambres);
       if (chambre && !chambre.face) chambre = null; // aucune préformée : pas de page chambre
     }
+    const liaisons = [...new Set(fo.flatMap(f => f.liaisons))];
     return {
       nom: String(titre || 'Plan').replace(/→/g, '->'), ok: true, forme: isCirc ? 'circ' : 'rect',
-      largeur: W, hauteur: H, tranchee: null, chambre, fourreaux: fo, cables: cb,
+      largeur: W, hauteur: H, tranchee: null, chambre, fourreaux: fo, cables: cb, liaisons,
       reglages: { ecart: FOURREAU_GAP, litDePose: (window.PACKER && window.PACKER.GEO.margin) || 0 },
     };
   }
+  function buildMasqueFromPlan(titre) { return buildMasqueFromState(etatPlanCourant(), titre); }
 
   // Écrit une page Vue3D (opérateurs bruts) dans jsPDF, textes via l'API jsPDF.
   function writeVue3DPage(pdf, page) {
@@ -7547,7 +7773,7 @@
   function addVue3DPages(pdf, titre) {
     const V = window.Vue3D;
     if (!V) return;
-    const m = buildMasqueFromPlan(titre);
+    const m = buildMasqueFromPlan(chambreProjet ? `${titre} — ${window.ChambreFaces.LIBELLE[chambreProjet.faceActive]}` : titre);
     if (!m) return;
     const { PAGE_W, PAGE_H, MARGE } = V;
     // Page 1 : coupe + vue 3D + légende
@@ -7570,7 +7796,14 @@
     if (m.fourreaux.length > 8) p.text(MARGE, y, 8, `… et ${m.fourreaux.length - 8} autres (voir le tableau du rapport)`);
     writeVue3DPage(pdf, p);
     // Page 2 : chambre de tirage compatible
-    if (m.chambre) {
+    const etude = etudeChambreCourante();
+    if (etude && etude.etude.ok) {
+      const pc = new V.Page({ emitText: false, ombre: false });
+      etude.etude.nom = chambreProjet.nom || 'Chambre';
+      V.dessinerEtudeChambre(pc, etude.etude, etude.masques);
+      writeVue3DPage(pdf, pc);
+    }
+    if (m.chambre && !etude) {
       const c = new V.Page({ emitText: false, ombre: false });
       const ch = m.chambre;
       c.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — chambre de tirage ${ch.ref}`, { bold: true });
@@ -9093,6 +9326,10 @@
       console.error('[PDF] exportPDF button not found!');
     }
     if (confirmPdfExport) confirmPdfExport.addEventListener('click', exportToPDF);
+    document.getElementById('chambreModeBtn')?.addEventListener('click', () => {
+      const o = document.getElementById('chambreOverlay');
+      if (o && !o.hidden) masquerVueChambre(); else activerChambre();
+    });
     if (cancelPdfExport) cancelPdfExport.addEventListener('click', closePdfExportModal);
     if (closePdfExportBtn) closePdfExportBtn.addEventListener('click', closePdfExportModal);
 
@@ -9844,6 +10081,8 @@
             diameter: WORLD_D_MM,
             chamberRef: compatChambresState.appliedUnit?.ref || null
           },
+          // Chambre à plusieurs faces (mode chambre) : absente des anciens projets
+          chambre: exporterChambre(),
           fourreaux: fourreaux.map(f => ({
             ...f,
             // Assurer la sérialisation complète
@@ -9908,7 +10147,7 @@
       }
 
       // Restaure l'état de l'application
-      restoreState(projectData) {
+      restoreState(projectData, opts = {}) {
         try {
           // Validation des données
           if (!projectData || !projectData.container) {
@@ -9977,6 +10216,10 @@
               });
             });
           }
+
+          // Chambre : rechargée avec le projet ; conservée quand on change de face
+          if (!opts.garderChambre) { importerChambre(projectData.chambre); masquerVueChambre(); }
+          majBandeauChambre();
 
           // Mettre à jour l'affichage
           toggleInputGroups();

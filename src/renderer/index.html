@@ -676,6 +676,15 @@
                 </svg>
                 <span class="ctrl-label">Réduire</span>
               </button>
+              <button id="chambreModeBtn" class="ctrl-btn" aria-label="Mode chambre : vue de dessus de la chambre de tirage et de ses 4 faces" title="Mode chambre (vue de dessus, 4 faces, traversées)">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="7" width="14" height="10" stroke="currentColor" stroke-width="2" fill="none"/>
+                  <line x1="1" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="19" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="12" y1="2" x2="12" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span class="ctrl-label">Chambre</span>
+              </button>
               <button id="rotateBoxCcw" class="ctrl-btn ctrl-btn-square" aria-label="Tourner la boîte de 90° antihoraire" title="90° gauche">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M7 7h6a5 5 0 1 1-4.2 7.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -878,6 +887,7 @@
   <script src="inventory-agg.js"></script>
   <script src="compat-chambres.js"></script>
   <script src="chambres-infos.js"></script>
+  <script src="chambre-faces.js"></script>
   <script src="vue3d.js"></script>
   <script src="script.js" defer></script>
   <script src="dimension-button-handler.js" defer></script>

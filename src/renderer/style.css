@@ -6044,3 +6044,38 @@ body.electron-mode .notification-container {
     gap: var(--spacing-md);
     flex-shrink: 0;
 }
+
+/* ─── Mode chambre (vue de dessus, 4 faces) ─────────────────────────── */
+.chambre-overlay {
+    position: absolute; inset: 0; z-index: 30;
+    display: grid; grid-template-columns: 1fr 280px; gap: 12px; padding: 12px;
+    background: var(--modal-bg-solid, #f8f9fa); color: var(--text-primary);
+}
+.chambre-overlay[hidden] { display: none; }
+.chambre-dessin { min-width: 0; min-height: 0; background: #fff; border: 1px solid var(--glass-border); border-radius: 8px; overflow: hidden; }
+.chambre-dessin canvas { display: block; }
+.chambre-panneau { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-width: 0; }
+.chambre-panneau h3 { margin: 0; font-size: 1rem; }
+.chambre-champ { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--text-secondary); }
+.chambre-champ input, .chambre-champ select { font: inherit; font-size: 0.85rem; padding: 6px 8px; border: 1px solid var(--glass-border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); }
+.chambre-faces { display: grid; gap: 6px; }
+.chambre-face { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; text-align: left; cursor: pointer;
+    border: 1px solid var(--glass-border); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); font: inherit; }
+.chambre-face strong { font-size: 0.85rem; text-transform: capitalize; }
+.chambre-face span { font-size: 0.75rem; color: var(--text-secondary); }
+.chambre-face:hover, .chambre-face:focus-visible { border-color: var(--accent); }
+.chambre-face.active { border-color: var(--accent); background: var(--accent-light); }
+.chambre-aide { margin: 0; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
+.chambre-actions { display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
+.chambre-btn { font: inherit; font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+.chambre-btn-discret { background: transparent; color: var(--text-secondary); border-color: var(--glass-border); }
+.chambre-bandeau { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 20;
+    display: flex; align-items: center; gap: 10px; padding: 4px 6px 4px 12px; font-size: 0.8rem;
+    background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--accent); border-radius: 999px; box-shadow: var(--glass-shadow); }
+.chambre-bandeau[hidden] { display: none; }
+
+.chambre-resultat { display: flex; flex-direction: column; gap: 3px; font-size: 0.75rem; }
+.chambre-res-titre { font-weight: 600; margin-top: 4px; color: var(--text-primary); }
+.chambre-res-ok { color: #1f7a3d; }
+.chambre-res-ko { color: #b3261e; }
+.chambre-res-ligne { line-height: 1.35; }
