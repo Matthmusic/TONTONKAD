@@ -28,30 +28,131 @@
   // Pour étaler en LARGEUR : contraindre maxH, laisser maxW = span.
   // Pour étaler en HAUTEUR : contraindre maxW, laisser maxH = span.
   // Retourne le contenu en Y-up (origine bas-gauche) ; null si ça ne tient pas.
-  function packBox(tubes, maxW, maxH) {
+  // stable=false : gravité seule (rapide), pour le balayage ; la stabilisation
+  // complète n'est faite que sur le(s) layout(s) retenu(s), voir finalize().
+  function packBox(tubes, maxW, maxH, stable = true) {
     const packer = new MaxRectsPacker(maxW, maxH, 0, OPTS);
     for (const t of tubes) { const c = cell(t.d); packer.add(c, c, { id: t.id, d: t.d }); }
     if (packer.bins.length !== 1) return null; // contenu trop grand pour la contrainte
     const bin = packer.bins[0];
     if (!bin) return null;
-    const cw = bin.width, ch = bin.height;
     // maxrects-packer (smart:true) ne fait pas toujours grandir bins.length quand le
     // contenu dépasse la borne demandée sur le 2e axe (observé : un bin peut dépasser
     // maxH tout en restant bins.length===1) : on vérifie donc les dimensions réelles
     // du bin plutôt que de faire confiance à bins.length seul.
-    if (cw > maxW + EPS || ch > maxH + EPS) return null;
-    const placed = bin.rects.map(r => ({
+    if (bin.width > maxW + EPS || bin.height > maxH + EPS) return null;
+    const placed = settle(bin.rects.map(r => ({
       id: r.data.id, d: r.data.d,
       x: r.x,   // maxrects place les gros en premier près de l'origine
       y: r.y,   // origine = bas-gauche (Y-up) → gros fourreaux posés en bas (gravité)
-    }));
+    })), maxW, maxH, stable);
+    let cw = 0, ch = 0;
+    for (const p of placed) {
+      const c = cell(p.d);
+      if (p.x + c > cw) cw = p.x + c;
+      if (p.y + c > ch) ch = p.y + c;
+    }
     return { cw, ch, placed };
+  }
+
+  // Gravité : maxrects remplit des trous rectangulaires sans regarder ce qu'il
+  // y a dessous, d'où des fourreaux « en l'air » (rien sous eux sur toute leur
+  // largeur). On les fait descendre un par un, du bas vers le haut, jusqu'au
+  // premier appui (fourreau déjà posé dont la cellule recouvre leur largeur, ou
+  // le lit de pose). Ne fait que descendre → aucun chevauchement créé, et la
+  // hauteur de la nappe ne peut que diminuer.
+  function settle(placed, maxW = Infinity, maxH = Infinity, stable = true) {
+    const order = [...placed].sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    const done = [];
+    for (const p of order) {
+      const c = cell(p.d);
+      let y = 0;
+      for (const q of done) {
+        const cq = cell(q.d);
+        if (q.x < p.x + c - EPS && q.x + cq > p.x + EPS && q.y + cq > y) y = q.y + cq;
+      }
+      p.y = y;
+      done.push(p);
+    }
+    return stable ? stabilize(placed, maxW, maxH) : placed;
+  }
+
+  const overlapX = (a, ca, b, cb) => a.x < b.x + cb - EPS && b.x < a.x + ca - EPS;
+  const overlap  = (a, ca, b, cb) => overlapX(a, ca, b, cb) && a.y < b.y + cb - EPS && b.y < a.y + ca - EPS;
+
+  // Stable = posé sur le lit de pose, ou appuyé de part et d'autre de son
+  // centre (un appui sous le centre compte des deux côtés). Un fourreau posé
+  // sur la seule arête d'un voisin roulerait : il n'est pas stable.
+  function isStable(p, others) {
+    if (p.y <= EPS) return true;
+    const c = cell(p.d), cx = p.x + c / 2;
+    let left = false, right = false;
+    for (const q of others) {
+      const cq = cell(q.d);
+      if (q === p || Math.abs(q.y + cq - p.y) > EPS || !overlapX(p, c, q, cq)) continue;
+      if (q.x < cx - EPS) left = true;
+      if (q.x + cq > cx + EPS) right = true;
+    }
+    return left && right;
+  }
+
+  // Déplace chaque fourreau instable vers la position stable la plus basse
+  // (puis la plus proche) dans l'emprise actuelle de la nappe. S'il n'y en a
+  // aucune, on accepte d'élargir/rehausser la nappe dans la limite de la boîte
+  // (maxW × maxH) ; sinon il reste où il est.
+  function stabilize(placed, maxW = Infinity, maxH = Infinity) {
+    let W = 0, H = 0;
+    for (const p of placed) { const c = cell(p.d); W = Math.max(W, p.x + c); H = Math.max(H, p.y + c); }
+    for (let pass = 0; pass < 4; pass++) {
+      let changed = false;
+      const order = [...placed].sort((a, b) => (a.y - b.y) || (a.x - b.x));
+      for (const p of order) {
+        if (isStable(p, placed)) continue;
+        const c = cell(p.d);
+        const others = placed.filter(q => q !== p);
+        const xs = new Set([0, W - c, W]);
+        for (const q of others) { const cq = cell(q.d); xs.add(q.x); xs.add(q.x + cq); xs.add(q.x + cq - c); xs.add(q.x - c); xs.add(q.x + cq / 2 - c / 2); }
+        let best = null;
+        for (const [lw, lh] of [[W, H], [maxW, maxH]]) {
+        if (best) break;
+        for (const x of xs) {
+          if (x < -EPS || x + c > lw + EPS) continue;
+          const ys = new Set([0]);
+          for (const q of others) { const cq = cell(q.d); if (overlapX({ x }, c, q, cq)) ys.add(q.y + cq); }
+          for (const y of [...ys].sort((a, b) => a - b)) {
+            if (y > p.y + EPS || y + c > lh + EPS) break;
+            if (best && (y > best.y + EPS || (Math.abs(y - best.y) <= EPS && Math.abs(x - p.x) >= Math.abs(best.x - p.x)))) break;
+            const cand = { x, y, d: p.d };
+            if (others.some(q => overlap(cand, c, q, cell(q.d)))) continue;
+            if (!isStable(cand, others)) continue;
+            best = { x, y };
+            break;
+          }
+        }
+        }
+        if (best) {
+          p.x = best.x; p.y = best.y; changed = true;
+          W = Math.max(W, p.x + c); H = Math.max(H, p.y + c);
+        }
+      }
+      if (!changed) break;
+      // Ce qui reposait sur un fourreau déplacé peut maintenant descendre.
+      const order2 = [...placed].sort((a, b) => (a.y - b.y) || (a.x - b.x));
+      const done = [];
+      for (const p of order2) {
+        const c = cell(p.d);
+        let y = 0;
+        for (const q of done) { const cq = cell(q.d); if (overlapX(p, c, q, cq) && q.y + cq > y) y = q.y + cq; }
+        p.y = y; done.push(p);
+      }
+    }
+    return placed;
   }
 
   // Largeur imposée → on étale en hauteur (maxW = innerW).
   function packWidth(tubes, innerW) { return packBox(tubes, innerW, span(tubes)); }
   // Hauteur imposée → on étale en largeur (maxH = innerH).
-  function packHeight(tubes, innerH) { return packBox(tubes, span(tubes), innerH); }
+  function packHeight(tubes, innerH, stable = true) { return packBox(tubes, span(tubes), innerH, stable); }
 
   function toLayout(pack, tag, outW, outH) {
     const w = outW != null ? outW : pack.cw + 2 * GEO.margin;
@@ -80,10 +181,19 @@
   function sweepByHeight(list, tag) {
     const out = [];
     for (const ih of candidateSizes(list)) {
-      const pk = packHeight(list, ih);
-      if (pk) out.push(toLayout(pk, tag, null, null));
+      const pk = packHeight(list, ih, false);
+      if (pk) out.push({ ...toLayout(pk, tag, null, null), ih });
     }
     return out;
+  }
+
+  // Refait le layout retenu par le balayage avec la stabilisation complète.
+  function finalize(list, L) {
+    if (L.ih == null) return L;
+    const pk = packHeight(list, L.ih, true);
+    if (!pk) return L;
+    const { ih, ...rest } = L;
+    return { ...rest, ...toLayout(pk, L.tag, null, null) };
   }
 
   // Mode libre : on veut une nappe "tranchée" (large : w >= h), compacte.
@@ -94,12 +204,13 @@
     const good = all.filter(L => L.ratio >= 1 && L.ratio <= 2);
     const wide = all.filter(L => L.w >= L.h);
     const pool = good.length ? good : (wide.length ? wide : all);
-    return pool.reduce((best, L) => (L.fill > best.fill ? L : best));
+    return finalize(list, pool.reduce((best, L) => (L.fill > best.fill ? L : best)));
   }
 
   function solve(tubes, opts) {
     const list = sortTubes(tubes);
     if (list.length === 0) return emptyLayout();
+    if (opts && opts.shape === 'circ') return solveCircle(list);
     const lock = (opts && opts.lock) || null;
     if (lock === 'w') {
       const pk = packWidth(list, opts.w - 2 * GEO.margin);
@@ -115,22 +226,22 @@
   function variants(tubes, opts) {
     const list = sortTubes(tubes);
     if (list.length === 0) return [];
-    if (opts && opts.lock) return [solve(tubes, opts)];
+    if (opts && opts.lock && opts.shape !== 'circ') return [solve(tubes, opts)];
 
     const all = sweepByHeight(list, '');
     if (!all.length) return [];
 
-    const pickMax = (arr, f) => arr.reduce((b, L) => (f(L) > f(b) ? L : b));
     const pickMin = (arr, f) => arr.reduce((b, L) => (f(L) < f(b) ? L : b));
 
     const wide = all.filter(L => L.w >= L.h);
     const out = [];
-    // compact : meilleure compacité parmi les layouts "tranchée" (w >= h), sinon global
-    out.push({ ...pickMax(wide.length ? wide : all, L => L.fill), tag: 'compact' });
+    // compact : le même layout que solve() en mode libre — la carte « compact »
+    // du panneau doit correspondre à ce qui est posé par défaut.
+    out.push({ ...solveFree(list), tag: 'compact' });
     // tranchee : ratio proche de 1.4 (large équilibré)
-    if (wide.length) out.push({ ...pickMin(wide, L => Math.abs(L.ratio - 1.4)), tag: 'tranchee' });
+    if (wide.length) out.push(finalize(list, { ...pickMin(wide, L => Math.abs(L.ratio - 1.4)), tag: 'tranchee' }));
     // rect43 : ratio proche de 4/3
-    out.push({ ...pickMin(all, L => Math.abs(L.ratio - 4 / 3)), tag: 'rect43' });
+    out.push(finalize(list, { ...pickMin(all, L => Math.abs(L.ratio - 4 / 3)), tag: 'rect43' }));
 
     const seen = new Set();
     return out.filter(L => {
@@ -138,6 +249,72 @@
       if (seen.has(k)) return false;
       seen.add(k); return true;
     });
+  }
+
+  // ── Conduit circulaire ────────────────────────────────────────────────
+  // Un layout rectangulaire ne tient PAS dans le cercle de diamètre max(w, h) :
+  // les fourreaux des coins dépassent. On calcule le vrai diamètre requis :
+  // D = 2·(max des |centre fourreau − centre| + cellule/2) + 2·lit de pose,
+  // le centre étant optimisé (problème convexe : recherche par motif).
+  function circleFit(items) {
+    if (!items.length) return { D: 2 * GEO.margin, cx: 0, cy: 0 };
+    const pts = items.map(it => { const c = cell(it.d); return { x: it.x + c / 2, y: it.y + c / 2, r: c / 2 }; });
+    const radius = (cx, cy) => pts.reduce((m, p) => Math.max(m, Math.hypot(p.x - cx, p.y - cy) + p.r), 0);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of pts) {
+      x0 = Math.min(x0, p.x - p.r); x1 = Math.max(x1, p.x + p.r);
+      y0 = Math.min(y0, p.y - p.r); y1 = Math.max(y1, p.y + p.r);
+    }
+    let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, best = radius(cx, cy);
+    let step = Math.max(x1 - x0, y1 - y0) / 4;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    while (step > 0.05) {
+      let moved = false;
+      for (const [dx, dy] of dirs) {
+        const r = radius(cx + dx * step, cy + dy * step);
+        if (r < best - EPS) { best = r; cx += dx * step; cy += dy * step; moved = true; break; }
+      }
+      if (!moved) step /= 2;
+    }
+    return { D: 2 * (best + GEO.margin), cx, cy };
+  }
+
+  // Meilleur layout pour un conduit circulaire : celui qui minimise D.
+  function solveCircle(list) {
+    const all = sweepByHeight(list, 'cercle');
+    if (!all.length) return emptyLayout();
+    let best = null;
+    for (const L of all) {
+      const D = circleFit(L.items).D;
+      if (!best || D < best.D - EPS) best = { L, D };
+    }
+    const L = finalize(list, best.L);
+    best.D = circleFit(L.items).D;
+    const cellArea = L.items.reduce((s, p) => s + cell(p.d) * cell(p.d), 0);
+    return { ...L, w: best.D, h: best.D, ratio: 1, fill: cellArea / (Math.PI * best.D * best.D / 4), tag: 'cercle' };
+  }
+
+  // Ancrage dans un conduit circulaire de diamètre box.w (= box.h) : nappe
+  // centrée sur le centre optimal ; le diamètre n'est agrandi que si besoin.
+  function anchorCircle(cfg, box) {
+    const round5 = (v) => Math.ceil(v / 5) * 5;
+    const locked = !!(box.lockW || box.lockH);
+    const boxD = Math.max(box.w || 0, box.h || 0);
+    let items = cfg.items;
+    let fit = circleFit(items);
+    // Diamètre verrouillé dépassé : on retente avec le layout optimal pour un cercle.
+    if (items.length && locked && fit.D > boxD + EPS) {
+      const alt = solveCircle(sortTubes(items.map(it => ({ id: it.id, d: it.d }))));
+      const altFit = circleFit(alt.items);
+      if (altFit.D < fit.D) { items = alt.items; fit = altFit; }
+    }
+    const D = (locked && fit.D <= boxD + EPS) ? boxD : Math.max(boxD, round5(fit.D));
+    const positions = items.map(it => {
+      const c = cell(it.d);
+      const yUp = D / 2 + (it.y + c / 2 - fit.cy);
+      return { id: it.id, d: it.d, x: D / 2 + (it.x + c / 2 - fit.cx), y: D - yUp, yUp };
+    });
+    return { w: D, h: D, positions };
   }
 
   // Bornes (Y-up, marge incluse) de la nappe la plus à droite / en haut.
@@ -156,8 +333,10 @@
   // convertit en positions canvas (Y-down, centres des cercles, en mm).
   // La boîte GARDE ses dimensions ; un axe libre n'est agrandi que si la nappe
   // ne tient pas. La nappe est posée au FOND (lit de pose) et centrée en largeur.
-  // box = { w, h, lockW, lockH } → { w, h, positions: [{id, d, x, y}] }
+  // box = { w, h, lockW, lockH, shape? } → { w, h, positions: [{id, d, x, y}] }
+  // shape === 'circ' : conduit circulaire (diamètre = w = h), voir anchorCircle.
   function anchorLayout(cfg, box) {
+    if (box.shape === 'circ') return anchorCircle(cfg, box);
     const round5 = (v) => Math.ceil(v / 5) * 5;
     let items = cfg.items;
     let { contentW, contentH } = contentBounds(items);
@@ -199,7 +378,7 @@
 
   const api = {
     GEO, cell, solve, variants, anchorLayout,
-    __test: { sortTubes, packWidth, packHeight, packAt: packWidth, toLayout, candidateSizes },
+    __test: { sortTubes, packWidth, packHeight, packAt: packWidth, toLayout, candidateSizes, settle, isStable, circleFit },
   };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;

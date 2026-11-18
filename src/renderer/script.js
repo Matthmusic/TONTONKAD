@@ -1431,7 +1431,7 @@
     const boxH = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
 
     const anchored = window.PACKER.anchorLayout(cfg, {
-      w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH,
+      w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH, shape,
     });
 
     // Positions en mm, centres des cercles, Y=0 en haut
@@ -1492,6 +1492,8 @@
       const optsPacker = lockWidth  ? { lock: 'w', w: boxWidth }
                        : lockHeight ? { lock: 'h', h: boxHeight }
                        : { lock: null };
+      // Conduit circulaire : le packer optimise directement le diamètre.
+      optsPacker.shape = shape;
 
       const bestConfig = window.solve(tubes, optsPacker);
       applyAnchoredConfig(bestConfig);
@@ -2762,7 +2764,7 @@
       // Aperçu fidèle : même ancrage que applyNappeVariant (boîte conservée,
       // nappe au fond, centrée) — sinon la carte montre une boîte redimensionnée.
       const anchored = window.PACKER.anchorLayout(cfg, {
-        w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH,
+        w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH, shape: shapeSel.value,
       });
       return {
         isNappeLayout: true,
@@ -3401,6 +3403,7 @@
       const optsPacker = {};
       if (lockWidth)  { optsPacker.lock = 'w'; optsPacker.w = boxWidth; }
       else if (lockHeight) { optsPacker.lock = 'h'; optsPacker.h = boxHeight; }
+      optsPacker.shape = shape;
 
       const bestConfig = window.solve(tubes, optsPacker);
 
@@ -3416,7 +3419,7 @@
 
       const anchored = window.PACKER.anchorLayout(bestConfig, {
         w: lockWidth ? boxWidth : 0, h: lockHeight ? boxHeight : 0,
-        lockW: !!lockWidth, lockH: !!lockHeight,
+        lockW: !!lockWidth, lockH: !!lockHeight, shape,
       });
 
       anchored.positions.forEach(p => {
@@ -3531,6 +3534,7 @@
       const optsPacker = {};
       if (lockWidth) { optsPacker.lock = 'w'; optsPacker.w = boxWidth; }
       else if (lockHeight) { optsPacker.lock = 'h'; optsPacker.h = boxHeight; }
+      optsPacker.shape = shape;
 
       // Meilleur placement (dimensions déjà serrées au minimum par le packer)
       const bestConfig = window.solve(tubes, optsPacker);
@@ -3539,7 +3543,7 @@
       // ancrage cohérent avec les autres flux (nappe posée sur le lit de pose).
       const anchored = window.PACKER.anchorLayout(bestConfig, {
         w: lockWidth ? boxWidth : 0, h: lockHeight ? boxHeight : 0,
-        lockW: !!lockWidth, lockH: !!lockHeight,
+        lockW: !!lockWidth, lockH: !!lockHeight, shape,
       });
 
       anchored.positions.forEach(p => {
