@@ -498,6 +498,17 @@ function rejouerSurCanvas(ctx, page, hauteurPt) {
 const hexRgb = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); const n = m ? parseInt(m[1], 16) : 0x5d6a70; return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
 const nuance = (c, k) => c.map((v) => Math.max(0, Math.min(1, k >= 1 ? v + (1 - v) * (k - 1) : v * k)));
 
+// Cartouche multiligne d'un tronçon (lignes = diamètres, dernière = distance en gras).
+function cartouche(p, mx, my, label) {
+  const lignes = Array.isArray(label) ? label : [String(label)], lh = 9.5;
+  const w = Math.max(...lignes.map((l) => l.length)) * 4.3 + 12, h = lignes.length * lh + 5;
+  p.rgb([1, 1, 1], false).rgb([0.6, 0.6, 0.6]).width(0.5).rect(mx - w / 2, my - h / 2, w, h, 'B');
+  lignes.forEach((l, i) => {
+    const der = i === lignes.length - 1 && lignes.length > 1;
+    p.rgb(der ? [0.75, 0.32, 0.05] : [0.1, 0.1, 0.1], false).text(mx, my + h / 2 - 3 - lh * (i + 0.75), 7.5, l, { align: 'center', bold: der });
+  });
+}
+
 function drawSynoptique2D(p, data, zx, zy, zw, zh) {
   if (!data.noeuds.length) return;
   const xs = data.noeuds.map((n) => n.x), ys = data.noeuds.map((n) => n.y);
@@ -508,9 +519,7 @@ function drawSynoptique2D(p, data, zx, zy, zw, zh) {
   for (const t of data.troncons) {
     p.rgb([0.35, 0.38, 0.42]).width(2).line(...P(t.a.x, t.a.y), ...P(t.b.x, t.b.y));
     const [mx, my] = P((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2);
-    const w = t.label.length * 4.2 + 10;
-    p.rgb([1, 1, 1], false).rgb([0.75, 0.75, 0.75]).width(0.5).rect(mx - w / 2, my - 7, w, 14, 'B');
-    p.rgb([0.1, 0.1, 0.1], false).text(mx, my - 3, 7.5, t.label, { align: 'center' });
+    cartouche(p, mx, my, t.label);
   }
   for (const n of data.noeuds) {
     const c = hexRgb(n.couleur), [cx, cy] = P(n.x, n.y);
@@ -570,11 +579,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
     p.texture([coin(A, 1, HAUT), coin(B, 1, HAUT), coin(B, -1, HAUT), coin(A, -1, HAUT)], nuance(terre, 1.08), { seed: 31, taille: 0.6, contour: bord });
     p.rgb([0.85, 0.12, 0.1]).width(0.9).line(...P(A.x, A.y, A.z + HAUT + 0.3), ...P(B.x, B.y, B.z + HAUT + 0.3)); // grillage
     const [mx, my] = P((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2 + HAUT + 12);
-    etiquettes.push(() => {
-      const w = t.label.length * 4.2 + 10;
-      p.rgb([1, 1, 1], false).rgb([0.6, 0.6, 0.6]).width(0.5).rect(mx - w / 2, my - 7, w, 14, 'B');
-      p.rgb([0.1, 0.1, 0.1], false).text(mx, my - 3, 7.5, t.label, { align: 'center' });
-    });
+    etiquettes.push(() => cartouche(p, mx, my, t.label));
   }
   function volume(n) {
     const [a, b, h] = dims[n.type] || dims.sortie, c = hexRgb(n.couleur);

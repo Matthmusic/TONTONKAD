@@ -7513,13 +7513,18 @@
     const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false);
     return m && m.forme === 'rect' ? m : null;
   }
-  function resumeFourreaux(t) {
+  // Fourreaux d'un tronçon par diamètre, du plus gros au plus petit : ['6 Ø200', '2 Ø160'].
+  function lignesFourreaux(t) {
     const st = etatTroncon(t);
-    if (!st || !st.fourreaux.length) return 'coupe vide';
-    // notation par diamètre, du plus gros au plus petit : « 6 Ø200 + 2 Ø160 »
+    if (!st || !st.fourreaux.length) return ['coupe vide'];
     const n = new Map();
     st.fourreaux.forEach((f) => { const d = Math.round(f.od || Number(f.code) || 0); n.set(d, (n.get(d) || 0) + 1); });
-    return [...n].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q} Ø${d}`).join(' + ');
+    return [...n].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q} Ø${d}`);
+  }
+  // Étiquette d'un tronçon : un diamètre par ligne, la distance tout en bas.
+  function etiquetteTroncon(t) { return [...lignesFourreaux(t), t.longueurM ? `${t.longueurM} m` : '? m']; }
+  function resumeFourreaux(t) {
+    return lignesFourreaux(t).join(' + ');
   }
 
 
@@ -7546,7 +7551,7 @@
     });
     const troncons = reseau.troncons.map((t) => {
       const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
-      return { a: { x: A.x, y: A.y, face: t.a.face, type: A.type }, b: { x: B.x, y: B.y, face: t.b.face, type: B.type }, label: `${t.longueurM ? t.longueurM + ' m' : '? m'} · ${resumeFourreaux(t)}` };
+      return { a: { x: A.x, y: A.y, face: t.a.face, type: A.type }, b: { x: B.x, y: B.y, face: t.b.face, type: B.type }, label: etiquetteTroncon(t) };
     });
     return { noeuds, troncons };
   }
@@ -7806,11 +7811,17 @@
       ctx.strokeStyle = sel ? th.cuivre : th.ardoise; ctx.lineWidth = sel ? 4 : 3; ctx.setLineDash(t.coupe || actif ? [] : [6, 4]);
       ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]);
       const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-      const txt = `${t.longueurM ? t.longueurM + ' m' : '? m'} · ${resumeFourreaux(t)}`;
-      ctx.font = `600 11px ${th.mono}`; const w = ctx.measureText(txt).width + 14;
+      const lignes = etiquetteTroncon(t), lh = 14;
+      ctx.font = `600 11px ${th.mono}`;
+      const w = Math.max(...lignes.map((l) => ctx.measureText(l).width)) + 16, h = lignes.length * lh + 6;
       ctx.fillStyle = th.surface; ctx.strokeStyle = sel ? th.cuivre : th.hairline; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect(mx - w / 2, my - 10, w, 20, 10); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = sel ? th.cuivre : th.encre; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, mx, my);
+      ctx.beginPath(); ctx.roundRect(mx - w / 2, my - h / 2, w, h, 8); ctx.fill(); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      lignes.forEach((l, i) => {
+        const der = i === lignes.length - 1;
+        ctx.font = `${der ? 700 : 500} 11px ${th.mono}`; ctx.fillStyle = der || sel ? th.cuivre : th.encre;
+        ctx.fillText(l, mx, my - h / 2 + 3 + lh * (i + 0.5));
+      });
     }
     if (SYN.lien) {
       const A = R().noeud(reseau, SYN.lien.de);
