@@ -6122,3 +6122,29 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 #layoutPreviewRailBtn[data-count]:not([data-count="0"])::after { content: attr(data-count); position: absolute; top: -4px; right: -4px;
     min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--primary-orange); color: #fff;
     font: 700 10px/16px 'JetBrains Mono', monospace; text-align: center; box-shadow: 0 2px 6px var(--shadow-color, rgba(0,0,0,0.15)); }
+
+/* ─── Notifications : en bas au centre, compactes, au plus 3 ───────── */
+.notification-container, body.electron-mode .notification-container {
+    top: auto; right: auto; left: 50%; bottom: 150px; transform: translateX(-50%);
+    align-items: center; gap: 6px; max-width: min(560px, calc(100vw - 32px));
+}
+.notification-container .notification {
+    min-width: 0; max-width: 100%; padding: 8px 16px 8px 12px; gap: 10px;
+    font-size: 13px; line-height: 1.35; border-radius: 999px;
+    border: 1px solid var(--glass-border); background: var(--modal-bg-solid, #f8f9fa);
+    box-shadow: 0 8px 24px var(--shadow-color, rgba(0,0,0,0.12));
+    transform: translateY(12px); animation: toastEntree 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.notification-container .notification:hover { transform: none; box-shadow: 0 10px 28px var(--shadow-color, rgba(0,0,0,0.16)); border-color: var(--primary-orange); }
+.notification-container .notification.removing { animation: toastSortie 0.2s ease-in forwards; }
+.notification-container .notification-icon { width: 8px; height: 8px; border-radius: 50%; font-size: 0; background: var(--text-muted, #718096); }
+.notification-container .notification.success .notification-icon { background: #059669; }
+.notification-container .notification.error .notification-icon { background: #d93025; }
+.notification-container .notification.warning .notification-icon { background: #c78a00; }
+.notification-container .notification.info .notification-icon { background: var(--primary-orange); }
+.notification-container .notification.error { border-color: rgba(217, 48, 37, 0.45); }
+@keyframes toastEntree { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes toastSortie { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) {
+    .notification-container .notification, .notification-container .notification.removing { animation-duration: 0.01ms; }
+}

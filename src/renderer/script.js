@@ -5489,14 +5489,6 @@
       }
     }
 
-    // Icônes par type
-    const icons = {
-      success: '✅',
-      error: '❌',
-      warning: '⚠️',
-      info: 'ℹ️',
-      default: '💬'
-    };
 
     // Nettoyer les emojis du message s'ils sont déjà dans le texte
     const cleanMsg = msg.replace(/^(✅|❌|⚠️|ℹ️|💬|🔒|🔧)\s*/, '');
@@ -5505,9 +5497,11 @@
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
 
+    // Indicateur de type : un point de couleur (pas d'emoji), lu par les lecteurs d'écran
     const icon = document.createElement('span');
     icon.className = 'notification-icon';
-    icon.textContent = icons[type] || icons.default;
+    icon.setAttribute('aria-hidden', 'true');
+    notification.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
     const content = document.createElement('span');
     content.className = 'notification-content';
@@ -5515,6 +5509,13 @@
 
     notification.appendChild(icon);
     notification.appendChild(content);
+
+    // Un message identique remplace le précédent ; au plus 3 à l'écran
+    [...notificationContainer.children].forEach((n) => {
+      if (n.querySelector('.notification-content')?.textContent === cleanMsg) n.remove();
+    });
+    while (notificationContainer.children.length >= 3) notificationContainer.firstElementChild.remove();
+    if (type === 'error' && duration === 3000) duration = 6000; // une erreur se lit
 
     // Ajouter au conteneur
     notificationContainer.appendChild(notification);
