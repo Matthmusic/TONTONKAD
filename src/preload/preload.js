@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resetDataPath: () => ipcRenderer.invoke('reset-data-path'),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
 
+  // Serveur MCP intégré : branchement dans Claude
+  mcpEtat: () => ipcRenderer.invoke('mcp-etat'),
+  mcpBrancherClaude: () => ipcRenderer.invoke('mcp-brancher-claude'),
+
   // Gestion du thème
   setTheme: (theme) => ipcRenderer.send('set-theme', theme),
 

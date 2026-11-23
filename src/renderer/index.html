@@ -173,7 +173,7 @@
   <div id="settings-modal" class="modal-overlay" style="display: none;" role="dialog" aria-labelledby="settings-modal-title" aria-modal="true">
     <div class="settings-modal-content">
       <div class="modal-header">
-        <h3 class="modal-title" id="settings-modal-title">Paramètres de la base de données</h3>
+        <h3 class="modal-title" id="settings-modal-title">Paramètres</h3>
         <button id="settings-close-btn" class="btn-close" aria-label="Fermer">&times;</button>
       </div>
 
@@ -231,6 +231,23 @@
         </div>
 
         <div id="settings-status" class="settings-status" style="display: none;"></div>
+
+        <!-- Serveur MCP intégré : Claude -->
+        <section class="mcp-section" aria-labelledby="mcp-titre">
+          <h4 id="mcp-titre" class="mcp-titre">Claude (serveur MCP)</h4>
+          <p class="settings-description">Le serveur MCP de TONTONKAD est installé avec l'application : Claude peut lire vos notes de calcul, générer les masques, étudier un réseau et dessiner sur vos plans. Aucun autre logiciel à installer.</p>
+          <div class="mcp-ligne">
+            <span id="mcp-etat" class="mcp-etat" role="status">Vérification…</span>
+            <button id="mcp-brancher-btn" type="button" class="btn-primary btn-compact">Brancher à Claude</button>
+          </div>
+          <details class="mcp-details">
+            <summary>Claude Code (terminal)</summary>
+            <div class="mcp-commande-groupe">
+              <code id="mcp-commande" class="mcp-commande"></code>
+              <button id="mcp-copier-btn" type="button" class="btn-secondary btn-compact">Copier</button>
+            </div>
+          </details>
+        </section>
       </div>
 
       <div class="modal-actions">

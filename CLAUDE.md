@@ -277,6 +277,10 @@ When the `/dev` agent implements a story, it auto-loads these files (from `core-
 Quality gate files: `docs/qa/gates/{epic}.{story}-{slug}.yml`
 Assessment reports: `docs/qa/assessments/`
 
+## Serveur MCP intégré (Claude)
+
+`mcp/` (serveur MCP : masques, réseau, PDF/DXF, commandes multiCAD) est livré dans l'installeur : `extraResources` copie `mcp/{src,package.json,node_modules}` vers `resources/mcp` et les modules purs dont il a besoin vers `resources/src/renderer` (liste dans `package.json` › `build.extraResources` — à compléter si le MCP `require` un nouveau module de `src/renderer`). Le workflow CI installe ses dépendances (`npm ci --prefix mcp`). Il tourne avec l'exécutable de l'app (`ELECTRON_RUN_AS_NODE=1`). `src/main/mcp-claude.js` (pur, testé par `tests/mcp-claude.test.js`) écrit l'entrée `mcpServers.tontonkad` de la configuration de l'application de bureau Claude (sauvegarde, autres serveurs conservés) ; IPC `mcp-etat` / `mcp-brancher-claude`, UI dans la modale Paramètres.
+
 ## CEA App Store Integration
 
 The file `cea-app.json` at the repo root is the manifest for the CEA App Store (internal company app distribution). It is updated automatically by the `/bump` skill alongside `package.json`. See `INSTRUCTIONS-POUR-REPOS.md` for the full field guide.

@@ -61,6 +61,33 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "mcp",
+        "to": "mcp",
+        "filter": [
+          "src/**/*",
+          "package.json",
+          "node_modules/**/*"
+        ]
+      },
+      {
+        "from": "src/renderer",
+        "to": "src/renderer",
+        "filter": [
+          "big-brain.js",
+          "cable-assign.js",
+          "caneco-import.js",
+          "chambre-faces.js",
+          "chambres-infos.js",
+          "circuit.js",
+          "compat-chambres.js",
+          "csv.js",
+          "packer.js",
+          "phase-assign.js",
+          "reseau.js",
+          "vue3d.js"
+        ]
       }
     ],
     "win": {

@@ -6201,3 +6201,14 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .icone { display: block; flex: none; }
 .folder-icon, .auto-save-status .icon { display: inline-flex; align-items: center; }
 .tooltip-btn .icone { width: 16px; height: 16px; }
+/* Paramètres : serveur MCP intégré (Claude) */
+.mcp-section { margin-top: var(--spacing-lg, 1.5rem); padding-top: var(--spacing-lg, 1.5rem); border-top: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 10px; }
+.mcp-titre { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.mcp-ligne { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.mcp-etat { font-size: 14px; color: var(--text-secondary); }
+.mcp-etat[data-etat="branche"] { color: var(--success-color); font-weight: 600; }
+.mcp-etat[data-etat="illisible"], .mcp-etat[data-etat="a_mettre_a_jour"] { color: var(--warning-color); font-weight: 600; }
+.mcp-details summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+.mcp-commande-groupe { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
+.mcp-commande { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 8px 10px; border-radius: var(--radius-sm, 8px); background: var(--input-bg, rgba(0,0,0,0.04)); border: 1px solid var(--glass-border); word-break: break-all; user-select: all; }
+.mcp-section .settings-description { text-align: left; margin: 0; }
