@@ -163,7 +163,6 @@
           <span id="update-btn-download-text">Télécharger maintenant</span>
         </button>
         <button class="btn-primary hidden" id="update-btn-restart">
-          <span>🔄</span>
           <span>Redémarrer maintenant</span>
         </button>
       </div>
@@ -237,7 +236,6 @@
       <div class="modal-actions">
         <button id="settings-cancel-btn" type="button" class="btn-cancel">Annuler</button>
         <button id="settings-save-btn" type="button" class="btn-primary">
-          <span>💾</span>
           <span>Enregistrer</span>
         </button>
       </div>
@@ -1042,10 +1040,10 @@
 
           <!-- Sauvegarde projet actuel -->
           <div class="project-save">
-            <h4>💾 Sauvegarder le projet actuel</h4>
+            <h4>Sauvegarder le projet actuel</h4>
             <div class="project-field">
               <select id="projectFolder" class="project-folder-select" aria-label="Dossier de destination du projet">
-                <option value="">🏠 Racine (sans dossier)</option>
+                <option value="">Racine (sans dossier)</option>
               </select>
               <input type="text" id="newProjectName" placeholder="Nom du projet..." maxlength="50" list="existingProjects" aria-label="Nom du projet">
               <datalist id="existingProjects"></datalist>
@@ -1056,7 +1054,7 @@
           <!-- Projets sauvegardés -->
           <div class="projects-list-section">
             <div class="projects-header">
-              <h4>📂 Projets sauvegardés</h4>
+              <h4>Projets sauvegardés</h4>
               <button id="importProject" type="button" class="btn-secondary btn-compact" title="Ouvrir un fichier projet (.json, .tontonkad) — Ctrl+O">Ouvrir un fichier…</button>
               <button id="toggleFolderCreation" type="button" class="btn-secondary btn-compact">+ Créer un dossier</button>
             </div>
@@ -1075,7 +1073,7 @@
         <div class="auto-save-section" id="autoSaveSection">
           <div class="auto-save-info">
             <div class="auto-save-status" id="autoSaveStatus">
-              <span class="icon">💾</span>
+              <span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg></span>
               <span class="text" id="autoSaveText">Aucune auto-sauvegarde</span>
             </div>
             <button id="restoreAutoSave" type="button" class="btn-secondary btn-compact" style="display: none;">Restaurer</button>

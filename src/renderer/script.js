@@ -3777,8 +3777,9 @@
     if (showInfo && f.label && f.label.trim()) {
       ctx.fillStyle = "#fff";
       ctx.strokeStyle = "#000";
-      ctx.lineWidth = getScaledLineWidth(2);
-      ctx.font = `bold ${getScaledLineWidth(12)}px Arial`;
+      ctx.lineWidth = getScaledLineWidth(3);
+      ctx.lineJoin = 'round';
+      ctx.font = `600 ${getScaledLineWidth(12)}px "IBM Plex Sans", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
       // Contour noir pour meilleure lisibilité
@@ -5475,6 +5476,21 @@
   }
 
   // Système de notifications intégrées
+
+  // Icônes dessinées (trait 2, même famille que la barre d'outils) : pas d'emoji comme icône.
+  const ICONE = (() => {
+    const svg = (d) => `<svg class="icone" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    return {
+      dossier: svg('<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'),
+      racine: svg('<path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>'),
+      ouvrir: svg('<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>'),
+      sauver: svg('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>'),
+      renommer: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+      exporter: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'),
+      supprimer: svg('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+    };
+  })();
+
   function showToast(msg, type = 'default', duration = 3000, onClick = null) {
     // Détecter automatiquement le type si msg contient des emojis
     if (!type || type === 'default') {
@@ -5491,7 +5507,7 @@
 
 
     // Nettoyer les emojis du message s'ils sont déjà dans le texte
-    const cleanMsg = msg.replace(/^(✅|❌|⚠️|ℹ️|💬|🔒|🔧)\s*/, '');
+    const cleanMsg = String(msg).replace(/^(?:\p{Extended_Pictographic}\uFE0F?\s*)+/u, ''); // l'emoji de tête devient le type
 
     // Créer la notification
     const notification = document.createElement('div');
@@ -7721,12 +7737,20 @@
 
   /* ── Synoptique 2D ── */
   const SYN = { sel: null, drag: null, lien: null, survol: null, vue: { k: 1, ox: 0, oy: 0 }, mode: '2d' };
-  const tailleNoeud = (n) => (n.type === 'chambre' ? { w: 96, h: 52 } : n.type === 'coffret' ? { w: 56, h: 56 } : { w: 70, h: 40 });
+  // Taille d'un nœud dans le repère du synoptique : élargi pour contenir son nom,
+  // grossi par SYN.c quand le cadrage réduit fortement (texte toujours lisible).
+  const REF_AFFICHEE = new WeakMap(); // modèle affiché sous le nom d'une chambre (dernier dessin)
+  const tailleNoeud = (n) => {
+    const b = n.type === 'chambre' ? { w: 96, h: 52 } : n.type === 'coffret' ? { w: 56, h: 56 } : { w: 70, h: 40 };
+    const c = SYN.c || 1, sous = REF_AFFICHEE.get(n) || '';
+    const w = Math.max(b.w, String(n.nom || '').length * 7.8 + (n.type === 'sortie' ? 30 : 18), sous.length * 6.8 + 16);
+    return { w: w * c, h: b.h * c };
+  };
   function noeudSous(x, y) {
     return [...reseau.noeuds].reverse().find((n) => { const s = tailleNoeud(n); return Math.abs(x - n.x) <= s.w / 2 && Math.abs(y - n.y) <= s.h / 2; }) || null;
   }
   function poigneeSous(x, y) {
-    return reseau.noeuds.find((n) => Math.hypot(x - (n.x + tailleNoeud(n).w / 2 + 12), y - n.y) <= 9) || null;
+    return reseau.noeuds.find((n) => Math.hypot(x - (n.x + tailleNoeud(n).w / 2 + 12 * (SYN.c || 1)), y - n.y) <= 9 * (SYN.c || 1)) || null;
   }
   function tronconSous(x, y) {
     return reseau.troncons.find((t) => {
@@ -7853,27 +7877,31 @@
         const xs = reseau.noeuds.map((n) => n.x), ys = reseau.noeuds.map((n) => n.y);
         const x0 = Math.min(...xs) - 80, x1 = Math.max(...xs) + 100, y0 = Math.min(...ys) - 60, y1 = Math.max(...ys) + 60;
         const k = Math.min(1.4, (zone.width - 40) / (x1 - x0), (zone.height - 40) / (y1 - y0));
+        SYN.c = Math.max(1, Math.min(1.9, 0.85 / k)); // compense la réduction pour le texte
         SYN.vue = { k, ox: (zone.width - (x1 - x0) * k) / 2 - x0 * k, oy: (zone.height - (y1 - y0) * k) / 2 - y0 * k };
       } else SYN.vue = { k: 1, ox: 0, oy: 0 };
     }
     ctx.setTransform(dpr * SYN.vue.k, 0, 0, dpr * SYN.vue.k, dpr * SYN.vue.ox, dpr * SYN.vue.oy);
-    // tronçons
+    // tronçons (étiquettes dessinées après les nœuds : toujours lisibles)
+    const etiquettes = [];
     for (const t of reseau.troncons) {
       const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
       const sel = SYN.sel && SYN.sel.troncon === t.id, actif = t.id === reseau.actif.troncon;
       ctx.strokeStyle = sel ? th.cuivre : th.ardoise; ctx.lineWidth = sel ? 4 : 3; ctx.setLineDash(t.coupe || actif ? [] : [6, 4]);
       ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]);
       const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-      const lignes = etiquetteTroncon(t), lh = 14;
-      ctx.font = `600 11px ${th.mono}`;
-      const w = Math.max(...lignes.map((l) => ctx.measureText(l).width)) + 16, h = lignes.length * lh + 6;
+      etiquettes.push(() => {
+      const c = SYN.c || 1, lignes = etiquetteTroncon(t), lh = 14 * c;
+      ctx.font = `600 ${11 * c}px ${th.mono}`;
+      const w = Math.max(...lignes.map((l) => ctx.measureText(l).width)) + 16 * c, h = lignes.length * lh + 6 * c;
       ctx.fillStyle = th.surface; ctx.strokeStyle = sel ? th.cuivre : th.hairline; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.roundRect(mx - w / 2, my - h / 2, w, h, 8); ctx.fill(); ctx.stroke();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       lignes.forEach((l, i) => {
         const der = i === lignes.length - 1;
-        ctx.font = `${der ? 700 : 500} 11px ${th.mono}`; ctx.fillStyle = der || sel ? th.cuivre : th.encre;
-        ctx.fillText(l, mx, my - h / 2 + 3 + lh * (i + 0.5));
+        ctx.font = `${der ? 700 : 500} ${11 * c}px ${th.mono}`; ctx.fillStyle = der || sel ? th.cuivre : th.encre;
+        ctx.fillText(l, mx, my - h / 2 + 3 * c + lh * (i + 0.5));
+      });
       });
     }
     if (SYN.lien) {
@@ -7883,7 +7911,11 @@
     }
     // nœuds
     for (const n of reseau.noeuds) {
-      const { w, h } = tailleNoeud(n), sel = SYN.sel && SYN.sel.noeud === n.id;
+      if (n.type === 'chambre') {
+        const e = etudeChambre(n);
+        REF_AFFICHEE.set(n, e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'));
+      }
+      const { w, h } = tailleNoeud(n), sel = SYN.sel && SYN.sel.noeud === n.id, c = SYN.c || 1;
       ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = n.couleur; ctx.fillStyle = th.fond; // opaque : le tronçon passe derrière
       ctx.beginPath();
       if (n.type === 'chambre') ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, 6);
@@ -7894,19 +7926,19 @@
       ctx.stroke();
       if (sel) { ctx.strokeStyle = th.cuivre; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(n.x - w / 2 - 5, n.y - h / 2 - 5, w + 10, h + 10); ctx.setLineDash([]); }
       ctx.fillStyle = th.encre; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = `600 13px ${th.sans}`; ctx.fillText(n.nom, n.x, n.y - (n.type === 'chambre' ? 7 : 0));
+      ctx.font = `600 ${13 * c}px ${th.sans}`; ctx.fillText(n.nom, n.x - (n.type === 'sortie' ? 6 * c : 0), n.y - (n.type === 'chambre' ? 7 * c : n.type === 'coffret' ? 6 * c : 0));
       if (n.type === 'chambre') {
-        const e = etudeChambre(n);
-        ctx.font = `500 11px ${th.mono}`; ctx.fillStyle = th.cuivre;
-        ctx.fillText(e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'), n.x, n.y + 11);
+        ctx.font = `500 ${11 * c}px ${th.mono}`; ctx.fillStyle = th.cuivre;
+        ctx.fillText(REF_AFFICHEE.get(n), n.x, n.y + 11 * c);
       }
-      if (n.type === 'coffret') { ctx.font = `500 10px ${th.sans}`; ctx.fillStyle = th.ardoise; ctx.fillText(n.coffret.genre, n.x, n.y + 16); }
+      if (n.type === 'coffret') { ctx.font = `500 ${10 * c}px ${th.sans}`; ctx.fillStyle = th.ardoise; ctx.fillText(n.coffret.genre, n.x, n.y + 12 * c); }
       // poignée « + » pour relier
-      const hx = n.x + w / 2 + 12;
-      ctx.fillStyle = th.surface; ctx.strokeStyle = th.cuivre; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(hx, n.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(hx - 4, n.y); ctx.lineTo(hx + 4, n.y); ctx.moveTo(hx, n.y - 4); ctx.lineTo(hx, n.y + 4); ctx.stroke(); // « + » dessiné
+      const hx = n.x + w / 2 + 12 * c;
+      ctx.fillStyle = th.surface; ctx.strokeStyle = th.cuivre; ctx.lineWidth = 1.5 * c;
+      ctx.beginPath(); ctx.arc(hx, n.y, 8 * c, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hx - 4 * c, n.y); ctx.lineTo(hx + 4 * c, n.y); ctx.moveTo(hx, n.y - 4 * c); ctx.lineTo(hx, n.y + 4 * c); ctx.stroke(); // « + » dessiné
     }
+    etiquettes.forEach((f) => f());
     if (panneau) remplirEdition();
   }
 
@@ -10946,7 +10978,7 @@
           localStorage.setItem(this.storageKey, JSON.stringify(data));
 
           const location = folderName ? `dans "${folderName}"` : '';
-          showToast(`💾 Projet "${projectName}" sauvegardé ${location}`);
+          showToast(`Projet "${projectName}" sauvegardé ${location}`, 'success');
           return true;
         } catch (error) {
           console.error('Erreur sauvegarde projet:', error);
@@ -11096,7 +11128,7 @@
           };
 
           localStorage.setItem(this.storageKey, JSON.stringify(data));
-          showToast(`📁 Dossier "${trimmedName}" créé`);
+          showToast(`Dossier "${trimmedName}" créé`, 'success');
           return true;
         } catch (error) {
           console.error('Erreur création dossier:', error);
@@ -11794,7 +11826,7 @@
       this.currentRenameData = { oldName, folderName, isFolder };
 
       if (isFolder) {
-        this.currentProjectName.textContent = `📁 ${oldName}`;
+        this.currentProjectName.textContent = oldName;
         document.getElementById('renameModalTitle').textContent = '✏️ Renommer le dossier';
       } else {
         this.currentProjectName.textContent = folderName ? `${folderName}/${oldName}` : oldName;
@@ -11975,9 +12007,9 @@
       const safeSelection = previousSelection === NEW_FOLDER_OPTION_VALUE ? '' : previousSelection;
 
       this.projectFolder.innerHTML = `
-        <option value="">🏠 Racine (sans dossier)</option>
+        <option value="">Racine (sans dossier)</option>
         ${folderNames.map(name =>
-        `<option value="${name}">📁 ${name}</option>`
+        `<option value="${name}">${name}</option>`
       ).join('')}
         <option value="${NEW_FOLDER_OPTION_VALUE}">➕ Nouveau dossier...</option>
       `;
@@ -12004,7 +12036,7 @@
       if (!hasProjects) {
         this.projectsList.innerHTML = `
           <div class="projects-empty">
-            🗂️ Aucun projet sauvegardé<br>
+            Aucun projet sauvegardé<br>
             <small>Créez votre premier projet en entrant un nom ci-dessus</small>
           </div>
         `;
@@ -12025,7 +12057,7 @@
                data-folder-name="${folderName}">
             <div class="folder-header">
               <span class="folder-toggle" aria-hidden="true">▾</span>
-              <span class="folder-icon">📁</span>
+              <span class="folder-icon">${ICONE.dossier}</span>
               <span class="folder-name">${folderName}</span>
               <span class="folder-count">(${projectCount} projet${projectCount > 1 ? 's' : ''})</span>
               <div class="folder-actions">
@@ -12049,7 +12081,7 @@
                data-folder-name="">
             <div class="folder-header">
               <span class="folder-toggle" aria-hidden="true">▾</span>
-              <span class="folder-icon">🏠</span>
+              <span class="folder-icon">${ICONE.racine}</span>
               <span class="folder-name">Projets sans dossier</span>
               <span class="folder-count">(${rootProjects.length} projet${rootProjects.length > 1 ? 's' : ''})</span>
             </div>
@@ -12093,19 +12125,19 @@
                 ${name}
               </div>
               <div class="project-meta">
-                <span>📅 ${this.formatDate(lastModified)}</span>
-                <span>📦 ${totalObjects} objets</span>
-                <span>📏 ${project.container?.shape === 'rect' ?
+                <span>${this.formatDate(lastModified)}</span>
+                <span>${totalObjects} objets</span>
+                <span class="reseau-valeur">${project.container?.shape === 'rect' ?
             `${project.container.width}×${project.container.height}mm` :
             `⌀${project.container?.diameter || '?'}mm`}</span>
               </div>
             </div>
             <div class="project-actions">
-              <button class="tooltip-btn btn-load" data-tooltip="Charger ce projet">📂</button>
-              <button class="tooltip-btn btn-save" data-tooltip="Écraser avec l'état actuel">💾</button>
-              <button class="tooltip-btn btn-rename" data-tooltip="Renommer ce projet">✏️</button>
-              <button class="tooltip-btn btn-export" data-tooltip="Exporter vers fichier">📤</button>
-              <button class="tooltip-btn btn-delete" data-tooltip="Supprimer définitivement">🗑️</button>
+              <button class="tooltip-btn btn-load" data-tooltip="Charger ce projet" aria-label="Charger ce projet">${ICONE.ouvrir}</button>
+              <button class="tooltip-btn btn-save" data-tooltip="Écraser avec l'état actuel" aria-label="Écraser avec l'état actuel">${ICONE.sauver}</button>
+              <button class="tooltip-btn btn-rename" data-tooltip="Renommer ce projet" aria-label="Renommer ce projet">${ICONE.renommer}</button>
+              <button class="tooltip-btn btn-export" data-tooltip="Exporter vers fichier" aria-label="Exporter vers fichier">${ICONE.exporter}</button>
+              <button class="tooltip-btn btn-delete" data-tooltip="Supprimer définitivement" aria-label="Supprimer définitivement">${ICONE.supprimer}</button>
             </div>
           </div>
         `;
@@ -12127,7 +12159,7 @@
 
         // Statut principal
         this.autoSaveText.textContent = `Auto-sauvegarde disponible`;
-        this.autoSaveStatus.querySelector('.icon').textContent = '💾';
+        this.autoSaveStatus.querySelector('.icon').innerHTML = ICONE.sauver;
         this.autoSaveStatus.style.color = '#22c55e';
 
         // Détails
@@ -12143,11 +12175,11 @@
         // Warning si trop ancien
         if (timeDiff > 15 * 60 * 1000) {
           this.autoSaveStatus.style.color = '#f59e0b';
-          this.autoSaveStatus.querySelector('.icon').textContent = '⚠️';
+          this.autoSaveStatus.querySelector('.icon').innerHTML = ICONE.sauver;
         }
       } else {
         this.autoSaveText.textContent = 'Aucune auto-sauvegarde';
-        this.autoSaveStatus.querySelector('.icon').textContent = '💾';
+        this.autoSaveStatus.querySelector('.icon').innerHTML = ICONE.sauver;
         this.autoSaveStatus.style.color = '#94a3b8';
 
         this.autoSaveDetails.innerHTML = `

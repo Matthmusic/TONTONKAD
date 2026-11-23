@@ -6181,3 +6181,23 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .reseau-ajout input { width: 100%; }
 .projects-header { gap: 8px; }
 .projects-header h4 { margin-right: auto; }
+/* Notifications (polish) : pas de bandeau latéral (Règle des Accents d'Angle) —
+   bordure complète teintée du type, pastille de couleur, titre lisible en encre. */
+.notification-container .notification,
+.notification-container .notification.success, .notification-container .notification.error,
+.notification-container .notification.warning, .notification-container .notification.info {
+    border-left-width: 1px;
+    border-color: var(--glass-border);
+}
+.notification-container .notification.success { border-color: color-mix(in srgb, var(--success-color) 55%, transparent); }
+.notification-container .notification.error { border-color: color-mix(in srgb, var(--error-color) 60%, transparent); }
+.notification-container .notification.warning { border-color: color-mix(in srgb, var(--warning-color) 60%, transparent); }
+.notification-container .notification.info { border-color: color-mix(in srgb, var(--primary-orange) 55%, transparent); }
+.notification-container .notification .notification-titre { color: var(--text-secondary, #4a5568); }
+.notification-container .notification.success .notification-icon { background: var(--success-color); }
+.notification-container .notification.error .notification-icon { background: var(--error-color); }
+.notification-container .notification.warning .notification-icon { background: var(--warning-color); }
+/* Icônes dessinées (gestionnaire de projets) */
+.icone { display: block; flex: none; }
+.folder-icon, .auto-save-status .icon { display: inline-flex; align-items: center; }
+.tooltip-btn .icone { width: 16px; height: 16px; }
