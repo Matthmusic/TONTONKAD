@@ -26,9 +26,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install MCP server dependencies (livré avec l'application)
-        run: npm ci --prefix mcp --omit=dev
-
       - name: Build Windows
         run: npm run build:win
         env:

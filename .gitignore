@@ -167,3 +167,6 @@ AGENTS.md
 
 # Subagent-driven-development isolated workspaces
 .worktrees/
+
+# Serveur MCP autonome livré par l'installeur (généré par npm run build:mcp, VERSIONNÉ)
+!mcp/dist/

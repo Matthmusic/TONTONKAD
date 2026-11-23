@@ -1,6 +1,6 @@
 {
   "name": "tontonkad",
-  "version": "2.8.2",
+  "version": "2.8.3",
   "description": "TONTONKAD - Dimensionnement de chemins de câbles et fourreaux",
   "main": "src/main/main.js",
   "author": "TONTONKAD Team",
@@ -19,7 +19,8 @@
     "test:coverage": "jest --coverage",
     "bmad:refresh": "bmad-method install -f -i codex",
     "bmad:list": "bmad-method list:agents",
-    "bmad:validate": "bmad-method validate"
+    "bmad:validate": "bmad-method validate",
+    "build:mcp": "node scripts/build-mcp.js"
   },
   "keywords": [
     "electrical",
@@ -63,30 +64,10 @@
         ]
       },
       {
-        "from": "mcp",
+        "from": "mcp/dist",
         "to": "mcp",
         "filter": [
-          "src/**/*",
-          "package.json",
-          "node_modules/**/*"
-        ]
-      },
-      {
-        "from": "src/renderer",
-        "to": "src/renderer",
-        "filter": [
-          "big-brain.js",
-          "cable-assign.js",
-          "caneco-import.js",
-          "chambre-faces.js",
-          "chambres-infos.js",
-          "circuit.js",
-          "compat-chambres.js",
-          "csv.js",
-          "packer.js",
-          "phase-assign.js",
-          "reseau.js",
-          "vue3d.js"
+          "tontonkad-mcp.js"
         ]
       }
     ],

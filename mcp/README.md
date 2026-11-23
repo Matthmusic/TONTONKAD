@@ -12,12 +12,19 @@ un fichier existant.
 
 ## Installation
 
-**Depuis TONTONKAD 2.8.2, le serveur est livré avec l'application.** Dans
-TONTONKAD : *Paramètres › Claude (serveur MCP) › Brancher à Claude*, puis
-redémarrer l'application Claude. Il tourne avec l'exécutable de TONTONKAD en
+**Depuis TONTONKAD 2.8.3, le serveur est livré avec l'application**, en un
+seul fichier autonome (`resources\mcp\tontonkad-mcp.js`, aucune dépendance).
+Dans TONTONKAD : *Paramètres › Claude (serveur MCP) › Brancher à Claude*,
+puis fermer et rouvrir Claude. Le bouton inscrit TONTONKAD dans l'application
+de bureau Claude **et** dans Claude Code pour toutes les sessions de
+l'utilisateur (portée `user`). Il tourne avec l'exécutable de TONTONKAD en
 mode Node (`ELECTRON_RUN_AS_NODE=1`) : ni dépôt ni Node.js à installer, et il
-se met à jour avec l'application. Pour Claude Code, le même panneau donne la
-commande `claude mcp add …` à copier.
+se met à jour avec l'application. Le panneau donne aussi la commande
+`claude mcp add tontonkad --scope user …` à copier.
+
+Développeurs : après une modification de `mcp/src`, régénérer le fichier
+livré avec `npm run build:mcp` (à la racine) et le vérifier avec
+`node mcp/test/poste-neuf.js`.
 
 ### Installation manuelle depuis le dépôt (développement)
 

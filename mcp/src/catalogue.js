@@ -5,7 +5,10 @@ const fs = require('fs');
 const path = require('path');
 const CSVUtil = require('../../src/renderer/csv.js');
 
-const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', 'data');
+// Dossier des catalogues : variable TONTONKAD_DATA, sinon data/ du dépôt
+// (mcp/src → ../../data), sinon data/ de l'installation (resources/mcp → ../data).
+const DEFAULT_DATA_DIR = [path.join(__dirname, '..', '..', 'data'), path.join(__dirname, '..', 'data')]
+  .find((d) => fs.existsSync(path.join(d, 'fourreaux.csv'))) || path.join(__dirname, '..', '..', 'data');
 
 function loadCatalogues(dataDir = process.env.TONTONKAD_DATA || DEFAULT_DATA_DIR) {
   const read = (name) => fs.readFileSync(path.join(dataDir, name), 'utf8');
