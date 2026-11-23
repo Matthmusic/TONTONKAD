@@ -7611,7 +7611,7 @@
         <label class="chambre-champ">Nom <input id="chambreNom" type="text" maxlength="40"></label>
         <label class="chambre-champ">Modèle <select id="chambreRef"></select></label>
         <div class="chambre-faces" id="chambreFaces"></div>
-        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Une liaison présente sur deux faces traverse la chambre.</p>
+        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Une liaison présente sur deux faces traverse la chambre. Double-clic sur une face pour ouvrir sa coupe.</p>
         <div class="chambre-actions">
           <button type="button" class="chambre-btn" id="chambreRetour">Retour à la coupe</button>
           <button type="button" class="chambre-btn chambre-btn-discret" id="chambreQuitter">Quitter le mode chambre</button>
@@ -7623,6 +7623,17 @@
     o.querySelector('#chambreNom').addEventListener('input', (e) => { if (chambreProjet) { chambreProjet.nom = e.target.value || 'Chambre'; dessinerVueChambre(); majBandeauChambre(); } });
     o.querySelector('#chambreRef').addEventListener('change', (e) => { if (chambreProjet) { chambreProjet.ref = e.target.value || null; dessinerVueChambre(); } });
     window.addEventListener('resize', () => { if (!o.hidden) dessinerVueChambre(); });
+    const cvs = o.querySelector('#chambreCanvas');
+    cvs.title = 'Double-clic sur un pignon ou un long-pan pour ouvrir sa coupe';
+    cvs.addEventListener('dblclick', (ev) => {
+      const r = cvs.getBoundingClientRect();
+      const k = faceSousPoint(ev.clientX - r.left, ev.clientY - r.top);
+      if (k) ouvrirFace(k);
+    });
+    cvs.addEventListener('mousemove', (ev) => {
+      const r = cvs.getBoundingClientRect();
+      cvs.style.cursor = faceSousPoint(ev.clientX - r.left, ev.clientY - r.top) ? 'pointer' : 'default';
+    });
     return o;
   }
 
@@ -7643,6 +7654,18 @@
     const o = document.getElementById('chambreOverlay');
     if (o) o.hidden = true;
     majBandeauChambre();
+  }
+
+  // Face la plus proche d'un point du canvas de la vue chambre (px écran), ou null.
+  let vueChambreGeo = null;
+  function faceSousPoint(px, py) {
+    const g = vueChambreGeo;
+    if (!g) return null;
+    const x = (px - g.ox) / g.s, y = ((g.H - py) - g.oy) / g.s; // mm, repère plan
+    const marge = g.e + 450; // zone utile autour de la chambre (mur + tubes)
+    if (x < -marge || x > g.L + marge || y < -marge || y > g.l + marge) return null;
+    const d = { pignonA: Math.abs(x), pignonB: Math.abs(x - g.L), longPanA: Math.abs(y), longPanB: Math.abs(y - g.l) };
+    return Object.keys(d).reduce((a, b) => (d[b] < d[a] ? b : a));
   }
 
   function dessinerVueChambre() {
@@ -7695,6 +7718,7 @@
     const page = new V.Page({ emitText: false, ombre: false });
     const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 16, W - 32, H - 32);
     V.rejouerSurCanvas(ctx, page, H);
+    vueChambreGeo = { ...page.geoDessus, H };
     // résultat dans le panneau
     const ligne = (txt, cls, couleur) => { const p = document.createElement('div'); p.className = cls; p.textContent = txt; if (couleur) p.style.color = couleur; res.appendChild(p); };
     const css = (c) => c ? `rgb(${c.map(v => Math.round(v * 255)).join(',')})` : '';
@@ -7707,7 +7731,7 @@
     (e.avertissements || []).forEach(a => ligne(`⚠ ${a}`, 'chambre-res-ko'));
   }
 
-  window.chambre = { activer: activerChambre, ouvrirFace, quitter: quitterChambre, etude: etudeChambreCourante };
+  window.chambre = { activer: activerChambre, ouvrirFace, quitter: quitterChambre, etude: etudeChambreCourante, faceAt: (x, y) => faceSousPoint(x, y) };
 
   /* ── Vue 3D dans l'export PDF (dessin partagé avec le MCP : vue3d.js) ── */
 

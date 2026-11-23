@@ -303,6 +303,7 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
   const s = fit(L + 2 * ext, l + 2 * ext, zw, zh);
   const ox = zx + (zw - (L + 2 * ext) * s) / 2 + ext * s, oy = zy + (zh - (l + 2 * ext) * s) / 2 + ext * s;
   const P = (x, y) => [ox + x * s, oy + y * s];
+  p.geoDessus = { ox, oy, s, L, l, e }; // pour retrouver une face à partir d'un clic
   // terrain autour, parois en béton, intérieur
   p.texture([P(-ext + 40, -ext + 40), P(L + ext - 40, -ext + 40), P(L + ext - 40, l + ext - 40), P(-ext + 40, l + ext - 40)], [0.9, 0.86, 0.78], { seed: 21, contraste: 0.05 });
   if (e) p.texture([P(-e, -e), P(L + e, -e), P(L + e, l + e), P(-e, l + e)], MAT.beton, { seed: 22, contour: [0.3, 0.3, 0.3] });
