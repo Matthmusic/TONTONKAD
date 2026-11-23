@@ -593,8 +593,11 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
       p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6)
         .poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], 'B');
     }
-    const [tx, ty] = P(n.x, n.y, z1 + 10);
+    const [tx, ty] = P(n.x, n.y, z1 + 14);
     etiquettes.push(() => {
+      // cadre à fond blanc bordé de la couleur de l'élément : lisible sur les volumes
+      const w = Math.max(n.nom.length * 5.4, (n.sous || '').length * 3.9) + 12, h = n.sous ? 22 : 14;
+      p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(tx - w / 2, ty - h + 10, w, h, 'B');
       p.rgb([0.08, 0.08, 0.08], false).text(tx, ty, 8.5, n.nom, { align: 'center', bold: true });
       if (n.sous) p.rgb([0.3, 0.3, 0.3], false).text(tx, ty - 9, 6.5, n.sous, { align: 'center' });
     });
