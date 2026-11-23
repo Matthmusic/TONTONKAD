@@ -131,6 +131,76 @@
     return r;
   }
 
+  // Continuité des liaisons sur tout le réseau.
+  // liaisonsDe(t) → noms des liaisons portées par le tronçon t.
+  // Une liaison doit former une chaîne qui ne s'arrête que sur un coffret /
+  // tableau ou une sortie : finir dans une chambre = interruption ; y passer
+  // par plus de deux faces = embranchement à vérifier.
+  function continuite(r, liaisonsDe) {
+    const parLiaison = new Map();
+    for (const t of r.troncons) {
+      for (const nom of liaisonsDe(t) || []) {
+        if (!nom) continue;
+        if (!parLiaison.has(nom)) parLiaison.set(nom, []);
+        parLiaison.get(nom).push(t);
+      }
+    }
+    const liaisons = [], problemes = [];
+    for (const [nom, ts] of parLiaison) {
+      const degre = new Map();
+      ts.forEach((t) => [t.a.noeud, t.b.noeud].forEach((n) => degre.set(n, (degre.get(n) || 0) + 1)));
+      const pb = [];
+      for (const [nid, d] of degre) {
+        const nd = noeud(r, nid);
+        if (!nd) continue;
+        if (nd.type === 'chambre' && d === 1) pb.push(`s'interrompt dans ${nd.nom}`);
+        if (nd.type === 'chambre' && d > 2) pb.push(`se divise dans ${nd.nom} (${d} tronçons)`);
+      }
+      // chemin : d'une extrémité (degré 1) en suivant les tronçons
+      const bouts = [...degre].filter(([, d]) => d === 1).map(([n]) => n);
+      const chemin = [];
+      if (bouts.length) {
+        let cur = bouts[0], restants = [...ts];
+        chemin.push(cur);
+        while (restants.length) {
+          const i = restants.findIndex((t) => t.a.noeud === cur || t.b.noeud === cur);
+          if (i < 0) break;
+          const t = restants.splice(i, 1)[0];
+          cur = t.a.noeud === cur ? t.b.noeud : t.a.noeud;
+          chemin.push(cur);
+        }
+        if (restants.length) pb.push('tronçons non reliés entre eux');
+      }
+      const manque = ts.some((t) => !(t.longueurM > 0));
+      const longueurM = ts.reduce((s, t) => s + (t.longueurM || 0), 0);
+      const l = { nom, troncons: ts.map((t) => t.id), chemin: chemin.map((id) => (noeud(r, id) || {}).nom), longueurM, longueurIncomplete: manque, problemes: pb };
+      liaisons.push(l);
+      pb.forEach((x) => problemes.push(`${nom} ${x}`));
+    }
+    liaisons.sort((a, b) => a.nom.localeCompare(b.nom));
+    return { liaisons, problemes };
+  }
+
+  // Métré des fourreaux : par type+code, longueur = Σ (nombre × longueur du tronçon).
+  // fourreauxDe(t) → [{ type, code }] du tronçon t.
+  function metre(r, fourreauxDe) {
+    const lignes = new Map(), sansLongueur = [];
+    for (const t of r.troncons) {
+      const fs = fourreauxDe(t) || [];
+      if (!fs.length) continue;
+      if (!(t.longueurM > 0)) { sansLongueur.push(nomTroncon(r, t)); continue; }
+      for (const f of fs) {
+        const k = `${f.type || ''} ${f.code || ''}`.trim();
+        const l = lignes.get(k) || { fourreau: k, nombre: 0, metres: 0 };
+        l.nombre += 1; l.metres += t.longueurM;
+        lignes.set(k, l);
+      }
+    }
+    const tab = [...lignes.values()].sort((a, b) => a.fourreau.localeCompare(b.fourreau, 'fr', { numeric: true }));
+    const longueurReseau = r.troncons.reduce((s, t) => s + (t.longueurM || 0), 0);
+    return { lignes: tab, totalMetres: tab.reduce((s, l) => s + l.metres, 0), longueurReseau, sansLongueur };
+  }
+
   // Libellé court d'un tronçon : « C1 → C2 ».
   function nomTroncon(r, t) {
     const A = noeud(r, t.a.noeud), B = noeud(r, t.b.noeud);
@@ -141,7 +211,7 @@
     FACES_CHAMBRE, COULEURS, TYPES, LIBELLE_FACE,
     creerReseau, ajouterNoeud, relier, changerFace, supprimerNoeud, supprimerTroncon,
     noeud, troncon, tronconsDe, surFace, facesLibres, faceVers, verifierCoffret,
-    depuisAncienneChambre, nomTroncon,
+    depuisAncienneChambre, nomTroncon, continuite, metre,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Reseau = api;

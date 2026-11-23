@@ -6106,3 +6106,7 @@ body.electron-mode .notification-container {
 .chambre-face { border-radius: 12px; }
 .chambre-resultat, .chambre-face span { font-variant-numeric: tabular-nums; }
 .chambre-panneau h3 { font-size: 16px; font-weight: 600; }
+
+.reseau-mode { display: flex; gap: 2px; padding: 3px; background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: 999px; align-self: flex-start; }
+.reseau-ajouts[hidden] { display: none; }
+.reseau-valeur { font-family: 'JetBrains Mono', monospace; color: var(--primary-orange); font-variant-numeric: tabular-nums; }

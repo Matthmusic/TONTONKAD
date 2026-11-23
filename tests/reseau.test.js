@@ -65,3 +65,42 @@ describe('réseau de chambres', () => {
     expect(actif.coupe).toBeNull(); // la face active vit dans le plan affiché
   });
 });
+
+describe('réseau : continuité et métré', () => {
+  // TGBT(coffret) → C1 → C2 → CF ; la liaison X va jusqu'au bout, Y s'arrête dans C2
+  const r = R.creerReseau();
+  const tg = R.ajouterNoeud(r, 'coffret', { nom: 'TGBT', x: 0, y: 0 });
+  const c1 = R.ajouterNoeud(r, 'chambre', { x: 200, y: 0 });
+  const c2 = R.ajouterNoeud(r, 'chambre', { x: 400, y: 0 });
+  const cf = R.ajouterNoeud(r, 'coffret', { x: 600, y: 0 });
+  const t1 = R.relier(r, tg.id, c1.id, { longueurM: 20 });
+  const t2 = R.relier(r, c1.id, c2.id, { longueurM: 45 });
+  const t3 = R.relier(r, c2.id, cf.id, { longueurM: 12 });
+  const L = { [t1.id]: ['X', 'Y'], [t2.id]: ['X', 'Y'], [t3.id]: ['X'] };
+  const F = { [t1.id]: [{ type: 'TPC', code: '160' }, { type: 'TPC', code: '110' }], [t2.id]: [{ type: 'TPC', code: '160' }, { type: 'TPC', code: '110' }], [t3.id]: [{ type: 'TPC', code: '110' }] };
+
+  test('chemin, longueur totale et interruption détectée', () => {
+    const c = R.continuite(r, (t) => L[t.id]);
+    const x = c.liaisons.find((l) => l.nom === 'X'), y = c.liaisons.find((l) => l.nom === 'Y');
+    expect(x.chemin).toEqual(['TGBT', 'C1', 'C2', 'CF2']);
+    expect(x.longueurM).toBe(77);
+    expect(x.problemes).toEqual([]);
+    expect(y.problemes).toEqual(["s'interrompt dans C2"]);
+    expect(c.problemes).toEqual(["Y s'interrompt dans C2"]);
+  });
+
+  test('métré par type de fourreau', () => {
+    const m = R.metre(r, (t) => F[t.id]);
+    expect(m.lignes).toEqual([{ fourreau: 'TPC 110', nombre: 3, metres: 77 }, { fourreau: 'TPC 160', nombre: 2, metres: 65 }]);
+    expect(m.totalMetres).toBe(142);
+    expect(m.longueurReseau).toBe(77);
+  });
+
+  test('tronçon sans longueur signalé, pas compté', () => {
+    t3.longueurM = null;
+    const m = R.metre(r, (t) => F[t.id]);
+    expect(m.sansLongueur).toEqual(['C2 → CF2']);
+    expect(R.continuite(r, (t) => L[t.id]).liaisons.find((l) => l.nom === 'X').longueurIncomplete).toBe(true);
+    t3.longueurM = 12;
+  });
+});

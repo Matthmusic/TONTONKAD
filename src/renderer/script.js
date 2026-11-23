@@ -7521,6 +7521,35 @@
     return [...n].map(([k, q]) => `${q}×${k}`).join(' + ');
   }
 
+
+  // Liaisons et fourreaux d'un tronçon (continuité, métré, synoptique).
+  function liaisonsDeTroncon(t) {
+    const st = etatTroncon(t);
+    if (!st) return [];
+    const noms = new Set();
+    (st.cables || []).forEach((c) => { if (c.liaison) noms.add(c.liaison); });
+    if (!noms.size) (st.fourreaux || []).forEach((f) => { if (f.label) noms.add(f.label); });
+    return [...noms];
+  }
+  function fourreauxDeTroncon(t) {
+    const st = etatTroncon(t);
+    return st ? st.fourreaux.map((f) => ({ type: f.type || '', code: String(f.code || '') })) : [];
+  }
+  // Données du synoptique pour vue3d.js (2D / isométrique, écran et PDF).
+  function donneesSynoptique() {
+    const noeuds = reseau.noeuds.map((n) => {
+      let sous = '';
+      if (n.type === 'chambre') { const e = etudeChambre(n); sous = e && e.etude.ok ? e.etude.ref : (n.ref || 'modèle auto'); }
+      if (n.type === 'coffret') sous = n.coffret.genre + (n.coffret.largeur && n.coffret.profondeur ? ` ${n.coffret.largeur}×${n.coffret.profondeur}` : '');
+      return { nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, sous };
+    });
+    const troncons = reseau.troncons.map((t) => {
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
+      return { a: { x: A.x, y: A.y }, b: { x: B.x, y: B.y }, label: `${t.longueurM ? t.longueurM + ' m' : '? m'} · ${resumeFourreaux(t)}` };
+    });
+    return { noeuds, troncons };
+  }
+
   // Étude d'une chambre (chambre-faces.js) à partir des coupes de ses tronçons.
   function etudeChambre(nd) {
     if (!reseau || !nd || nd.type !== 'chambre' || !window.ChambreFaces) return null;
@@ -7640,7 +7669,7 @@
   }
 
   /* ── Synoptique 2D ── */
-  const SYN = { sel: null, drag: null, lien: null, survol: null, vue: { k: 1, ox: 0, oy: 0 } };
+  const SYN = { sel: null, drag: null, lien: null, survol: null, vue: { k: 1, ox: 0, oy: 0 }, mode: '2d' };
   const tailleNoeud = (n) => (n.type === 'chambre' ? { w: 96, h: 52 } : n.type === 'coffret' ? { w: 56, h: 56 } : { w: 70, h: 40 });
   function noeudSous(x, y) {
     return [...reseau.noeuds].reverse().find((n) => { const s = tailleNoeud(n); return Math.abs(x - n.x) <= s.w / 2 && Math.abs(y - n.y) <= s.h / 2; }) || null;
@@ -7666,6 +7695,10 @@
       <div class="chambre-dessin"><canvas id="reseauCanvas" aria-label="Synoptique du réseau"></canvas></div>
       <aside class="chambre-panneau">
         <h3>Synoptique</h3>
+        <div class="reseau-mode" role="group" aria-label="Type de vue">
+          <button type="button" class="reseau-onglet actif" data-mode="2d">2D</button>
+          <button type="button" class="reseau-onglet" data-mode="iso">Isométrique</button>
+        </div>
         <div class="reseau-ajouts">
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="chambre">Ajouter une chambre</button>
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="coffret">Ajouter un coffret / tableau</button>
@@ -7681,10 +7714,17 @@
       SYN.sel = { noeud: n.id }; dessinerSynoptique();
     }));
     o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
+    o.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+      SYN.mode = b.dataset.mode;
+      o.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('actif', x === b));
+      o.querySelector('.reseau-ajouts').hidden = SYN.mode === 'iso';
+      dessinerSynoptique();
+    }));
     const cv = o.querySelector('#reseauCanvas');
     const pos = (ev) => { const r = cv.getBoundingClientRect(), v = SYN.vue || { k: 1, ox: 0, oy: 0 };
       return { x: (ev.clientX - r.left - v.ox) / v.k, y: (ev.clientY - r.top - v.oy) / v.k }; };
     cv.addEventListener('mousedown', (ev) => {
+      if (SYN.mode === 'iso') return; // vue de consultation
       const p = pos(ev);
       const pg = poigneeSous(p.x, p.y);
       if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y }; return; }
@@ -7712,6 +7752,7 @@
       if (SYN.drag) { SYN.drag = null; dessinerSynoptique(); }
     });
     cv.addEventListener('dblclick', (ev) => {
+      if (SYN.mode === 'iso') return;
       const p = pos(ev);
       const n = noeudSous(p.x, p.y);
       if (n) {
@@ -7735,6 +7776,14 @@
     const ctx = cv.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const th = themeCanvas();
+    if (SYN.mode === 'iso') {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height); // feuille, même rendu que le PDF
+      const page = new window.Vue3D.Page({ emitText: false, ombre: false });
+      window.Vue3D.drawSynoptiqueIso(page, donneesSynoptique(), 20, 20, zone.width - 40, zone.height - 40);
+      window.Vue3D.rejouerSurCanvas(ctx, page, zone.height);
+      if (panneau) remplirEdition();
+      return;
+    }
     ctx.fillStyle = th.fond; ctx.fillRect(0, 0, zone.width, zone.height);
     ctx.strokeStyle = th.hairline; ctx.lineWidth = 1;
     for (let x = 0; x < zone.width; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, zone.height); ctx.stroke(); }
@@ -7802,7 +7851,21 @@
     const champ = (libelle, el) => { const l = document.createElement('label'); l.className = 'chambre-champ'; l.append(libelle, el); box.appendChild(l); return el; };
     const bouton = (txt, fn, discret) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chambre-btn' + (discret ? ' chambre-btn-discret' : ''); b.textContent = txt; b.addEventListener('click', fn); box.appendChild(b); return b; };
     const note = (txt, cls = 'chambre-res-ligne') => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; box.appendChild(d); };
-    if (!SYN.sel) { note(`${reseau.noeuds.length} élément(s), ${reseau.troncons.length} tronçon(s). Sélectionnez un élément ou un tronçon pour le modifier.`); return; }
+    if (!SYN.sel) {
+      note(`${reseau.noeuds.length} élément(s), ${reseau.troncons.length} tronçon(s). Sélectionnez un élément ou un tronçon pour le modifier.`);
+      const c = R().continuite(reseau, liaisonsDeTroncon), m = R().metre(reseau, fourreauxDeTroncon);
+      const h = (txt) => { const x = document.createElement('h4'); x.textContent = txt; box.appendChild(x); };
+      h('Continuité des liaisons');
+      if (!c.liaisons.length) note('Aucune liaison : générez les coupes avec BIG BRAIN.');
+      else if (!c.problemes.length) note(`${c.liaisons.length} liaison(s), toutes continues.`, 'chambre-res-ok');
+      c.problemes.forEach((x) => note(`À vérifier : ${x}`, 'chambre-res-ko'));
+      h('Métré des fourreaux');
+      if (!m.lignes.length) note('Aucun fourreau sur des tronçons de longueur connue.');
+      m.lignes.forEach((l) => note(`${l.fourreau} : [${l.metres.toLocaleString('fr-FR')} m] (${l.nombre} tube(s)-tronçon)`, 'chambre-res-ligne reseau-valeur'));
+      if (m.lignes.length) note(`Total : [${m.totalMetres.toLocaleString('fr-FR')} m] de fourreaux sur [${m.longueurReseau.toLocaleString('fr-FR')} m] de tranchée`, 'chambre-res-titre reseau-valeur');
+      m.sansLongueur.forEach((t) => note(`Longueur manquante : ${t} (non compté)`, 'chambre-res-ko'));
+      return;
+    }
     if (SYN.sel.noeud) {
       const n = R().noeud(reseau, SYN.sel.noeud);
       if (!n) { SYN.sel = null; return remplirEdition(); }
@@ -8097,6 +8160,43 @@
       pdf.text(l.text.replace(/→/g, '->').replace(/≥/g, '>='), l.x * k, (V.PAGE_H - l.y) * k, { align: l.align });
     }
     pdf.setTextColor(0, 0, 0);
+  }
+
+
+  // Pages PDF du réseau : synoptique 2D, isométrique, métré et continuité.
+  function addReseauPages(pdf, titre) {
+    const V = window.Vue3D;
+    if (!reseau || !V || !reseau.noeuds.length) return;
+    const { PAGE_W, PAGE_H, MARGE } = V, data = donneesSynoptique();
+    const entete = (p, sous) => {
+      p.rgb([0, 0, 0], false).text(MARGE, PAGE_H - MARGE - 4, 16, `${titre} — ${sous}`, { bold: true });
+      p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+    };
+    const p1 = new V.Page({ emitText: false, ombre: false });
+    entete(p1, 'synoptique du réseau');
+    V.drawSynoptique2D(p1, data, MARGE, MARGE, PAGE_W - 2 * MARGE, PAGE_H - 2 * MARGE - 30);
+    writeVue3DPage(pdf, p1);
+    const p2 = new V.Page({ emitText: false, ombre: false });
+    entete(p2, 'vue isométrique');
+    V.drawSynoptiqueIso(p2, data, MARGE, MARGE, PAGE_W - 2 * MARGE, PAGE_H - 2 * MARGE - 30);
+    writeVue3DPage(pdf, p2);
+    const p3 = new V.Page({ emitText: false, ombre: false });
+    entete(p3, 'métré et continuité');
+    const m = R().metre(reseau, fourreauxDeTroncon), c = R().continuite(reseau, liaisonsDeTroncon);
+    let y = PAGE_H - MARGE - 40;
+    p3.rgb([0, 0, 0], false).text(MARGE, y, 11, 'Métré des fourreaux', { bold: true }); y -= 16;
+    p3.text(MARGE, y, 8, 'Fourreau', { bold: true }); p3.text(MARGE + 160, y, 8, 'Tubes × tronçons', { bold: true }); p3.text(MARGE + 280, y, 8, 'Longueur (m)', { bold: true }); y -= 12;
+    m.lignes.forEach((l) => { p3.text(MARGE, y, 8, l.fourreau); p3.text(MARGE + 160, y, 8, String(l.nombre)); p3.text(MARGE + 280, y, 8, l.metres.toLocaleString('fr-FR')); y -= 11; });
+    p3.text(MARGE, y - 2, 8.5, `Total : ${m.totalMetres.toLocaleString('fr-FR')} m de fourreaux — ${m.longueurReseau.toLocaleString('fr-FR')} m de tranchée`, { bold: true }); y -= 16;
+    m.sansLongueur.forEach((t) => { p3.rgb([0.7, 0.15, 0.1], false).text(MARGE, y, 7.5, `Longueur manquante, non compté : ${t}`); y -= 10; });
+    let y2 = PAGE_H - MARGE - 40; const x2 = 440;
+    p3.rgb([0, 0, 0], false).text(x2, y2, 11, 'Continuité des liaisons', { bold: true }); y2 -= 16;
+    c.liaisons.slice(0, 30).forEach((l) => {
+      const ok = !l.problemes.length;
+      p3.rgb(ok ? [0.1, 0.45, 0.2] : [0.75, 0.12, 0.1], false).text(x2, y2, 8, `${ok ? 'OK' : 'NON'}  ${l.nom}`.slice(0, 60), { bold: true }); y2 -= 10;
+      p3.rgb([0.25, 0.25, 0.25], false).text(x2 + 14, y2, 7, `${l.chemin.join(' → ')} · ${l.longueurM.toLocaleString('fr-FR')} m${l.longueurIncomplete ? ' (incomplète)' : ''}${ok ? '' : ' · ' + l.problemes.join(', ')}`.slice(0, 95)); y2 -= 12;
+    });
+    writeVue3DPage(pdf, p3);
   }
 
   function addVue3DPages(pdf, titre) {
@@ -8977,7 +9077,7 @@
 
       // Vue 3D (coupe en perspective + chambre de tirage compatible)
       if (formData.include3D) {
-        try { addVue3DPages(pdf, formData.projectName); }
+        try { addVue3DPages(pdf, formData.projectName); addReseauPages(pdf, formData.projectName); }
         catch (err) { errorPdf('vue 3D impossible', err); }
       }
 

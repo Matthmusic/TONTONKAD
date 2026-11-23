@@ -89,7 +89,7 @@ Besides `packer.js`, several business-logic pieces have been extracted out of `s
 | `chambres-infos.js` | `window.ChambresInfos` | Chamber choice for a W × H nappe (`chambrePourNappe`, same rule as `compat-chambres.js`) + indicative walls/covers/total height per model | `vue3d.test.js`, `mcp-masque.test.js` |
 | `vue3d.js` | `window.Vue3D` | 3D views (cavalier perspective, textured) as raw PDF operators: section, trench, draw-pit. Shared by the app's PDF export (jsPDF `internal.write`) and the MCP server | `vue3d.test.js` |
 | `chambre-faces.js` | `window.ChambreFaces` | Multi-face draw-pit study: one masque per face (pignon A/B, long-pan A/B), smallest fitting chamber, through-routes (straight / angle) and terminating liaisons | `vue3d.test.js` |
-| `reseau.js` | `window.Reseau` | Project network: nodes (chambres, coffrets/tableaux, sorties) with name/colour/position, tronçons between node faces with length and ONE coupe; face choice, next-node navigation, coffret bottom-face fit check, migration of the earlier single-chamber format | `reseau.test.js` |
+| `reseau.js` | `window.Reseau` | Project network: nodes (chambres, coffrets/tableaux, sorties) with name/colour/position, tronçons between node faces with length and ONE coupe; face choice, next-node navigation, coffret bottom-face fit check, network-wide liaison continuity (`continuite`) and fourreau take-off by type (`metre`), migration of the earlier single-chamber format | `reseau.test.js` |
 
 ### BIG BRAIN: Circuit → Cable → Fourreau Pipeline
 

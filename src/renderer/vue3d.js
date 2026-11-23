@@ -492,7 +492,83 @@ function rejouerSurCanvas(ctx, page, hauteurPt) {
   }
 }
 
-const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+// ─── Synoptique du réseau (2D et isométrique) ─────────────────────────
+// data = { noeuds: [{ nom, type, couleur '#rrggbb', x, y, sous }], troncons: [{ a: {x,y}, b: {x,y}, label }] }
+// (x, y) = positions du synoptique de l'application (y vers le bas).
+const hexRgb = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); const n = m ? parseInt(m[1], 16) : 0x5d6a70; return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
+const nuance = (c, k) => c.map((v) => Math.max(0, Math.min(1, k >= 1 ? v + (1 - v) * (k - 1) : v * k)));
+
+function drawSynoptique2D(p, data, zx, zy, zw, zh) {
+  if (!data.noeuds.length) return;
+  const xs = data.noeuds.map((n) => n.x), ys = data.noeuds.map((n) => n.y);
+  const x0 = Math.min(...xs) - 70, x1 = Math.max(...xs) + 70, y0 = Math.min(...ys) - 50, y1 = Math.max(...ys) + 50;
+  const s = Math.min(zw / (x1 - x0), zh / (y1 - y0), 1.6);
+  const ox = zx + (zw - (x1 - x0) * s) / 2, oy = zy + (zh - (y1 - y0) * s) / 2;
+  const P = (x, y) => [ox + (x - x0) * s, oy + (y1 - y) * s]; // y vers le bas → repère PDF
+  for (const t of data.troncons) {
+    p.rgb([0.35, 0.38, 0.42]).width(2).line(...P(t.a.x, t.a.y), ...P(t.b.x, t.b.y));
+    const [mx, my] = P((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2);
+    const w = t.label.length * 4.2 + 10;
+    p.rgb([1, 1, 1], false).rgb([0.75, 0.75, 0.75]).width(0.5).rect(mx - w / 2, my - 7, w, 14, 'B');
+    p.rgb([0.1, 0.1, 0.1], false).text(mx, my - 3, 7.5, t.label, { align: 'center' });
+  }
+  for (const n of data.noeuds) {
+    const c = hexRgb(n.couleur), [cx, cy] = P(n.x, n.y);
+    const w = (n.type === 'chambre' ? 92 : n.type === 'coffret' ? 54 : 66) * s * 0.75, h = (n.type === 'coffret' ? 54 : 44) * s * 0.75;
+    p.rgb(nuance(c, 1.75), false).rgb(c).width(1.6);
+    if (n.type === 'sortie') p.poly([[cx - w / 2, cy - h / 2], [cx + w / 2 - 10, cy - h / 2], [cx + w / 2, cy], [cx + w / 2 - 10, cy + h / 2], [cx - w / 2, cy + h / 2]], 'B');
+    else p.rect(cx - w / 2, cy - h / 2, w, h, 'B');
+    p.rgb([0.1, 0.1, 0.1], false).text(cx, cy + (n.sous ? 1 : -3), 9, n.nom, { align: 'center', bold: true });
+    if (n.sous) p.rgb([0.35, 0.35, 0.35], false).text(cx, cy - 9, 7, n.sous, { align: 'center' });
+  }
+}
+
+// Isométrique : sol (x, y), hauteur z. Chambres = caissons enterrés vus en
+// volume, coffrets = armoires, sorties = bornes ; tranchées = bandes de terre.
+function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
+  if (!data.noeuds.length) return;
+  const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
+  const iso = (x, y, z) => [(x - y) * C, -(x + y) * S + z];
+  const dims = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+  // cadrage sur l'emprise projetée
+  const pts = [];
+  data.noeuds.forEach((n) => { const [a, b, h] = dims[n.type] || dims.sortie; [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z + 18))); });
+  const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
+  const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
+  const s = Math.min(zw / (X1 - X0), zh / (Y1 - Y0), 1.8);
+  const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
+  const P = (x, y, z = 0) => { const [u, v] = iso(x, y, z); return [ox + u * s, oy + v * s]; };
+  // tranchées au sol (bandes de terre) avec leur longueur
+  for (const t of data.troncons) {
+    const dx = t.b.x - t.a.x, dy = t.b.y - t.a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * 7, ny = dx / L * 7;
+    const band = [P(t.a.x + nx, t.a.y + ny), P(t.b.x + nx, t.b.y + ny), P(t.b.x - nx, t.b.y - ny), P(t.a.x - nx, t.a.y - ny)];
+    p.texture(band, MAT.terre, { seed: 31, taille: 0.6, contour: [0.35, 0.26, 0.18] });
+    p.rgb([0.85, 0.12, 0.1]).width(0.8).line(...P(t.a.x, t.a.y, 0.5), ...P(t.b.x, t.b.y, 0.5)); // grillage rouge
+    const [mx, my] = P((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2, 14);
+    const w = t.label.length * 4.2 + 10;
+    p.rgb([1, 1, 1], false).rgb([0.6, 0.6, 0.6]).width(0.5).rect(mx - w / 2, my - 7, w, 14, 'B');
+    p.rgb([0.1, 0.1, 0.1], false).text(mx, my - 3, 7.5, t.label, { align: 'center' });
+  }
+  // volumes, du fond vers l'avant (x + y croissant = plus près)
+  for (const n of [...data.noeuds].sort((a, b) => (a.x + a.y) - (b.x + b.y))) {
+    const [a, b, h] = dims[n.type] || dims.sortie, c = hexRgb(n.couleur);
+    const x0 = n.x - a / 2, x1 = n.x + a / 2, y0 = n.y - b / 2, y1 = n.y + b / 2;
+    const z0 = n.type === 'chambre' ? -8 : 0, z1 = z0 + h;
+    const mat = n.type === 'chambre' ? MAT.beton : c;
+    p.texture([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)], nuance(mat, 0.72), { seed: 41, taille: 0.6, contour: [0.25, 0.25, 0.25] });
+    p.texture([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)], nuance(mat, 0.88), { seed: 42, taille: 0.6, contour: [0.25, 0.25, 0.25] });
+    p.texture([P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)], nuance(mat, 1.12), { seed: 43, taille: 0.6, contour: [0.25, 0.25, 0.25] });
+    if (n.type === 'chambre') { // tampon(s) de la couleur de la chambre
+      p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6)
+        .poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], 'B');
+    }
+    const [tx, ty] = P(n.x, n.y, z1 + 10);
+    p.rgb([0.08, 0.08, 0.08], false).text(tx, ty, 8.5, n.nom, { align: 'center', bold: true });
+    if (n.sous) p.rgb([0.3, 0.3, 0.3], false).text(tx, ty - 9, 6.5, n.sous, { align: 'center' });
+  }
+}
+
+const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Vue3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);
