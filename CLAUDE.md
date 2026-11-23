@@ -279,6 +279,8 @@ Assessment reports: `docs/qa/assessments/`
 
 ## Serveur MCP intégré (Claude)
 
+**Règles à respecter pour tout serveur MCP livré avec une application : `docs/GUIDE-MCP-APPS.md`** (fichier unique autonome, aucune dépendance sur le poste, inscription Desktop + Claude Code portée utilisateur, test « poste neuf » obligatoire avant d'annoncer que ça marche).
+
 `mcp/` (serveur MCP : masques, réseau, PDF/DXF, commandes multiCAD) est livré dans l'installeur sous la forme d'**un seul fichier autonome**, `mcp/dist/tontonkad-mcp.js` (serveur + modules de `src/renderer` + `@modelcontextprotocol/sdk`, `zod`, `xlsx`), copié vers `resources/mcp` par `extraResources`. Ce fichier est **versionné** : la compilation de l'app n'en dépend pas. **Après toute modification de `mcp/src` ou d'un module métier qu'il utilise, le régénérer** : `npm install --prefix mcp` (une fois) puis `npm run build:mcp` (esbuild, repli `npx`), et vérifier avec `node mcp/test/poste-neuf.js` (copie le fichier seul dans un dossier vide, sans `node_modules`, et l'interroge par le protocole MCP ; aussi lancé par `tests/mcp-bundle.test.js`). Il tourne avec l'exécutable de l'app (`ELECTRON_RUN_AS_NODE=1`). `src/main/mcp-claude.js` (pur, testé par `tests/mcp-claude.test.js`) écrit l'entrée `mcpServers.tontonkad` dans la configuration de l'application de bureau Claude et, si Claude Code est installé, dans `~/.claude.json` (portée utilisateur : toutes les sessions) — sauvegarde, autres serveurs conservés ; IPC `mcp-etat` / `mcp-brancher-claude`, UI dans la modale Paramètres.
 
 ## CEA App Store Integration
