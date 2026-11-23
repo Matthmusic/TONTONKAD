@@ -1139,7 +1139,7 @@
         const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
         if (selSpec) {
           generateVirtualSlots(selSpec.od);
-          console.log('[UNDO] Grille recalculée après restauration');
+          console.debug('[UNDO] Grille recalculée après restauration');
         }
       } else {
         // Si aucun fourreau sélectionné, vider les slots virtuels
@@ -1178,7 +1178,7 @@
   /* ====== Logique de Placement ====== */
   function placementDebug(message, data = {}) {
     if (DEBUG_PLACEMENT) {
-      console.log(`[PLACEMENT] ${message}`, data);
+      console.debug(`[PLACEMENT] ${message}`, data);
     }
   }
 
@@ -1285,30 +1285,6 @@
     return { valid: true, reason: null };
   }
 
-  function validatePlacementBatch(candidates, options = {}) {
-    const gapPx = (options.enforceGap ?? true) ? FOURREAU_GAP * MM_TO_PX : 0;
-
-    for (const candidate of candidates) {
-      const inside = isInsideBox(candidate.x, candidate.y, candidate.r, {
-        requireSafetyMargin: options.requireSafetyMargin ?? false
-      });
-      if (!inside) {
-        return { valid: false, reason: 'outside-box', candidate };
-      }
-    }
-
-    for (let i = 0; i < candidates.length; i++) {
-      for (let j = i + 1; j < candidates.length; j++) {
-        const a = candidates[i];
-        const b = candidates[j];
-        if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r + gapPx) {
-          return { valid: false, reason: 'batch-collision', candidate: a, other: b };
-        }
-      }
-    }
-
-    return { valid: true, reason: null };
-  }
 
   function findFreeSpot(x, y, r, ignoreId) {
     if (validatePlacement({ x, y, r, id: ignoreId }, { ignoreId }).valid) return { x, y };
@@ -2876,13 +2852,13 @@
           const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
           if (selSpec) {
             generateVirtualSlots(selSpec.od);
-            console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille recalculée pour ${fourreaux.length} fourreau(x) restant(s)`);
+            console.debug(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille recalculée pour ${fourreaux.length} fourreau(x) restant(s)`);
           }
         } else if (virtualSlots.length > 0 || pendingFourreauType) {
           // Pas de sélection mais des cellules virtuelles étaient affichées : les vider
           virtualSlots = [];
           pendingFourreauType = null;
-          console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), cellules virtuelles vidées`);
+          console.debug(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), cellules virtuelles vidées`);
         }
       } else {
         // Plus de fourreaux : réinitialiser complètement la grille
@@ -2893,7 +2869,7 @@
         gridLocked = false;
         gridFourreauxCount = 0;
         deactivateVirtualPlacement();
-        console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille complètement réinitialisée`);
+        console.debug(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille complètement réinitialisée`);
       }
     }
 
@@ -3079,7 +3055,7 @@
     });
 
     lastGridCells = optimizedCells;
-    console.log(`[GRID] Généré ${optimizedCells.length} cellules depuis layout actuel`);
+    console.debug(`[GRID] Généré ${optimizedCells.length} cellules depuis layout actuel`);
   }
 
   /**
@@ -3139,7 +3115,7 @@
     // Ajouter les nouvelles cellules à la grille
     lastGridCells.push(...newCells);
 
-    console.log(`[EXPANSION] Ajouté ${newCells.length} cellules adjacentes autour du fourreau ${fourreau.id}`);
+    console.debug(`[EXPANSION] Ajouté ${newCells.length} cellules adjacentes autour du fourreau ${fourreau.id}`);
   }
 
   function dedupeVirtualSlots(slots, tolerancePx = 5) {
@@ -3172,7 +3148,7 @@
 
     // Si aucun fourreau placé, pas de cellules virtuelles à générer
     if (fourreaux.length === 0) {
-      console.log('[VIRTUAL SLOTS] Aucun fourreau placé, aucune cellule virtuelle générée');
+      console.debug('[VIRTUAL SLOTS] Aucun fourreau placé, aucune cellule virtuelle générée');
       return;
     }
 
@@ -3242,7 +3218,7 @@
     });
 
     virtualSlots = dedupeVirtualSlots(virtualSlots, 5);
-    console.log(`[VIRTUAL SLOTS DYNAMIQUE] Généré ${virtualSlots.length} emplacements pour Ø${selectedOd}mm autour de ${fourreaux.length} fourreaux`);
+    console.debug(`[VIRTUAL SLOTS DYNAMIQUE] Généré ${virtualSlots.length} emplacements pour Ø${selectedOd}mm autour de ${fourreaux.length} fourreaux`);
   }
 
   /**
@@ -3392,7 +3368,7 @@
     };
     animateSlots();
 
-    console.log(`[VIRTUAL PLACEMENT] Activé pour ${type} ${code} (Ø${spec.od}mm)`);
+    console.debug(`[VIRTUAL PLACEMENT] Activé pour ${type} ${code} (Ø${spec.od}mm)`);
   }
 
   /**
@@ -5687,7 +5663,7 @@
     };
     // Debug log temporaire
     if (window._debugCanvasCoords) {
-      console.log('📍 canvasCoords:', {
+      console.debug('📍 canvasCoords:', {
         client: { x: e.clientX, y: e.clientY },
         rect: { left: r.left, top: r.top, width: r.width, height: r.height },
         logical: { w: logicalW, h: logicalH },
@@ -5991,7 +5967,7 @@
       if (fourreau) {
         // Recalculer avec le fourreau en cours de déplacement exclu
         generateVirtualSlots(fourreau.od, fourreau.id);
-        console.log('[DRAG] Cellules virtuelles générées pour déplacement de fourreau', fourreau.id);
+        console.debug('[DRAG] Cellules virtuelles générées pour déplacement de fourreau', fourreau.id);
       }
     }
 
@@ -7221,7 +7197,7 @@
 
   /* ====== Export PDF Functions ====== */
   // Helpers de debug PDF
-  const logPdf = (...args) => console.log('[PDF]', ...args);
+  const logPdf = (...args) => console.debug('[PDF]', ...args);
   const warnPdf = (...args) => console.warn('[PDF]', ...args);
   const errorPdf = (...args) => console.error('[PDF]', ...args);
 
@@ -7321,10 +7297,6 @@
     return (cablesArea / fourreauInnerArea) * 100;
   }
 
-  // Libellés/textes PDF extraits dans pdf-format.js (purs, testés). Wrappers fins.
-  function getPdfObjectLabel(obj, fallback) {
-    return PdfFormat.getObjectLabel(obj, fallback);
-  }
   function getPdfFourreauName(fourreau, numero) {
     return PdfFormat.getFourreauName(fourreau, numero);
   }
@@ -7611,6 +7583,7 @@
     if (!reseau) return;
     if (noeudId) reseau.actif.noeud = noeudId;
     reseau.actif.vue = vue;
+    if (vue !== 'coupe' && typeof closeRightToolsPane === 'function') closeRightToolsPane(); // place pour le dessin
     const syn = construireSynoptique(), ch = construireVueChambre();
     syn.hidden = vue !== 'synoptique';
     ch.hidden = vue !== 'chambre';
@@ -7649,8 +7622,25 @@
     );
   }
 
+  // Couleurs et polices du thème courant (clair / sombre) pour les canvas.
+  function themeCanvas() {
+    const cs = getComputedStyle(document.documentElement), v = (n, d) => (cs.getPropertyValue(n).trim() || d);
+    return { fond: v('--modal-bg-solid', '#f8f9fa'), encre: v('--text-primary', '#1a1d1f'), ardoise: v('--text-secondary', '#4a5568'),
+      estompe: v('--text-muted', '#718096'), hairline: v('--glass-border', 'rgba(45,52,54,0.1)'), cuivre: v('--primary-orange', '#ff914d'),
+      surface: v('--bg-card', '#ffffff'), sans: "'IBM Plex Sans', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" };
+  }
+  // Flèche dessinée (pas de glyphe) : pointe vers dir ∈ left|right|up|down.
+  function dessinerFleche(ctx, x, y, dir, t = 5) {
+    const d = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
+    ctx.beginPath();
+    ctx.moveTo(x + d[0] * t, y + d[1] * t);
+    ctx.lineTo(x - d[0] * t + d[1] * t, y - d[1] * t + d[0] * t);
+    ctx.lineTo(x - d[0] * t - d[1] * t, y - d[1] * t - d[0] * t);
+    ctx.closePath(); ctx.fill();
+  }
+
   /* ── Synoptique 2D ── */
-  const SYN = { sel: null, drag: null, lien: null, survol: null };
+  const SYN = { sel: null, drag: null, lien: null, survol: null, vue: { k: 1, ox: 0, oy: 0 } };
   const tailleNoeud = (n) => (n.type === 'chambre' ? { w: 96, h: 52 } : n.type === 'coffret' ? { w: 56, h: 56 } : { w: 70, h: 40 });
   function noeudSous(x, y) {
     return [...reseau.noeuds].reverse().find((n) => { const s = tailleNoeud(n); return Math.abs(x - n.x) <= s.w / 2 && Math.abs(y - n.y) <= s.h / 2; }) || null;
@@ -7677,9 +7667,9 @@
       <aside class="chambre-panneau">
         <h3>Synoptique</h3>
         <div class="reseau-ajouts">
-          <button type="button" class="chambre-btn" data-ajout="chambre">+ Chambre</button>
-          <button type="button" class="chambre-btn" data-ajout="coffret">+ Coffret / tableau</button>
-          <button type="button" class="chambre-btn" data-ajout="sortie">+ Sortie</button>
+          <button type="button" class="chambre-btn chambre-btn-second" data-ajout="chambre">Ajouter une chambre</button>
+          <button type="button" class="chambre-btn chambre-btn-second" data-ajout="coffret">Ajouter un coffret / tableau</button>
+          <button type="button" class="chambre-btn chambre-btn-second" data-ajout="sortie">Ajouter une sortie</button>
         </div>
         <div id="reseauEdition" class="reseau-edition"></div>
         <p class="chambre-aide">Glissez un élément pour le déplacer. Tirez depuis son <b>+</b> vers un autre pour les relier. Double-clic : ouvrir la chambre ou la coupe.</p>
@@ -7692,7 +7682,8 @@
     }));
     o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
     const cv = o.querySelector('#reseauCanvas');
-    const pos = (ev) => { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+    const pos = (ev) => { const r = cv.getBoundingClientRect(), v = SYN.vue || { k: 1, ox: 0, oy: 0 };
+      return { x: (ev.clientX - r.left - v.ox) / v.k, y: (ev.clientY - r.top - v.oy) / v.k }; };
     cv.addEventListener('mousedown', (ev) => {
       const p = pos(ev);
       const pg = poigneeSous(p.x, p.y);
@@ -7743,51 +7734,63 @@
     cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
     const ctx = cv.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#fbfaf7'; ctx.fillRect(0, 0, zone.width, zone.height);
-    ctx.strokeStyle = '#eceae4'; ctx.lineWidth = 1;
+    const th = themeCanvas();
+    ctx.fillStyle = th.fond; ctx.fillRect(0, 0, zone.width, zone.height);
+    ctx.strokeStyle = th.hairline; ctx.lineWidth = 1;
     for (let x = 0; x < zone.width; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, zone.height); ctx.stroke(); }
     for (let y = 0; y < zone.height; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(zone.width, y); ctx.stroke(); }
+    // cadrage : tous les éléments visibles (figé pendant un glisser pour ne pas fuir sous la souris)
+    if (!SYN.drag && !SYN.lien) {
+      if (reseau.noeuds.length) {
+        const xs = reseau.noeuds.map((n) => n.x), ys = reseau.noeuds.map((n) => n.y);
+        const x0 = Math.min(...xs) - 80, x1 = Math.max(...xs) + 100, y0 = Math.min(...ys) - 60, y1 = Math.max(...ys) + 60;
+        const k = Math.min(1.4, (zone.width - 40) / (x1 - x0), (zone.height - 40) / (y1 - y0));
+        SYN.vue = { k, ox: (zone.width - (x1 - x0) * k) / 2 - x0 * k, oy: (zone.height - (y1 - y0) * k) / 2 - y0 * k };
+      } else SYN.vue = { k: 1, ox: 0, oy: 0 };
+    }
+    ctx.setTransform(dpr * SYN.vue.k, 0, 0, dpr * SYN.vue.k, dpr * SYN.vue.ox, dpr * SYN.vue.oy);
     // tronçons
     for (const t of reseau.troncons) {
       const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
       const sel = SYN.sel && SYN.sel.troncon === t.id, actif = t.id === reseau.actif.troncon;
-      ctx.strokeStyle = sel ? '#e8661c' : '#7a6a55'; ctx.lineWidth = sel ? 4 : 3; ctx.setLineDash(t.coupe || actif ? [] : [6, 4]);
+      ctx.strokeStyle = sel ? th.cuivre : th.ardoise; ctx.lineWidth = sel ? 4 : 3; ctx.setLineDash(t.coupe || actif ? [] : [6, 4]);
       ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]);
       const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
       const txt = `${t.longueurM ? t.longueurM + ' m' : '? m'} · ${resumeFourreaux(t)}`;
-      ctx.font = '12px system-ui, sans-serif'; const w = ctx.measureText(txt).width + 12;
-      ctx.fillStyle = '#fff'; ctx.strokeStyle = sel ? '#e8661c' : '#d4cdc1'; ctx.lineWidth = 1;
+      ctx.font = `600 11px ${th.mono}`; const w = ctx.measureText(txt).width + 14;
+      ctx.fillStyle = th.surface; ctx.strokeStyle = sel ? th.cuivre : th.hairline; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.roundRect(mx - w / 2, my - 10, w, 20, 10); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, mx, my);
+      ctx.fillStyle = sel ? th.cuivre : th.encre; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, mx, my);
     }
     if (SYN.lien) {
       const A = R().noeud(reseau, SYN.lien.de);
-      ctx.strokeStyle = '#e8661c'; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+      ctx.strokeStyle = th.cuivre; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(SYN.lien.x, SYN.lien.y); ctx.stroke(); ctx.setLineDash([]);
     }
     // nœuds
     for (const n of reseau.noeuds) {
       const { w, h } = tailleNoeud(n), sel = SYN.sel && SYN.sel.noeud === n.id;
-      ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = n.couleur; ctx.fillStyle = '#fff';
+      ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = n.couleur; ctx.fillStyle = th.surface;
       ctx.beginPath();
       if (n.type === 'chambre') ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, 6);
       else if (n.type === 'coffret') ctx.rect(n.x - w / 2, n.y - h / 2, w, h);
       else { ctx.moveTo(n.x - w / 2, n.y - h / 2); ctx.lineTo(n.x + w / 2 - 14, n.y - h / 2); ctx.lineTo(n.x + w / 2, n.y); ctx.lineTo(n.x + w / 2 - 14, n.y + h / 2); ctx.lineTo(n.x - w / 2, n.y + h / 2); ctx.closePath(); }
       ctx.fill(); ctx.stroke();
       ctx.fillStyle = n.couleur; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
-      if (sel) { ctx.strokeStyle = '#e8661c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(n.x - w / 2 - 5, n.y - h / 2 - 5, w + 10, h + 10); ctx.setLineDash([]); }
-      ctx.fillStyle = '#1f2a30'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText(n.nom, n.x, n.y - (n.type === 'chambre' ? 7 : 0));
+      if (sel) { ctx.strokeStyle = th.cuivre; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(n.x - w / 2 - 5, n.y - h / 2 - 5, w + 10, h + 10); ctx.setLineDash([]); }
+      ctx.fillStyle = th.encre; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `600 13px ${th.sans}`; ctx.fillText(n.nom, n.x, n.y - (n.type === 'chambre' ? 7 : 0));
       if (n.type === 'chambre') {
         const e = etudeChambre(n);
-        ctx.font = '11px system-ui, sans-serif'; ctx.fillStyle = '#5d6a70';
+        ctx.font = `500 11px ${th.mono}`; ctx.fillStyle = th.cuivre;
         ctx.fillText(e && e.etude.ok ? e.etude.ref : (n.ref || 'modèle auto'), n.x, n.y + 11);
       }
-      if (n.type === 'coffret') { ctx.font = '10px system-ui, sans-serif'; ctx.fillStyle = '#5d6a70'; ctx.fillText(n.coffret.genre, n.x, n.y + 16); }
+      if (n.type === 'coffret') { ctx.font = `500 10px ${th.sans}`; ctx.fillStyle = th.ardoise; ctx.fillText(n.coffret.genre, n.x, n.y + 16); }
       // poignée « + » pour relier
-      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#e8661c'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(n.x + w / 2 + 12, n.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#e8661c'; ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText('+', n.x + w / 2 + 12, n.y + 1);
+      const hx = n.x + w / 2 + 12;
+      ctx.fillStyle = th.surface; ctx.strokeStyle = th.cuivre; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(hx, n.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hx - 4, n.y); ctx.lineTo(hx + 4, n.y); ctx.moveTo(hx, n.y - 4); ctx.lineTo(hx, n.y + 4); ctx.stroke(); // « + » dessiné
     }
     if (panneau) remplirEdition();
   }
@@ -7960,13 +7963,14 @@
     cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
     const ctx = cv.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height);
+    const th = themeCanvas();
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height); // feuille (même rendu que le PDF)
     const V = window.Vue3D, W = zone.width, H = zone.height, r = etudeChambre(nd);
     const res = o.querySelector('#chambreResultat');
     res.innerHTML = '';
     vueChambreGeo = null;
     if (!r || !r.etude.ok) {
-      ctx.fillStyle = r ? '#b3261e' : '#555'; ctx.font = '15px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = r ? '#b3261e' : '#4a5568'; ctx.font = `500 14px ${th.sans}`; ctx.textAlign = 'center';
       const msg = r ? (r.etude.erreurs || []).join(' ') : 'Aucune coupe sur cette chambre : double-cliquez une face ou utilisez la liste à droite.';
       ctx.fillText(msg, W / 2, H / 2);
       // repères des faces pour le double-clic, même sans dessin
@@ -7980,12 +7984,12 @@
     const ligne = (txt, cls, c) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; if (c) d.style.color = c; res.appendChild(d); };
     const css = (c) => c ? `rgb(${c.map((v) => Math.round(v * 255)).join(',')})` : '';
     ligne(`Modèle ${e.ref}${nd.ref ? ' (imposé)' : ' (automatique)'} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
-    Object.values(e.faces).forEach((f) => ligne(`${f.tient ? '✓' : '✗'} ${f.face} : ${Math.round(f.largeurMasque)} × ${Math.round(f.hauteurMasque)} dans ${f.largeurFace} × ${f.hauteurFace}`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
+    Object.values(e.faces).forEach((f) => ligne(`${f.tient ? 'OK' : 'NON'} · ${f.face} : [${Math.round(f.largeurMasque)} × ${Math.round(f.hauteurMasque)}] dans [${f.largeurFace} × ${f.hauteurFace}] mm`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
     if (e.traversees.length) ligne('Traversées', 'chambre-res-titre');
     e.traversees.forEach((t, i) => ligne(`${i + 1}. ${t.liaison} — ${t.entree} → ${t.sortie} (${t.type})`, 'chambre-res-ligne', css(couleurs.get(t.liaison))));
     if (e.arrets.length) ligne('S\'arrêtent dans la chambre', 'chambre-res-titre');
     e.arrets.forEach((a) => ligne(`• ${a.liaison} (${a.face})`, 'chambre-res-ligne', css(couleurs.get(a.liaison))));
-    (e.avertissements || []).forEach((a) => ligne(`⚠ ${a}`, 'chambre-res-ko'));
+    (e.avertissements || []).forEach((a) => ligne(`À vérifier : ${a}`, 'chambre-res-ko'));
     o._fond = ctx.getImageData(0, 0, cv.width, cv.height);
     dessinerFleches();
   }
@@ -8005,10 +8009,10 @@
     R().FACES_CHAMBRE.forEach((f) => {
       const v = R().surFace(reseau, nd.id, f);
       if (!v) return;
-      const fl = { pignonA: '←', pignonB: '→', longPanA: '↓', longPanB: '↑' }[f];
-      const txt = `${fl} ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
-      ctx.font = 'bold 13px system-ui, sans-serif';
-      const w = ctx.measureText(txt).width + 20, h = 26;
+      const dir = { pignonA: 'left', pignonB: 'right', longPanA: 'down', longPanB: 'up' }[f];
+      const txt = `${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
+      ctx.font = `600 13px 'IBM Plex Sans', system-ui, sans-serif`;
+      const w = ctx.measureText(txt).width + 34, h = 26;
       let [x, y, cote] = ancres[f];
       x = cote === 'right' ? x - w : cote === 'left' ? x : x - w / 2;
       y = cote === 'top' ? y : cote === 'bottom' ? y - h : y - h / 2;
@@ -8016,8 +8020,9 @@
       const survol = g.survol === v.autre.id;
       ctx.fillStyle = survol ? v.autre.couleur : '#ffffff'; ctx.strokeStyle = v.autre.couleur; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(x, y, w, h, 13); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = survol ? '#ffffff' : v.autre.couleur; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(txt, x + w / 2, y + h / 2 + 1);
+      ctx.fillStyle = survol ? '#ffffff' : v.autre.couleur; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      dessinerFleche(ctx, x + 13, y + h / 2, dir, 5);
+      ctx.fillText(txt, x + 24, y + h / 2 + 1);
       vueChambreFleches.push({ x, y, w, h, vers: v.autre.id });
     });
   }
@@ -8030,7 +8035,7 @@
 
   window.reseauTontonkad = {
     activer: activerReseau, vue: afficherVue, ouvrirTroncon, etat: () => reseau, etudeChambre: (id) => etudeChambre(R().noeud(reseau, id)),
-    faceAt: (x, y) => faceSousPoint(x, y), fleches: () => vueChambreFleches,
+    faceAt: (x, y) => faceSousPoint(x, y), fleches: () => vueChambreFleches, cadrage: () => ({ ...SYN.vue }),
   };
 
   /* ── Vue 3D dans l'export PDF (dessin partagé avec le MCP : vue3d.js) ── */
@@ -8421,7 +8426,7 @@
         logPdf('stats', stats);
         const statsY = pageHeight - 70; // Encore plus haut pour être sûr
 
-        console.log(`Stats position: Y=${statsY}, pageHeight=${pageHeight}`);
+        console.debug(`Stats position: Y=${statsY}, pageHeight=${pageHeight}`);
 
         pdf.setFontSize(12);
         pdf.setFont('helvetica', 'bold');
@@ -10950,7 +10955,7 @@
       const spec = FOURREAUX.find(f => f.type === type && f.code === code);
       if (spec) {
         generateVirtualSlots(spec.od);
-        console.log('[INIT] Grille dynamique initialisée avec', fourreaux.length, 'fourreaux');
+        console.debug('[INIT] Grille dynamique initialisée avec', fourreaux.length, 'fourreaux');
       }
     }
 

@@ -105,6 +105,7 @@ describe('packer — solve libre', () => {
   });
   test('performance : 50 tubes < 100 ms', () => {
     const big = Array.from({ length: 50 }, (_, i) => ({ id: 'x' + i, d: [63, 90, 125][i % 3] }));
+    pkg.solve(big, { lock: null }); // échauffement (compilation JIT), hors mesure
     const t0 = Date.now();
     pkg.solve(big, { lock: null });
     expect(Date.now() - t0).toBeLessThan(100);

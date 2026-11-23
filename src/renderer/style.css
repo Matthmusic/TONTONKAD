@@ -6052,7 +6052,7 @@ body.electron-mode .notification-container {
     background: var(--modal-bg-solid, #f8f9fa); color: var(--text-primary);
 }
 .chambre-overlay[hidden] { display: none; }
-.chambre-dessin { min-width: 0; min-height: 0; background: #fff; border: 1px solid var(--glass-border); border-radius: 8px; overflow: hidden; }
+.chambre-dessin { min-width: 0; min-height: 0; background: var(--modal-bg-solid, #f8f9fa); border: 1px solid var(--glass-border); border-radius: 20px; overflow: hidden; box-shadow: 0 8px 32px var(--shadow-color, rgba(0,0,0,0.1)); }
 .chambre-dessin canvas { display: block; }
 .chambre-panneau { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-width: 0; }
 .chambre-panneau h3 { margin: 0; font-size: 1rem; }
@@ -6067,12 +6067,12 @@ body.electron-mode .notification-container {
 .chambre-face.active { border-color: var(--accent); background: var(--accent-light); }
 .chambre-aide { margin: 0; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
 .chambre-actions { display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
-.chambre-btn { font: inherit; font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff; }
-.chambre-btn-discret { background: transparent; color: var(--text-secondary); border-color: var(--glass-border); }
-.chambre-bandeau { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 20;
-    display: flex; align-items: center; gap: 10px; padding: 4px 6px 4px 12px; font-size: 0.8rem;
-    background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--accent); border-radius: 999px; box-shadow: var(--glass-shadow); }
-.chambre-bandeau[hidden] { display: none; }
+.chambre-btn { font: inherit; font-size: 0.8rem; font-weight: 600; padding: 8px 14px; border-radius: 12px; cursor: pointer; border: 0; background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark)); color: #fff; transition: background 0.18s ease, transform 0.12s ease; }
+.chambre-btn:hover { background: var(--primary-orange-dark); }
+.chambre-btn-second { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--glass-border); }
+.chambre-btn-second:hover { background: var(--accent-light); border-color: var(--primary-orange); }
+.chambre-btn-discret { background: transparent; color: var(--text-secondary); border: 1px solid var(--glass-border); }
+.chambre-btn-discret:hover { background: var(--accent-light); color: var(--text-primary); }
 
 .chambre-resultat { display: flex; flex-direction: column; gap: 3px; font-size: 0.75rem; }
 .chambre-res-titre { font-weight: 600; margin-top: 4px; color: var(--text-primary); }
@@ -6085,7 +6085,7 @@ body.electron-mode .notification-container {
     display: flex; gap: 2px; padding: 3px; background: var(--bg-card); border: 1px solid var(--glass-border);
     border-radius: 999px; box-shadow: var(--glass-shadow); }
 .reseau-bandeau[hidden] { display: none; }
-.reseau-onglet { font: inherit; font-size: 0.78rem; padding: 5px 12px; border: 0; border-radius: 999px; cursor: pointer;
+.reseau-onglet { font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; padding: 6px 14px; border: 0; border-radius: 999px; cursor: pointer;
     background: transparent; color: var(--text-secondary); white-space: nowrap; }
 .reseau-onglet.actif { background: var(--accent); color: #fff; }
 .reseau-onglet:disabled { opacity: 0.4; cursor: default; }
@@ -6097,3 +6097,12 @@ body.electron-mode .notification-container {
 .reseau-couleurs { display: flex; flex-wrap: wrap; gap: 6px; }
 .reseau-pastille { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--glass-border); cursor: pointer; }
 .reseau-pastille.actif { box-shadow: 0 0 0 2px var(--text-primary); }
+
+/* Focus clavier visible (vues réseau / chambre) */
+.chambre-btn:focus-visible, .chambre-face:focus-visible, .reseau-onglet:focus-visible, .reseau-pastille:focus-visible,
+.chambre-champ input:focus-visible, .chambre-champ select:focus-visible { outline: 2px solid var(--primary-orange); outline-offset: 2px; }
+.chambre-champ input:focus, .chambre-champ select:focus { border-color: var(--primary-orange); }
+.chambre-champ input[type="number"] { font-family: 'JetBrains Mono', monospace; color: var(--primary-orange); font-weight: 600; }
+.chambre-face { border-radius: 12px; }
+.chambre-resultat, .chambre-face span { font-variant-numeric: tabular-nums; }
+.chambre-panneau h3 { font-size: 16px; font-weight: 600; }
