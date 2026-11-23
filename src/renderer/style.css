@@ -6048,7 +6048,7 @@ body.electron-mode .notification-container {
 /* ─── Mode chambre (vue de dessus, 4 faces) ─────────────────────────── */
 .chambre-overlay {
     position: absolute; inset: 0; z-index: 30;
-    display: grid; grid-template-columns: 1fr 280px; gap: 12px; padding: 12px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 10px; padding: 10px;
     background: var(--modal-bg-solid, #f8f9fa); color: var(--text-primary);
 }
 .chambre-overlay[hidden] { display: none; }
@@ -6079,3 +6079,21 @@ body.electron-mode .notification-container {
 .chambre-res-ok { color: #1f7a3d; }
 .chambre-res-ko { color: #b3261e; }
 .chambre-res-ligne { line-height: 1.35; }
+
+/* ─── Réseau : bandeau de navigation et synoptique ─────────────────── */
+.reseau-bandeau { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 40;
+    display: flex; gap: 2px; padding: 3px; background: var(--bg-card); border: 1px solid var(--glass-border);
+    border-radius: 999px; box-shadow: var(--glass-shadow); }
+.reseau-bandeau[hidden] { display: none; }
+.reseau-onglet { font: inherit; font-size: 0.78rem; padding: 5px 12px; border: 0; border-radius: 999px; cursor: pointer;
+    background: transparent; color: var(--text-secondary); white-space: nowrap; }
+.reseau-onglet.actif { background: var(--accent); color: #fff; }
+.reseau-onglet:disabled { opacity: 0.4; cursor: default; }
+.reseau-onglet:not(.actif):not(:disabled):hover { background: var(--accent-light); color: var(--text-primary); }
+.chambre-overlay { padding-top: 52px; }
+.reseau-ajouts { display: grid; gap: 6px; }
+.reseau-edition { display: flex; flex-direction: column; gap: 8px; }
+.reseau-edition h4 { margin: 4px 0 0; font-size: 0.85rem; }
+.reseau-couleurs { display: flex; flex-wrap: wrap; gap: 6px; }
+.reseau-pastille { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--glass-border); cursor: pointer; }
+.reseau-pastille.actif { box-shadow: 0 0 0 2px var(--text-primary); }

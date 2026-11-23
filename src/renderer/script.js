@@ -7500,238 +7500,538 @@
 
 
 
-  /* ── Mode chambre : un projet = une chambre à 4 faces (une coupe par face) ── */
-  // chambreProjet = { nom, ref (null = automatique), faceActive, faces: { cle: état sauvegardé | null } }
-  // La face ACTIVE vit dans le plan affiché (fourreaux/câbles/boîte) ; les autres
-  // faces sont des états complets (même format qu'un projet enregistré).
-  let chambreProjet = null;
-  const FACES_CHAMBRE = ['pignonA', 'pignonB', 'longPanA', 'longPanB'];
+  /* ── Réseau : synoptique, chambres, coupes de tronçons (reseau.js) ───────
+   * reseau = null → plan simple (comportement historique).
+   * Sinon : nœuds (chambres, coffrets, sorties) et tronçons ; chaque tronçon
+   * porte UNE coupe. La coupe du tronçon ACTIF vit dans le plan affiché
+   * (fourreaux/câbles/boîte) ; les autres sont des états enregistrés. */
+  let reseau = null;
+  const R = () => window.Reseau;
+  const LIB = (f) => (window.Reseau ? window.Reseau.LIBELLE_FACE[f] : f);
 
-  function exporterChambre() {
-    if (!chambreProjet) return undefined;
-    return { nom: chambreProjet.nom, ref: chambreProjet.ref, faceActive: chambreProjet.faceActive,
-      faces: { ...chambreProjet.faces, [chambreProjet.faceActive]: null } };
+  function exporterReseau() {
+    if (!reseau) return undefined;
+    const copie = JSON.parse(JSON.stringify(reseau));
+    const t = copie.troncons.find((x) => x.id === copie.actif.troncon);
+    if (t) t.coupe = null; // la coupe active est le plan principal du projet
+    return copie;
   }
-  function importerChambre(c) {
-    if (!c || !c.faces) { chambreProjet = null; return; }
-    const faces = {};
-    FACES_CHAMBRE.forEach(k => { faces[k] = c.faces[k] || null; });
-    chambreProjet = { nom: c.nom || 'Chambre', ref: c.ref || null, faceActive: FACES_CHAMBRE.includes(c.faceActive) ? c.faceActive : 'pignonA', faces };
+  function importerReseau(data, ancienneChambre) {
+    if (data && Array.isArray(data.noeuds)) reseau = JSON.parse(JSON.stringify(data));
+    else if (ancienneChambre && window.Reseau) reseau = window.Reseau.depuisAncienneChambre(ancienneChambre, null);
+    else reseau = null;
   }
-  function etatFace(k) {
-    if (!chambreProjet) return null;
-    return k === chambreProjet.faceActive ? etatPlanCourant() : (chambreProjet.faces[k] ? etatDepuisSauvegarde(chambreProjet.faces[k]) : null);
+  // Coupe du plan affiché → tronçon actif (copie propre, sans le réseau).
+  function sauverCoupeActive() {
+    if (!reseau || !reseau.actif.troncon) return;
+    const t = R().troncon(reseau, reseau.actif.troncon);
+    if (!t) return;
+    const etat = window.projectManager.captureCurrentState();
+    delete etat.reseau; delete etat.chambre;
+    t.coupe = etat;
   }
-  function compterFourreaux(k) { const st = etatFace(k); return st ? st.fourreaux.length : 0; }
+  function etatTroncon(t) {
+    if (!t) return null;
+    if (reseau && t.id === reseau.actif.troncon) return etatPlanCourant();
+    return t.coupe ? etatDepuisSauvegarde(t.coupe) : null;
+  }
+  function masqueTroncon(t) {
+    const st = etatTroncon(t);
+    if (!st || !st.fourreaux.length) return null;
+    const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false);
+    return m && m.forme === 'rect' ? m : null;
+  }
+  function resumeFourreaux(t) {
+    const st = etatTroncon(t);
+    if (!st || !st.fourreaux.length) return 'coupe vide';
+    const n = new Map();
+    st.fourreaux.forEach((f) => { const k = `${f.type || ''}${f.code || ''}`; n.set(k, (n.get(k) || 0) + 1); });
+    return [...n].map(([k, q]) => `${q}×${k}`).join(' + ');
+  }
 
-  // Étude de la chambre (chambre-faces.js) à partir des faces renseignées.
-  function etudeChambreCourante() {
-    if (!chambreProjet || !window.ChambreFaces) return null;
+  // Étude d'une chambre (chambre-faces.js) à partir des coupes de ses tronçons.
+  function etudeChambre(nd) {
+    if (!reseau || !nd || nd.type !== 'chambre' || !window.ChambreFaces) return null;
     const masques = {};
-    FACES_CHAMBRE.forEach(k => {
-      const st = etatFace(k);
-      if (!st || !st.fourreaux.length) return;
-      const n = st.fourreaux.length;
-      const m = buildMasqueFromState(st, `${n} fourreau${n > 1 ? 'x' : ''}`, false);
-      if (m && m.forme === 'rect') masques[k] = m;
+    R().FACES_CHAMBRE.forEach((f) => {
+      const v = R().surFace(reseau, nd.id, f);
+      const m = v && masqueTroncon(v.troncon);
+      if (m) masques[f] = m;
     });
     if (!Object.keys(masques).length) return null;
     const etude = window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres,
-      { ref: chambreProjet.ref || undefined, infos: window.ChambresInfos && window.ChambresInfos.infosChambre });
+      { ref: nd.ref || undefined, infos: window.ChambresInfos && window.ChambresInfos.infosChambre });
+    etude.nom = nd.nom;
     return { etude, masques };
   }
 
-  function activerChambre() {
-    if (!chambreProjet) {
-      chambreProjet = { nom: 'Chambre', ref: null, faceActive: 'pignonA', faces: { pignonA: null, pignonB: null, longPanA: null, longPanB: null } };
-      showToast('Mode chambre : le plan actuel devient la face pignon A');
-    }
-    afficherVueChambre();
-  }
-
-  // Passe sur une autre face : la face courante est enregistrée, la cible chargée.
-  function ouvrirFace(k) {
-    if (!chambreProjet || !FACES_CHAMBRE.includes(k)) return;
-    if (k !== chambreProjet.faceActive) {
-      const pm = window.projectManager;
-      const courant = pm.captureCurrentState();
-      delete courant.chambre;
-      chambreProjet.faces[chambreProjet.faceActive] = courant;
-      const cible = chambreProjet.faces[k];
-      chambreProjet.faceActive = k;
-      chambreProjet.faces[k] = null;
-      if (cible) pm.restoreState(cible, { garderChambre: true });
-      else {
-        fourreaux.length = 0; cables.length = 0;
-        updateStats(); updateInventory(); updateSelectedInfo(); redraw();
+  // Active le réseau : le plan actuel devient la coupe du tronçon C1 → S1.
+  function activerReseau() {
+    if (!reseau) {
+      reseau = R().creerReseau();
+      const c1 = R().ajouterNoeud(reseau, 'chambre', { x: 260, y: 220 });
+      if (fourreaux.length) {
+        const s1 = R().ajouterNoeud(reseau, 'sortie', { x: 520, y: 220 });
+        const t = R().relier(reseau, c1.id, s1.id);
+        reseau.actif.troncon = t.id;
       }
-      actionHistory.length = 0; // pas d'annulation d'une face à l'autre
+      reseau.actif.noeud = c1.id;
+      showToast(fourreaux.length ? 'Réseau créé : le plan actuel devient la coupe du tronçon C1 → S1' : 'Réseau créé avec une chambre C1');
     }
-    masquerVueChambre();
-    showToast(`Face ${window.ChambreFaces.LIBELLE[k]} : dessinez ou générez sa coupe`);
+    afficherVue('synoptique');
   }
 
-  function quitterChambre() {
-    chambreProjet = null;
-    masquerVueChambre();
-    majBandeauChambre();
-    showToast('Mode chambre désactivé : le plan reste la face qui était ouverte');
+  // Ouvre la coupe d'un tronçon dans le canvas (la coupe affichée est enregistrée).
+  function ouvrirTroncon(tId) {
+    if (!reseau) return;
+    const t = R().troncon(reseau, tId);
+    if (!t) return;
+    if (tId !== reseau.actif.troncon) {
+      sauverCoupeActive();
+      const cible = t.coupe;
+      reseau.actif.troncon = tId;
+      t.coupe = null;
+      if (cible) window.projectManager.restoreState(cible, { garderChambre: true });
+      else { fourreaux.length = 0; cables.length = 0; updateStats(); updateInventory(); updateSelectedInfo(); redraw(); }
+      actionHistory.length = 0; // pas d'annulation d'une coupe à l'autre
+    }
+    afficherVue('coupe');
+    showToast(`Coupe du tronçon ${R().nomTroncon(reseau, t)} : dessinez ou générez-la`);
   }
 
-  function majBandeauChambre() {
-    let b = document.getElementById('chambreBandeau');
-    if (!chambreProjet) { if (b) b.hidden = true; return; }
+  // Face libre d'une chambre → nouvel élément « Sortie » relié par cette face.
+  function relierFaceLibre(nd, face) {
+    const dir = { pignonA: [-220, 0], pignonB: [220, 0], longPanA: [0, 170], longPanB: [0, -170] }[face] || [220, 0];
+    const s = R().ajouterNoeud(reseau, 'sortie', { x: nd.x + dir[0], y: nd.y + dir[1] });
+    return R().relier(reseau, nd.id, s.id, { faceA: face, faceB: 'sortie' });
+  }
+
+  /* ── Vues et bandeau de navigation ── */
+  function afficherVue(vue, noeudId) {
+    if (!reseau) return;
+    if (noeudId) reseau.actif.noeud = noeudId;
+    reseau.actif.vue = vue;
+    const syn = construireSynoptique(), ch = construireVueChambre();
+    syn.hidden = vue !== 'synoptique';
+    ch.hidden = vue !== 'chambre';
+    if (vue === 'synoptique') dessinerSynoptique();
+    if (vue === 'chambre') afficherVueChambre();
+    majBandeau();
+  }
+  function masquerVues() {
+    ['reseauOverlay', 'chambreOverlay'].forEach((id) => { const o = document.getElementById(id); if (o) o.hidden = true; });
+    if (reseau) reseau.actif.vue = 'coupe';
+    majBandeau();
+  }
+
+  function majBandeau() {
+    let b = document.getElementById('reseauBandeau');
+    if (!reseau) { if (b) b.hidden = true; return; }
     if (!b) {
-      b = document.createElement('div');
-      b.id = 'chambreBandeau';
-      b.className = 'chambre-bandeau';
+      b = document.createElement('nav');
+      b.id = 'reseauBandeau'; b.className = 'reseau-bandeau'; b.setAttribute('aria-label', 'Navigation du réseau');
       document.querySelector('.canvas-wrap')?.appendChild(b);
     }
-    b.hidden = false;
-    b.innerHTML = '';
-    const t = document.createElement('span');
-    t.textContent = `${chambreProjet.nom} — face ${window.ChambreFaces.LIBELLE[chambreProjet.faceActive]}`;
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'chambre-btn'; btn.textContent = 'Vue chambre';
-    btn.addEventListener('click', afficherVueChambre);
-    b.append(t, btn);
+    b.hidden = false; b.innerHTML = '';
+    const nd = reseau.actif.noeud && R().noeud(reseau, reseau.actif.noeud);
+    const t = reseau.actif.troncon && R().troncon(reseau, reseau.actif.troncon);
+    const onglet = (vue, libelle, actif, ok) => {
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'reseau-onglet' + (reseau.actif.vue === vue ? ' actif' : '');
+      x.textContent = libelle; x.disabled = !ok;
+      x.addEventListener('click', () => (vue === 'coupe' ? masquerVues() : afficherVue(vue)));
+      return x;
+    };
+    b.append(
+      onglet('synoptique', 'Synoptique', true, true),
+      onglet('chambre', nd && nd.type === 'chambre' ? `Chambre ${nd.nom}` : 'Chambre', false, !!(nd && nd.type === 'chambre')),
+      onglet('coupe', t ? `Coupe ${R().nomTroncon(reseau, t)}` : 'Coupe', false, !!t),
+    );
   }
+
+  /* ── Synoptique 2D ── */
+  const SYN = { sel: null, drag: null, lien: null, survol: null };
+  const tailleNoeud = (n) => (n.type === 'chambre' ? { w: 96, h: 52 } : n.type === 'coffret' ? { w: 56, h: 56 } : { w: 70, h: 40 });
+  function noeudSous(x, y) {
+    return [...reseau.noeuds].reverse().find((n) => { const s = tailleNoeud(n); return Math.abs(x - n.x) <= s.w / 2 && Math.abs(y - n.y) <= s.h / 2; }) || null;
+  }
+  function poigneeSous(x, y) {
+    return reseau.noeuds.find((n) => Math.hypot(x - (n.x + tailleNoeud(n).w / 2 + 12), y - n.y) <= 9) || null;
+  }
+  function tronconSous(x, y) {
+    return reseau.troncons.find((t) => {
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
+      const dx = B.x - A.x, dy = B.y - A.y, L2 = dx * dx + dy * dy || 1;
+      const k = Math.max(0, Math.min(1, ((x - A.x) * dx + (y - A.y) * dy) / L2));
+      return Math.hypot(x - (A.x + k * dx), y - (A.y + k * dy)) <= 6;
+    }) || null;
+  }
+
+  function construireSynoptique() {
+    let o = document.getElementById('reseauOverlay');
+    if (o) return o;
+    o = document.createElement('div');
+    o.id = 'reseauOverlay'; o.className = 'chambre-overlay'; o.hidden = true;
+    o.innerHTML = `
+      <div class="chambre-dessin"><canvas id="reseauCanvas" aria-label="Synoptique du réseau"></canvas></div>
+      <aside class="chambre-panneau">
+        <h3>Synoptique</h3>
+        <div class="reseau-ajouts">
+          <button type="button" class="chambre-btn" data-ajout="chambre">+ Chambre</button>
+          <button type="button" class="chambre-btn" data-ajout="coffret">+ Coffret / tableau</button>
+          <button type="button" class="chambre-btn" data-ajout="sortie">+ Sortie</button>
+        </div>
+        <div id="reseauEdition" class="reseau-edition"></div>
+        <p class="chambre-aide">Glissez un élément pour le déplacer. Tirez depuis son <b>+</b> vers un autre pour les relier. Double-clic : ouvrir la chambre ou la coupe.</p>
+        <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
+      </aside>`;
+    document.querySelector('.canvas-wrap')?.appendChild(o);
+    o.querySelectorAll('[data-ajout]').forEach((b) => b.addEventListener('click', () => {
+      const n = R().ajouterNoeud(reseau, b.dataset.ajout);
+      SYN.sel = { noeud: n.id }; dessinerSynoptique();
+    }));
+    o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
+    const cv = o.querySelector('#reseauCanvas');
+    const pos = (ev) => { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+    cv.addEventListener('mousedown', (ev) => {
+      const p = pos(ev);
+      const pg = poigneeSous(p.x, p.y);
+      if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y }; return; }
+      const n = noeudSous(p.x, p.y);
+      if (n) { SYN.sel = { noeud: n.id }; SYN.drag = { id: n.id, dx: p.x - n.x, dy: p.y - n.y }; dessinerSynoptique(); return; }
+      const t = tronconSous(p.x, p.y);
+      SYN.sel = t ? { troncon: t.id } : null; dessinerSynoptique();
+    });
+    cv.addEventListener('mousemove', (ev) => {
+      const p = pos(ev);
+      if (SYN.drag) { const n = R().noeud(reseau, SYN.drag.id); n.x = Math.round(p.x - SYN.drag.dx); n.y = Math.round(p.y - SYN.drag.dy); dessinerSynoptique(false); return; }
+      if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; dessinerSynoptique(false); return; }
+      cv.style.cursor = poigneeSous(p.x, p.y) ? 'crosshair' : (noeudSous(p.x, p.y) || tronconSous(p.x, p.y)) ? 'pointer' : 'default';
+    });
+    window.addEventListener('mouseup', (ev) => {
+      if (SYN.lien && !o.hidden) {
+        const p = pos(ev), cible = noeudSous(p.x, p.y), de = SYN.lien.de;
+        SYN.lien = null;
+        if (cible && cible.id !== de) {
+          try { const t = R().relier(reseau, de, cible.id); SYN.sel = { troncon: t.id }; showToast(`Tronçon ${R().nomTroncon(reseau, t)} créé : indiquez sa longueur`); }
+          catch (e) { showToast(e.message); }
+        }
+        dessinerSynoptique();
+      }
+      if (SYN.drag) { SYN.drag = null; dessinerSynoptique(); }
+    });
+    cv.addEventListener('dblclick', (ev) => {
+      const p = pos(ev);
+      const n = noeudSous(p.x, p.y);
+      if (n) {
+        if (n.type === 'chambre') afficherVue('chambre', n.id);
+        else { const v = R().tronconsDe(reseau, n.id)[0]; if (v) ouvrirTroncon(v.troncon.id); }
+        return;
+      }
+      const t = tronconSous(p.x, p.y);
+      if (t) ouvrirTroncon(t.id);
+    });
+    window.addEventListener('resize', () => { if (!o.hidden) dessinerSynoptique(false); });
+    return o;
+  }
+
+  function dessinerSynoptique(panneau = true) {
+    const o = document.getElementById('reseauOverlay');
+    if (!o || o.hidden || !reseau) return;
+    const cv = o.querySelector('#reseauCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
+    cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#fbfaf7'; ctx.fillRect(0, 0, zone.width, zone.height);
+    ctx.strokeStyle = '#eceae4'; ctx.lineWidth = 1;
+    for (let x = 0; x < zone.width; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, zone.height); ctx.stroke(); }
+    for (let y = 0; y < zone.height; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(zone.width, y); ctx.stroke(); }
+    // tronçons
+    for (const t of reseau.troncons) {
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
+      const sel = SYN.sel && SYN.sel.troncon === t.id, actif = t.id === reseau.actif.troncon;
+      ctx.strokeStyle = sel ? '#e8661c' : '#7a6a55'; ctx.lineWidth = sel ? 4 : 3; ctx.setLineDash(t.coupe || actif ? [] : [6, 4]);
+      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]);
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+      const txt = `${t.longueurM ? t.longueurM + ' m' : '? m'} · ${resumeFourreaux(t)}`;
+      ctx.font = '12px system-ui, sans-serif'; const w = ctx.measureText(txt).width + 12;
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = sel ? '#e8661c' : '#d4cdc1'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(mx - w / 2, my - 10, w, 20, 10); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, mx, my);
+    }
+    if (SYN.lien) {
+      const A = R().noeud(reseau, SYN.lien.de);
+      ctx.strokeStyle = '#e8661c'; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(SYN.lien.x, SYN.lien.y); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // nœuds
+    for (const n of reseau.noeuds) {
+      const { w, h } = tailleNoeud(n), sel = SYN.sel && SYN.sel.noeud === n.id;
+      ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = n.couleur; ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      if (n.type === 'chambre') ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, 6);
+      else if (n.type === 'coffret') ctx.rect(n.x - w / 2, n.y - h / 2, w, h);
+      else { ctx.moveTo(n.x - w / 2, n.y - h / 2); ctx.lineTo(n.x + w / 2 - 14, n.y - h / 2); ctx.lineTo(n.x + w / 2, n.y); ctx.lineTo(n.x + w / 2 - 14, n.y + h / 2); ctx.lineTo(n.x - w / 2, n.y + h / 2); ctx.closePath(); }
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = n.couleur; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+      if (sel) { ctx.strokeStyle = '#e8661c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(n.x - w / 2 - 5, n.y - h / 2 - 5, w + 10, h + 10); ctx.setLineDash([]); }
+      ctx.fillStyle = '#1f2a30'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText(n.nom, n.x, n.y - (n.type === 'chambre' ? 7 : 0));
+      if (n.type === 'chambre') {
+        const e = etudeChambre(n);
+        ctx.font = '11px system-ui, sans-serif'; ctx.fillStyle = '#5d6a70';
+        ctx.fillText(e && e.etude.ok ? e.etude.ref : (n.ref || 'modèle auto'), n.x, n.y + 11);
+      }
+      if (n.type === 'coffret') { ctx.font = '10px system-ui, sans-serif'; ctx.fillStyle = '#5d6a70'; ctx.fillText(n.coffret.genre, n.x, n.y + 16); }
+      // poignée « + » pour relier
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#e8661c'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(n.x + w / 2 + 12, n.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e8661c'; ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText('+', n.x + w / 2 + 12, n.y + 1);
+    }
+    if (panneau) remplirEdition();
+  }
+
+  function remplirEdition() {
+    const box = document.getElementById('reseauEdition');
+    if (!box) return;
+    box.innerHTML = '';
+    const champ = (libelle, el) => { const l = document.createElement('label'); l.className = 'chambre-champ'; l.append(libelle, el); box.appendChild(l); return el; };
+    const bouton = (txt, fn, discret) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chambre-btn' + (discret ? ' chambre-btn-discret' : ''); b.textContent = txt; b.addEventListener('click', fn); box.appendChild(b); return b; };
+    const note = (txt, cls = 'chambre-res-ligne') => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; box.appendChild(d); };
+    if (!SYN.sel) { note(`${reseau.noeuds.length} élément(s), ${reseau.troncons.length} tronçon(s). Sélectionnez un élément ou un tronçon pour le modifier.`); return; }
+    if (SYN.sel.noeud) {
+      const n = R().noeud(reseau, SYN.sel.noeud);
+      if (!n) { SYN.sel = null; return remplirEdition(); }
+      const h = document.createElement('h4'); h.textContent = R().TYPES[n.type]; box.appendChild(h);
+      const nom = document.createElement('input'); nom.type = 'text'; nom.maxLength = 30; nom.value = n.nom;
+      nom.addEventListener('input', () => { n.nom = nom.value || n.nom; dessinerSynoptique(false); majBandeau(); });
+      champ('Nom', nom);
+      const pal = document.createElement('div'); pal.className = 'reseau-couleurs';
+      R().COULEURS.forEach((c) => {
+        const s = document.createElement('button'); s.type = 'button'; s.className = 'reseau-pastille' + (n.couleur === c ? ' actif' : '');
+        s.style.background = c; s.setAttribute('aria-label', `Couleur ${c}`);
+        s.addEventListener('click', () => { n.couleur = c; dessinerSynoptique(); });
+        pal.appendChild(s);
+      });
+      champ('Couleur', pal);
+      if (n.type === 'chambre') {
+        const sel = document.createElement('select');
+        const models = window.CompatChambres ? window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE) : [];
+        sel.innerHTML = '<option value="">Automatique</option>' + models.map((m) => `<option value="${m.ref}">${m.ref} — ${m.L} × ${m.l} mm</option>`).join('');
+        sel.value = n.ref || '';
+        sel.addEventListener('change', () => { n.ref = sel.value || null; dessinerSynoptique(); });
+        champ('Modèle', sel);
+        bouton('Ouvrir la chambre', () => afficherVue('chambre', n.id));
+      }
+      if (n.type === 'coffret') {
+        const cf = n.coffret;
+        const g = document.createElement('select');
+        g.innerHTML = '<option value="coffret">Coffret</option><option value="tableau">Tableau</option><option value="autre">Autre</option>';
+        g.value = cf.genre; g.addEventListener('change', () => { cf.genre = g.value; dessinerSynoptique(); });
+        champ('Type', g);
+        const dim = (cle) => { const i = document.createElement('input'); i.type = 'number'; i.min = 0; i.step = 10; i.value = cf[cle] || ''; i.placeholder = 'mm';
+          i.addEventListener('change', () => { cf[cle] = Number(i.value) > 0 ? Number(i.value) : null; remplirEdition(); }); return i; };
+        champ('Face du bas : largeur (mm)', dim('largeur'));
+        champ('Face du bas : profondeur (mm)', dim('profondeur'));
+        note('Saisie manuelle. Le choix dans le catalogue des fiches techniques arrivera avec la base de données.', 'chambre-aide');
+        R().tronconsDe(reseau, n.id).forEach((v) => {
+          const m = masqueTroncon(v.troncon);
+          if (!m) return note(`${R().nomTroncon(reseau, v.troncon)} : coupe vide`);
+          const c = R().verifierCoffret(cf, m.largeur, m.hauteur);
+          note(`${R().nomTroncon(reseau, v.troncon)} : nappe ${Math.round(m.largeur)} × ${Math.round(m.hauteur)} mm — ${!c.connu ? 'cotes du coffret à saisir' : c.tient ? 'passe' : 'NE PASSE PAS'}`,
+            !c.connu ? 'chambre-res-ligne' : c.tient ? 'chambre-res-ok' : 'chambre-res-ko');
+        });
+      }
+      const types = document.createElement('select');
+      types.innerHTML = Object.entries(R().TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+      types.value = n.type;
+      types.addEventListener('change', () => {
+        if (types.value !== 'chambre' && R().tronconsDe(reseau, n.id).length > 1 && n.type === 'chambre' && types.value === 'sortie') { showToast('Une sortie ne reçoit qu\'un tronçon'); types.value = n.type; return; }
+        n.type = types.value;
+        if (n.type === 'chambre' && n.ref === undefined) n.ref = null;
+        if (n.type === 'coffret' && !n.coffret) n.coffret = { genre: 'coffret', largeur: null, profondeur: null, source: 'manuel' };
+        R().tronconsDe(reseau, n.id).forEach((v) => { const bout = v.troncon.a.noeud === n.id ? 'a' : 'b'; v.troncon[bout].face = n.type === 'chambre' ? (R().facesLibres(reseau, n)[0] || 'pignonA') : n.type === 'coffret' ? 'bas' : 'sortie'; });
+        dessinerSynoptique();
+      });
+      champ('Changer en', types);
+      bouton('Supprimer', () => { R().supprimerNoeud(reseau, n.id); if (reseau.actif.troncon && !R().troncon(reseau, reseau.actif.troncon)) reseau.actif.troncon = null; SYN.sel = null; dessinerSynoptique(); majBandeau(); }, true);
+      return;
+    }
+    const t = R().troncon(reseau, SYN.sel.troncon);
+    if (!t) { SYN.sel = null; return remplirEdition(); }
+    const h = document.createElement('h4'); h.textContent = `Tronçon ${R().nomTroncon(reseau, t)}`; box.appendChild(h);
+    const lg = document.createElement('input'); lg.type = 'number'; lg.min = 0; lg.step = 0.5; lg.value = t.longueurM || ''; lg.placeholder = 'm';
+    lg.addEventListener('change', () => { t.longueurM = Number(lg.value) > 0 ? Number(lg.value) : null; dessinerSynoptique(false); });
+    champ('Longueur (m)', lg);
+    ['a', 'b'].forEach((bout) => {
+      const nd = R().noeud(reseau, t[bout].noeud);
+      if (nd.type !== 'chambre') return;
+      const sel = document.createElement('select');
+      const faces = [t[bout].face, ...R().facesLibres(reseau, nd)];
+      sel.innerHTML = faces.map((f) => `<option value="${f}">${LIB(f)}</option>`).join('');
+      sel.value = t[bout].face;
+      sel.addEventListener('change', () => { try { R().changerFace(reseau, t.id, bout, sel.value); } catch (e) { showToast(e.message); } dessinerSynoptique(); });
+      champ(`Face côté ${nd.nom}`, sel);
+    });
+    note(resumeFourreaux(t));
+    bouton('Ouvrir la coupe', () => ouvrirTroncon(t.id));
+    bouton('Supprimer le tronçon', () => { R().supprimerTroncon(reseau, t.id); if (reseau.actif.troncon === t.id) reseau.actif.troncon = null; SYN.sel = null; dessinerSynoptique(); majBandeau(); }, true);
+  }
+
+  /* ── Vue chambre (vue de dessus d'un nœud chambre) ── */
+  let vueChambreGeo = null, vueChambreFleches = [];
+  function faceSousPoint(px, py) {
+    const g = vueChambreGeo;
+    if (!g) return null;
+    const x = (px - g.ox) / g.s, y = ((g.H - py) - g.oy) / g.s;
+    const marge = g.e + 450;
+    if (x < -marge || x > g.L + marge || y < -marge || y > g.l + marge) return null;
+    const d = { pignonA: Math.abs(x), pignonB: Math.abs(x - g.L), longPanA: Math.abs(y), longPanB: Math.abs(y - g.l) };
+    return Object.keys(d).reduce((a, b) => (d[b] < d[a] ? b : a));
+  }
+  function chambreCourante() { return reseau && reseau.actif.noeud ? R().noeud(reseau, reseau.actif.noeud) : null; }
 
   function construireVueChambre() {
     let o = document.getElementById('chambreOverlay');
     if (o) return o;
     o = document.createElement('div');
-    o.id = 'chambreOverlay';
-    o.className = 'chambre-overlay';
-    o.hidden = true;
+    o.id = 'chambreOverlay'; o.className = 'chambre-overlay'; o.hidden = true;
     o.innerHTML = `
       <div class="chambre-dessin"><canvas id="chambreCanvas" aria-label="Vue de dessus de la chambre de tirage"></canvas></div>
       <aside class="chambre-panneau">
-        <h3>Chambre de tirage</h3>
-        <label class="chambre-champ">Nom <input id="chambreNom" type="text" maxlength="40"></label>
-        <label class="chambre-champ">Modèle <select id="chambreRef"></select></label>
+        <h3 id="chambreTitre">Chambre</h3>
         <div class="chambre-faces" id="chambreFaces"></div>
-        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Une liaison présente sur deux faces traverse la chambre. Double-clic sur une face pour ouvrir sa coupe.</p>
-        <div class="chambre-actions">
-          <button type="button" class="chambre-btn" id="chambreRetour">Retour à la coupe</button>
-          <button type="button" class="chambre-btn chambre-btn-discret" id="chambreQuitter">Quitter le mode chambre</button>
-        </div>
+        <div id="chambreResultat" class="chambre-resultat"></div>
+        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Flèche : élément suivant. Double-clic sur une face : sa coupe.</p>
+        <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="chambreSyn">Modifier dans le synoptique</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
-    o.querySelector('#chambreRetour').addEventListener('click', masquerVueChambre);
-    o.querySelector('#chambreQuitter').addEventListener('click', quitterChambre);
-    o.querySelector('#chambreNom').addEventListener('input', (e) => { if (chambreProjet) { chambreProjet.nom = e.target.value || 'Chambre'; dessinerVueChambre(); majBandeauChambre(); } });
-    o.querySelector('#chambreRef').addEventListener('change', (e) => { if (chambreProjet) { chambreProjet.ref = e.target.value || null; dessinerVueChambre(); } });
+    o.querySelector('#chambreSyn').addEventListener('click', () => { const n = chambreCourante(); SYN.sel = n ? { noeud: n.id } : null; afficherVue('synoptique'); });
+    const cv = o.querySelector('#chambreCanvas');
+    const pos = (ev) => { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+    const flecheSous = (p) => vueChambreFleches.find((f) => p.x >= f.x && p.x <= f.x + f.w && p.y >= f.y && p.y <= f.y + f.h);
+    cv.addEventListener('click', (ev) => { const f = flecheSous(pos(ev)); if (f) allerA(f.vers); });
+    cv.addEventListener('dblclick', (ev) => {
+      const p = pos(ev); if (flecheSous(p)) return;
+      const face = faceSousPoint(p.x, p.y), nd = chambreCourante();
+      if (!face || !nd) return;
+      const v = R().surFace(reseau, nd.id, face);
+      ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, face).id);
+    });
+    cv.addEventListener('mousemove', (ev) => {
+      const p = pos(ev), f = flecheSous(p);
+      const survol = f ? f.vers : null;
+      if (survol !== vueChambreGeo?.survol) { if (vueChambreGeo) vueChambreGeo.survol = survol; dessinerFleches(); }
+      cv.style.cursor = f || faceSousPoint(p.x, p.y) ? 'pointer' : 'default';
+    });
     window.addEventListener('resize', () => { if (!o.hidden) dessinerVueChambre(); });
-    const cvs = o.querySelector('#chambreCanvas');
-    cvs.title = 'Double-clic sur un pignon ou un long-pan pour ouvrir sa coupe';
-    cvs.addEventListener('dblclick', (ev) => {
-      const r = cvs.getBoundingClientRect();
-      const k = faceSousPoint(ev.clientX - r.left, ev.clientY - r.top);
-      if (k) ouvrirFace(k);
-    });
-    cvs.addEventListener('mousemove', (ev) => {
-      const r = cvs.getBoundingClientRect();
-      cvs.style.cursor = faceSousPoint(ev.clientX - r.left, ev.clientY - r.top) ? 'pointer' : 'default';
-    });
     return o;
   }
-
+  function allerA(id) {
+    const n = R().noeud(reseau, id);
+    if (!n) return;
+    if (n.type === 'chambre') afficherVue('chambre', n.id);
+    else { SYN.sel = { noeud: n.id }; afficherVue('synoptique'); }
+  }
   function afficherVueChambre() {
-    if (!chambreProjet) return;
-    const o = construireVueChambre();
-    const sel = o.querySelector('#chambreRef');
-    const models = window.CompatChambres ? window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE) : [];
-    sel.innerHTML = '<option value="">Automatique (la plus petite qui convient)</option>' +
-      models.map(m => `<option value="${m.ref}">${m.ref} — ${m.L} × ${m.l} mm</option>`).join('');
-    sel.value = chambreProjet.ref || '';
-    o.querySelector('#chambreNom').value = chambreProjet.nom;
-    o.hidden = false;
+    const o = construireVueChambre(), nd = chambreCourante();
+    o.querySelector('#chambreTitre').textContent = nd ? `Chambre ${nd.nom}` : 'Chambre';
     dessinerVueChambre();
-    majBandeauChambre();
-  }
-  function masquerVueChambre() {
-    const o = document.getElementById('chambreOverlay');
-    if (o) o.hidden = true;
-    majBandeauChambre();
-  }
-
-  // Face la plus proche d'un point du canvas de la vue chambre (px écran), ou null.
-  let vueChambreGeo = null;
-  function faceSousPoint(px, py) {
-    const g = vueChambreGeo;
-    if (!g) return null;
-    const x = (px - g.ox) / g.s, y = ((g.H - py) - g.oy) / g.s; // mm, repère plan
-    const marge = g.e + 450; // zone utile autour de la chambre (mur + tubes)
-    if (x < -marge || x > g.L + marge || y < -marge || y > g.l + marge) return null;
-    const d = { pignonA: Math.abs(x), pignonB: Math.abs(x - g.L), longPanA: Math.abs(y), longPanB: Math.abs(y - g.l) };
-    return Object.keys(d).reduce((a, b) => (d[b] < d[a] ? b : a));
   }
 
   function dessinerVueChambre() {
-    const o = document.getElementById('chambreOverlay');
-    if (!o || o.hidden || !chambreProjet) return;
-    // boutons de face
+    const o = document.getElementById('chambreOverlay'), nd = chambreCourante();
+    if (!o || o.hidden || !nd) return;
     const box = o.querySelector('#chambreFaces');
     box.innerHTML = '';
-    FACES_CHAMBRE.forEach(k => {
-      const n = compterFourreaux(k);
+    R().FACES_CHAMBRE.forEach((f) => {
+      const v = R().surFace(reseau, nd.id, f);
       const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'chambre-face' + (k === chambreProjet.faceActive ? ' active' : '');
-      b.innerHTML = `<strong></strong><span></span>`;
-      b.querySelector('strong').textContent = window.ChambreFaces.LIBELLE[k];
-      b.querySelector('span').textContent = n ? `${n} fourreau${n > 1 ? 'x' : ''} — ouvrir` : 'vide — dessiner';
-      b.addEventListener('click', () => ouvrirFace(k));
+      b.type = 'button'; b.className = 'chambre-face' + (v && v.troncon.id === reseau.actif.troncon ? ' active' : '');
+      b.innerHTML = '<strong></strong><span></span>';
+      b.querySelector('strong').textContent = LIB(f);
+      b.querySelector('span').textContent = v ? `→ ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''} · ${resumeFourreaux(v.troncon)}` : 'libre — relier et dessiner';
+      b.addEventListener('click', () => ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, f).id));
       box.appendChild(b);
     });
-    // dessin (même rendu que la page PDF)
-    const cv = o.querySelector('#chambreCanvas');
-    const zone = cv.parentElement.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+    const cv = o.querySelector('#chambreCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
     cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
     const ctx = cv.getContext('2d');
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
-    const V = window.Vue3D;
-    const r = etudeChambreCourante();
-    const W = zone.width, H = zone.height;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const res = o.querySelector('#chambreResultat') || (() => {
-      const d = document.createElement('div'); d.id = 'chambreResultat'; d.className = 'chambre-resultat';
-      o.querySelector('.chambre-aide').before(d); return d;
-    })();
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height);
+    const V = window.Vue3D, W = zone.width, H = zone.height, r = etudeChambre(nd);
+    const res = o.querySelector('#chambreResultat');
     res.innerHTML = '';
-    if (!r) {
-      ctx.fillStyle = '#555'; ctx.font = '15px Helvetica, Arial, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('Aucune face renseignée : ouvrez une face et dessinez ou générez sa coupe.', W / 2, H / 2);
-      return;
+    vueChambreGeo = null;
+    if (!r || !r.etude.ok) {
+      ctx.fillStyle = r ? '#b3261e' : '#555'; ctx.font = '15px system-ui, sans-serif'; ctx.textAlign = 'center';
+      const msg = r ? (r.etude.erreurs || []).join(' ') : 'Aucune coupe sur cette chambre : double-cliquez une face ou utilisez la liste à droite.';
+      ctx.fillText(msg, W / 2, H / 2);
+      // repères des faces pour le double-clic, même sans dessin
+      vueChambreGeo = { ox: W / 2 - 150, oy: H / 2 - 80, s: 300 / 1160, L: 1160, l: 520, e: 0, H };
+      dessinerFleches(); return;
     }
-    const e = r.etude;
-    if (!e.ok) {
-      ctx.fillStyle = '#b3261e'; ctx.font = 'bold 15px Helvetica, Arial, sans-serif'; ctx.textAlign = 'center';
-      (e.erreurs || []).forEach((t, i) => ctx.fillText(t, W / 2, H / 2 + i * 20));
-      return;
-    }
-    // dessin plein cadre (même tracé que la page PDF)
-    const page = new V.Page({ emitText: false, ombre: false });
-    const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 16, W - 32, H - 32);
+    const e = r.etude, page = new V.Page({ emitText: false, ombre: false });
+    const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 40, W - 32, H - 80);
     V.rejouerSurCanvas(ctx, page, H);
     vueChambreGeo = { ...page.geoDessus, H };
-    // résultat dans le panneau
-    const ligne = (txt, cls, couleur) => { const p = document.createElement('div'); p.className = cls; p.textContent = txt; if (couleur) p.style.color = couleur; res.appendChild(p); };
-    const css = (c) => c ? `rgb(${c.map(v => Math.round(v * 255)).join(',')})` : '';
-    ligne(`Chambre ${e.ref} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
-    Object.values(e.faces).forEach(f => ligne(`${f.tient ? '✓' : '✗'} ${f.face} : ${f.largeurMasque} × ${f.hauteurMasque} dans ${f.largeurFace} × ${f.hauteurFace}`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
+    const ligne = (txt, cls, c) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; if (c) d.style.color = c; res.appendChild(d); };
+    const css = (c) => c ? `rgb(${c.map((v) => Math.round(v * 255)).join(',')})` : '';
+    ligne(`Modèle ${e.ref}${nd.ref ? ' (imposé)' : ' (automatique)'} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
+    Object.values(e.faces).forEach((f) => ligne(`${f.tient ? '✓' : '✗'} ${f.face} : ${Math.round(f.largeurMasque)} × ${Math.round(f.hauteurMasque)} dans ${f.largeurFace} × ${f.hauteurFace}`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
     if (e.traversees.length) ligne('Traversées', 'chambre-res-titre');
-    e.traversees.forEach((t, i) => ligne(`${i + 1}. ${t.liaison} — ${t.entree} → ${t.sortie} (${t.type})${t.changementFourreau ? ', ' + t.changementFourreau : ''}`, 'chambre-res-ligne', css(couleurs.get(t.liaison))));
+    e.traversees.forEach((t, i) => ligne(`${i + 1}. ${t.liaison} — ${t.entree} → ${t.sortie} (${t.type})`, 'chambre-res-ligne', css(couleurs.get(t.liaison))));
     if (e.arrets.length) ligne('S\'arrêtent dans la chambre', 'chambre-res-titre');
-    e.arrets.forEach(a => ligne(`• ${a.liaison} (${a.face})`, 'chambre-res-ligne', css(couleurs.get(a.liaison))));
-    (e.avertissements || []).forEach(a => ligne(`⚠ ${a}`, 'chambre-res-ko'));
+    e.arrets.forEach((a) => ligne(`• ${a.liaison} (${a.face})`, 'chambre-res-ligne', css(couleurs.get(a.liaison))));
+    (e.avertissements || []).forEach((a) => ligne(`⚠ ${a}`, 'chambre-res-ko'));
+    o._fond = ctx.getImageData(0, 0, cv.width, cv.height);
+    dessinerFleches();
   }
 
-  window.chambre = { activer: activerChambre, ouvrirFace, quitter: quitterChambre, etude: etudeChambreCourante, faceAt: (x, y) => faceSousPoint(x, y) };
+  // Flèches « → suivant » au-delà de chaque face reliée (clic : y aller).
+  function dessinerFleches() {
+    const o = document.getElementById('chambreOverlay'), nd = chambreCourante(), g = vueChambreGeo;
+    if (!o || !nd || !g) return;
+    const cv = o.querySelector('#chambreCanvas'), ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+    if (o._fond) ctx.putImageData(o._fond, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const W = cv.width / dpr, H = cv.height / dpr;
+    const pt = (x, y) => [g.ox + x * g.s, g.H - (g.oy + y * g.s)];
+    const ancres = { pignonA: [...pt(-g.e - 380, g.l / 2), 'right'], pignonB: [...pt(g.L + g.e + 380, g.l / 2), 'left'],
+      longPanA: [...pt(g.L / 2, -g.e - 380), 'top'], longPanB: [...pt(g.L / 2, g.l + g.e + 380), 'bottom'] };
+    vueChambreFleches = [];
+    R().FACES_CHAMBRE.forEach((f) => {
+      const v = R().surFace(reseau, nd.id, f);
+      if (!v) return;
+      const fl = { pignonA: '←', pignonB: '→', longPanA: '↓', longPanB: '↑' }[f];
+      const txt = `${fl} ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
+      ctx.font = 'bold 13px system-ui, sans-serif';
+      const w = ctx.measureText(txt).width + 20, h = 26;
+      let [x, y, cote] = ancres[f];
+      x = cote === 'right' ? x - w : cote === 'left' ? x : x - w / 2;
+      y = cote === 'top' ? y : cote === 'bottom' ? y - h : y - h / 2;
+      x = Math.max(4, Math.min(W - w - 4, x)); y = Math.max(4, Math.min(H - h - 4, y));
+      const survol = g.survol === v.autre.id;
+      ctx.fillStyle = survol ? v.autre.couleur : '#ffffff'; ctx.strokeStyle = v.autre.couleur; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, 13); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = survol ? '#ffffff' : v.autre.couleur; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, x + w / 2, y + h / 2 + 1);
+      vueChambreFleches.push({ x, y, w, h, vers: v.autre.id });
+    });
+  }
+
+  // PDF : une page « vue de dessus » par chambre qui a des coupes.
+  function etudesChambresReseau() {
+    if (!reseau) return [];
+    return reseau.noeuds.filter((n) => n.type === 'chambre').map(etudeChambre).filter((x) => x && x.etude.ok);
+  }
+
+  window.reseauTontonkad = {
+    activer: activerReseau, vue: afficherVue, ouvrirTroncon, etat: () => reseau, etudeChambre: (id) => etudeChambre(R().noeud(reseau, id)),
+    faceAt: (x, y) => faceSousPoint(x, y), fleches: () => vueChambreFleches,
+  };
 
   /* ── Vue 3D dans l'export PDF (dessin partagé avec le MCP : vue3d.js) ── */
 
@@ -7797,7 +8097,8 @@
   function addVue3DPages(pdf, titre) {
     const V = window.Vue3D;
     if (!V) return;
-    const m = buildMasqueFromPlan(chambreProjet ? `${titre} — ${window.ChambreFaces.LIBELLE[chambreProjet.faceActive]}` : titre);
+    const tAct = reseau && reseau.actif.troncon && window.Reseau.troncon(reseau, reseau.actif.troncon);
+    const m = buildMasqueFromPlan(tAct ? `${titre} — tronçon ${window.Reseau.nomTroncon(reseau, tAct)}` : titre);
     if (!m) return;
     const { PAGE_W, PAGE_H, MARGE } = V;
     // Page 1 : coupe + vue 3D + légende
@@ -7820,14 +8121,13 @@
     if (m.fourreaux.length > 8) p.text(MARGE, y, 8, `… et ${m.fourreaux.length - 8} autres (voir le tableau du rapport)`);
     writeVue3DPage(pdf, p);
     // Page 2 : chambre de tirage compatible
-    const etude = etudeChambreCourante();
-    if (etude && etude.etude.ok) {
+    const etudes = etudesChambresReseau();
+    for (const et of etudes) {
       const pc = new V.Page({ emitText: false, ombre: false });
-      etude.etude.nom = chambreProjet.nom || 'Chambre';
-      V.dessinerEtudeChambre(pc, etude.etude, etude.masques);
+      V.dessinerEtudeChambre(pc, et.etude, et.masques);
       writeVue3DPage(pdf, pc);
     }
-    if (m.chambre && !etude) {
+    if (m.chambre && !etudes.length) {
       const c = new V.Page({ emitText: false, ombre: false });
       const ch = m.chambre;
       c.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — chambre de tirage ${ch.ref}`, { bold: true });
@@ -9351,8 +9651,7 @@
     }
     if (confirmPdfExport) confirmPdfExport.addEventListener('click', exportToPDF);
     document.getElementById('chambreModeBtn')?.addEventListener('click', () => {
-      const o = document.getElementById('chambreOverlay');
-      if (o && !o.hidden) masquerVueChambre(); else activerChambre();
+      if (reseau && reseau.actif.vue !== 'coupe') masquerVues(); else activerReseau();
     });
     if (cancelPdfExport) cancelPdfExport.addEventListener('click', closePdfExportModal);
     if (closePdfExportBtn) closePdfExportBtn.addEventListener('click', closePdfExportModal);
@@ -10106,7 +10405,7 @@
             chamberRef: compatChambresState.appliedUnit?.ref || null
           },
           // Chambre à plusieurs faces (mode chambre) : absente des anciens projets
-          chambre: exporterChambre(),
+          reseau: exporterReseau(),
           fourreaux: fourreaux.map(f => ({
             ...f,
             // Assurer la sérialisation complète
@@ -10242,8 +10541,8 @@
           }
 
           // Chambre : rechargée avec le projet ; conservée quand on change de face
-          if (!opts.garderChambre) { importerChambre(projectData.chambre); masquerVueChambre(); }
-          majBandeauChambre();
+          if (!opts.garderChambre) { importerReseau(projectData.reseau, projectData.chambre); masquerVues(); }
+          majBandeau();
 
           // Mettre à jour l'affichage
           toggleInputGroups();
