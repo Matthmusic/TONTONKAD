@@ -136,6 +136,12 @@ quelle face d'une chambre, vue de dessus : `pignonA` (gauche), `pignonB`
 - le PDF ajoute une **vue de dessus** : fourreaux sur chaque face, traversées
   numérotées et colorées, légende.
 
+- **chambre maçonnée** : ajouter `"maconnee": { "paroi": 200, "tampon": { "L": 600, "l": 600, "classe": "D400" }, "zone": "chaussee" }`
+  (tout est facultatif). Les cotes intérieures sont déduites des nappes, le
+  nombre de tampons de la longueur, et la classe du tampon est contrôlée
+  selon la zone (NF EN 124). Sans préfabriquée qui convienne, la maçonnée est
+  proposée d'office. **Valeurs par défaut à valider.**
+
 Démo : `node test/chambre-demo.js sortie.pdf`.
 
 ### DXF

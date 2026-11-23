@@ -163,7 +163,6 @@
           <span id="update-btn-download-text">Télécharger maintenant</span>
         </button>
         <button class="btn-primary hidden" id="update-btn-restart">
-          <span>🔄</span>
           <span>Redémarrer maintenant</span>
         </button>
       </div>
@@ -237,7 +236,6 @@
       <div class="modal-actions">
         <button id="settings-cancel-btn" type="button" class="btn-cancel">Annuler</button>
         <button id="settings-save-btn" type="button" class="btn-primary">
-          <span>💾</span>
           <span>Enregistrer</span>
         </button>
       </div>
@@ -676,14 +674,14 @@
                 </svg>
                 <span class="ctrl-label">Réduire</span>
               </button>
-              <button id="chambreModeBtn" class="ctrl-btn" aria-label="Mode chambre : vue de dessus de la chambre de tirage et de ses 4 faces" title="Mode chambre (vue de dessus, 4 faces, traversées)">
+              <button id="chambreModeBtn" class="ctrl-btn" aria-label="Réseau : synoptique des chambres, coffrets et sorties" title="Réseau : synoptique, chambres, tronçons">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                   <rect x="5" y="7" width="14" height="10" stroke="currentColor" stroke-width="2" fill="none"/>
                   <line x1="1" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                   <line x1="19" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                   <line x1="12" y1="2" x2="12" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
-                <span class="ctrl-label">Chambre</span>
+                <span class="ctrl-label">Réseau</span>
               </button>
               <button id="rotateBoxCcw" class="ctrl-btn ctrl-btn-square" aria-label="Tourner la boîte de 90° antihoraire" title="90° gauche">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -888,6 +886,7 @@
   <script src="compat-chambres.js"></script>
   <script src="chambres-infos.js"></script>
   <script src="chambre-faces.js"></script>
+  <script src="reseau.js"></script>
   <script src="vue3d.js"></script>
   <script src="script.js" defer></script>
   <script src="dimension-button-handler.js" defer></script>
@@ -1041,10 +1040,10 @@
 
           <!-- Sauvegarde projet actuel -->
           <div class="project-save">
-            <h4>💾 Sauvegarder le projet actuel</h4>
+            <h4>Sauvegarder le projet actuel</h4>
             <div class="project-field">
               <select id="projectFolder" class="project-folder-select" aria-label="Dossier de destination du projet">
-                <option value="">🏠 Racine (sans dossier)</option>
+                <option value="">Racine (sans dossier)</option>
               </select>
               <input type="text" id="newProjectName" placeholder="Nom du projet..." maxlength="50" list="existingProjects" aria-label="Nom du projet">
               <datalist id="existingProjects"></datalist>
@@ -1055,7 +1054,8 @@
           <!-- Projets sauvegardés -->
           <div class="projects-list-section">
             <div class="projects-header">
-              <h4>📂 Projets sauvegardés</h4>
+              <h4>Projets sauvegardés</h4>
+              <button id="importProject" type="button" class="btn-secondary btn-compact" title="Ouvrir un fichier projet (.json, .tontonkad) — Ctrl+O">Ouvrir un fichier…</button>
               <button id="toggleFolderCreation" type="button" class="btn-secondary btn-compact">+ Créer un dossier</button>
             </div>
             <div id="folderCreationField" class="folder-field" style="display: none;">
@@ -1073,7 +1073,7 @@
         <div class="auto-save-section" id="autoSaveSection">
           <div class="auto-save-info">
             <div class="auto-save-status" id="autoSaveStatus">
-              <span class="icon">💾</span>
+              <span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg></span>
               <span class="text" id="autoSaveText">Aucune auto-sauvegarde</span>
             </div>
             <button id="restoreAutoSave" type="button" class="btn-secondary btn-compact" style="display: none;">Restaurer</button>
@@ -1083,7 +1083,6 @@
 
         <!-- Éléments cachés pour fonctionnalité existante -->
         <button id="exportCurrentProject" type="button" style="display: none;">Export actuel</button>
-        <button id="importProject" type="button" style="display: none;">Import</button>
         <input type="file" id="importProjectFile" accept=".tontonkad,.json" style="display: none;">
       </div>
     </div>

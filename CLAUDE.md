@@ -62,7 +62,7 @@ The renderer uses a **hybrid rendering approach**:
 API exposed via `window.PACKER`:
 
 - **`solve(tubes, opts)`** - computes one layout. Free mode favors a "trench" shape (width ≥ height, ratio 1–2) that is as compact as possible; locked mode (`opts.lock = 'w' | 'h'`) preserves the imposed axis (locked height → narrowest layout that fits); `opts.shape = 'circ'` → circular conduit layout.
-- **`variants(tubes, opts)`** - up to 3 candidate layouts, tagged (`compact` = same as `solve`, `tranchee`, `rect43`) and de-duplicated.
+- **`variants(tubes, opts)`** - up to 4 trade-off layouts from the same width sweep, de-duplicated: `compact` (= `solve`), `etroite` (narrowest trench), `basse` (shallowest trench) and, when `opts.faces` lists chamber entry faces (smallest first), `chambre` (most compact layout fitting the first face, named in `face`). The variants panel does not auto-open; the rail button shows the count.
 - **`anchorLayout(cfg, box)`** - anchors a layout into an existing box: laid at the BOTTOM (lit de pose), centered horizontally; a free axis is only grown (to the next multiple of 5) if the layout does not fit. With `box.shape = 'circ'`, centred in the conduit and the diameter grown only if needed. Converts to canvas coordinates (circle centers, mm).
 - **`GEO`** (`{ gap, margin }`) - écart between tubes and lit de pose, driven by the control-bar sliders in the UI.
 
@@ -86,9 +86,10 @@ Besides `packer.js`, several business-logic pieces have been extracted out of `s
 | `cable-assign.js` | `window.CableAssign` | Packs a liaison's cables into fourreaux (built on `packer.js`) | `cable-assign.test.js` |
 | `big-brain.js` | `window.BigBrain` | Pure adapter between `CableAssign`/reserve output and the panel | `big-brain.test.js` |
 | `caneco-import.js` | `window.CanecoImport` | Parses raw Caneco cable-schedule rows (`.xls`/`.xlsx`) into BIG BRAIN liaison drafts | `caneco-import.test.js` |
-| `chambres-infos.js` | `window.ChambresInfos` | Chamber choice for a W × H nappe (`chambrePourNappe`, same rule as `compat-chambres.js`) + indicative walls/covers/total height per model | `vue3d.test.js`, `mcp-masque.test.js` |
+| `chambres-infos.js` | `window.ChambresInfos` | Chamber choice for a W × H nappe (`chambrePourNappe`, same rule as `compat-chambres.js`) + indicative walls/covers/total height per model; `chambreMaconnee` sizes a cast-in-place chamber from the face nappes (default clearances, wall, tampon opening/NF EN 124 class vs zone — all « à valider »), used when no precast model fits or when the node is set to « Maçonnée » | `vue3d.test.js`, `mcp-masque.test.js`, `chambre-maconnee.test.js` |
 | `vue3d.js` | `window.Vue3D` | 3D views (cavalier perspective, textured) as raw PDF operators: section, trench, draw-pit. Shared by the app's PDF export (jsPDF `internal.write`) and the MCP server | `vue3d.test.js` |
 | `chambre-faces.js` | `window.ChambreFaces` | Multi-face draw-pit study: one masque per face (pignon A/B, long-pan A/B), smallest fitting chamber, through-routes (straight / angle) and terminating liaisons | `vue3d.test.js` |
+| `reseau.js` | `window.Reseau` | Project network: nodes (chambres, coffrets/tableaux, sorties) with name/colour/position, tronçons between node faces with length and ONE coupe; face choice, next-node navigation, coffret bottom-face fit check, network-wide liaison continuity (`continuite`) and fourreau take-off by type (`metre`), migration of the earlier single-chamber format | `reseau.test.js` |
 
 ### BIG BRAIN: Circuit → Cable → Fourreau Pipeline
 

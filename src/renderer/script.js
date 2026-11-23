@@ -1139,7 +1139,7 @@
         const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
         if (selSpec) {
           generateVirtualSlots(selSpec.od);
-          console.log('[UNDO] Grille recalculée après restauration');
+          console.debug('[UNDO] Grille recalculée après restauration');
         }
       } else {
         // Si aucun fourreau sélectionné, vider les slots virtuels
@@ -1178,7 +1178,7 @@
   /* ====== Logique de Placement ====== */
   function placementDebug(message, data = {}) {
     if (DEBUG_PLACEMENT) {
-      console.log(`[PLACEMENT] ${message}`, data);
+      console.debug(`[PLACEMENT] ${message}`, data);
     }
   }
 
@@ -1285,30 +1285,6 @@
     return { valid: true, reason: null };
   }
 
-  function validatePlacementBatch(candidates, options = {}) {
-    const gapPx = (options.enforceGap ?? true) ? FOURREAU_GAP * MM_TO_PX : 0;
-
-    for (const candidate of candidates) {
-      const inside = isInsideBox(candidate.x, candidate.y, candidate.r, {
-        requireSafetyMargin: options.requireSafetyMargin ?? false
-      });
-      if (!inside) {
-        return { valid: false, reason: 'outside-box', candidate };
-      }
-    }
-
-    for (let i = 0; i < candidates.length; i++) {
-      for (let j = i + 1; j < candidates.length; j++) {
-        const a = candidates[i];
-        const b = candidates[j];
-        if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r + gapPx) {
-          return { valid: false, reason: 'batch-collision', candidate: a, other: b };
-        }
-      }
-    }
-
-    return { valid: true, reason: null };
-  }
 
   function findFreeSpot(x, y, r, ignoreId) {
     if (validatePlacement({ x, y, r, id: ignoreId }, { ignoreId }).valid) return { x, y };
@@ -1472,7 +1448,7 @@
 
   // Fonction principale d'arrangement - utilise toujours le nouveau moteur intelligent
   function arrangeConduitGrid(options = {}) {
-    arrangeConduitGridNew();
+    arrangeConduitGridNew(options);
   }
 
   // Rendre la fonction accessible globalement
@@ -1481,7 +1457,7 @@
   /**
    * Système de placement utilisant le packer (window.solve / window.variants)
    */
-  function arrangeConduitGridNew() {
+  function arrangeConduitGridNew(options = {}) {
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à disposer en grille');
       return;
@@ -1515,7 +1491,7 @@
       applyAnchoredConfig(bestConfig);
 
       // Exposer les variantes dans le panel d'alternatives
-      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
+      const allConfigs = variantesAutourDe(bestConfig, tubes, optsPacker);
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
       lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input)];
 
@@ -1529,7 +1505,7 @@
 
       // Afficher taux d'occupation et feedback
       const fillPercent = calculateBoxOccupancy().toFixed(0);
-      showToast(`✅ ${fourreaux.length} fourreaux placés (Occupation: ${fillPercent}%) - Ctrl+X pour dégeler`);
+      if (!options.silencieux) showToast(`✅ ${fourreaux.length} fourreaux placés (Occupation: ${fillPercent}%) - Ctrl+X pour dégeler`);
 
       updateStats();
       redraw();
@@ -1911,6 +1887,24 @@
     redraw();
   }
 
+  // Faces d'entrée des chambres préformées (pignon puis long-pan), de la plus
+  // petite à la plus grande : la variante « chambre » vise la première qui convient.
+  function facesChambresPreformees() {
+    if (!window.CompatChambres || shapeSel.value === 'circ') return [];
+    return window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE)
+      .flatMap((m) => [{ nom: `${m.ref} par le pignon`, w: m.l, h: m.H }, { nom: `${m.ref} par le long-pan`, w: m.L, h: m.H }])
+      .sort((a, b) => a.w * a.h - b.w * b.h);
+  }
+
+  // Variantes à proposer autour du placement posé (bestConfig, en 1re position).
+  // Si le moteur rattache une chambre à la variante identique, on la reporte.
+  function variantesAutourDe(bestConfig, tubes, optsPacker) {
+    const vs = window.variants(tubes, { ...optsPacker, faces: facesChambresPreformees() });
+    const meme = vs.find((v) => v.tag === bestConfig.tag);
+    if (meme && meme.face && !bestConfig.face) bestConfig.face = meme.face;
+    return [bestConfig, ...vs.filter((v) => v.tag !== bestConfig.tag)];
+  }
+
   function showLayoutPreviewPanel() {
     const railBtn = document.getElementById('layoutPreviewRailBtn');
     const cardsEl = document.getElementById('layoutPreviewCards');
@@ -1924,35 +1918,40 @@
       return;
     }
 
-    // La 1re carte réduit la boîte au contenu ; la 2e est le placement qui
-    // vient d'être posé (étoile) ; les suivantes sont les autres formes.
-    const STRATEGY_FR = {
-      compact:  'Placement proposé',
-      locked:   'Cote imposée',
-      cercle:   'Conduit',
-      tranchee: 'Tranchée',
-      rect43:   'Rectangle 4/3',
-    };
-
+    // Cartes : la boîte serrée (réduire la boîte au contenu), puis les formes de
+    // nappe. La 2e carte est le placement en place ; les suivantes, des choix
+    // métier (étroite, peu profonde, compatible chambre). Cotes en registre afficheur.
+    const NOM = { compact: 'Proposé', locked: 'Cote imposée', cercle: 'Conduit', etroite: 'La plus étroite', basse: 'La moins profonde', chambre: 'Compatible chambre' };
+    const AIDE = { compact: 'Meilleur compromis largeur / profondeur', locked: 'Respecte la cote verrouillée', cercle: 'Rangement en nid d\'abeille',
+      etroite: 'Emprise minimale : tranchée plus profonde', basse: 'Fouille minimale : tranchée plus large', chambre: '' };
     cardsEl.innerHTML = visibleVariants.map(({ v, originalIdx }, i) => {
-      const label      = v.isCompact ? 'BOÎTE SERRÉE' : (STRATEGY_FR[v.name] || v.name).toUpperCase();
-      const desc       = v.isCompact ? 'Boîte réduite au contenu' : (STRATEGY_FR[v.name] || v.name);
-      const isOptimized = i === 1;
-      const scoreLabel = v.isNappeLayout
-        ? `${v.container.width.toFixed(0)}×${v.container.height.toFixed(0)}mm · ${v.score.toFixed(0)}%`
-        : desc;
-      const extraClass = isOptimized ? ' card-optimized' : '';
-      const badge      = isOptimized ? '<span class="card-optimized-badge">⭐</span>' : '';
-      return `<div class="layout-preview-card${i === 0 ? ' active' : ''}${extraClass}" data-idx="${originalIdx}" title="${label} — ${scoreLabel}">
-        ${badge}
+      const enPlace = i === 1;
+      const titre = v.isCompact ? 'Boîte serrée' : (NOM[v.name] || v.name);
+      const aide = v.isCompact ? 'Réduit la boîte au contenu actuel' : (v.name === 'chambre' && v.face ? `Passe dans une ${v.face}` : (AIDE[v.name] || ''));
+      // cotes et occupation de la NAPPE elle-même (la boîte affichée peut être plus grande)
+      let cotes = '';
+      if (v.isNappeLayout && v.nappe) {
+        const W = v.nappe.w, H = v.nappe.h, aire = (v.nappe.items || []).reduce((a, it) => a + Math.PI * it.d * it.d / 4, 0);
+        cotes = `<span class="layout-preview-card-cotes">[${Math.round(W)} × ${Math.round(H)}] mm · ${Math.round(aire / (W * H) * 100)} %</span>`;
+      }
+      const chambre = v.face && v.name !== 'chambre' ? `<span class="layout-preview-card-name">Passe dans une ${v.face}</span>` : '';
+      const etat = enPlace ? '<span class="layout-preview-card-etat">En place</span>' : '';
+      return `<button type="button" class="layout-preview-card${enPlace ? ' active' : ''}" data-idx="${originalIdx}" aria-pressed="${enPlace}" title="${titre} — ${aide}">
+        ${etat}
         ${renderVariantSVG(v)}
-        <span class="layout-preview-card-label">${label}</span>
-        <span class="layout-preview-card-name">${v.isNappeLayout ? scoreLabel : desc}</span>
-      </div>`;
+        <span class="layout-preview-card-label">${titre}</span>
+        ${cotes}
+        <span class="layout-preview-card-name">${aide}</span>
+        ${chambre}
+      </button>`;
     }).join('');
 
+    // Pas d'ouverture automatique : le bouton du rail indique combien de choix
+    // existent, l'utilisateur ouvre le panneau quand il le veut.
     railBtn.style.display = 'flex';
-    openRightToolsPane('variantes'); // toujours ouvert à l'ouverture d'un nouveau placement
+    railBtn.dataset.count = String(visibleVariants.length - 1);
+    railBtn.title = `Variantes de placement (${visibleVariants.length - 1})`;
+    if (rightToolsState.active === 'variantes') openRightToolsPane('variantes'); // déjà ouvert : rafraîchi
 
     cardsEl.querySelectorAll('.layout-preview-card').forEach(card => {
       card.addEventListener('click', () => {
@@ -1994,6 +1993,7 @@
       return {
         isNappeLayout: true,
         name:  cfg.tag || 'auto',
+        face:  cfg.face || null,
         // vrai taux d'occupation : surface des fourreaux / surface de la boîte
         score: occupancyPercent(anchored.positions, anchored.w, anchored.h, shapeSel.value),
         nappe: cfg,
@@ -2478,7 +2478,7 @@
       applyDimensions();
 
       // Panel variantes
-      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
+      const allConfigs = variantesAutourDe(bestConfig, tubes, optsPacker);
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
       lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, expandedInput)];
 
@@ -2499,15 +2499,15 @@
     }
   }
 
-  function reduceToMinimum() {
-    reduceToMinimumNew();
+  function reduceToMinimum(options = {}) {
+    reduceToMinimumNew(options);
   }
 
   /**
    * Système de réduction utilisant le packer (window.solve / window.variants)
    * Génère placement optimal ET réduit dimensions au minimum
    */
-  function reduceToMinimumNew() {
+  function reduceToMinimumNew(options = {}) {
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à redimensionner');
       return;
@@ -2566,7 +2566,7 @@
       }
 
       // Exposer les variantes (chacune déjà serrée à son minimum)
-      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
+      const allConfigs = variantesAutourDe(bestConfig, tubes, optsPacker);
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
       lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input)];
 
@@ -2576,7 +2576,7 @@
 
       // Afficher taux d'occupation et feedback
       const fillPercent = calculateBoxOccupancy().toFixed(0);
-      showToast(`✅ Boîte redimensionnée à ${newWidth}×${newHeight}mm (Occupation: ${fillPercent}%)`);
+      if (!options.silencieux) showToast(`✅ Boîte redimensionnée à ${newWidth}×${newHeight}mm (Occupation: ${fillPercent}%)`);
 
       updateStats();
       redraw();
@@ -2876,13 +2876,13 @@
           const selSpec = FOURREAUX.find(f => f.type === selType && f.code === selCode);
           if (selSpec) {
             generateVirtualSlots(selSpec.od);
-            console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille recalculée pour ${fourreaux.length} fourreau(x) restant(s)`);
+            console.debug(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille recalculée pour ${fourreaux.length} fourreau(x) restant(s)`);
           }
         } else if (virtualSlots.length > 0 || pendingFourreauType) {
           // Pas de sélection mais des cellules virtuelles étaient affichées : les vider
           virtualSlots = [];
           pendingFourreauType = null;
-          console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), cellules virtuelles vidées`);
+          console.debug(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), cellules virtuelles vidées`);
         }
       } else {
         // Plus de fourreaux : réinitialiser complètement la grille
@@ -2893,7 +2893,7 @@
         gridLocked = false;
         gridFourreauxCount = 0;
         deactivateVirtualPlacement();
-        console.log(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille complètement réinitialisée`);
+        console.debug(`[SUPPRESSION] ${deletedFourreauxCount} fourreau(x) supprimé(s), grille complètement réinitialisée`);
       }
     }
 
@@ -3079,7 +3079,7 @@
     });
 
     lastGridCells = optimizedCells;
-    console.log(`[GRID] Généré ${optimizedCells.length} cellules depuis layout actuel`);
+    console.debug(`[GRID] Généré ${optimizedCells.length} cellules depuis layout actuel`);
   }
 
   /**
@@ -3139,7 +3139,7 @@
     // Ajouter les nouvelles cellules à la grille
     lastGridCells.push(...newCells);
 
-    console.log(`[EXPANSION] Ajouté ${newCells.length} cellules adjacentes autour du fourreau ${fourreau.id}`);
+    console.debug(`[EXPANSION] Ajouté ${newCells.length} cellules adjacentes autour du fourreau ${fourreau.id}`);
   }
 
   function dedupeVirtualSlots(slots, tolerancePx = 5) {
@@ -3172,7 +3172,7 @@
 
     // Si aucun fourreau placé, pas de cellules virtuelles à générer
     if (fourreaux.length === 0) {
-      console.log('[VIRTUAL SLOTS] Aucun fourreau placé, aucune cellule virtuelle générée');
+      console.debug('[VIRTUAL SLOTS] Aucun fourreau placé, aucune cellule virtuelle générée');
       return;
     }
 
@@ -3242,7 +3242,7 @@
     });
 
     virtualSlots = dedupeVirtualSlots(virtualSlots, 5);
-    console.log(`[VIRTUAL SLOTS DYNAMIQUE] Généré ${virtualSlots.length} emplacements pour Ø${selectedOd}mm autour de ${fourreaux.length} fourreaux`);
+    console.debug(`[VIRTUAL SLOTS DYNAMIQUE] Généré ${virtualSlots.length} emplacements pour Ø${selectedOd}mm autour de ${fourreaux.length} fourreaux`);
   }
 
   /**
@@ -3392,7 +3392,7 @@
     };
     animateSlots();
 
-    console.log(`[VIRTUAL PLACEMENT] Activé pour ${type} ${code} (Ø${spec.od}mm)`);
+    console.debug(`[VIRTUAL PLACEMENT] Activé pour ${type} ${code} (Ø${spec.od}mm)`);
   }
 
   /**
@@ -3777,8 +3777,9 @@
     if (showInfo && f.label && f.label.trim()) {
       ctx.fillStyle = "#fff";
       ctx.strokeStyle = "#000";
-      ctx.lineWidth = getScaledLineWidth(2);
-      ctx.font = `bold ${getScaledLineWidth(12)}px Arial`;
+      ctx.lineWidth = getScaledLineWidth(3);
+      ctx.lineJoin = 'round';
+      ctx.font = `600 ${getScaledLineWidth(12)}px "IBM Plex Sans", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
       // Contour noir pour meilleure lisibilité
@@ -5475,6 +5476,21 @@
   }
 
   // Système de notifications intégrées
+
+  // Icônes dessinées (trait 2, même famille que la barre d'outils) : pas d'emoji comme icône.
+  const ICONE = (() => {
+    const svg = (d) => `<svg class="icone" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    return {
+      dossier: svg('<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'),
+      racine: svg('<path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>'),
+      ouvrir: svg('<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>'),
+      sauver: svg('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>'),
+      renommer: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+      exporter: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'),
+      supprimer: svg('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+    };
+  })();
+
   function showToast(msg, type = 'default', duration = 3000, onClick = null) {
     // Détecter automatiquement le type si msg contient des emojis
     if (!type || type === 'default') {
@@ -5489,32 +5505,40 @@
       }
     }
 
-    // Icônes par type
-    const icons = {
-      success: '✅',
-      error: '❌',
-      warning: '⚠️',
-      info: 'ℹ️',
-      default: '💬'
-    };
 
     // Nettoyer les emojis du message s'ils sont déjà dans le texte
-    const cleanMsg = msg.replace(/^(✅|❌|⚠️|ℹ️|💬|🔒|🔧)\s*/, '');
+    const cleanMsg = String(msg).replace(/^(?:\p{Extended_Pictographic}\uFE0F?\s*)+/u, ''); // l'emoji de tête devient le type
 
     // Créer la notification
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
 
+    // Indicateur de type : un point de couleur (pas d'emoji), lu par les lecteurs d'écran
     const icon = document.createElement('span');
     icon.className = 'notification-icon';
-    icon.textContent = icons[type] || icons.default;
+    icon.setAttribute('aria-hidden', 'true');
+    notification.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
     const content = document.createElement('span');
     content.className = 'notification-content';
     content.textContent = cleanMsg;
+    const TITRES = { success: 'Fait', error: 'Erreur', warning: 'Attention', info: 'Info' };
+    if (TITRES[type]) {
+      const titre = document.createElement('strong');
+      titre.className = 'notification-titre';
+      titre.textContent = TITRES[type];
+      content.prepend(titre);
+    }
 
     notification.appendChild(icon);
     notification.appendChild(content);
+
+    // Un message identique remplace le précédent ; au plus 3 à l'écran
+    [...notificationContainer.children].forEach((n) => {
+      if (n.querySelector('.notification-content')?.textContent === cleanMsg) n.remove();
+    });
+    while (notificationContainer.children.length >= 3) notificationContainer.firstElementChild.remove();
+    if (type === 'error' && duration === 3000) duration = 6000; // une erreur se lit
 
     // Ajouter au conteneur
     notificationContainer.appendChild(notification);
@@ -5687,7 +5711,7 @@
     };
     // Debug log temporaire
     if (window._debugCanvasCoords) {
-      console.log('📍 canvasCoords:', {
+      console.debug('📍 canvasCoords:', {
         client: { x: e.clientX, y: e.clientY },
         rect: { left: r.left, top: r.top, width: r.width, height: r.height },
         logical: { w: logicalW, h: logicalH },
@@ -5991,7 +6015,7 @@
       if (fourreau) {
         // Recalculer avec le fourreau en cours de déplacement exclu
         generateVirtualSlots(fourreau.od, fourreau.id);
-        console.log('[DRAG] Cellules virtuelles générées pour déplacement de fourreau', fourreau.id);
+        console.debug('[DRAG] Cellules virtuelles générées pour déplacement de fourreau', fourreau.id);
       }
     }
 
@@ -7221,7 +7245,7 @@
 
   /* ====== Export PDF Functions ====== */
   // Helpers de debug PDF
-  const logPdf = (...args) => console.log('[PDF]', ...args);
+  const logPdf = (...args) => console.debug('[PDF]', ...args);
   const warnPdf = (...args) => console.warn('[PDF]', ...args);
   const errorPdf = (...args) => console.error('[PDF]', ...args);
 
@@ -7321,10 +7345,6 @@
     return (cablesArea / fourreauInnerArea) * 100;
   }
 
-  // Libellés/textes PDF extraits dans pdf-format.js (purs, testés). Wrappers fins.
-  function getPdfObjectLabel(obj, fallback) {
-    return PdfFormat.getObjectLabel(obj, fallback);
-  }
   function getPdfFourreauName(fourreau, numero) {
     return PdfFormat.getFourreauName(fourreau, numero);
   }
@@ -7500,214 +7520,828 @@
 
 
 
-  /* ── Mode chambre : un projet = une chambre à 4 faces (une coupe par face) ── */
-  // chambreProjet = { nom, ref (null = automatique), faceActive, faces: { cle: état sauvegardé | null } }
-  // La face ACTIVE vit dans le plan affiché (fourreaux/câbles/boîte) ; les autres
-  // faces sont des états complets (même format qu'un projet enregistré).
-  let chambreProjet = null;
-  const FACES_CHAMBRE = ['pignonA', 'pignonB', 'longPanA', 'longPanB'];
+  /* ── Réseau : synoptique, chambres, coupes de tronçons (reseau.js) ───────
+   * reseau = null → plan simple (comportement historique).
+   * Sinon : nœuds (chambres, coffrets, sorties) et tronçons ; chaque tronçon
+   * porte UNE coupe. La coupe du tronçon ACTIF vit dans le plan affiché
+   * (fourreaux/câbles/boîte) ; les autres sont des états enregistrés. */
+  let reseau = null;
+  const R = () => window.Reseau;
+  const LIB = (f) => (window.Reseau ? window.Reseau.LIBELLE_FACE[f] : f);
 
-  function exporterChambre() {
-    if (!chambreProjet) return undefined;
-    return { nom: chambreProjet.nom, ref: chambreProjet.ref, faceActive: chambreProjet.faceActive,
-      faces: { ...chambreProjet.faces, [chambreProjet.faceActive]: null } };
+  function exporterReseau() {
+    if (!reseau) return undefined;
+    const copie = JSON.parse(JSON.stringify(reseau));
+    const t = copie.troncons.find((x) => x.id === copie.actif.troncon);
+    if (t) t.coupe = null; // la coupe active est le plan principal du projet
+    return copie;
   }
-  function importerChambre(c) {
-    if (!c || !c.faces) { chambreProjet = null; return; }
-    const faces = {};
-    FACES_CHAMBRE.forEach(k => { faces[k] = c.faces[k] || null; });
-    chambreProjet = { nom: c.nom || 'Chambre', ref: c.ref || null, faceActive: FACES_CHAMBRE.includes(c.faceActive) ? c.faceActive : 'pignonA', faces };
+  function importerReseau(data, ancienneChambre) {
+    if (data && Array.isArray(data.noeuds)) reseau = JSON.parse(JSON.stringify(data));
+    else if (ancienneChambre && window.Reseau) reseau = window.Reseau.depuisAncienneChambre(ancienneChambre, null);
+    else reseau = null;
   }
-  function etatFace(k) {
-    if (!chambreProjet) return null;
-    return k === chambreProjet.faceActive ? etatPlanCourant() : (chambreProjet.faces[k] ? etatDepuisSauvegarde(chambreProjet.faces[k]) : null);
+  // Coupe du plan affiché → tronçon actif (copie propre, sans le réseau).
+  function sauverCoupeActive() {
+    if (!reseau || !reseau.actif.troncon) return;
+    const t = R().troncon(reseau, reseau.actif.troncon);
+    if (!t) return;
+    const etat = window.projectManager.captureCurrentState();
+    delete etat.reseau; delete etat.chambre;
+    t.coupe = etat;
   }
-  function compterFourreaux(k) { const st = etatFace(k); return st ? st.fourreaux.length : 0; }
+  function etatTroncon(t) {
+    if (!t) return null;
+    if (reseau && t.id === reseau.actif.troncon) return etatPlanCourant();
+    return t.coupe ? etatDepuisSauvegarde(t.coupe) : null;
+  }
+  function masqueTroncon(t) {
+    const st = etatTroncon(t);
+    if (!st || !st.fourreaux.length) return null;
+    const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false);
+    return m && m.forme === 'rect' ? m : null;
+  }
+  // Fourreaux d'un tronçon par diamètre, du plus gros au plus petit : ['6 Ø200', '2 Ø160'].
+  function lignesFourreaux(t) {
+    const st = etatTroncon(t);
+    if (!st || !st.fourreaux.length) return ['coupe vide'];
+    const n = new Map();
+    st.fourreaux.forEach((f) => { const d = Math.round(f.od || Number(f.code) || 0); n.set(d, (n.get(d) || 0) + 1); });
+    return [...n].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q} Ø${d}`);
+  }
+  // Étiquette d'un tronçon : un diamètre par ligne, la distance tout en bas.
+  function etiquetteTroncon(t) { return [...lignesFourreaux(t), t.longueurM ? `${t.longueurM} m` : '? m']; }
+  function resumeFourreaux(t) {
+    return lignesFourreaux(t).join(' + ');
+  }
 
-  // Étude de la chambre (chambre-faces.js) à partir des faces renseignées.
-  function etudeChambreCourante() {
-    if (!chambreProjet || !window.ChambreFaces) return null;
+
+  // Liaisons et fourreaux d'un tronçon (continuité, métré, synoptique).
+  function liaisonsDeTroncon(t) {
+    const st = etatTroncon(t);
+    if (!st) return [];
+    const noms = new Set();
+    (st.cables || []).forEach((c) => { if (c.liaison) noms.add(c.liaison); });
+    if (!noms.size) (st.fourreaux || []).forEach((f) => { if (f.label) noms.add(f.label); });
+    return [...noms];
+  }
+  function fourreauxDeTroncon(t) {
+    const st = etatTroncon(t);
+    return st ? st.fourreaux.map((f) => ({ type: f.type || '', code: String(f.code || '') })) : [];
+  }
+  // Données du synoptique pour vue3d.js (2D / isométrique, écran et PDF).
+  function donneesSynoptique() {
+    const noeuds = reseau.noeuds.map((n) => {
+      let sous = '';
+      if (n.type === 'chambre') { const e = etudeChambre(n); sous = e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'); }
+      if (n.type === 'coffret') sous = n.coffret.genre + (n.coffret.largeur && n.coffret.profondeur ? ` ${n.coffret.largeur}×${n.coffret.profondeur}` : '');
+      return { nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, sous };
+    });
+    const troncons = reseau.troncons.map((t) => {
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
+      return { a: { x: A.x, y: A.y, face: t.a.face, type: A.type }, b: { x: B.x, y: B.y, face: t.b.face, type: B.type }, label: etiquetteTroncon(t) };
+    });
+    return { noeuds, troncons };
+  }
+
+  const MACONNEE = '__maconnee'; // valeur de n.ref pour une chambre maçonnée sur mesure
+  // Liaisons du réseau dans un ordre stable (première apparition, tronçon par tronçon) :
+  // l'index donne la couleur d'une liaison, identique d'une chambre à l'autre.
+  function ordreLiaisonsReseau() {
+    const vus = [];
+    const ajoute = (n) => { if (n && !vus.includes(n)) vus.push(n); };
+    (reseau ? reseau.troncons : []).forEach((t) => {
+      liaisonsDeTroncon(t).forEach(ajoute);
+      const st = etatTroncon(t); // fourreaux de réserve : liaison = libellé, sans câble
+      (st ? st.fourreaux : []).forEach((f) => ajoute(f.label));
+    });
+    return vus;
+  }
+  // Étude d'une chambre (chambre-faces.js) à partir des coupes de ses tronçons.
+  function etudeChambre(nd) {
+    if (!reseau || !nd || nd.type !== 'chambre' || !window.ChambreFaces) return null;
     const masques = {};
-    FACES_CHAMBRE.forEach(k => {
-      const st = etatFace(k);
-      if (!st || !st.fourreaux.length) return;
-      const n = st.fourreaux.length;
-      const m = buildMasqueFromState(st, `${n} fourreau${n > 1 ? 'x' : ''}`, false);
-      if (m && m.forme === 'rect') masques[k] = m;
+    R().FACES_CHAMBRE.forEach((f) => {
+      const v = R().surFace(reseau, nd.id, f);
+      const m = v && masqueTroncon(v.troncon);
+      if (!m) return;
+      // sens du tronçon sur cette face : la coupe est vue de dos à l'arrivée
+      m.sens = v.troncon.a.noeud === nd.id && v.troncon.a.face === f ? 'depart' : 'arrivee';
+      masques[f] = m;
     });
     if (!Object.keys(masques).length) return null;
-    const etude = window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres,
-      { ref: chambreProjet.ref || undefined, infos: window.ChambresInfos && window.ChambresInfos.infosChambre });
+    const CI = window.ChambresInfos;
+    // Chambre maçonnée sur mesure : choisie, ou d'office si aucune préformée ne convient
+    const maconnee = () => window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres, {
+      modele: CI.chambreMaconnee(Object.fromEntries(Object.entries(masques).map(([k, m]) => [k, { largeur: m.largeur, hauteur: m.hauteur }])), nd.maconnee || {}) });
+    let etude;
+    if (nd.ref === MACONNEE && CI) etude = maconnee();
+    else {
+      etude = window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres,
+        { ref: nd.ref || undefined, infos: CI && CI.infosChambre });
+      if (!etude.ok && !nd.ref && CI) { etude = maconnee(); etude.avertissements.unshift('Aucune chambre préformée ne convient : chambre maçonnée proposée'); }
+    }
+    etude.nom = nd.nom;
+    etude.ordreLiaisons = ordreLiaisonsReseau(); // mêmes couleurs dans toutes les chambres
     return { etude, masques };
   }
 
-  function activerChambre() {
-    if (!chambreProjet) {
-      chambreProjet = { nom: 'Chambre', ref: null, faceActive: 'pignonA', faces: { pignonA: null, pignonB: null, longPanA: null, longPanB: null } };
-      showToast('Mode chambre : le plan actuel devient la face pignon A');
-    }
-    afficherVueChambre();
-  }
-
-  // Passe sur une autre face : la face courante est enregistrée, la cible chargée.
-  function ouvrirFace(k) {
-    if (!chambreProjet || !FACES_CHAMBRE.includes(k)) return;
-    if (k !== chambreProjet.faceActive) {
-      const pm = window.projectManager;
-      const courant = pm.captureCurrentState();
-      delete courant.chambre;
-      chambreProjet.faces[chambreProjet.faceActive] = courant;
-      const cible = chambreProjet.faces[k];
-      chambreProjet.faceActive = k;
-      chambreProjet.faces[k] = null;
-      if (cible) pm.restoreState(cible, { garderChambre: true });
-      else {
-        fourreaux.length = 0; cables.length = 0;
-        updateStats(); updateInventory(); updateSelectedInfo(); redraw();
+  // Active le réseau : le plan actuel devient la coupe du tronçon C1 → S1.
+  function activerReseau() {
+    if (!reseau) {
+      reseau = R().creerReseau();
+      const c1 = R().ajouterNoeud(reseau, 'chambre', { x: 260, y: 220 });
+      if (fourreaux.length) {
+        const s1 = R().ajouterNoeud(reseau, 'sortie', { x: 520, y: 220 });
+        const t = R().relier(reseau, c1.id, s1.id);
+        reseau.actif.troncon = t.id;
       }
-      actionHistory.length = 0; // pas d'annulation d'une face à l'autre
+      reseau.actif.noeud = c1.id;
+      showToast(fourreaux.length ? 'Réseau créé : le plan actuel devient la coupe du tronçon C1 → S1' : 'Réseau créé avec une chambre C1');
     }
-    masquerVueChambre();
-    showToast(`Face ${window.ChambreFaces.LIBELLE[k]} : dessinez ou générez sa coupe`);
+    afficherVue('synoptique');
   }
 
-  function quitterChambre() {
-    chambreProjet = null;
-    masquerVueChambre();
-    majBandeauChambre();
-    showToast('Mode chambre désactivé : le plan reste la face qui était ouverte');
+  // Ouvre la coupe d'un tronçon dans le canvas (la coupe affichée est enregistrée).
+  function ouvrirTroncon(tId) {
+    if (!reseau) return;
+    const t = R().troncon(reseau, tId);
+    if (!t) return;
+    if (tId !== reseau.actif.troncon) {
+      sauverCoupeActive();
+      const cible = t.coupe;
+      reseau.actif.troncon = tId;
+      t.coupe = null;
+      if (cible) window.projectManager.restoreState(cible, { garderChambre: true });
+      else { fourreaux.length = 0; cables.length = 0; updateStats(); updateInventory(); updateSelectedInfo(); redraw(); }
+      actionHistory.length = 0; // pas d'annulation d'une coupe à l'autre
+    }
+    afficherVue('coupe');
+    showToast(`Coupe du tronçon ${R().nomTroncon(reseau, t)} : dessinez ou générez-la`);
   }
 
-  function majBandeauChambre() {
-    let b = document.getElementById('chambreBandeau');
-    if (!chambreProjet) { if (b) b.hidden = true; return; }
+  // Face libre d'une chambre → nouvel élément « Sortie » relié par cette face.
+  function relierFaceLibre(nd, face) {
+    const dir = { pignonA: [-220, 0], pignonB: [220, 0], longPanA: [0, 170], longPanB: [0, -170] }[face] || [220, 0];
+    const s = R().ajouterNoeud(reseau, 'sortie', { x: nd.x + dir[0], y: nd.y + dir[1] });
+    return R().relier(reseau, nd.id, s.id, { faceA: face, faceB: 'sortie' });
+  }
+
+  /* ── Vues et bandeau de navigation ── */
+  function afficherVue(vue, noeudId) {
+    if (!reseau) return;
+    if (noeudId) reseau.actif.noeud = noeudId;
+    reseau.actif.vue = vue;
+    if (vue !== 'coupe' && typeof closeRightToolsPane === 'function') closeRightToolsPane(); // place pour le dessin
+    const syn = construireSynoptique(), ch = construireVueChambre();
+    syn.hidden = vue !== 'synoptique';
+    ch.hidden = vue !== 'chambre';
+    if (vue === 'synoptique') dessinerSynoptique();
+    if (vue === 'chambre') afficherVueChambre();
+    majBandeau();
+  }
+  function masquerVues() {
+    ['reseauOverlay', 'chambreOverlay'].forEach((id) => { const o = document.getElementById(id); if (o) o.hidden = true; });
+    if (reseau) reseau.actif.vue = 'coupe';
+    majBandeau();
+  }
+
+  function majBandeau() {
+    let b = document.getElementById('reseauBandeau');
+    if (!reseau) { if (b) b.hidden = true; return; }
     if (!b) {
-      b = document.createElement('div');
-      b.id = 'chambreBandeau';
-      b.className = 'chambre-bandeau';
+      b = document.createElement('nav');
+      b.id = 'reseauBandeau'; b.className = 'reseau-bandeau'; b.setAttribute('aria-label', 'Navigation du réseau');
       document.querySelector('.canvas-wrap')?.appendChild(b);
     }
-    b.hidden = false;
-    b.innerHTML = '';
-    const t = document.createElement('span');
-    t.textContent = `${chambreProjet.nom} — face ${window.ChambreFaces.LIBELLE[chambreProjet.faceActive]}`;
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'chambre-btn'; btn.textContent = 'Vue chambre';
-    btn.addEventListener('click', afficherVueChambre);
-    b.append(t, btn);
+    b.hidden = false; b.innerHTML = '';
+    const nd = reseau.actif.noeud && R().noeud(reseau, reseau.actif.noeud);
+    const t = reseau.actif.troncon && R().troncon(reseau, reseau.actif.troncon);
+    const onglet = (vue, libelle, actif, ok) => {
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'reseau-onglet' + (reseau.actif.vue === vue ? ' actif' : '');
+      x.textContent = libelle; x.disabled = !ok;
+      x.addEventListener('click', () => (vue === 'coupe' ? masquerVues() : afficherVue(vue)));
+      return x;
+    };
+    b.append(
+      onglet('synoptique', 'Synoptique', true, true),
+      onglet('chambre', nd && nd.type === 'chambre' ? `Chambre ${nd.nom}` : 'Chambre', false, !!(nd && nd.type === 'chambre')),
+      onglet('coupe', t ? `Coupe ${R().nomTroncon(reseau, t)}` : 'Coupe', false, !!t),
+    );
   }
+
+  // Couleurs et polices du thème courant (clair / sombre) pour les canvas.
+  function themeCanvas() {
+    const cs = getComputedStyle(document.documentElement), v = (n, d) => (cs.getPropertyValue(n).trim() || d);
+    return { fond: v('--modal-bg-solid', '#f8f9fa'), encre: v('--text-primary', '#1a1d1f'), ardoise: v('--text-secondary', '#4a5568'),
+      estompe: v('--text-muted', '#718096'), hairline: v('--glass-border', 'rgba(45,52,54,0.1)'), cuivre: v('--primary-orange', '#ff914d'),
+      surface: v('--bg-card', '#ffffff'), sans: "'IBM Plex Sans', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" };
+  }
+  // Flèche dessinée (pas de glyphe) : pointe vers dir ∈ left|right|up|down.
+  function dessinerFleche(ctx, x, y, dir, t = 5) {
+    const d = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
+    ctx.beginPath();
+    ctx.moveTo(x + d[0] * t, y + d[1] * t);
+    ctx.lineTo(x - d[0] * t + d[1] * t, y - d[1] * t + d[0] * t);
+    ctx.lineTo(x - d[0] * t - d[1] * t, y - d[1] * t - d[0] * t);
+    ctx.closePath(); ctx.fill();
+  }
+
+  /* ── Synoptique 2D ── */
+  const SYN = { sel: null, drag: null, lien: null, survol: null, vue: { k: 1, ox: 0, oy: 0 }, mode: '2d' };
+  // Taille d'un nœud dans le repère du synoptique : élargi pour contenir son nom,
+  // grossi par SYN.c quand le cadrage réduit fortement (texte toujours lisible).
+  const REF_AFFICHEE = new WeakMap(); // modèle affiché sous le nom d'une chambre (dernier dessin)
+  const tailleNoeud = (n) => {
+    const b = n.type === 'chambre' ? { w: 96, h: 52 } : n.type === 'coffret' ? { w: 56, h: 56 } : { w: 70, h: 40 };
+    const c = SYN.c || 1, sous = REF_AFFICHEE.get(n) || '';
+    const w = Math.max(b.w, String(n.nom || '').length * 7.8 + (n.type === 'sortie' ? 30 : 18), sous.length * 6.8 + 16);
+    return { w: w * c, h: b.h * c };
+  };
+  function noeudSous(x, y) {
+    return [...reseau.noeuds].reverse().find((n) => { const s = tailleNoeud(n); return Math.abs(x - n.x) <= s.w / 2 && Math.abs(y - n.y) <= s.h / 2; }) || null;
+  }
+  function poigneeSous(x, y) {
+    return reseau.noeuds.find((n) => Math.hypot(x - (n.x + tailleNoeud(n).w / 2 + 12 * (SYN.c || 1)), y - n.y) <= 9 * (SYN.c || 1)) || null;
+  }
+  function tronconSous(x, y) {
+    return reseau.troncons.find((t) => {
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
+      const dx = B.x - A.x, dy = B.y - A.y, L2 = dx * dx + dy * dy || 1;
+      const k = Math.max(0, Math.min(1, ((x - A.x) * dx + (y - A.y) * dy) / L2));
+      return Math.hypot(x - (A.x + k * dx), y - (A.y + k * dy)) <= 6;
+    }) || null;
+  }
+
+  function construireSynoptique() {
+    let o = document.getElementById('reseauOverlay');
+    if (o) return o;
+    o = document.createElement('div');
+    o.id = 'reseauOverlay'; o.className = 'chambre-overlay'; o.hidden = true;
+    o.innerHTML = `
+      <div class="chambre-dessin"><canvas id="reseauCanvas" aria-label="Synoptique du réseau"></canvas></div>
+      <aside class="chambre-panneau">
+        <h3>Synoptique</h3>
+        <div class="reseau-mode" role="group" aria-label="Type de vue">
+          <button type="button" class="reseau-onglet actif" data-mode="2d">2D</button>
+          <button type="button" class="reseau-onglet" data-mode="iso">Isométrique</button>
+        </div>
+        <div class="reseau-ajouts">
+          <button type="button" class="chambre-btn chambre-btn-second" data-ajout="chambre">Ajouter une chambre</button>
+          <button type="button" class="chambre-btn chambre-btn-second" data-ajout="coffret">Ajouter un coffret / tableau</button>
+          <button type="button" class="chambre-btn chambre-btn-second" data-ajout="sortie">Ajouter une sortie</button>
+        </div>
+        <div id="reseauEdition" class="reseau-edition"></div>
+        <p class="chambre-aide">Glissez un élément pour le déplacer. Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
+        <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
+      </aside>`;
+    document.querySelector('.canvas-wrap')?.appendChild(o);
+    o.querySelectorAll('[data-ajout]').forEach((b) => b.addEventListener('click', () => {
+      const n = R().ajouterNoeud(reseau, b.dataset.ajout);
+      SYN.sel = { noeud: n.id }; dessinerSynoptique();
+    }));
+    o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
+    o.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+      SYN.mode = b.dataset.mode;
+      o.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('actif', x === b));
+      o.querySelector('.reseau-ajouts').hidden = SYN.mode === 'iso';
+      dessinerSynoptique();
+    }));
+    const cv = o.querySelector('#reseauCanvas');
+    const pos = (ev) => { const r = cv.getBoundingClientRect(), v = SYN.vue || { k: 1, ox: 0, oy: 0 };
+      return { x: (ev.clientX - r.left - v.ox) / v.k, y: (ev.clientY - r.top - v.oy) / v.k }; };
+    cv.addEventListener('mousedown', (ev) => {
+      if (SYN.mode === 'iso') return; // vue de consultation
+      const p = pos(ev);
+      const pg = poigneeSous(p.x, p.y);
+      if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y, x0: p.x, y0: p.y }; return; }
+      const n = noeudSous(p.x, p.y);
+      if (n) { SYN.sel = { noeud: n.id }; SYN.drag = { id: n.id, dx: p.x - n.x, dy: p.y - n.y }; dessinerSynoptique(); return; }
+      const t = tronconSous(p.x, p.y);
+      SYN.sel = t ? { troncon: t.id } : null; dessinerSynoptique();
+    });
+    cv.addEventListener('mousemove', (ev) => {
+      const p = pos(ev);
+      if (SYN.drag) { const n = R().noeud(reseau, SYN.drag.id); n.x = Math.round(p.x - SYN.drag.dx); n.y = Math.round(p.y - SYN.drag.dy); dessinerSynoptique(false); return; }
+      if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; dessinerSynoptique(false); return; }
+      const surPlus = !!poigneeSous(p.x, p.y);
+      cv.style.cursor = surPlus ? 'crosshair' : (noeudSous(p.x, p.y) || tronconSous(p.x, p.y)) ? 'pointer' : 'default';
+      cv.title = surPlus ? 'Tirer vers un élément pour le relier · Clic : ajouter une chambre reliée' : '';
+    });
+    window.addEventListener('mouseup', (ev) => {
+      if (SYN.lien && !o.hidden) {
+        const p = pos(ev), cible = noeudSous(p.x, p.y), de = SYN.lien.de;
+        const clic = Math.hypot(p.x - SYN.lien.x0, p.y - SYN.lien.y0) < 4;
+        SYN.lien = null;
+        if (clic) { // clic simple sur « + » : prolonger le réseau d'une chambre reliée
+          const src = R().noeud(reseau, de);
+          const n = R().ajouterNoeud(reseau, 'chambre', { x: src.x + 220, y: src.y });
+          try { const t = R().relier(reseau, de, n.id); SYN.sel = { troncon: t.id }; showToast(`${n.nom} ajoutée et reliée : indiquez la longueur du tronçon`); }
+          catch (e) { R().supprimerNoeud(reseau, n.id); showToast(e.message); }
+        } else if (cible && cible.id !== de) {
+          try { const t = R().relier(reseau, de, cible.id); SYN.sel = { troncon: t.id }; showToast(`Tronçon ${R().nomTroncon(reseau, t)} créé : indiquez sa longueur`); }
+          catch (e) { showToast(e.message); }
+        }
+        dessinerSynoptique();
+      }
+      if (SYN.drag) { SYN.drag = null; dessinerSynoptique(); }
+    });
+    cv.addEventListener('dblclick', (ev) => {
+      if (SYN.mode === 'iso') return;
+      const p = pos(ev);
+      const n = noeudSous(p.x, p.y);
+      if (n) {
+        if (n.type === 'chambre') afficherVue('chambre', n.id);
+        else { const v = R().tronconsDe(reseau, n.id)[0]; if (v) ouvrirTroncon(v.troncon.id); }
+        return;
+      }
+      const t = tronconSous(p.x, p.y);
+      if (t) ouvrirTroncon(t.id);
+    });
+    window.addEventListener('resize', () => { if (!o.hidden) dessinerSynoptique(false); });
+    return o;
+  }
+
+  function dessinerSynoptique(panneau = true) {
+    const o = document.getElementById('reseauOverlay');
+    if (!o || o.hidden || !reseau) return;
+    const cv = o.querySelector('#reseauCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
+    cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const th = themeCanvas();
+    if (SYN.mode === 'iso') {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height); // feuille, même rendu que le PDF
+      const page = new window.Vue3D.Page({ emitText: false, ombre: false });
+      window.Vue3D.drawSynoptiqueIso(page, donneesSynoptique(), 20, 20, zone.width - 40, zone.height - 40);
+      window.Vue3D.rejouerSurCanvas(ctx, page, zone.height);
+      if (panneau) remplirEdition();
+      return;
+    }
+    ctx.fillStyle = th.fond; ctx.fillRect(0, 0, zone.width, zone.height);
+    ctx.strokeStyle = th.hairline; ctx.lineWidth = 1;
+    for (let x = 0; x < zone.width; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, zone.height); ctx.stroke(); }
+    for (let y = 0; y < zone.height; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(zone.width, y); ctx.stroke(); }
+    // cadrage : tous les éléments visibles (figé pendant un glisser pour ne pas fuir sous la souris)
+    if (!SYN.drag && !SYN.lien) {
+      if (reseau.noeuds.length) {
+        const xs = reseau.noeuds.map((n) => n.x), ys = reseau.noeuds.map((n) => n.y);
+        const x0 = Math.min(...xs) - 80, x1 = Math.max(...xs) + 100, y0 = Math.min(...ys) - 60, y1 = Math.max(...ys) + 60;
+        const k = Math.min(1.4, (zone.width - 40) / (x1 - x0), (zone.height - 40) / (y1 - y0));
+        SYN.c = Math.max(1, Math.min(1.9, 0.85 / k)); // compense la réduction pour le texte
+        SYN.vue = { k, ox: (zone.width - (x1 - x0) * k) / 2 - x0 * k, oy: (zone.height - (y1 - y0) * k) / 2 - y0 * k };
+      } else SYN.vue = { k: 1, ox: 0, oy: 0 };
+    }
+    ctx.setTransform(dpr * SYN.vue.k, 0, 0, dpr * SYN.vue.k, dpr * SYN.vue.ox, dpr * SYN.vue.oy);
+    // tronçons (étiquettes dessinées après les nœuds : toujours lisibles)
+    const etiquettes = [];
+    for (const t of reseau.troncons) {
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
+      const sel = SYN.sel && SYN.sel.troncon === t.id, actif = t.id === reseau.actif.troncon;
+      ctx.strokeStyle = sel ? th.cuivre : th.ardoise; ctx.lineWidth = sel ? 4 : 3; ctx.setLineDash(t.coupe || actif ? [] : [6, 4]);
+      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]);
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+      etiquettes.push(() => {
+      const c = SYN.c || 1, lignes = etiquetteTroncon(t), lh = 14 * c;
+      ctx.font = `600 ${11 * c}px ${th.mono}`;
+      const w = Math.max(...lignes.map((l) => ctx.measureText(l).width)) + 16 * c, h = lignes.length * lh + 6 * c;
+      ctx.fillStyle = th.surface; ctx.strokeStyle = sel ? th.cuivre : th.hairline; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(mx - w / 2, my - h / 2, w, h, 8); ctx.fill(); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      lignes.forEach((l, i) => {
+        const der = i === lignes.length - 1;
+        ctx.font = `${der ? 700 : 500} ${11 * c}px ${th.mono}`; ctx.fillStyle = der || sel ? th.cuivre : th.encre;
+        ctx.fillText(l, mx, my - h / 2 + 3 * c + lh * (i + 0.5));
+      });
+      });
+    }
+    if (SYN.lien) {
+      const A = R().noeud(reseau, SYN.lien.de);
+      ctx.strokeStyle = th.cuivre; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(SYN.lien.x, SYN.lien.y); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // nœuds
+    for (const n of reseau.noeuds) {
+      if (n.type === 'chambre') {
+        const e = etudeChambre(n);
+        REF_AFFICHEE.set(n, e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'));
+      }
+      const { w, h } = tailleNoeud(n), sel = SYN.sel && SYN.sel.noeud === n.id, c = SYN.c || 1;
+      ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = n.couleur; ctx.fillStyle = th.fond; // opaque : le tronçon passe derrière
+      ctx.beginPath();
+      if (n.type === 'chambre') ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, 6);
+      else if (n.type === 'coffret') ctx.rect(n.x - w / 2, n.y - h / 2, w, h);
+      else { ctx.moveTo(n.x - w / 2, n.y - h / 2); ctx.lineTo(n.x + w / 2 - 14, n.y - h / 2); ctx.lineTo(n.x + w / 2, n.y); ctx.lineTo(n.x + w / 2 - 14, n.y + h / 2); ctx.lineTo(n.x - w / 2, n.y + h / 2); ctx.closePath(); }
+      ctx.fill();
+      ctx.fillStyle = n.couleur; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.stroke();
+      if (sel) { ctx.strokeStyle = th.cuivre; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(n.x - w / 2 - 5, n.y - h / 2 - 5, w + 10, h + 10); ctx.setLineDash([]); }
+      ctx.fillStyle = th.encre; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `600 ${13 * c}px ${th.sans}`; ctx.fillText(n.nom, n.x - (n.type === 'sortie' ? 6 * c : 0), n.y - (n.type === 'chambre' ? 7 * c : n.type === 'coffret' ? 6 * c : 0));
+      if (n.type === 'chambre') {
+        ctx.font = `500 ${11 * c}px ${th.mono}`; ctx.fillStyle = th.cuivre;
+        ctx.fillText(REF_AFFICHEE.get(n), n.x, n.y + 11 * c);
+      }
+      if (n.type === 'coffret') { ctx.font = `500 ${10 * c}px ${th.sans}`; ctx.fillStyle = th.ardoise; ctx.fillText(n.coffret.genre, n.x, n.y + 12 * c); }
+      // poignée « + » pour relier
+      const hx = n.x + w / 2 + 12 * c;
+      ctx.fillStyle = th.surface; ctx.strokeStyle = th.cuivre; ctx.lineWidth = 1.5 * c;
+      ctx.beginPath(); ctx.arc(hx, n.y, 8 * c, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hx - 4 * c, n.y); ctx.lineTo(hx + 4 * c, n.y); ctx.moveTo(hx, n.y - 4 * c); ctx.lineTo(hx, n.y + 4 * c); ctx.stroke(); // « + » dessiné
+    }
+    etiquettes.forEach((f) => f());
+    if (panneau) remplirEdition();
+  }
+
+  // Réglages d'une chambre maçonnée (valeurs par défaut modifiables, à valider).
+  function champsMaconnee(n, box, champ, note) {
+    const CI = window.ChambresInfos, D = CI.MACONNEE_DEFAUTS;
+    const mc = n.maconnee || (n.maconnee = { paroi: D.paroi, tampon: { ...D.tampon }, zone: D.zone });
+    const maj = () => { dessinerSynoptique(false); remplirEdition(); };
+    const paroi = document.createElement('input'); paroi.type = 'number'; paroi.min = 50; paroi.step = 10; paroi.value = mc.paroi;
+    paroi.addEventListener('change', () => { mc.paroi = Math.max(50, Number(paroi.value) || D.paroi); maj(); });
+    champ('Épaisseur des parois (mm)', paroi);
+    const tp = document.createElement('select');
+    tp.innerHTML = CI.TAMPONS.map(([a, b]) => `<option value="${a}x${b}">${a} × ${b} mm</option>`).join('');
+    tp.value = `${mc.tampon.L}x${mc.tampon.l}`;
+    tp.addEventListener('change', () => { const [a, b] = tp.value.split('x').map(Number); mc.tampon.L = a; mc.tampon.l = b; maj(); });
+    champ('Tampon : ouverture', tp);
+    const cl = document.createElement('select');
+    cl.innerHTML = CI.CLASSES.map((c) => `<option>${c}</option>`).join('');
+    cl.value = mc.tampon.classe;
+    cl.addEventListener('change', () => { mc.tampon.classe = cl.value; maj(); });
+    champ('Tampon : classe (NF EN 124)', cl);
+    const zn = document.createElement('select');
+    zn.innerHTML = Object.entries(CI.ZONES).map(([k, z]) => `<option value="${k}">${z.libelle}</option>`).join('');
+    zn.value = mc.zone;
+    zn.addEventListener('change', () => { mc.zone = zn.value; maj(); });
+    champ('Zone', zn);
+    const e = etudeChambre(n);
+    if (e && e.etude.ok) {
+      const i = e.etude.infos;
+      note(`Intérieur [${e.etude.L} × ${e.etude.l} × ${e.etude.H} mm] — ${i.tampons} tampon(s) ${i.tampon.L} × ${i.tampon.l} ${i.tampon.classe}`, 'chambre-res-titre reseau-valeur');
+      (e.etude.avertissements || []).forEach((a) => note(a, 'chambre-res-ko'));
+    } else note('Dimensions calculées dès qu\'un tronçon a des fourreaux.', 'chambre-aide');
+    note('Valeurs par défaut à valider : dégagements 150 mm de chaque côté, 250 mm au-dessus de la nappe, longueur mini 1 m, un tampon par 1,5 m.', 'chambre-aide');
+  }
+
+  /* ── Répartition des fourreaux par tronçon (depuis le synoptique) ── */
+  // Le tronçon devient la coupe active sans quitter la vue courante.
+  function activerCoupeSansVue(t) {
+    if (t.id === reseau.actif.troncon) return;
+    sauverCoupeActive();
+    const cible = t.coupe;
+    reseau.actif.troncon = t.id;
+    t.coupe = null;
+    if (cible) window.projectManager.restoreState(cible, { garderChambre: true });
+    else { fourreaux.length = 0; cables.length = 0; }
+    actionHistory.length = 0;
+  }
+  function apresRepartition() {
+    if (fourreaux.length) { arrangeConduitGridNew({ silencieux: true }); reduceToMinimum({ silencieux: true }); }
+    updateStats(); updateInventory(); updateSelectedInfo(); redraw();
+    dessinerSynoptique(false); remplirEdition(); majBandeau();
+  }
+  function ajouterFourreauxTroncon(t, type, code, n = 1) {
+    const spec = FOURREAUX.find((f) => f.type === type && String(f.code) === String(code));
+    if (!spec) { showToast(`Fourreau ${type} ${code} absent du catalogue`, 'error'); return; }
+    activerCoupeSansVue(t);
+    for (let i = 0; i < n; i++) fourreaux.push(makeFourreauObject(nextId++, 0, 0, spec, ''));
+    apresRepartition();
+  }
+  function retirerFourreauTroncon(t, type, code) {
+    activerCoupeSansVue(t);
+    // de préférence un fourreau vide ; ses câbles partent avec lui sinon
+    const cand = fourreaux.filter((f) => f.type === type && String(f.code) === String(code));
+    const f = cand.find((x) => !cables.some((c) => c.parent === x.id)) || cand[cand.length - 1];
+    if (!f) return;
+    fourreaux.splice(fourreaux.indexOf(f), 1);
+    for (let i = cables.length - 1; i >= 0; i--) if (cables[i].parent === f.id) cables.splice(i, 1);
+    apresRepartition();
+  }
+  // Fourreaux d'un tronçon regroupés par type/code, du plus gros au plus petit.
+  function groupesFourreaux(t) {
+    const st = etatTroncon(t), g = new Map();
+    (st ? st.fourreaux : []).forEach((f) => {
+      const k = `${f.type}|${f.code}`;
+      if (!g.has(k)) g.set(k, { type: f.type, code: String(f.code), od: Math.round(f.od || Number(f.code) || 0), n: 0 });
+      g.get(k).n++;
+    });
+    return [...g.values()].sort((a, b) => b.od - a.od);
+  }
+  function repartitionTroncon(t, box) {
+    const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const mini = (txt, titre, fn) => { const b = el('button', 'reseau-mini', txt); b.type = 'button'; b.title = titre; b.setAttribute('aria-label', titre); b.addEventListener('click', fn); return b; };
+    box.appendChild(el('h4', null, 'Fourreaux du tronçon'));
+    const ici = groupesFourreaux(t);
+    if (!ici.length) box.appendChild(el('div', 'chambre-aide', 'Aucun fourreau. Reprenez-en d\'un tronçon voisin ou ajoutez-en ci-dessous.'));
+    ici.forEach((g) => {
+      const l = el('div', 'reseau-fourreau');
+      l.append(el('span', 'reseau-valeur', `${g.n} × ${g.type} Ø${g.od}`),
+        mini('−', `Retirer un ${g.type} Ø${g.od}`, () => retirerFourreauTroncon(t, g.type, g.code)),
+        mini('+', `Ajouter un ${g.type} Ø${g.od}`, () => ajouterFourreauxTroncon(t, g.type, g.code)));
+      box.appendChild(l);
+    });
+    // Reprise depuis les tronçons qui arrivent aux mêmes chambres / coffrets
+    const nIci = new Map(ici.map((g) => [`${g.type}|${g.code}`, g.n]));
+    const voisins = [];
+    [t.a.noeud, t.b.noeud].forEach((id) => R().tronconsDe(reseau, id).forEach((v) => {
+      if (v.troncon.id !== t.id && !voisins.some((x) => x.id === v.troncon.id)) voisins.push(v.troncon);
+    }));
+    voisins.forEach((tv) => {
+      const gs = groupesFourreaux(tv);
+      if (!gs.length) return;
+      box.appendChild(el('div', 'chambre-aide', `Repris de ${R().nomTroncon(reseau, tv)} :`));
+      const ligne = el('div', 'reseau-reprise');
+      gs.forEach((g) => {
+        const deja = nIci.get(`${g.type}|${g.code}`) || 0;
+        const b = mini(`+ Ø${g.od}`, `Faire suivre un ${g.type} Ø${g.od} de ${R().nomTroncon(reseau, tv)}`, () => ajouterFourreauxTroncon(t, g.type, g.code));
+        b.classList.add('reseau-chip');
+        b.append(el('small', null, ` ${Math.min(deja, g.n)}/${g.n}`));
+        if (deja >= g.n) b.classList.add('complet');
+        ligne.appendChild(b);
+      });
+      box.appendChild(ligne);
+    });
+    // Ajout depuis le catalogue
+    const types = [...new Set(FOURREAUX.map((f) => f.type))];
+    if (!types.length) return;
+    const ajout = el('div', 'reseau-ajout');
+    const sT = el('select'), sC = el('select'), q = el('input');
+    sT.setAttribute('aria-label', 'Type de fourreau'); sC.setAttribute('aria-label', 'Diamètre'); q.setAttribute('aria-label', 'Quantité');
+    sT.innerHTML = types.map((x) => `<option>${x}</option>`).join('');
+    const codes = () => { sC.innerHTML = FOURREAUX.filter((f) => f.type === sT.value).map((f) => `<option value="${f.code}">Ø${Math.round(f.od)} (${f.code})</option>`).join(''); };
+    sT.value = (ici[0] && ici[0].type) || types[0]; codes();
+    sT.addEventListener('change', codes);
+    q.type = 'number'; q.min = 1; q.max = 50; q.value = 1;
+    const b = el('button', 'chambre-btn', 'Ajouter'); b.type = 'button';
+    b.addEventListener('click', () => ajouterFourreauxTroncon(t, sT.value, sC.value, Math.max(1, Math.min(50, Number(q.value) || 1))));
+    ajout.append(sT, sC, q, b);
+    box.appendChild(ajout);
+    box.appendChild(el('div', 'chambre-aide', 'Les fourreaux sont rangés automatiquement ; « Ouvrir la coupe » pour y placer les câbles.'));
+  }
+
+  function remplirEdition() {
+    const box = document.getElementById('reseauEdition');
+    if (!box) return;
+    box.innerHTML = '';
+    const champ = (libelle, el) => { const l = document.createElement('label'); l.className = 'chambre-champ'; l.append(libelle, el); box.appendChild(l); return el; };
+    const bouton = (txt, fn, discret) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chambre-btn' + (discret ? ' chambre-btn-discret' : ''); b.textContent = txt; b.addEventListener('click', fn); box.appendChild(b); return b; };
+    const note = (txt, cls = 'chambre-res-ligne') => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; box.appendChild(d); };
+    if (!SYN.sel) {
+      note(`${reseau.noeuds.length} élément(s), ${reseau.troncons.length} tronçon(s). Sélectionnez un élément ou un tronçon pour le modifier.`);
+      const c = R().continuite(reseau, liaisonsDeTroncon), m = R().metre(reseau, fourreauxDeTroncon);
+      const h = (txt) => { const x = document.createElement('h4'); x.textContent = txt; box.appendChild(x); };
+      h('Continuité des liaisons');
+      if (!c.liaisons.length) note('Aucune liaison : générez les coupes avec BIG BRAIN.');
+      else if (!c.problemes.length) note(`${c.liaisons.length} liaison(s), toutes continues.`, 'chambre-res-ok');
+      c.problemes.forEach((x) => note(`À vérifier : ${x}`, 'chambre-res-ko'));
+      h('Métré des fourreaux');
+      if (!m.lignes.length) note('Aucun fourreau sur des tronçons de longueur connue.');
+      m.lignes.forEach((l) => note(`${l.fourreau} : [${l.metres.toLocaleString('fr-FR')} m] (${l.nombre} tube(s)-tronçon)`, 'chambre-res-ligne reseau-valeur'));
+      if (m.lignes.length) note(`Total : [${m.totalMetres.toLocaleString('fr-FR')} m] de fourreaux sur [${m.longueurReseau.toLocaleString('fr-FR')} m] de tranchée`, 'chambre-res-titre reseau-valeur');
+      m.sansLongueur.forEach((t) => note(`Longueur manquante : ${t} (non compté)`, 'chambre-res-ko'));
+      return;
+    }
+    if (SYN.sel.noeud) {
+      const n = R().noeud(reseau, SYN.sel.noeud);
+      if (!n) { SYN.sel = null; return remplirEdition(); }
+      const h = document.createElement('h4'); h.textContent = R().TYPES[n.type]; box.appendChild(h);
+      const nom = document.createElement('input'); nom.type = 'text'; nom.maxLength = 30; nom.value = n.nom;
+      nom.addEventListener('input', () => { n.nom = nom.value || n.nom; dessinerSynoptique(false); majBandeau(); });
+      champ('Nom', nom);
+      const pal = document.createElement('div'); pal.className = 'reseau-couleurs';
+      R().COULEURS.forEach((c) => {
+        const s = document.createElement('button'); s.type = 'button'; s.className = 'reseau-pastille' + (n.couleur === c ? ' actif' : '');
+        s.style.background = c; s.setAttribute('aria-label', `Couleur ${c}`);
+        s.addEventListener('click', () => { n.couleur = c; dessinerSynoptique(); });
+        pal.appendChild(s);
+      });
+      champ('Couleur', pal);
+      if (n.type === 'chambre') {
+        const sel = document.createElement('select');
+        const models = window.CompatChambres ? window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE) : [];
+        sel.innerHTML = '<option value="">Automatique</option>' + models.map((m) => `<option value="${m.ref}">${m.ref} — ${m.L} × ${m.l} mm</option>`).join('')
+          + `<option value="${MACONNEE}">Maçonnée (sur mesure)</option>`;
+        sel.value = n.ref || '';
+        sel.addEventListener('change', () => { n.ref = sel.value || null; dessinerSynoptique(); remplirEdition(); });
+        champ('Modèle', sel);
+        if (n.ref === MACONNEE && window.ChambresInfos) champsMaconnee(n, box, champ, note);
+        bouton('Ouvrir la chambre', () => afficherVue('chambre', n.id));
+      }
+      if (n.type === 'coffret') {
+        const cf = n.coffret;
+        const g = document.createElement('select');
+        g.innerHTML = '<option value="coffret">Coffret</option><option value="tableau">Tableau</option><option value="autre">Autre</option>';
+        g.value = cf.genre; g.addEventListener('change', () => { cf.genre = g.value; dessinerSynoptique(); });
+        champ('Type', g);
+        const dim = (cle) => { const i = document.createElement('input'); i.type = 'number'; i.min = 0; i.step = 10; i.value = cf[cle] || ''; i.placeholder = 'mm';
+          i.addEventListener('change', () => { cf[cle] = Number(i.value) > 0 ? Number(i.value) : null; remplirEdition(); }); return i; };
+        champ('Face du bas : largeur (mm)', dim('largeur'));
+        champ('Face du bas : profondeur (mm)', dim('profondeur'));
+        note('Saisie manuelle. Le choix dans le catalogue des fiches techniques arrivera avec la base de données.', 'chambre-aide');
+        R().tronconsDe(reseau, n.id).forEach((v) => {
+          const m = masqueTroncon(v.troncon);
+          if (!m) return note(`${R().nomTroncon(reseau, v.troncon)} : coupe vide`);
+          const c = R().verifierCoffret(cf, m.largeur, m.hauteur);
+          note(`${R().nomTroncon(reseau, v.troncon)} : nappe ${Math.round(m.largeur)} × ${Math.round(m.hauteur)} mm — ${!c.connu ? 'cotes du coffret à saisir' : c.tient ? 'passe' : 'NE PASSE PAS'}`,
+            !c.connu ? 'chambre-res-ligne' : c.tient ? 'chambre-res-ok' : 'chambre-res-ko');
+        });
+      }
+      const types = document.createElement('select');
+      types.innerHTML = Object.entries(R().TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+      types.value = n.type;
+      types.addEventListener('change', () => {
+        if (types.value !== 'chambre' && R().tronconsDe(reseau, n.id).length > 1 && n.type === 'chambre' && types.value === 'sortie') { showToast('Une sortie ne reçoit qu\'un tronçon'); types.value = n.type; return; }
+        n.type = types.value;
+        if (n.type === 'chambre' && n.ref === undefined) n.ref = null;
+        if (n.type === 'coffret' && !n.coffret) n.coffret = { genre: 'coffret', largeur: null, profondeur: null, source: 'manuel' };
+        R().tronconsDe(reseau, n.id).forEach((v) => { const bout = v.troncon.a.noeud === n.id ? 'a' : 'b'; v.troncon[bout].face = n.type === 'chambre' ? (R().facesLibres(reseau, n)[0] || 'pignonA') : n.type === 'coffret' ? 'bas' : 'sortie'; });
+        dessinerSynoptique();
+      });
+      champ('Changer en', types);
+      bouton('Supprimer', () => { R().supprimerNoeud(reseau, n.id); if (reseau.actif.troncon && !R().troncon(reseau, reseau.actif.troncon)) reseau.actif.troncon = null; SYN.sel = null; dessinerSynoptique(); majBandeau(); }, true);
+      return;
+    }
+    const t = R().troncon(reseau, SYN.sel.troncon);
+    if (!t) { SYN.sel = null; return remplirEdition(); }
+    const h = document.createElement('h4'); h.textContent = `Tronçon ${R().nomTroncon(reseau, t)}`; box.appendChild(h);
+    const lg = document.createElement('input'); lg.type = 'number'; lg.min = 0; lg.step = 0.5; lg.value = t.longueurM || ''; lg.placeholder = 'm';
+    lg.addEventListener('change', () => { t.longueurM = Number(lg.value) > 0 ? Number(lg.value) : null; dessinerSynoptique(false); });
+    champ('Longueur (m)', lg);
+    ['a', 'b'].forEach((bout) => {
+      const nd = R().noeud(reseau, t[bout].noeud);
+      if (nd.type !== 'chambre') return;
+      const sel = document.createElement('select');
+      const faces = [t[bout].face, ...R().facesLibres(reseau, nd)];
+      sel.innerHTML = faces.map((f) => `<option value="${f}">${LIB(f)}</option>`).join('');
+      sel.value = t[bout].face;
+      sel.addEventListener('change', () => { try { R().changerFace(reseau, t.id, bout, sel.value); } catch (e) { showToast(e.message); } dessinerSynoptique(); });
+      champ(`Face côté ${nd.nom}`, sel);
+    });
+    repartitionTroncon(t, box);
+    bouton('Ouvrir la coupe', () => ouvrirTroncon(t.id));
+    bouton('Supprimer le tronçon', () => { R().supprimerTroncon(reseau, t.id); if (reseau.actif.troncon === t.id) reseau.actif.troncon = null; SYN.sel = null; dessinerSynoptique(); majBandeau(); }, true);
+  }
+
+  /* ── Vue chambre (vue de dessus d'un nœud chambre) ── */
+  let vueChambreGeo = null, vueChambreFleches = [];
+  function faceSousPoint(px, py) {
+    const g = vueChambreGeo;
+    if (!g) return null;
+    const x = (px - g.ox) / g.s, y = ((g.H - py) - g.oy) / g.s;
+    const marge = g.e + 450;
+    if (x < -marge || x > g.L + marge || y < -marge || y > g.l + marge) return null;
+    const d = { pignonA: Math.abs(x), pignonB: Math.abs(x - g.L), longPanA: Math.abs(y), longPanB: Math.abs(y - g.l) };
+    return Object.keys(d).reduce((a, b) => (d[b] < d[a] ? b : a));
+  }
+  function chambreCourante() { return reseau && reseau.actif.noeud ? R().noeud(reseau, reseau.actif.noeud) : null; }
 
   function construireVueChambre() {
     let o = document.getElementById('chambreOverlay');
     if (o) return o;
     o = document.createElement('div');
-    o.id = 'chambreOverlay';
-    o.className = 'chambre-overlay';
-    o.hidden = true;
+    o.id = 'chambreOverlay'; o.className = 'chambre-overlay'; o.hidden = true;
     o.innerHTML = `
       <div class="chambre-dessin"><canvas id="chambreCanvas" aria-label="Vue de dessus de la chambre de tirage"></canvas></div>
       <aside class="chambre-panneau">
-        <h3>Chambre de tirage</h3>
-        <label class="chambre-champ">Nom <input id="chambreNom" type="text" maxlength="40"></label>
-        <label class="chambre-champ">Modèle <select id="chambreRef"></select></label>
+        <h3 id="chambreTitre">Chambre</h3>
         <div class="chambre-faces" id="chambreFaces"></div>
-        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Une liaison présente sur deux faces traverse la chambre.</p>
-        <div class="chambre-actions">
-          <button type="button" class="chambre-btn" id="chambreRetour">Retour à la coupe</button>
-          <button type="button" class="chambre-btn chambre-btn-discret" id="chambreQuitter">Quitter le mode chambre</button>
-        </div>
+        <div id="chambreResultat" class="chambre-resultat"></div>
+        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Flèche : élément suivant. Double-clic sur une face : sa coupe.</p>
+        <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="chambreSyn">Modifier dans le synoptique</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
-    o.querySelector('#chambreRetour').addEventListener('click', masquerVueChambre);
-    o.querySelector('#chambreQuitter').addEventListener('click', quitterChambre);
-    o.querySelector('#chambreNom').addEventListener('input', (e) => { if (chambreProjet) { chambreProjet.nom = e.target.value || 'Chambre'; dessinerVueChambre(); majBandeauChambre(); } });
-    o.querySelector('#chambreRef').addEventListener('change', (e) => { if (chambreProjet) { chambreProjet.ref = e.target.value || null; dessinerVueChambre(); } });
+    o.querySelector('#chambreSyn').addEventListener('click', () => { const n = chambreCourante(); SYN.sel = n ? { noeud: n.id } : null; afficherVue('synoptique'); });
+    const cv = o.querySelector('#chambreCanvas');
+    const pos = (ev) => { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+    const flecheSous = (p) => vueChambreFleches.find((f) => p.x >= f.x && p.x <= f.x + f.w && p.y >= f.y && p.y <= f.y + f.h);
+    cv.addEventListener('click', (ev) => { const f = flecheSous(pos(ev)); if (f) allerA(f.vers); });
+    cv.addEventListener('dblclick', (ev) => {
+      const p = pos(ev); if (flecheSous(p)) return;
+      const face = faceSousPoint(p.x, p.y), nd = chambreCourante();
+      if (!face || !nd) return;
+      const v = R().surFace(reseau, nd.id, face);
+      ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, face).id);
+    });
+    cv.addEventListener('mousemove', (ev) => {
+      const p = pos(ev), f = flecheSous(p);
+      const survol = f ? f.vers : null;
+      if (survol !== vueChambreGeo?.survol) { if (vueChambreGeo) vueChambreGeo.survol = survol; dessinerFleches(); }
+      cv.style.cursor = f || faceSousPoint(p.x, p.y) ? 'pointer' : 'default';
+    });
     window.addEventListener('resize', () => { if (!o.hidden) dessinerVueChambre(); });
     return o;
   }
-
-  function afficherVueChambre() {
-    if (!chambreProjet) return;
-    const o = construireVueChambre();
-    const sel = o.querySelector('#chambreRef');
-    const models = window.CompatChambres ? window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE) : [];
-    sel.innerHTML = '<option value="">Automatique (la plus petite qui convient)</option>' +
-      models.map(m => `<option value="${m.ref}">${m.ref} — ${m.L} × ${m.l} mm</option>`).join('');
-    sel.value = chambreProjet.ref || '';
-    o.querySelector('#chambreNom').value = chambreProjet.nom;
-    o.hidden = false;
-    dessinerVueChambre();
-    majBandeauChambre();
+  function allerA(id) {
+    const n = R().noeud(reseau, id);
+    if (!n) return;
+    if (n.type === 'chambre') afficherVue('chambre', n.id);
+    else { SYN.sel = { noeud: n.id }; afficherVue('synoptique'); }
   }
-  function masquerVueChambre() {
-    const o = document.getElementById('chambreOverlay');
-    if (o) o.hidden = true;
-    majBandeauChambre();
+  function afficherVueChambre() {
+    const o = construireVueChambre(), nd = chambreCourante();
+    o.querySelector('#chambreTitre').textContent = nd ? `Chambre ${nd.nom}` : 'Chambre';
+    dessinerVueChambre();
   }
 
   function dessinerVueChambre() {
-    const o = document.getElementById('chambreOverlay');
-    if (!o || o.hidden || !chambreProjet) return;
-    // boutons de face
+    const o = document.getElementById('chambreOverlay'), nd = chambreCourante();
+    if (!o || o.hidden || !nd) return;
     const box = o.querySelector('#chambreFaces');
     box.innerHTML = '';
-    FACES_CHAMBRE.forEach(k => {
-      const n = compterFourreaux(k);
+    R().FACES_CHAMBRE.forEach((f) => {
+      const v = R().surFace(reseau, nd.id, f);
       const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'chambre-face' + (k === chambreProjet.faceActive ? ' active' : '');
-      b.innerHTML = `<strong></strong><span></span>`;
-      b.querySelector('strong').textContent = window.ChambreFaces.LIBELLE[k];
-      b.querySelector('span').textContent = n ? `${n} fourreau${n > 1 ? 'x' : ''} — ouvrir` : 'vide — dessiner';
-      b.addEventListener('click', () => ouvrirFace(k));
+      b.type = 'button'; b.className = 'chambre-face' + (v && v.troncon.id === reseau.actif.troncon ? ' active' : '');
+      b.innerHTML = '<strong></strong><span></span>';
+      b.querySelector('strong').textContent = LIB(f);
+      b.querySelector('span').textContent = v ? `→ ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''} · ${resumeFourreaux(v.troncon)}` : 'libre — relier et dessiner';
+      b.addEventListener('click', () => ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, f).id));
       box.appendChild(b);
     });
-    // dessin (même rendu que la page PDF)
-    const cv = o.querySelector('#chambreCanvas');
-    const zone = cv.parentElement.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+    const cv = o.querySelector('#chambreCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
     cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
     const ctx = cv.getContext('2d');
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
-    const V = window.Vue3D;
-    const r = etudeChambreCourante();
-    const W = zone.width, H = zone.height;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const res = o.querySelector('#chambreResultat') || (() => {
-      const d = document.createElement('div'); d.id = 'chambreResultat'; d.className = 'chambre-resultat';
-      o.querySelector('.chambre-aide').before(d); return d;
-    })();
+    const th = themeCanvas();
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height); // feuille (même rendu que le PDF)
+    const V = window.Vue3D, W = zone.width, H = zone.height, r = etudeChambre(nd);
+    const res = o.querySelector('#chambreResultat');
     res.innerHTML = '';
-    if (!r) {
-      ctx.fillStyle = '#555'; ctx.font = '15px Helvetica, Arial, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('Aucune face renseignée : ouvrez une face et dessinez ou générez sa coupe.', W / 2, H / 2);
-      return;
+    vueChambreGeo = null;
+    if (!r || !r.etude.ok) {
+      ctx.fillStyle = r ? '#b3261e' : '#4a5568'; ctx.font = `500 14px ${th.sans}`; ctx.textAlign = 'center';
+      const msg = r ? (r.etude.erreurs || []).join(' ') : 'Aucune coupe sur cette chambre : double-cliquez une face ou utilisez la liste à droite.';
+      ctx.fillText(msg, W / 2, H / 2);
+      // repères des faces pour le double-clic, même sans dessin
+      vueChambreGeo = { ox: W / 2 - 150, oy: H / 2 - 80, s: 300 / 1160, L: 1160, l: 520, e: 0, H };
+      dessinerFleches(); return;
     }
-    const e = r.etude;
-    if (!e.ok) {
-      ctx.fillStyle = '#b3261e'; ctx.font = 'bold 15px Helvetica, Arial, sans-serif'; ctx.textAlign = 'center';
-      (e.erreurs || []).forEach((t, i) => ctx.fillText(t, W / 2, H / 2 + i * 20));
-      return;
-    }
-    // dessin plein cadre (même tracé que la page PDF)
-    const page = new V.Page({ emitText: false, ombre: false });
-    const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 16, W - 32, H - 32);
+    const e = r.etude, page = new V.Page({ emitText: false, ombre: false });
+    const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 40, W - 32, H - 80);
     V.rejouerSurCanvas(ctx, page, H);
-    // résultat dans le panneau
-    const ligne = (txt, cls, couleur) => { const p = document.createElement('div'); p.className = cls; p.textContent = txt; if (couleur) p.style.color = couleur; res.appendChild(p); };
-    const css = (c) => c ? `rgb(${c.map(v => Math.round(v * 255)).join(',')})` : '';
-    ligne(`Chambre ${e.ref} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
-    Object.values(e.faces).forEach(f => ligne(`${f.tient ? '✓' : '✗'} ${f.face} : ${f.largeurMasque} × ${f.hauteurMasque} dans ${f.largeurFace} × ${f.hauteurFace}`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
+    vueChambreGeo = { ...page.geoDessus, H };
+    const ligne = (txt, cls, c) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; if (c) d.style.color = c; res.appendChild(d); };
+    const css = (c) => c ? `rgb(${c.map((v) => Math.round(v * 255)).join(',')})` : '';
+    ligne(`Modèle ${e.ref}${nd.ref ? ' (imposé)' : ' (automatique)'} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
+    Object.values(e.faces).forEach((f) => ligne(`${f.tient ? 'OK' : 'NON'} · ${f.face} : [${Math.round(f.largeurMasque)} × ${Math.round(f.hauteurMasque)}] dans [${f.largeurFace} × ${f.hauteurFace}] mm`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
     if (e.traversees.length) ligne('Traversées', 'chambre-res-titre');
-    e.traversees.forEach((t, i) => ligne(`${i + 1}. ${t.liaison} — ${t.entree} → ${t.sortie} (${t.type})${t.changementFourreau ? ', ' + t.changementFourreau : ''}`, 'chambre-res-ligne', css(couleurs.get(t.liaison))));
+    e.traversees.forEach((t, i) => ligne(`${i + 1}. ${t.liaison} — ${t.entree} → ${t.sortie} (${t.type})`, 'chambre-res-ligne', css(couleurs.get(t.liaison))));
     if (e.arrets.length) ligne('S\'arrêtent dans la chambre', 'chambre-res-titre');
-    e.arrets.forEach(a => ligne(`• ${a.liaison} (${a.face})`, 'chambre-res-ligne', css(couleurs.get(a.liaison))));
-    (e.avertissements || []).forEach(a => ligne(`⚠ ${a}`, 'chambre-res-ko'));
+    e.arrets.forEach((a) => ligne(`• ${a.liaison} (${a.face})`, 'chambre-res-ligne', css(couleurs.get(a.liaison))));
+    (e.avertissements || []).forEach((a) => ligne(`À vérifier : ${a}`, 'chambre-res-ko'));
+    o._fond = ctx.getImageData(0, 0, cv.width, cv.height);
+    dessinerFleches();
   }
 
-  window.chambre = { activer: activerChambre, ouvrirFace, quitter: quitterChambre, etude: etudeChambreCourante };
+  // Flèches « → suivant » au-delà de chaque face reliée (clic : y aller).
+  function dessinerFleches() {
+    const o = document.getElementById('chambreOverlay'), nd = chambreCourante(), g = vueChambreGeo;
+    if (!o || !nd || !g) return;
+    const cv = o.querySelector('#chambreCanvas'), ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+    if (o._fond) ctx.putImageData(o._fond, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const W = cv.width / dpr, H = cv.height / dpr;
+    const pt = (x, y) => [g.ox + x * g.s, g.H - (g.oy + y * g.s)];
+    const ancres = { pignonA: [...pt(-g.e - 380, g.l / 2), 'right'], pignonB: [...pt(g.L + g.e + 380, g.l / 2), 'left'],
+      longPanA: [...pt(g.L / 2, -g.e - 380), 'top'], longPanB: [...pt(g.L / 2, g.l + g.e + 380), 'bottom'] };
+    vueChambreFleches = [];
+    R().FACES_CHAMBRE.forEach((f) => {
+      const v = R().surFace(reseau, nd.id, f);
+      if (!v) return;
+      const dir = { pignonA: 'left', pignonB: 'right', longPanA: 'down', longPanB: 'up' }[f];
+      const txt = `${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
+      ctx.font = `600 13px 'IBM Plex Sans', system-ui, sans-serif`;
+      const w = ctx.measureText(txt).width + 34, h = 26;
+      let [x, y, cote] = ancres[f];
+      x = cote === 'right' ? x - w : cote === 'left' ? x : x - w / 2;
+      y = cote === 'top' ? y : cote === 'bottom' ? y - h : y - h / 2;
+      x = Math.max(4, Math.min(W - w - 4, x)); y = Math.max(4, Math.min(H - h - 4, y));
+      const survol = g.survol === v.autre.id;
+      ctx.fillStyle = survol ? v.autre.couleur : '#ffffff'; ctx.strokeStyle = v.autre.couleur; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, 13); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = survol ? '#ffffff' : v.autre.couleur; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      dessinerFleche(ctx, x + 13, y + h / 2, dir, 5);
+      ctx.fillText(txt, x + 24, y + h / 2 + 1);
+      vueChambreFleches.push({ x, y, w, h, vers: v.autre.id });
+    });
+  }
+
+  // PDF : une page « vue de dessus » par chambre qui a des coupes.
+  function etudesChambresReseau() {
+    if (!reseau) return [];
+    return reseau.noeuds.filter((n) => n.type === 'chambre').map(etudeChambre).filter((x) => x && x.etude.ok);
+  }
+
+  window.reseauTontonkad = {
+    activer: activerReseau, vue: afficherVue, ouvrirTroncon, etat: () => reseau, etudeChambre: (id) => etudeChambre(R().noeud(reseau, id)),
+    faceAt: (x, y) => faceSousPoint(x, y), fleches: () => vueChambreFleches, cadrage: () => ({ ...SYN.vue }),
+    selectionner: (sel) => { SYN.sel = sel; dessinerSynoptique(false); remplirEdition(); },
+  };
 
   /* ── Vue 3D dans l'export PDF (dessin partagé avec le MCP : vue3d.js) ── */
 
@@ -7770,10 +8404,48 @@
     pdf.setTextColor(0, 0, 0);
   }
 
+
+  // Pages PDF du réseau : synoptique 2D, isométrique, métré et continuité.
+  function addReseauPages(pdf, titre) {
+    const V = window.Vue3D;
+    if (!reseau || !V || !reseau.noeuds.length) return;
+    const { PAGE_W, PAGE_H, MARGE } = V, data = donneesSynoptique();
+    const entete = (p, sous) => {
+      p.rgb([0, 0, 0], false).text(MARGE, PAGE_H - MARGE - 4, 16, `${titre} — ${sous}`, { bold: true });
+      p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+    };
+    const p1 = new V.Page({ emitText: false, ombre: false });
+    entete(p1, 'synoptique du réseau');
+    V.drawSynoptique2D(p1, data, MARGE, MARGE, PAGE_W - 2 * MARGE, PAGE_H - 2 * MARGE - 30);
+    writeVue3DPage(pdf, p1);
+    const p2 = new V.Page({ emitText: false, ombre: false });
+    entete(p2, 'vue isométrique');
+    V.drawSynoptiqueIso(p2, data, MARGE, MARGE, PAGE_W - 2 * MARGE, PAGE_H - 2 * MARGE - 30);
+    writeVue3DPage(pdf, p2);
+    const p3 = new V.Page({ emitText: false, ombre: false });
+    entete(p3, 'métré et continuité');
+    const m = R().metre(reseau, fourreauxDeTroncon), c = R().continuite(reseau, liaisonsDeTroncon);
+    let y = PAGE_H - MARGE - 40;
+    p3.rgb([0, 0, 0], false).text(MARGE, y, 11, 'Métré des fourreaux', { bold: true }); y -= 16;
+    p3.text(MARGE, y, 8, 'Fourreau', { bold: true }); p3.text(MARGE + 160, y, 8, 'Tubes × tronçons', { bold: true }); p3.text(MARGE + 280, y, 8, 'Longueur (m)', { bold: true }); y -= 12;
+    m.lignes.forEach((l) => { p3.text(MARGE, y, 8, l.fourreau); p3.text(MARGE + 160, y, 8, String(l.nombre)); p3.text(MARGE + 280, y, 8, l.metres.toLocaleString('fr-FR')); y -= 11; });
+    p3.text(MARGE, y - 2, 8.5, `Total : ${m.totalMetres.toLocaleString('fr-FR')} m de fourreaux — ${m.longueurReseau.toLocaleString('fr-FR')} m de tranchée`, { bold: true }); y -= 16;
+    m.sansLongueur.forEach((t) => { p3.rgb([0.7, 0.15, 0.1], false).text(MARGE, y, 7.5, `Longueur manquante, non compté : ${t}`); y -= 10; });
+    let y2 = PAGE_H - MARGE - 40; const x2 = 440;
+    p3.rgb([0, 0, 0], false).text(x2, y2, 11, 'Continuité des liaisons', { bold: true }); y2 -= 16;
+    c.liaisons.slice(0, 30).forEach((l) => {
+      const ok = !l.problemes.length;
+      p3.rgb(ok ? [0.1, 0.45, 0.2] : [0.75, 0.12, 0.1], false).text(x2, y2, 8, `${ok ? 'OK' : 'NON'}  ${l.nom}`.slice(0, 60), { bold: true }); y2 -= 10;
+      p3.rgb([0.25, 0.25, 0.25], false).text(x2 + 14, y2, 7, `${l.chemin.join(' → ')} · ${l.longueurM.toLocaleString('fr-FR')} m${l.longueurIncomplete ? ' (incomplète)' : ''}${ok ? '' : ' · ' + l.problemes.join(', ')}`.slice(0, 95)); y2 -= 12;
+    });
+    writeVue3DPage(pdf, p3);
+  }
+
   function addVue3DPages(pdf, titre) {
     const V = window.Vue3D;
     if (!V) return;
-    const m = buildMasqueFromPlan(chambreProjet ? `${titre} — ${window.ChambreFaces.LIBELLE[chambreProjet.faceActive]}` : titre);
+    const tAct = reseau && reseau.actif.troncon && window.Reseau.troncon(reseau, reseau.actif.troncon);
+    const m = buildMasqueFromPlan(tAct ? `${titre} — tronçon ${window.Reseau.nomTroncon(reseau, tAct)}` : titre);
     if (!m) return;
     const { PAGE_W, PAGE_H, MARGE } = V;
     // Page 1 : coupe + vue 3D + légende
@@ -7796,14 +8468,13 @@
     if (m.fourreaux.length > 8) p.text(MARGE, y, 8, `… et ${m.fourreaux.length - 8} autres (voir le tableau du rapport)`);
     writeVue3DPage(pdf, p);
     // Page 2 : chambre de tirage compatible
-    const etude = etudeChambreCourante();
-    if (etude && etude.etude.ok) {
+    const etudes = etudesChambresReseau();
+    for (const et of etudes) {
       const pc = new V.Page({ emitText: false, ombre: false });
-      etude.etude.nom = chambreProjet.nom || 'Chambre';
-      V.dessinerEtudeChambre(pc, etude.etude, etude.masques);
+      V.dessinerEtudeChambre(pc, et.etude, et.masques);
       writeVue3DPage(pdf, pc);
     }
-    if (m.chambre && !etude) {
+    if (m.chambre && !etudes.length) {
       const c = new V.Page({ emitText: false, ombre: false });
       const ch = m.chambre;
       c.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — chambre de tirage ${ch.ref}`, { bold: true });
@@ -8097,7 +8768,7 @@
         logPdf('stats', stats);
         const statsY = pageHeight - 70; // Encore plus haut pour être sûr
 
-        console.log(`Stats position: Y=${statsY}, pageHeight=${pageHeight}`);
+        console.debug(`Stats position: Y=${statsY}, pageHeight=${pageHeight}`);
 
         pdf.setFontSize(12);
         pdf.setFont('helvetica', 'bold');
@@ -8648,7 +9319,7 @@
 
       // Vue 3D (coupe en perspective + chambre de tirage compatible)
       if (formData.include3D) {
-        try { addVue3DPages(pdf, formData.projectName); }
+        try { addVue3DPages(pdf, formData.projectName); addReseauPages(pdf, formData.projectName); }
         catch (err) { errorPdf('vue 3D impossible', err); }
       }
 
@@ -9327,8 +9998,7 @@
     }
     if (confirmPdfExport) confirmPdfExport.addEventListener('click', exportToPDF);
     document.getElementById('chambreModeBtn')?.addEventListener('click', () => {
-      const o = document.getElementById('chambreOverlay');
-      if (o && !o.hidden) masquerVueChambre(); else activerChambre();
+      if (reseau && reseau.actif.vue !== 'coupe') masquerVues(); else activerReseau();
     });
     if (cancelPdfExport) cancelPdfExport.addEventListener('click', closePdfExportModal);
     if (closePdfExportBtn) closePdfExportBtn.addEventListener('click', closePdfExportModal);
@@ -10082,7 +10752,7 @@
             chamberRef: compatChambresState.appliedUnit?.ref || null
           },
           // Chambre à plusieurs faces (mode chambre) : absente des anciens projets
-          chambre: exporterChambre(),
+          reseau: exporterReseau(),
           fourreaux: fourreaux.map(f => ({
             ...f,
             // Assurer la sérialisation complète
@@ -10218,8 +10888,8 @@
           }
 
           // Chambre : rechargée avec le projet ; conservée quand on change de face
-          if (!opts.garderChambre) { importerChambre(projectData.chambre); masquerVueChambre(); }
-          majBandeauChambre();
+          if (!opts.garderChambre) { importerReseau(projectData.reseau, projectData.chambre); masquerVues(); }
+          majBandeau();
 
           // Mettre à jour l'affichage
           toggleInputGroups();
@@ -10321,7 +10991,7 @@
           localStorage.setItem(this.storageKey, JSON.stringify(data));
 
           const location = folderName ? `dans "${folderName}"` : '';
-          showToast(`💾 Projet "${projectName}" sauvegardé ${location}`);
+          showToast(`Projet "${projectName}" sauvegardé ${location}`, 'success');
           return true;
         } catch (error) {
           console.error('Erreur sauvegarde projet:', error);
@@ -10471,7 +11141,7 @@
           };
 
           localStorage.setItem(this.storageKey, JSON.stringify(data));
-          showToast(`📁 Dossier "${trimmedName}" créé`);
+          showToast(`Dossier "${trimmedName}" créé`, 'success');
           return true;
         } catch (error) {
           console.error('Erreur création dossier:', error);
@@ -10627,7 +11297,7 @@
       const spec = FOURREAUX.find(f => f.type === type && f.code === code);
       if (spec) {
         generateVirtualSlots(spec.od);
-        console.log('[INIT] Grille dynamique initialisée avec', fourreaux.length, 'fourreaux');
+        console.debug('[INIT] Grille dynamique initialisée avec', fourreaux.length, 'fourreaux');
       }
     }
 
@@ -11000,6 +11670,12 @@
       });
 
       // Import projet
+      // Electron : Fichier → Ouvrir un projet (Ctrl+O) envoie le contenu lu par le processus principal
+      window.addEventListener('electron-load-project', (e) => {
+        const data = e.detail;
+        if (!data || (!data.container && !data.fourreaux && !data.cables)) { showToast('Fichier invalide ou corrompu', 'error'); return; }
+        if (window.projectManager.restoreState(data)) showToast('Projet ouvert', 'success');
+      });
       document.getElementById('importProject').addEventListener('click', () => {
         document.getElementById('importProjectFile').click();
       });
@@ -11163,7 +11839,7 @@
       this.currentRenameData = { oldName, folderName, isFolder };
 
       if (isFolder) {
-        this.currentProjectName.textContent = `📁 ${oldName}`;
+        this.currentProjectName.textContent = oldName;
         document.getElementById('renameModalTitle').textContent = '✏️ Renommer le dossier';
       } else {
         this.currentProjectName.textContent = folderName ? `${folderName}/${oldName}` : oldName;
@@ -11344,9 +12020,9 @@
       const safeSelection = previousSelection === NEW_FOLDER_OPTION_VALUE ? '' : previousSelection;
 
       this.projectFolder.innerHTML = `
-        <option value="">🏠 Racine (sans dossier)</option>
+        <option value="">Racine (sans dossier)</option>
         ${folderNames.map(name =>
-        `<option value="${name}">📁 ${name}</option>`
+        `<option value="${name}">${name}</option>`
       ).join('')}
         <option value="${NEW_FOLDER_OPTION_VALUE}">➕ Nouveau dossier...</option>
       `;
@@ -11373,7 +12049,7 @@
       if (!hasProjects) {
         this.projectsList.innerHTML = `
           <div class="projects-empty">
-            🗂️ Aucun projet sauvegardé<br>
+            Aucun projet sauvegardé<br>
             <small>Créez votre premier projet en entrant un nom ci-dessus</small>
           </div>
         `;
@@ -11394,7 +12070,7 @@
                data-folder-name="${folderName}">
             <div class="folder-header">
               <span class="folder-toggle" aria-hidden="true">▾</span>
-              <span class="folder-icon">📁</span>
+              <span class="folder-icon">${ICONE.dossier}</span>
               <span class="folder-name">${folderName}</span>
               <span class="folder-count">(${projectCount} projet${projectCount > 1 ? 's' : ''})</span>
               <div class="folder-actions">
@@ -11418,7 +12094,7 @@
                data-folder-name="">
             <div class="folder-header">
               <span class="folder-toggle" aria-hidden="true">▾</span>
-              <span class="folder-icon">🏠</span>
+              <span class="folder-icon">${ICONE.racine}</span>
               <span class="folder-name">Projets sans dossier</span>
               <span class="folder-count">(${rootProjects.length} projet${rootProjects.length > 1 ? 's' : ''})</span>
             </div>
@@ -11462,19 +12138,19 @@
                 ${name}
               </div>
               <div class="project-meta">
-                <span>📅 ${this.formatDate(lastModified)}</span>
-                <span>📦 ${totalObjects} objets</span>
-                <span>📏 ${project.container?.shape === 'rect' ?
+                <span>${this.formatDate(lastModified)}</span>
+                <span>${totalObjects} objets</span>
+                <span class="reseau-valeur">${project.container?.shape === 'rect' ?
             `${project.container.width}×${project.container.height}mm` :
             `⌀${project.container?.diameter || '?'}mm`}</span>
               </div>
             </div>
             <div class="project-actions">
-              <button class="tooltip-btn btn-load" data-tooltip="Charger ce projet">📂</button>
-              <button class="tooltip-btn btn-save" data-tooltip="Écraser avec l'état actuel">💾</button>
-              <button class="tooltip-btn btn-rename" data-tooltip="Renommer ce projet">✏️</button>
-              <button class="tooltip-btn btn-export" data-tooltip="Exporter vers fichier">📤</button>
-              <button class="tooltip-btn btn-delete" data-tooltip="Supprimer définitivement">🗑️</button>
+              <button class="tooltip-btn btn-load" data-tooltip="Charger ce projet" aria-label="Charger ce projet">${ICONE.ouvrir}</button>
+              <button class="tooltip-btn btn-save" data-tooltip="Écraser avec l'état actuel" aria-label="Écraser avec l'état actuel">${ICONE.sauver}</button>
+              <button class="tooltip-btn btn-rename" data-tooltip="Renommer ce projet" aria-label="Renommer ce projet">${ICONE.renommer}</button>
+              <button class="tooltip-btn btn-export" data-tooltip="Exporter vers fichier" aria-label="Exporter vers fichier">${ICONE.exporter}</button>
+              <button class="tooltip-btn btn-delete" data-tooltip="Supprimer définitivement" aria-label="Supprimer définitivement">${ICONE.supprimer}</button>
             </div>
           </div>
         `;
@@ -11496,7 +12172,7 @@
 
         // Statut principal
         this.autoSaveText.textContent = `Auto-sauvegarde disponible`;
-        this.autoSaveStatus.querySelector('.icon').textContent = '💾';
+        this.autoSaveStatus.querySelector('.icon').innerHTML = ICONE.sauver;
         this.autoSaveStatus.style.color = '#22c55e';
 
         // Détails
@@ -11512,11 +12188,11 @@
         // Warning si trop ancien
         if (timeDiff > 15 * 60 * 1000) {
           this.autoSaveStatus.style.color = '#f59e0b';
-          this.autoSaveStatus.querySelector('.icon').textContent = '⚠️';
+          this.autoSaveStatus.querySelector('.icon').innerHTML = ICONE.sauver;
         }
       } else {
         this.autoSaveText.textContent = 'Aucune auto-sauvegarde';
-        this.autoSaveStatus.querySelector('.icon').textContent = '💾';
+        this.autoSaveStatus.querySelector('.icon').innerHTML = ICONE.sauver;
         this.autoSaveStatus.style.color = '#94a3b8';
 
         this.autoSaveDetails.innerHTML = `

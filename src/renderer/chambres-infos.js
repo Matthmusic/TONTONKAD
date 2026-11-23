@@ -73,10 +73,75 @@ function chambrePourNappe(W, H, chambresRows, compat, refImposee) {
   const best = compat.pickBestChamber(unit, longPan);
   if (best) return build(models.find((x) => x.ref === best.ref), best.via === 'unit' ? 'pignon' : 'long-pan');
   const t = tiling[0];
-  return { aucune: true, maconnee: t ? { tampons: t.N, refs: t.refs, largeurTotale: t.total } : null };
+  // Aucune préformée : chambre maçonnée sur mesure (valeurs par défaut, à valider)
+  const mc = chambreMaconnee({ pignonA: { largeur: W, hauteur: H } });
+  return { aucune: true, maconnee: t ? { tampons: t.N, refs: t.refs, largeurTotale: t.total } : null,
+    ref: mc.ref, entree: mc.l >= W ? 'pignon' : 'long-pan', L: mc.L, l: mc.l, H: mc.H,
+    face: { largeur: mc.l >= W ? mc.l : mc.L, hauteur: mc.H }, profondeur: mc.l >= W ? mc.L : mc.l,
+    marge: { largeur: (mc.l >= W ? mc.l : mc.L) - W, hauteur: mc.H - H }, tient: true, infos: mc.infos, sur_mesure: true, source: SOURCE_MACONNEE };
 }
 
-const api = { infosChambre, chambrePourNappe, INFOS, SOURCE };
+
+// ─── Chambre MAÇONNÉE sur mesure ──────────────────────────────────────────
+// Toutes les valeurs ci-dessous sont des DÉFAUTS MODIFIABLES, à valider par
+// le bureau d'études : aucune n'est tirée d'une norme ni d'une fiche fabricant.
+const MACONNEE_DEFAUTS = {
+  paroi: 200,               // épaisseur des parois (mm) : bloc béton / béton banché
+  degagementLateral: 150,   // de chaque côté de la nappe, le long d'une face (mm)
+  degagementHaut: 250,      // au-dessus de la nappe, sous le cadre du tampon (mm)
+  longueurMin: 1000,        // longueur intérieure mini pour le tirage (mm)
+  arrondi: 50,              // cotes intérieures arrondies au multiple supérieur (mm)
+  tampon: { L: 600, l: 600, classe: 'D400' },
+  zone: 'chaussee',
+  ouvertureParTampon: 1500, // longueur de chambre desservie par un tampon (mm)
+};
+// Ouvertures courantes (mm) et classes NF EN 124 (à valider pour chaque projet).
+const TAMPONS = [[400, 400], [500, 500], [600, 600], [700, 700], [800, 800], [1000, 600], [1200, 600]];
+const CLASSES = ['A15', 'B125', 'C250', 'D400', 'E600', 'F900'];
+const ZONES = {
+  espaceVert: { libelle: 'Espace vert / piétons', mini: 'A15' },
+  trottoir: { libelle: 'Trottoir / parking VL', mini: 'B125' },
+  bordure: { libelle: 'Bordure de trottoir / caniveau', mini: 'C250' },
+  chaussee: { libelle: 'Chaussée', mini: 'D400' },
+  lourd: { libelle: 'Zone poids lourds / portuaire', mini: 'E600' },
+};
+const SOURCE_MACONNEE = 'Chambre maçonnée : dimensions et tampon calculés avec des valeurs par défaut — à valider (bureau d\'études, NF EN 124 pour la classe).';
+
+function controleTampon(classe, zone) {
+  const z = ZONES[zone];
+  if (!z) return { ok: true, message: null };
+  const ok = CLASSES.indexOf(classe) >= CLASSES.indexOf(z.mini);
+  return { ok, message: ok ? null : `Tampon ${classe} insuffisant en ${z.libelle.toLowerCase()} : ${z.mini} minimum (à valider)` };
+}
+
+// besoins = { pignonA?: { largeur, hauteur }, pignonB?, longPanA?, longPanB? }
+// (largeur/hauteur de la nappe de chaque face, en mm).
+function chambreMaconnee(besoins, options) {
+  const o = { ...MACONNEE_DEFAUTS, ...(options || {}) };
+  o.tampon = { ...MACONNEE_DEFAUTS.tampon, ...((options && options.tampon) || {}) };
+  const up = (v) => Math.ceil(v / o.arrondi) * o.arrondi;
+  const b = besoins || {};
+  const larg = (ks) => Math.max(0, ...ks.filter((k) => b[k]).map((k) => b[k].largeur));
+  const haut = Math.max(0, ...Object.values(b).filter(Boolean).map((x) => x.hauteur));
+  const tMin = Math.min(o.tampon.L, o.tampon.l), tMax = Math.max(o.tampon.L, o.tampon.l);
+  // pignons = petite largeur l, long-pans = grande longueur L
+  let l = up(Math.max(larg(['pignonA', 'pignonB']) + 2 * o.degagementLateral, tMin));
+  let L = up(Math.max(larg(['longPanA', 'longPanB']) + 2 * o.degagementLateral, o.longueurMin, tMax));
+  if (l > L) [L, l] = [l, L];
+  const H = up(Math.max(haut + o.degagementHaut, 400));
+  const tampons = Math.max(1, Math.ceil(L / o.ouvertureParTampon));
+  const controles = [];
+  const c = controleTampon(o.tampon.classe, o.zone);
+  if (!c.ok) controles.push(c.message);
+  if (tampons * tMax > L) controles.push(`${tampons} tampon(s) de ${tMax} mm ne tiennent pas sur ${L} mm : réduire le nombre ou la taille`);
+  return {
+    ref: `Maçonnée ${L}×${l}`, L, l, H, maconnee: true, controles,
+    infos: { paroi: o.paroi, reserveHauteur: 0, tampons, tampon: o.tampon, zone: o.zone, maconnee: true, source: SOURCE_MACONNEE },
+    reglages: o,
+  };
+}
+
+const api = { infosChambre, chambrePourNappe, chambreMaconnee, controleTampon, MACONNEE_DEFAUTS, TAMPONS, CLASSES, ZONES, INFOS, SOURCE };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.ChambresInfos = api;
 })(typeof window !== 'undefined' ? window : globalThis);

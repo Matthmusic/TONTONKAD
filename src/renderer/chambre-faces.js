@@ -38,7 +38,9 @@
       return f.largeur >= faces[k].largeur && f.hauteur >= faces[k].hauteur;
     });
     let modele;
-    if (opts.ref) {
+    if (opts.modele) {
+      modele = opts.modele; // chambre maçonnée sur mesure (ChambresInfos.chambreMaconnee)
+    } else if (opts.ref) {
       modele = models.find((m) => m.ref.toUpperCase() === String(opts.ref).toUpperCase());
       if (!modele) return { ok: false, erreurs: [`Chambre « ${opts.ref} » inconnue (catalogue : ${models.map((m) => m.ref).join(', ')})`] };
     } else {
@@ -83,7 +85,8 @@
       if (t.type === 'angle') t.note = 'traversée en angle : vérifier le rayon de courbure des câbles dans la chambre';
       traversees.push(t);
     }
-    const infos = typeof opts.infos === 'function' ? opts.infos(modele.ref) : null;
+    const infos = modele.infos || (typeof opts.infos === 'function' ? opts.infos(modele.ref) : null);
+    (modele.controles || []).forEach((c) => avertissements.push(c));
     return {
       ok: true, ref: modele.ref, L: modele.L, l: modele.l, H: modele.H, infos,
       faces: detailFaces, traversees, arrets, avertissements,
