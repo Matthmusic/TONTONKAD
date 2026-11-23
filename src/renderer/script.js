@@ -2499,15 +2499,15 @@
     }
   }
 
-  function reduceToMinimum() {
-    reduceToMinimumNew();
+  function reduceToMinimum(options = {}) {
+    reduceToMinimumNew(options);
   }
 
   /**
    * Système de réduction utilisant le packer (window.solve / window.variants)
    * Génère placement optimal ET réduit dimensions au minimum
    */
-  function reduceToMinimumNew() {
+  function reduceToMinimumNew(options = {}) {
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à redimensionner');
       return;
@@ -2576,7 +2576,7 @@
 
       // Afficher taux d'occupation et feedback
       const fillPercent = calculateBoxOccupancy().toFixed(0);
-      showToast(`✅ Boîte redimensionnée à ${newWidth}×${newHeight}mm (Occupation: ${fillPercent}%)`);
+      if (!options.silencieux) showToast(`✅ Boîte redimensionnée à ${newWidth}×${newHeight}mm (Occupation: ${fillPercent}%)`);
 
       updateStats();
       redraw();
@@ -7577,7 +7577,7 @@
   function donneesSynoptique() {
     const noeuds = reseau.noeuds.map((n) => {
       let sous = '';
-      if (n.type === 'chambre') { const e = etudeChambre(n); sous = e && e.etude.ok ? e.etude.ref : (n.ref || 'modèle auto'); }
+      if (n.type === 'chambre') { const e = etudeChambre(n); sous = e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'); }
       if (n.type === 'coffret') sous = n.coffret.genre + (n.coffret.largeur && n.coffret.profondeur ? ` ${n.coffret.largeur}×${n.coffret.profondeur}` : '');
       return { nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, sous };
     });
@@ -7588,6 +7588,7 @@
     return { noeuds, troncons };
   }
 
+  const MACONNEE = '__maconnee'; // valeur de n.ref pour une chambre maçonnée sur mesure
   // Étude d'une chambre (chambre-faces.js) à partir des coupes de ses tronçons.
   function etudeChambre(nd) {
     if (!reseau || !nd || nd.type !== 'chambre' || !window.ChambreFaces) return null;
@@ -7601,8 +7602,17 @@
       masques[f] = m;
     });
     if (!Object.keys(masques).length) return null;
-    const etude = window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres,
-      { ref: nd.ref || undefined, infos: window.ChambresInfos && window.ChambresInfos.infosChambre });
+    const CI = window.ChambresInfos;
+    // Chambre maçonnée sur mesure : choisie, ou d'office si aucune préformée ne convient
+    const maconnee = () => window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres, {
+      modele: CI.chambreMaconnee(Object.fromEntries(Object.entries(masques).map(([k, m]) => [k, { largeur: m.largeur, hauteur: m.hauteur }])), nd.maconnee || {}) });
+    let etude;
+    if (nd.ref === MACONNEE && CI) etude = maconnee();
+    else {
+      etude = window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres,
+        { ref: nd.ref || undefined, infos: CI && CI.infosChambre });
+      if (!etude.ok && !nd.ref && CI) { etude = maconnee(); etude.avertissements.unshift('Aucune chambre préformée ne convient : chambre maçonnée proposée'); }
+    }
     etude.nom = nd.nom;
     return { etude, masques };
   }
@@ -7888,7 +7898,7 @@
       if (n.type === 'chambre') {
         const e = etudeChambre(n);
         ctx.font = `500 11px ${th.mono}`; ctx.fillStyle = th.cuivre;
-        ctx.fillText(e && e.etude.ok ? e.etude.ref : (n.ref || 'modèle auto'), n.x, n.y + 11);
+        ctx.fillText(e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'), n.x, n.y + 11);
       }
       if (n.type === 'coffret') { ctx.font = `500 10px ${th.sans}`; ctx.fillStyle = th.ardoise; ctx.fillText(n.coffret.genre, n.x, n.y + 16); }
       // poignée « + » pour relier
@@ -7898,6 +7908,38 @@
       ctx.beginPath(); ctx.moveTo(hx - 4, n.y); ctx.lineTo(hx + 4, n.y); ctx.moveTo(hx, n.y - 4); ctx.lineTo(hx, n.y + 4); ctx.stroke(); // « + » dessiné
     }
     if (panneau) remplirEdition();
+  }
+
+  // Réglages d'une chambre maçonnée (valeurs par défaut modifiables, à valider).
+  function champsMaconnee(n, box, champ, note) {
+    const CI = window.ChambresInfos, D = CI.MACONNEE_DEFAUTS;
+    const mc = n.maconnee || (n.maconnee = { paroi: D.paroi, tampon: { ...D.tampon }, zone: D.zone });
+    const maj = () => { dessinerSynoptique(false); remplirEdition(); };
+    const paroi = document.createElement('input'); paroi.type = 'number'; paroi.min = 50; paroi.step = 10; paroi.value = mc.paroi;
+    paroi.addEventListener('change', () => { mc.paroi = Math.max(50, Number(paroi.value) || D.paroi); maj(); });
+    champ('Épaisseur des parois (mm)', paroi);
+    const tp = document.createElement('select');
+    tp.innerHTML = CI.TAMPONS.map(([a, b]) => `<option value="${a}x${b}">${a} × ${b} mm</option>`).join('');
+    tp.value = `${mc.tampon.L}x${mc.tampon.l}`;
+    tp.addEventListener('change', () => { const [a, b] = tp.value.split('x').map(Number); mc.tampon.L = a; mc.tampon.l = b; maj(); });
+    champ('Tampon : ouverture', tp);
+    const cl = document.createElement('select');
+    cl.innerHTML = CI.CLASSES.map((c) => `<option>${c}</option>`).join('');
+    cl.value = mc.tampon.classe;
+    cl.addEventListener('change', () => { mc.tampon.classe = cl.value; maj(); });
+    champ('Tampon : classe (NF EN 124)', cl);
+    const zn = document.createElement('select');
+    zn.innerHTML = Object.entries(CI.ZONES).map(([k, z]) => `<option value="${k}">${z.libelle}</option>`).join('');
+    zn.value = mc.zone;
+    zn.addEventListener('change', () => { mc.zone = zn.value; maj(); });
+    champ('Zone', zn);
+    const e = etudeChambre(n);
+    if (e && e.etude.ok) {
+      const i = e.etude.infos;
+      note(`Intérieur [${e.etude.L} × ${e.etude.l} × ${e.etude.H} mm] — ${i.tampons} tampon(s) ${i.tampon.L} × ${i.tampon.l} ${i.tampon.classe}`, 'chambre-res-titre reseau-valeur');
+      (e.etude.avertissements || []).forEach((a) => note(a, 'chambre-res-ko'));
+    } else note('Dimensions calculées dès qu\'un tronçon a des fourreaux.', 'chambre-aide');
+    note('Valeurs par défaut à valider : dégagements 150 mm de chaque côté, 250 mm au-dessus de la nappe, longueur mini 1 m, un tampon par 1,5 m.', 'chambre-aide');
   }
 
   /* ── Répartition des fourreaux par tronçon (depuis le synoptique) ── */
@@ -7913,7 +7955,7 @@
     actionHistory.length = 0;
   }
   function apresRepartition() {
-    if (fourreaux.length) arrangeConduitGridNew({ silencieux: true });
+    if (fourreaux.length) { arrangeConduitGridNew({ silencieux: true }); reduceToMinimum({ silencieux: true }); }
     updateStats(); updateInventory(); updateSelectedInfo(); redraw();
     dessinerSynoptique(false); remplirEdition(); majBandeau();
   }
@@ -8036,10 +8078,12 @@
       if (n.type === 'chambre') {
         const sel = document.createElement('select');
         const models = window.CompatChambres ? window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE) : [];
-        sel.innerHTML = '<option value="">Automatique</option>' + models.map((m) => `<option value="${m.ref}">${m.ref} — ${m.L} × ${m.l} mm</option>`).join('');
+        sel.innerHTML = '<option value="">Automatique</option>' + models.map((m) => `<option value="${m.ref}">${m.ref} — ${m.L} × ${m.l} mm</option>`).join('')
+          + `<option value="${MACONNEE}">Maçonnée (sur mesure)</option>`;
         sel.value = n.ref || '';
-        sel.addEventListener('change', () => { n.ref = sel.value || null; dessinerSynoptique(); });
+        sel.addEventListener('change', () => { n.ref = sel.value || null; dessinerSynoptique(); remplirEdition(); });
         champ('Modèle', sel);
+        if (n.ref === MACONNEE && window.ChambresInfos) champsMaconnee(n, box, champ, note);
         bouton('Ouvrir la chambre', () => afficherVue('chambre', n.id));
       }
       if (n.type === 'coffret') {

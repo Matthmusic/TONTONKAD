@@ -322,8 +322,15 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
   if (e) p.texture([P(-e, -e), P(L + e, -e), P(L + e, l + e), P(-e, l + e)], MAT.beton, { seed: 22, contour: [0.3, 0.3, 0.3] });
   p.rgb([0.97, 0.97, 0.96], false).rgb([0.2, 0.2, 0.2]).width(e ? 0.6 : 2).poly([P(0, 0), P(L, 0), P(L, l), P(0, l)], 'B');
   // tampons (séparations) le long de L
-  const nt = etude.infos && etude.infos.tampons;
-  if (nt > 1) { p.rgb([0.6, 0.6, 0.6]).width(0.4).dash(true); for (let k = 1; k < nt; k++) p.line(...P(L * k / nt, 0), ...P(L * k / nt, l)); p.dash(false); }
+  const nt = etude.infos && etude.infos.tampons, tp = etude.infos && etude.infos.tampon;
+  if (tp && nt) {
+    // chambre maçonnée : ouvertures réelles des tampons, réparties le long de L
+    const a = Math.min(Math.max(tp.L, tp.l), L / nt), b = Math.min(Math.min(tp.L, tp.l), l);
+    p.rgb([0.45, 0.45, 0.45]).width(0.6).dash(true);
+    for (let k = 0; k < nt; k++) { const cx = L * (k + 0.5) / nt; p.poly([P(cx - a / 2, (l - b) / 2), P(cx + a / 2, (l - b) / 2), P(cx + a / 2, (l + b) / 2), P(cx - a / 2, (l + b) / 2)], 'S'); }
+    p.dash(false);
+    p.rgb([0.35, 0.35, 0.35], false).text(...P(L / 2, l - 40).map((v, i) => i ? v - 9 : v), 7, `${nt} tampon(s) ${tp.L}×${tp.l} ${tp.classe} — paroi ${e} mm (à valider)`, { align: 'center' });
+  } else if (nt > 1) { p.rgb([0.6, 0.6, 0.6]).width(0.4).dash(true); for (let k = 1; k < nt; k++) p.line(...P(L * k / nt, 0), ...P(L * k / nt, l)); p.dash(false); }
 
   // géométrie d'une face : point le long du mur, normale vers l'intérieur
   const faceGeo = {

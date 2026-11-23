@@ -186,7 +186,7 @@ function buildMasque({ nom, liaisons = [], reserves = [], options = {} }, cat) {
   if (o.forme !== 'circ') {
     chambre = choisirChambre(W, H, cat, o.chambre);
     if (chambre && chambre.erreur) { avertissements.push(chambre.erreur); chambre = null; }
-    else if (chambre && chambre.aucune) avertissements.push('Aucune chambre préformée ne convient : chambre maçonnée sur mesure à prévoir');
+    else if (chambre && chambre.aucune) avertissements.push(`Aucune chambre préformée ne convient : chambre maçonnée sur mesure proposée (${chambre.ref}, valeurs par défaut à valider)`);
     if (chambre && chambre.infos && chambre.infos.aVerifier) avertissements.push(`Chambre ${chambre.ref} : ${chambre.infos.aVerifier}`);
     if (chambre && chambre.aucune) { /* déjà signalé */ } else if (chambre && !chambre.tient) avertissements.push(`La nappe (${W} × ${H} mm) ne tient pas dans la face ${chambre.entree} de la ${chambre.ref} (${chambre.face.largeur} × ${chambre.face.hauteur} mm)`);
   }
