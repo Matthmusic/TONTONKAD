@@ -68,7 +68,11 @@ Revit est prévu et signalé comme indisponible pour l'instant.
 | `preparer_etude` | À appeler en premier : vérifie les fichiers et les tronçons fournis, renvoie les questions à poser pour ce qui manque. |
 | `lire_note_calcul` | Liste les liaisons d'une note Caneco (.xls/.xlsx) : référence `L<n° de ligne>`, origine, destination, câble, longueur. Filtres possibles. |
 | `generer_masques` | Un masque par tronçon : choix et placement des fourreaux, répartition des câbles avec leurs phases, profondeur de fouille et grillage avertisseur. Renvoie la **géométrie** (mm) et écrit un **DXF** si `sortieDxf` est donné. |
+| `etudier_reseau` | Un **réseau complet** en un appel : éléments (chambres, coffrets/tableaux, sorties) et tronçons (liaisons de la note, réserves, longueur, faces). Renvoie la coupe de chaque tronçon, l'étude de chaque chambre (préfabriquée ou maçonnée, traversées, arrêts), le contrôle des coffrets, la continuité des liaisons et le métré ; PDF (synoptique 2D, isométrique, métré, coupes, chambres) et DXF. |
 | `regles_normes` | Affiche les règles normatives appliquées et leurs sources. |
+
+`generer_masques` et `etudier_reseau` acceptent `cad: true` (commandes multiCAD)
+et `placements` (position et rotation de chaque dessin sur le plan).
 
 ### Trouver les liaisons d'un tronçon
 
@@ -152,6 +156,33 @@ plus `_CEAI_GRILLAGE_<couleur>` et `_CEAI_TEXTES`. Options : `unite` (`mm` ou
 `m`, selon l'unité du plan) et `origine` (point d'insertion). Un fichier
 existant n'est jamais écrasé.
 
+### Dessin sur un plan DWG avec le MCP multiCAD
+
+[multiCAD-mcp](https://github.com/AnCode666/multiCAD-mcp) pilote AutoCAD,
+ZWCAD, GstarCAD et BricsCAD (Windows, COM). Avec `cad: true`, la réponse
+contient un objet `multicad` :
+
+- `calques` : une commande `create|<calque>|<couleur>|25` par ligne, à passer
+  à **`manage_layers`** ;
+- `blocs` : un dessin par coupe (« Coupe TGBT → C1 ») et par chambre
+  (« Chambre C1 »), avec ses `commandes` (`line|…`, `circle|…`,
+  `polyline|…`, `text|…`, en mm) à passer à **`draw_entities`**.
+
+Base des dessins : une coupe part du coin bas-gauche du fond de fouille ; une
+chambre est centrée sur son intérieur, pignon A vers −X, long-pan B vers +Y.
+`placements` les pose sur le plan :
+
+```json
+"placements": { "Chambre C1": { "x": 152340, "y": 48210, "rotation": 35 },
+                "Coupe TGBT → C1": { "x": 160000, "y": 40000 } }
+```
+
+Claude demande ces points à l'utilisateur (ou les lit sur le plan si multiCAD
+le permet). Les textes restent horizontaux (multiCAD ne prend pas d'angle de
+texte). **Non testé sur une vraie installation AutoCAD : premier essai à faire
+sur un plan de test.** Sans multiCAD, `sortieDxf` donne les mêmes dessins en
+DXF R12 à insérer à la main.
+
 ## Normes appliquées (à valider)
 
 - **NF P 98-331** (tranchées) : recouvrement minimal au-dessus des fourreaux
@@ -172,4 +203,5 @@ surchargeables par masque (`zone`, `recouvrementMm`, `grillageAuDessusMm`,
 ```bash
 npm test --prefix ..        # tests du cœur (tests/mcp-masque.test.js)
 node test/smoke.js          # bout en bout par le protocole MCP, note d'essai générée
+node test/reseau-demo.js    # etudier_reseau : réseau complet, PDF, DXF et commandes multiCAD
 ```

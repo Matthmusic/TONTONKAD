@@ -3,7 +3,7 @@
 // (coupe, vue 3D, légende, conformité) + une page chambre de tirage.
 // Le dessin est dans src/renderer/vue3d.js, partagé avec l'application ;
 // ici seulement la mise en page et l'écriture du fichier PDF.
-const { Page, fit, drawCoupe, draw3D, drawChambre3D, dessinerEtudeChambre, PAGE_W, PAGE_H, MARGE } = require('../../src/renderer/vue3d.js');
+const { Page, fit, drawCoupe, draw3D, drawChambre3D, dessinerEtudeChambre, drawSynoptique2D, drawSynoptiqueIso, PAGE_W, PAGE_H, MARGE } = require('../../src/renderer/vue3d.js');
 void fit;
 
 function pageMasque(m, i, total, opts) {
@@ -98,6 +98,36 @@ function pageChambreDessus(e) {
   return dessinerEtudeChambre(new Page(), e, e._masques || {}).toString();
 }
 
+
+// Pages « réseau » (mêmes dessins que l'application) : synoptique 2D,
+// isométrique, puis métré et continuité.
+function pagesReseau({ titre, data, metre, continuite }) {
+  const fr = (v) => String(v).replace('.', ',');
+  const entete = (p, sous) => {
+    p.rgb([0, 0, 0], false).text(MARGE, PAGE_H - MARGE - 4, 16, `${titre} - ${sous}`, { bold: true });
+    p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+  };
+  const p1 = new Page({ ombre: false }); entete(p1, 'synoptique du réseau');
+  drawSynoptique2D(p1, data, MARGE, MARGE, PAGE_W - 2 * MARGE, PAGE_H - 2 * MARGE - 30);
+  const p2 = new Page({ ombre: false }); entete(p2, 'vue isométrique');
+  drawSynoptiqueIso(p2, data, MARGE, MARGE, PAGE_W - 2 * MARGE, PAGE_H - 2 * MARGE - 30);
+  const p3 = new Page({ ombre: false }); entete(p3, 'métré et continuité');
+  let y = PAGE_H - MARGE - 40;
+  p3.rgb([0, 0, 0], false).text(MARGE, y, 11, 'Métré des fourreaux', { bold: true }); y -= 16;
+  p3.text(MARGE, y, 8, 'Fourreau', { bold: true }); p3.text(MARGE + 160, y, 8, 'Tubes x tronçons', { bold: true }); p3.text(MARGE + 280, y, 8, 'Longueur (m)', { bold: true }); y -= 12;
+  metre.lignes.forEach((l) => { p3.text(MARGE, y, 8, l.fourreau); p3.text(MARGE + 160, y, 8, String(l.nombre)); p3.text(MARGE + 280, y, 8, fr(l.metres)); y -= 11; });
+  p3.text(MARGE, y - 2, 8.5, `Total : ${fr(metre.totalMetres)} m de fourreaux - ${fr(metre.longueurReseau)} m de tranchée`, { bold: true }); y -= 16;
+  metre.sansLongueur.forEach((t) => { p3.rgb([0.7, 0.15, 0.1], false).text(MARGE, y, 7.5, `Longueur manquante, non compté : ${t}`); y -= 10; });
+  let y2 = PAGE_H - MARGE - 40; const x2 = 440;
+  p3.rgb([0, 0, 0], false).text(x2, y2, 11, 'Continuité des liaisons', { bold: true }); y2 -= 16;
+  continuite.liaisons.slice(0, 30).forEach((l) => {
+    const okL = !l.problemes.length;
+    p3.rgb(okL ? [0.1, 0.45, 0.2] : [0.75, 0.12, 0.1], false).text(x2, y2, 8, `${okL ? 'OK' : 'NON'}  ${l.nom}`.slice(0, 60), { bold: true }); y2 -= 10;
+    p3.rgb([0.25, 0.25, 0.25], false).text(x2 + 14, y2, 7, `${l.chemin.join(' -> ')} - ${fr(l.longueurM)} m${l.longueurIncomplete ? ' (incomplète)' : ''}${okL ? '' : ' - ' + l.problemes.join(', ')}`.slice(0, 95)); y2 -= 12;
+  });
+  return [p1, p2, p3].map((p) => p.toString());
+}
+
 /** @returns {Buffer} un PDF, une page par masque réussi */
 function masquesToPdf(masques, opts = {}) {
   const ok = masques.filter((m) => m && m.ok);
@@ -113,6 +143,7 @@ function masquesToPdf(masques, opts = {}) {
     const cid = add(`<< /Length ${content.length} >>\nstream\n${content.toString('latin1')}\nendstream`);
     kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /ExtGState << /GS1 << /ca 0.12 /CA 0.12 >> >> >> /Contents ${cid} 0 R >>`));
   };
+  for (const t of opts.pagesAvant || []) addPage(t);
   ok.forEach((m, i) => {
     addPage(pageMasque(m, i, ok.length, opts));
     if (m.chambre && m.chambre.face && opts.chambre !== false) addPage(pageChambre(m, i, ok.length));
@@ -130,4 +161,4 @@ function masquesToPdf(masques, opts = {}) {
   return Buffer.from(out, 'latin1');
 }
 
-module.exports = { masquesToPdf };
+module.exports = { masquesToPdf, pagesReseau };
