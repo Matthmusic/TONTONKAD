@@ -248,10 +248,10 @@ describe('packer — anchorLayout (ancrage fond de boîte)', () => {
 describe('packer — variants', () => {
   beforeAll(setStandardGeo);
   const tubes = Array.from({ length: 10 }, (_, i) => ({ id: 'v' + i, d: [125, 63, 90][i % 3] }));
-  test('≤ 3 variantes, taguées, dédupliquées, valides', () => {
+  test('≤ 4 variantes, taguées, dédupliquées, valides', () => {
     const vs = pkg.variants(tubes, { lock: null });
     expect(vs.length).toBeGreaterThanOrEqual(1);
-    expect(vs.length).toBeLessThanOrEqual(3);
+    expect(vs.length).toBeLessThanOrEqual(4);
     const tags = vs.map(v => v.tag);
     expect(new Set(tags).size).toBe(tags.length);          // tags uniques
     const keys = vs.map(v => `${Math.round(v.w)}x${Math.round(v.h)}`);
@@ -411,5 +411,29 @@ describe('packer — rangement par groupes de diamètre', () => {
     const big = L.items.filter(i => i.d === 110), small = L.items.filter(i => i.d === 40);
     const mid = (arr) => (Math.min(...arr.map(i => i.x)) + Math.max(...arr.map(i => i.x + pkg.cell(i.d)))) / 2;
     expect(Math.abs(mid(big) - mid(small))).toBeLessThan(1);
+  });
+});
+
+describe('packer — variantes métier', () => {
+  beforeEach(() => { pkg.GEO.gap = 30; pkg.GEO.margin = 40; });
+  const tubes = [[160, 4], [110, 6], [63, 6]].flatMap(([d, n]) => Array.from({ length: n }, (_, i) => ({ id: `${d}-${i}`, d })));
+
+  test('la plus étroite est la moins large, la moins profonde la moins haute', () => {
+    const vs = pkg.variants(tubes, { lock: null });
+    const parTag = Object.fromEntries(vs.map((v) => [v.tag, v]));
+    const lo = Math.min(...vs.map((v) => v.w)), hi = Math.min(...vs.map((v) => v.h));
+    if (parTag.etroite) expect(parTag.etroite.w).toBe(lo);
+    if (parTag.basse) expect(parTag.basse.h).toBe(hi);
+    expect(vs[0].tag).toBe('compact');
+  });
+
+  test('variante chambre : la nappe tient dans la première face qui convient', () => {
+    const faces = [{ nom: 'trop petite', w: 200, h: 200 }, { nom: 'L4T (pignon)', w: 1700, h: 540 }, { nom: 'énorme', w: 5000, h: 5000 }];
+    const v = pkg.variants(tubes, { lock: null, faces }).find((x) => x.tag === 'chambre');
+    if (v) { expect(v.face).toBe('L4T (pignon)'); expect(v.w).toBeLessThanOrEqual(1700); expect(v.h).toBeLessThanOrEqual(540); }
+    else {
+      // dédoublonnée : une autre variante a déjà exactement ces cotes
+      expect(pkg.variants(tubes, { lock: null }).some((x) => x.w <= 1700 && x.h <= 540)).toBe(true);
+    }
   });
 });

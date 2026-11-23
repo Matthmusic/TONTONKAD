@@ -332,6 +332,13 @@
     return solveFree(list);
   }
 
+  // Variantes métier d'une nappe (toutes issues du même balayage de largeurs) :
+  //   compact     le placement proposé (= solve)
+  //   etroite     la tranchée la plus étroite
+  //   basse       la tranchée la moins profonde
+  //   chambre     la nappe la plus compacte qui passe dans la plus petite face
+  //               de opts.faces ([{ nom, w, h }], du plus petit au plus grand)
+  // Dédoublonnées par cotes ; la face retenue est dans `face`.
   function variants(tubes, opts) {
     const list = sortTubes(tubes);
     if (list.length === 0) return [];
@@ -340,21 +347,28 @@
 
     const all = sweep(list, '');
     if (!all.length) return [];
-    const pickMin = (arr, f) => arr.reduce((b, L) => (f(L) < f(b) - EPS ? L : b));
-    const wide = all.filter(L => L.w >= L.h);
-    const out = [];
-    // compact : le même layout que solve() — la carte « compact » du panneau
-    // doit correspondre à ce qui est posé par défaut.
-    out.push({ ...solveFree(list), tag: 'compact' });
-    if (wide.length) out.push({ ...pickMin(wide, L => Math.abs(L.ratio - 1.4)), tag: 'tranchee' });
-    out.push({ ...pickMin(all, L => Math.abs(L.ratio - 4 / 3)), tag: 'rect43' });
+    const meilleur = (arr, cle) => arr.reduce((b, L) => (lexLess(cle(L), cle(b)) ? L : b));
+    const out = [{ ...solveFree(list), tag: 'compact' }];
+    // formes réalistes pour un chantier : profondeur ≤ 2 × largeur, largeur ≤ 4 × profondeur
+    // (pas de colonne unique ni de rangée unique, sauf s'il n'existe rien d'autre)
+    const realistes = all.filter((L) => L.w / L.h >= 0.5 && L.w / L.h <= 4);
+    const pool = realistes.length ? realistes : all;
+    out.push({ ...meilleur(pool, (L) => [L.w, L.h]), tag: 'etroite' });
+    out.push({ ...meilleur(pool, (L) => [L.h, L.w]), tag: 'basse' });
+    for (const f of (opts && opts.faces) || []) {
+      const ok = all.filter((L) => L.w <= f.w + EPS && L.h <= f.h + EPS);
+      if (ok.length) { out.push({ ...meilleur(ok, (L) => [-L.fill, L.w]), tag: 'chambre', face: f.nom }); break; }
+    }
 
-    const seen = new Set();
-    return out.filter(L => {
+    // Dédoublonnage par cotes ; une variante « chambre » en double transmet sa
+    // face à la variante identique (l'information « passe dans … » est gardée).
+    const parCotes = new Map(), res = [];
+    for (const L of out) {
       const k = `${Math.round(L.w)}x${Math.round(L.h)}`;
-      if (seen.has(k)) return false;
-      seen.add(k); return true;
-    });
+      if (parCotes.has(k)) { if (L.face && !parCotes.get(k).face) parCotes.get(k).face = L.face; continue; }
+      parCotes.set(k, L); res.push(L);
+    }
+    return res;
   }
 
   // ─── Conduit circulaire : nid d'abeille, sans écart ────────────────────

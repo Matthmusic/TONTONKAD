@@ -1491,7 +1491,7 @@
       applyAnchoredConfig(bestConfig);
 
       // Exposer les variantes dans le panel d'alternatives
-      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
+      const allConfigs = variantesAutourDe(bestConfig, tubes, optsPacker);
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
       lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input)];
 
@@ -1887,6 +1887,24 @@
     redraw();
   }
 
+  // Faces d'entrée des chambres préformées (pignon puis long-pan), de la plus
+  // petite à la plus grande : la variante « chambre » vise la première qui convient.
+  function facesChambresPreformees() {
+    if (!window.CompatChambres || shapeSel.value === 'circ') return [];
+    return window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE)
+      .flatMap((m) => [{ nom: `${m.ref} par le pignon`, w: m.l, h: m.H }, { nom: `${m.ref} par le long-pan`, w: m.L, h: m.H }])
+      .sort((a, b) => a.w * a.h - b.w * b.h);
+  }
+
+  // Variantes à proposer autour du placement posé (bestConfig, en 1re position).
+  // Si le moteur rattache une chambre à la variante identique, on la reporte.
+  function variantesAutourDe(bestConfig, tubes, optsPacker) {
+    const vs = window.variants(tubes, { ...optsPacker, faces: facesChambresPreformees() });
+    const meme = vs.find((v) => v.tag === bestConfig.tag);
+    if (meme && meme.face && !bestConfig.face) bestConfig.face = meme.face;
+    return [bestConfig, ...vs.filter((v) => v.tag !== bestConfig.tag)];
+  }
+
   function showLayoutPreviewPanel() {
     const railBtn = document.getElementById('layoutPreviewRailBtn');
     const cardsEl = document.getElementById('layoutPreviewCards');
@@ -1900,35 +1918,40 @@
       return;
     }
 
-    // La 1re carte réduit la boîte au contenu ; la 2e est le placement qui
-    // vient d'être posé (étoile) ; les suivantes sont les autres formes.
-    const STRATEGY_FR = {
-      compact:  'Placement proposé',
-      locked:   'Cote imposée',
-      cercle:   'Conduit',
-      tranchee: 'Tranchée',
-      rect43:   'Rectangle 4/3',
-    };
-
+    // Cartes : la boîte serrée (réduire la boîte au contenu), puis les formes de
+    // nappe. La 2e carte est le placement en place ; les suivantes, des choix
+    // métier (étroite, peu profonde, compatible chambre). Cotes en registre afficheur.
+    const NOM = { compact: 'Proposé', locked: 'Cote imposée', cercle: 'Conduit', etroite: 'La plus étroite', basse: 'La moins profonde', chambre: 'Compatible chambre' };
+    const AIDE = { compact: 'Meilleur compromis largeur / profondeur', locked: 'Respecte la cote verrouillée', cercle: 'Rangement en nid d\'abeille',
+      etroite: 'Emprise minimale : tranchée plus profonde', basse: 'Fouille minimale : tranchée plus large', chambre: '' };
     cardsEl.innerHTML = visibleVariants.map(({ v, originalIdx }, i) => {
-      const label      = v.isCompact ? 'BOÎTE SERRÉE' : (STRATEGY_FR[v.name] || v.name).toUpperCase();
-      const desc       = v.isCompact ? 'Boîte réduite au contenu' : (STRATEGY_FR[v.name] || v.name);
-      const isOptimized = i === 1;
-      const scoreLabel = v.isNappeLayout
-        ? `${v.container.width.toFixed(0)}×${v.container.height.toFixed(0)}mm · ${v.score.toFixed(0)}%`
-        : desc;
-      const extraClass = isOptimized ? ' card-optimized' : '';
-      const badge      = isOptimized ? '<span class="card-optimized-badge">⭐</span>' : '';
-      return `<div class="layout-preview-card${i === 0 ? ' active' : ''}${extraClass}" data-idx="${originalIdx}" title="${label} — ${scoreLabel}">
-        ${badge}
+      const enPlace = i === 1;
+      const titre = v.isCompact ? 'Boîte serrée' : (NOM[v.name] || v.name);
+      const aide = v.isCompact ? 'Réduit la boîte au contenu actuel' : (v.name === 'chambre' && v.face ? `Passe dans une ${v.face}` : (AIDE[v.name] || ''));
+      // cotes et occupation de la NAPPE elle-même (la boîte affichée peut être plus grande)
+      let cotes = '';
+      if (v.isNappeLayout && v.nappe) {
+        const W = v.nappe.w, H = v.nappe.h, aire = (v.nappe.items || []).reduce((a, it) => a + Math.PI * it.d * it.d / 4, 0);
+        cotes = `<span class="layout-preview-card-cotes">[${Math.round(W)} × ${Math.round(H)}] mm · ${Math.round(aire / (W * H) * 100)} %</span>`;
+      }
+      const chambre = v.face && v.name !== 'chambre' ? `<span class="layout-preview-card-name">Passe dans une ${v.face}</span>` : '';
+      const etat = enPlace ? '<span class="layout-preview-card-etat">En place</span>' : '';
+      return `<button type="button" class="layout-preview-card${enPlace ? ' active' : ''}" data-idx="${originalIdx}" aria-pressed="${enPlace}" title="${titre} — ${aide}">
+        ${etat}
         ${renderVariantSVG(v)}
-        <span class="layout-preview-card-label">${label}</span>
-        <span class="layout-preview-card-name">${v.isNappeLayout ? scoreLabel : desc}</span>
-      </div>`;
+        <span class="layout-preview-card-label">${titre}</span>
+        ${cotes}
+        <span class="layout-preview-card-name">${aide}</span>
+        ${chambre}
+      </button>`;
     }).join('');
 
+    // Pas d'ouverture automatique : le bouton du rail indique combien de choix
+    // existent, l'utilisateur ouvre le panneau quand il le veut.
     railBtn.style.display = 'flex';
-    openRightToolsPane('variantes'); // toujours ouvert à l'ouverture d'un nouveau placement
+    railBtn.dataset.count = String(visibleVariants.length - 1);
+    railBtn.title = `Variantes de placement (${visibleVariants.length - 1})`;
+    if (rightToolsState.active === 'variantes') openRightToolsPane('variantes'); // déjà ouvert : rafraîchi
 
     cardsEl.querySelectorAll('.layout-preview-card').forEach(card => {
       card.addEventListener('click', () => {
@@ -1970,6 +1993,7 @@
       return {
         isNappeLayout: true,
         name:  cfg.tag || 'auto',
+        face:  cfg.face || null,
         // vrai taux d'occupation : surface des fourreaux / surface de la boîte
         score: occupancyPercent(anchored.positions, anchored.w, anchored.h, shapeSel.value),
         nappe: cfg,
@@ -2454,7 +2478,7 @@
       applyDimensions();
 
       // Panel variantes
-      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
+      const allConfigs = variantesAutourDe(bestConfig, tubes, optsPacker);
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
       lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, expandedInput)];
 
@@ -2542,7 +2566,7 @@
       }
 
       // Exposer les variantes (chacune déjà serrée à son minimum)
-      const allConfigs = [bestConfig, ...window.variants(tubes, optsPacker).filter(v => v.tag !== bestConfig.tag)];
+      const allConfigs = variantesAutourDe(bestConfig, tubes, optsPacker);
       const compactVariant = { isNappeLayout: false, isCompact: true, name: 'compact', score: 0 };
       lastLayoutVariants = [compactVariant, ...buildNappeVariants(allConfigs, boxWidth, boxHeight, input)];
 
