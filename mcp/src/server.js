@@ -19,7 +19,7 @@ const normes = require('./normes.js');
 const { preparerEtude, RENDUS } = require('./etude.js');
 const ChambreFaces = require('../../src/renderer/chambre-faces.js');
 const CompatChambres = require('../../src/renderer/compat-chambres.js');
-const { infosChambre } = require('./chambres-infos.js');
+const { infosChambre, chambreMaconnee } = require('./chambres-infos.js');
 
 const cat = loadCatalogues();
 const notes = new Map(); // chemin absolu → { mtime, liaisons }
@@ -45,7 +45,7 @@ const fail = (msg) => ({ isError: true, content: [{ type: 'text', text: msg }] }
 const INSTRUCTIONS = `TONTONKAD produit les masques de liaisons électriques (coupes de tranchée ou de conduit) à partir des notes de calcul Caneco.
 Avant toute génération, réunis dans le chat : la ou les notes de calcul (NDC), les tronçons voulus, le rendu souhaité (AutoCAD, ZWCAD, MultiCAD sur le plan DWG, Revit, PDF avec vue 3D), le plan si les masques doivent y être posés, et la zone (chaussée, trottoir…).
 Appelle preparer_etude avec ce que tu sais ; s'il manque quelque chose, pose TOUTES ses questions à l'utilisateur en un seul message, puis rappelle-le avec les réponses. Ne devine jamais un fichier ou une liaison.
-Si plusieurs masques arrivent dans une même chambre de tirage, demande quelle face reçoit quel masque (pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut, vu de dessus) et passe-les dans le paramètre chambres de generer_masques : la chambre est choisie pour recevoir toutes les faces et les traversées sont déduites.
+Si plusieurs masques arrivent dans une même chambre de tirage, demande quelle face reçoit quel masque (pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut, vu de dessus) et passe-les dans le paramètre chambres de generer_masques : la chambre est choisie pour recevoir toutes les faces et les traversées sont déduites. Demande aussi si la chambre est préfabriquée ou MAÇONNÉE ; si maçonnée, demande l'épaisseur des parois, le tampon (ouverture et classe) et la zone (paramètre maconnee), sinon les valeurs par défaut sont prises et doivent être signalées comme à valider.
 Quand preparer_etude répond pret=true : montre les liaisons retenues par tronçon, fais-les valider, puis appelle generer_masques. Relaie toujours les avertissements et les contrôles de conformité, en rappelant que les règles normatives sont à valider.`;
 
 const server = new McpServer({ name: 'tontonkad', version: '0.2.0' }, { instructions: INSTRUCTIONS });
@@ -140,6 +140,12 @@ server.registerTool('generer_masques', {
         pignonA: z.string().optional(), pignonB: z.string().optional(),
         longPanA: z.string().optional(), longPanB: z.string().optional(),
       }).describe('Nom du masque arrivant sur chaque face. Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Une liaison présente dans deux masques traverse la chambre.'),
+      maconnee: z.object({
+        paroi: z.number().optional().describe('Épaisseur des parois en mm (défaut 200)'),
+        tampon: z.object({ L: z.number(), l: z.number(), classe: z.enum(['A15', 'B125', 'C250', 'D400', 'E600', 'F900']) }).partial().optional()
+          .describe('Ouverture du tampon en mm et classe NF EN 124 (défaut 600 × 600 D400)'),
+        zone: z.enum(['espaceVert', 'trottoir', 'bordure', 'chaussee', 'lourd']).optional().describe('Zone : contrôle la classe minimale du tampon (défaut chaussée)'),
+      }).optional().describe('Chambre MAÇONNÉE sur mesure (au lieu d\'un modèle préfabriqué) : dimensions déduites des nappes, valeurs par défaut à valider. Utilisée aussi d\'office si aucune préfabriquée ne convient.'),
     })).optional().describe('Chambres de tirage à étudier (plusieurs faces, traversées) — ajoute une vue de dessus au PDF'),
     sortieDxf: z.string().optional().describe('Chemin du fichier .dxf à écrire (jamais un plan existant : un nouveau fichier)'),
     sortiePdf: z.string().optional().describe('Chemin du fichier .pdf à écrire : une page par masque, coupe + vue 3D + conformité'),
@@ -170,7 +176,14 @@ server.registerTool('generer_masques', {
         const mq = out.find((m) => m.ok && m.nom === nomMasque);
         if (mq) faces[k] = mq; else manquants.push(nomMasque);
       }
-      const e = ChambreFaces.etudierChambre(faces, cat.chambres, CompatChambres, { ref: c.ref, infos: infosChambre });
+      const maconnee = () => ChambreFaces.etudierChambre(faces, cat.chambres, CompatChambres, {
+        modele: chambreMaconnee(Object.fromEntries(Object.entries(faces).map(([k, m]) => [k, { largeur: m.largeur, hauteur: m.hauteur }])), c.maconnee || {}) });
+      let e = c.maconnee && Object.keys(faces).length ? maconnee()
+        : ChambreFaces.etudierChambre(faces, cat.chambres, CompatChambres, { ref: c.ref, infos: infosChambre });
+      if (!e.ok && !c.ref && Object.keys(faces).length) {
+        e = maconnee();
+        e.avertissements.unshift('Aucune chambre préfabriquée ne reçoit toutes ces faces : chambre maçonnée proposée (valeurs par défaut à valider)');
+      }
       e.nom = c.nom;
       if (manquants.length) (e.avertissements = e.avertissements || []).unshift(`Masque(s) introuvable(s) : ${manquants.join(', ')} (utiliser le nom exact d'un masque de cette demande)`);
       e._masques = faces;
