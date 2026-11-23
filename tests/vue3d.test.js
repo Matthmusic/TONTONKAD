@@ -80,3 +80,26 @@ describe('chambre à plusieurs faces : choix et traversées', () => {
     expect(p.labels.some((l) => /pignon A : Arrivée/.test(l.text))).toBe(true);
   });
 });
+
+describe('coupe vue des deux côtés d\'un tronçon (symétrie)', () => {
+  // position le long de la face (repère plan) d'un fourreau à x dans une coupe de largeur W
+  const surFace = (face, sens, x, W = 400) => (V.coupeEnMiroir(face, sens) ? W - x : x);
+  // coordonnée physique perpendiculaire au tronçon, pour comparer les deux bouts
+  const physique = (face, t) => (face.startsWith('pignon') ? { y: t } : { x: t });
+
+  test('ligne droite : pignon B (départ) → pignon A (arrivée), même côté physique', () => {
+    expect(physique('pignonB', surFace('pignonB', 'depart', 60))).toEqual(physique('pignonA', surFace('pignonA', 'arrivee', 60)));
+  });
+  test('vue de dos : à l\'arrivée la coupe est l\'image miroir du départ sur une même orientation', () => {
+    expect(V.coupeEnMiroir('pignonA', 'arrivee')).toBe(!V.coupeEnMiroir('pignonA', 'depart'));
+  });
+  test('angle : vers l\'est puis vers le nord, le fourreau de gauche reste à gauche', () => {
+    // départ pignon B (vers l'est) : x petit = gauche = nord (y grand)
+    expect(surFace('pignonB', 'depart', 60)).toBe(340);
+    // arrivée long-pan A en montant (vers le nord) : x petit = gauche = ouest (x petit)
+    expect(surFace('longPanA', 'arrivee', 60)).toBe(60);
+  });
+  test('sans sens connu (MCP) : coupe posée telle quelle', () => {
+    expect(V.coupeEnMiroir('pignonB', undefined)).toBe(false);
+  });
+});

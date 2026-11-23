@@ -297,6 +297,19 @@ function drawChambre3D(p, m, zx, zy, zw, zh) {
 // Repère plan : x le long du long-pan (0 → L), y le long du pignon (0 → l).
 const estPignonCle = (k) => k.startsWith('pignon');
 const COUL_LIAISON = [[0.85, 0.33, 0.1], [0.13, 0.45, 0.8], [0.2, 0.6, 0.25], [0.6, 0.25, 0.65], [0.85, 0.6, 0.05], [0.1, 0.6, 0.65], [0.55, 0.35, 0.2], [0.8, 0.2, 0.45]];
+// Coupe posée en miroir sur une face de chambre ? La coupe d'un tronçon se lit
+// dans le sens départ → arrivée, x vers la droite du sens de marche. Le sens de
+// marche sort par la face au départ, y entre à l'arrivée. Repère de la vue de
+// dessus : y vers le haut ; pignons le long de y, long-pans le long de x.
+const NORMALE_FACE = { pignonA: [-1, 0], pignonB: [1, 0], longPanA: [0, -1], longPanB: [0, 1] };
+function coupeEnMiroir(face, sens) {
+  const n = NORMALE_FACE[face];
+  if (!n || (sens !== 'depart' && sens !== 'arrivee')) return false;
+  const d = sens === 'depart' ? n : [-n[0], -n[1]];
+  const droite = [d[1], -d[0]], tangente = face.startsWith('pignon') ? [0, 1] : [1, 0];
+  return droite[0] * tangente[0] + droite[1] * tangente[1] < 0;
+}
+
 function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
   const L = etude.L, l = etude.l, e = (etude.infos && etude.infos.paroi) || 0, sortie = 350;
   const ext = e + sortie + 60;
@@ -327,10 +340,15 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
     const mq = masques[k];
     if (!mq) continue;
     const g = faceGeo[k], off = (g.long - mq.largeur) / 2;
+    // Une coupe se lit dans le sens de son tronçon (départ → arrivée), x vers la
+    // droite du sens de marche. Sur une face, le sens de marche sort de la chambre
+    // si le tronçon part d'ici, y entre s'il arrive : selon l'orientation de la
+    // face, la coupe est posée telle quelle ou en miroir (vue de dos).
+    const miroir = coupeEnMiroir(k, mq.sens);
     ancre[k] = {};
     const vus = new Set();
     for (const f of mq.fourreaux) {
-      const t = off + f.x, [bx, by] = g.at(t);
+      const t = off + (miroir ? mq.largeur - f.x : f.x), [bx, by] = g.at(t);
       const r = f.od / 2;
       // tube vu de dessus : bande de largeur od, du dehors jusqu'à 40 mm dans la chambre
       const a0 = [bx + g.out[0] * (e + sortie), by + g.out[1] * (e + sortie)], a1 = [bx - g.out[0] * 40, by - g.out[1] * 40];
@@ -344,7 +362,7 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
       }
       if (!vus.has(key)) {
         vus.add(key);
-        const nb = mq.fourreaux.filter((x) => Math.round(off + x.x) === key).length;
+        const nb = mq.fourreaux.filter((x) => Math.round(off + (miroir ? mq.largeur - x.x : x.x)) === key).length;
         const [lx, ly] = P(a0[0] + g.out[0] * 30, a0[1] + g.out[1] * 30);
         p.rgb([0, 0, 0], false).text(lx, ly - 3, 6, nb > 1 ? `${f.id}…×${nb}` : f.id, { align: g.out[0] < 0 ? 'right' : g.out[0] > 0 ? 'left' : 'center', bold: true });
       }
@@ -620,7 +638,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   etiquettes.forEach((f) => f());
 }
 
-const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Vue3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);

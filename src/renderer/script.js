@@ -7563,7 +7563,10 @@
     R().FACES_CHAMBRE.forEach((f) => {
       const v = R().surFace(reseau, nd.id, f);
       const m = v && masqueTroncon(v.troncon);
-      if (m) masques[f] = m;
+      if (!m) return;
+      // sens du tronçon sur cette face : la coupe est vue de dos à l'arrivée
+      m.sens = v.troncon.a.noeud === nd.id && v.troncon.a.face === f ? 'depart' : 'arrivee';
+      masques[f] = m;
     });
     if (!Object.keys(masques).length) return null;
     const etude = window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres,
