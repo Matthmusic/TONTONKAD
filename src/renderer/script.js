@@ -1324,6 +1324,22 @@
     return null;
   }
 
+  // Place libre la plus basse dans la boîte (puis la plus proche du centre en
+  // largeur) pour un fourreau de rayon r (px), sans toucher aux autres.
+  function findLowestFreeSpot(r) {
+    const step = Math.max(1, 5 * MM_TO_PX);
+    const cx = WORLD_W / 2;
+    for (let y = WORLD_H - r; y >= r; y -= step) {
+      let best = null;
+      for (let x = r; x <= WORLD_W - r + 1e-6; x += step) {
+        if (!validatePlacement({ x, y, r, id: null }, { ignoreId: null }).valid) continue;
+        if (!best || Math.abs(x - cx) < Math.abs(best.x - cx)) best = { x, y };
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
   function fitsInFourreau(cable, fourreau) { return cable.od <= fourreau.idm; }
 
   function findFourreauUnder(x, y, needOD) {
@@ -1431,7 +1447,7 @@
     const boxH = shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value);
 
     const anchored = window.PACKER.anchorLayout(cfg, {
-      w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH,
+      w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH, shape,
     });
 
     // Positions en mm, centres des cercles, Y=0 en haut
@@ -1492,6 +1508,8 @@
       const optsPacker = lockWidth  ? { lock: 'w', w: boxWidth }
                        : lockHeight ? { lock: 'h', h: boxHeight }
                        : { lock: null };
+      // Conduit circulaire : le packer optimise directement le diamètre.
+      optsPacker.shape = shape;
 
       const bestConfig = window.solve(tubes, optsPacker);
       applyAnchoredConfig(bestConfig);
@@ -1510,7 +1528,7 @@
       checkForPossibleReduction();
 
       // Afficher taux d'occupation et feedback
-      const fillPercent = (bestConfig.fill * 100).toFixed(0);
+      const fillPercent = calculateBoxOccupancy().toFixed(0);
       showToast(`✅ ${fourreaux.length} fourreaux placés (Occupation: ${fillPercent}%) - Ctrl+X pour dégeler`);
 
       updateStats();
@@ -1521,139 +1539,6 @@
       lastLayoutVariants = [];
       hideLayoutPreviewPanel();
       showToast('❌ Erreur lors du rangement en grille — réessayez');
-
-      // Fallback sur ancien système si échec
-      console.warn('[arrangeConduitGridNew] Fallback sur ancien système');
-      arrangeConduitGridOptimized({
-        allowResize: false,
-        reduceAfterFit: false,
-        source: 'grid-fallback'
-      });
-    }
-  }
-
-  /**
-   * Calcule le placement optimal en grille pour un ensemble d'items dans un conteneur.
-   * @param {Array<Object>} items - Tableau d'objets avec {id, diameter}.
-   * @param {Object} container - Dimensions du conteneur {width, height}.
-   * @param {Object} options - Options de placement {margin, gap}.
-   * @returns {Object} - Résultat du placement.
-   */
-  function calculateGridPlacement(items, container, options) {
-    const { margin = 0, gap = 0, sort = 'desc' } = options || {};
-    const numItems = items.length;
-
-    if (numItems === 0) {
-      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
-    }
-
-    let sortedItems;
-    if (sort === 'asc') sortedItems = [...items].sort((a, b) => a.diameter - b.diameter);
-    else if (sort === 'none') sortedItems = [...items];
-    else sortedItems = [...items].sort((a, b) => b.diameter - a.diameter);
-
-    const availableWidth = container.width - 2 * margin;
-    const availableHeight = container.height - 2 * margin;
-
-    const getGridSize = (cols, rows) => {
-      if (cols === 0 || rows === 0) return { width: 0, height: 0, grid: [] };
-
-      const grid = Array(rows).fill(null).map(() => Array(cols).fill(null));
-      let itemIndex = 0;
-      for (let r = rows - 1; r >= 0; r--) {
-        for (let c = 0; c < cols; c++) {
-          if (itemIndex < numItems) {
-            grid[r][c] = sortedItems[itemIndex++];
-          }
-        }
-      }
-
-      const colWidths = Array(cols).fill(0);
-      for (let c = 0; c < cols; c++) {
-        let maxDiameter = 0;
-        for (let r = 0; r < rows; r++) {
-          if (grid[r][c]) maxDiameter = Math.max(maxDiameter, grid[r][c].diameter);
-        }
-        if (maxDiameter > 0) colWidths[c] = maxDiameter + gap;
-      }
-
-      const rowHeights = Array(rows).fill(0);
-      for (let r = 0; r < rows; r++) {
-        let maxDiameter = 0;
-        for (let c = 0; c < cols; c++) {
-          if (grid[r][c]) maxDiameter = Math.max(maxDiameter, grid[r][c].diameter);
-        }
-        if (maxDiameter > 0) rowHeights[r] = maxDiameter + gap;
-      }
-
-      const totalWidth = colWidths.reduce((sum, w) => sum + w, 0);
-      const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
-
-      return { totalWidth, totalHeight, grid, colWidths, rowHeights };
-    };
-
-    let validGrids = [];
-    for (let cols = 1; cols <= numItems; cols++) {
-      const rows = Math.ceil(numItems / cols);
-      const { totalWidth, totalHeight } = getGridSize(cols, rows);
-      if (totalWidth <= availableWidth && totalHeight <= availableHeight) {
-        validGrids.push({ cols, rows, ratio: cols / rows });
-      }
-    }
-
-    if (validGrids.length > 0) {
-      // Privilégier la grille la plus large
-      validGrids.sort((a, b) => b.ratio - a.ratio || b.cols - a.cols);
-      const bestGrid = validGrids[0];
-
-      const { totalWidth, totalHeight, grid, colWidths, rowHeights } = getGridSize(bestGrid.cols, bestGrid.rows);
-
-      const startX = (container.width - totalWidth) / 2;
-      const startY = (container.height - totalHeight) / 2;
-
-      const placements = [];
-      const cells = []; // Stockage des cellules pour affichage visuel
-      let currentY = startY;
-      for (let r = 0; r < bestGrid.rows; r++) {
-        let currentX = startX;
-        for (let c = 0; c < bestGrid.cols; c++) {
-          const item = grid[r][c];
-          if (item) {
-            placements.push({
-              id: item.id,
-              x: currentX + colWidths[c] / 2,
-              y: currentY + rowHeights[r] / 2,
-            });
-            cells.push({
-              x: currentX,
-              y: currentY,
-              width: colWidths[c],
-              height: rowHeights[r]
-            });
-          }
-          currentX += colWidths[c];
-        }
-        currentY += rowHeights[r];
-      }
-
-      return { fits: true, placements, grid: { cols: bestGrid.cols, rows: bestGrid.rows }, cells };
-    } else {
-      // Aucune grille ne rentre, calculer la taille suggérée
-      const aspectRatio = container.width / container.height;
-      const cols = Math.ceil(Math.sqrt(numItems * aspectRatio));
-      const rows = Math.ceil(numItems / cols);
-
-      const { totalWidth, totalHeight } = getGridSize(cols, rows);
-
-      return {
-        fits: false,
-        suggestedContainer: {
-          width: Math.ceil((totalWidth + 2 * margin) / 10) * 10,
-          height: Math.ceil((totalHeight + 2 * margin) / 10) * 10,
-        },
-        grid: { cols, rows },
-        cells: []
-      };
     }
   }
 
@@ -1877,6 +1762,8 @@
       cables.push({
         id, x: x0, y: y0, od: co.od, parent: parentId,
         color: colorForCable(co.fam, co.code), customColor: phaseColor, label: co.label || '',
+        // nom de la liaison (étude de chambre : traversées entre faces)
+        liaison: (liaisonsById && liaisonsById[co.liaisonId]) || null,
         fam: co.fam, code: co.code, vx: 0, vy: 0, dragging: false, frozen: false,
         _frozenByUser: false, _frozenByMode: false, _px: x0, _py: y0,
         selectedPhase: phaseKey,
@@ -1972,638 +1859,6 @@
   }
   window.bigBrainGenerate = bigBrainGenerate;
 
-  /* ====== Grille virtuelle adaptative pour multitubulaires (VRD/BTP) ====== */
-
-  /**
-   * Stratégie PYRAMID: Placement hiérarchique (gros en bas, petits autour)
-   * Logique: Gros fourreau(x) en bas au centre, remplissage symétrique autour
-   * @param {Array} items - Fourreaux avec {id, diameter}
-   * @param {Object} container - {width, height}
-   * @param {Object} options - {margin, gap}
-   * @param {Object} analysis - Résultat de analyzeConduitMix
-   * @returns {Object} - Résultat placement
-   */
-  /**
-   * Stratégie SMART PYRAMID: Placement pyramidal intelligent par rangées optimisées
-   * Remplit chaque rangée en fonction de la largeur disponible (pas séquentiel)
-   * Exemple: 2×Ø63 peuvent tenir dans la largeur d'1×Ø200
-   * @param {Array} items - Fourreaux avec {id, diameter}
-   * @param {Object} container - {width, height}
-   * @param {Object} options - {margin, gap}
-   * @returns {Object} - Résultat placement
-   */
-  function placeSmartPyramid(items, container, options) {
-    const { margin = 0, gap = 0 } = options || {};
-
-    if (items.length === 0) {
-      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
-    }
-
-    // Trier par taille décroissante (gros en premier)
-    const sortedCompact = [...items].sort((a, b) => b.diameter - a.diameter);
-    const compactAvailableWidth = container.width - 2 * margin;
-    const compactRows = [];
-    let compactIndex = 0;
-
-    while (compactIndex < sortedCompact.length) {
-      const diameter = sortedCompact[compactIndex].diameter;
-      const sameDiameter = [];
-
-      while (compactIndex < sortedCompact.length && sortedCompact[compactIndex].diameter === diameter) {
-        sameDiameter.push(sortedCompact[compactIndex]);
-        compactIndex++;
-      }
-
-      const cellSize = diameter + gap;
-      if (cellSize > compactAvailableWidth + gap) {
-        return {
-          fits: false,
-          placements: [],
-          grid: { cols: 0, rows: compactRows.length },
-          cells: [],
-          suggestedContainer: {
-            width: Math.ceil((cellSize + 2 * margin) / 10) * 10,
-            height: container.height
-          }
-        };
-      }
-
-      const maxCols = Math.max(1, Math.floor((compactAvailableWidth + gap) / cellSize));
-      for (let start = 0; start < sameDiameter.length; start += maxCols) {
-        const rowItems = sameDiameter.slice(start, start + maxCols);
-        compactRows.push({
-          items: rowItems,
-          width: rowItems.length * cellSize,
-          height: cellSize,
-          cellSize
-        });
-      }
-    }
-
-    const compactNeededHeight = compactRows.reduce((sum, row) => sum + row.height, 0) + 2 * margin;
-    if (compactNeededHeight > container.height) {
-      const maxRowWidth = compactRows.reduce((max, row) => Math.max(max, row.width), 0);
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols: Math.max(0, ...compactRows.map(row => row.items.length)), rows: compactRows.length },
-        cells: [],
-        suggestedContainer: {
-          width: Math.ceil((maxRowWidth + 2 * margin) / 10) * 10,
-          height: Math.ceil(compactNeededHeight / 10) * 10
-        }
-      };
-    }
-
-    const compactPlacements = [];
-    const compactCells = [];
-    let compactY = container.height - margin;
-
-    for (const row of compactRows) {
-      compactY -= row.height;
-      const rowStartX = margin + (compactAvailableWidth - row.width) / 2;
-
-      row.items.forEach((item, colIndex) => {
-        const x = rowStartX + colIndex * row.cellSize + row.cellSize / 2;
-        const y = compactY + row.height / 2;
-        compactPlacements.push({ id: item.id, x, y });
-        compactCells.push({
-          x: rowStartX + colIndex * row.cellSize,
-          y: compactY,
-          width: row.cellSize,
-          height: row.height
-        });
-      });
-    }
-
-    return {
-      fits: true,
-      placements: compactPlacements,
-      grid: {
-        cols: Math.max(0, ...compactRows.map(row => row.items.length)),
-        rows: compactRows.length
-      },
-      cells: compactCells
-    };
-
-    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
-    const availableWidth = container.width - 2 * margin;
-    const availableHeight = container.height - 2 * margin;
-
-    const placements = [];
-    const cells = [];
-    const rows = []; // Stockage des rangées construites
-
-    let remainingItems = [...sorted];
-    let currentY = container.height - margin;
-
-    // Construire les rangées de bas en haut
-    while (remainingItems.length > 0) {
-      const row = { items: [], width: 0, height: 0 };
-      let rowX = margin;
-
-      // Remplir la rangée avec les items qui rentrent dans la largeur disponible
-      let i = 0;
-      while (i < remainingItems.length) {
-        const item = remainingItems[i];
-        const itemWidth = item.diameter + gap;
-
-        // Vérifier si l'item rentre dans la largeur restante de la rangée
-        if (row.width + itemWidth <= availableWidth + gap) {
-          row.items.push(item);
-          row.width += itemWidth;
-          row.height = Math.max(row.height, item.diameter + gap);
-          remainingItems.splice(i, 1); // Retirer de la liste
-        } else {
-          i++; // Passer au suivant
-        }
-      }
-
-      // Si la rangée est vide (aucun item ne rentre), on arrête
-      if (row.items.length === 0) break;
-
-      // Calculer la position Y de cette rangée (on monte)
-      currentY -= row.height;
-
-      // Si on dépasse en hauteur, cette rangée ne rentre pas
-      if (currentY < margin) {
-        // Replacer les items dans remainingItems
-        remainingItems.push(...row.items);
-        break;
-      }
-
-      // Centrer la rangée horizontalement
-      const rowStartX = margin + (availableWidth - row.width + gap) / 2;
-
-      // Placer les items de cette rangée
-      let xPos = rowStartX;
-      for (const item of row.items) {
-        const cellSize = item.diameter + gap;
-        placements.push({
-          id: item.id,
-          x: xPos + item.diameter / 2,
-          y: currentY + row.height / 2
-        });
-        cells.push({
-          x: xPos,
-          y: currentY,
-          width: cellSize,
-          height: row.height
-        });
-        xPos += cellSize;
-      }
-
-      rows.push(row);
-    }
-
-    // Vérifier si tous les items ont été placés
-    if (remainingItems.length > 0) {
-      // Calculer les dimensions nécessaires
-      const neededHeight = rows.reduce((sum, r) => sum + r.height, 0) + 2 * margin +
-                           remainingItems.reduce((sum, item) => sum + item.diameter + gap, 0);
-
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols: 0, rows: rows.length },
-        cells: [],
-        suggestedContainer: {
-          width: container.width,
-          height: Math.ceil(neededHeight)
-        }
-      };
-    }
-
-    return {
-      fits: true,
-      placements,
-      grid: {
-        cols: Math.max(...rows.map(r => r.items.length)),
-        rows: rows.length
-      },
-      cells
-    };
-  }
-
-  /**
-   * Score un layout selon critères de qualité
-   * @param {Object} layout - Résultat de placement
-   * @param {Object} container - {width, height}
-   * @param {Array} items - Items originaux
-   * @returns {number} - Score (plus haut = meilleur)
-   */
-  function scoreLayout(layout, container, items) {
-    if (!layout.fits || !layout.placements || layout.placements.length === 0) {
-      return -1000;
-    }
-
-    const { placements } = layout;
-
-    // Critère 1: Compacité (40%) - densité de packing réelle (bords des cercles)
-    const radiusById = new Map(items.map(it => [it.id, it.diameter / 2]));
-    const radiusOf = p => radiusById.get(p.id) || 0;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    let circlesArea = 0;
-    for (const p of placements) {
-      const r = radiusOf(p);
-      minX = Math.min(minX, p.x - r);
-      maxX = Math.max(maxX, p.x + r);
-      minY = Math.min(minY, p.y - r);
-      maxY = Math.max(maxY, p.y + r);
-      circlesArea += Math.PI * r * r;
-    }
-    const envArea = (maxX - minX) * (maxY - minY);
-    const packingDensity = envArea > 0 ? circlesArea / envArea : 0;
-    const compacityScore = Math.min(1, packingDensity) * 40;
-
-    // Critère 2: Symétrie (30%) - Layouts équilibrés autour de l'axe vertical
-    const centerX = container.width / 2;
-    const avgDistanceFromCenter = placements.reduce((sum, p) => sum + Math.abs(p.x - centerX), 0) / placements.length;
-    const maxDistancePossible = container.width / 2;
-    const symmetryScore = (1 - Math.min(1, avgDistanceFromCenter / maxDistancePossible)) * 30;
-
-    // Critère 3: Alignement (30%) - Grilles bien formées
-    const cols = layout.grid?.cols || 1;
-    const rows = layout.grid?.rows || 1;
-    const ratio = cols / rows;
-    const idealRatio = 1.5; // Rectangle large > haut (métier VRD)
-    const alignmentScore = (1 - Math.min(1, Math.abs(ratio - idealRatio) / idealRatio)) * 30;
-
-    const itemById = new Map(items.map(item => [item.id, item]));
-    const maxDiameter = Math.max(...items.map(item => item.diameter || 0));
-    const minDiameter = Math.min(...items.map(item => item.diameter || 0));
-    let largeConduitsAtBottomScore = 0;
-    let smallUnderLargePenalty = 0;
-    let diameterGroupingScore = 0;
-    let regularGapScore = 0;
-
-    if (maxDiameter > minDiameter) {
-      const sortedByY = [...placements].sort((a, b) => a.y - b.y);
-      placements.forEach(p => {
-        const item = itemById.get(p.id);
-        if (!item) return;
-        const verticalRank = sortedByY.findIndex(other => other.id === p.id) / Math.max(placements.length - 1, 1);
-        if (item.diameter === maxDiameter) largeConduitsAtBottomScore += verticalRank;
-        if (item.diameter === minDiameter && verticalRank > 0.65) smallUnderLargePenalty += 1;
-      });
-      largeConduitsAtBottomScore = largeConduitsAtBottomScore / Math.max(items.filter(i => i.diameter === maxDiameter).length, 1) * 30;
-      smallUnderLargePenalty = smallUnderLargePenalty * -8;
-    }
-
-    for (let i = 0; i < placements.length; i++) {
-      let nearestSame = Infinity;
-      let nearestOther = Infinity;
-      const item = itemById.get(placements[i].id);
-      if (!item) continue;
-      for (let j = 0; j < placements.length; j++) {
-        if (i === j) continue;
-        const otherItem = itemById.get(placements[j].id);
-        if (!otherItem) continue;
-        const d = Math.hypot(placements[i].x - placements[j].x, placements[i].y - placements[j].y);
-        if (otherItem.diameter === item.diameter) nearestSame = Math.min(nearestSame, d);
-        else nearestOther = Math.min(nearestOther, d);
-      }
-      if (nearestSame < nearestOther) diameterGroupingScore += 2;
-    }
-
-    const distances = [];
-    for (let i = 0; i < placements.length; i++) {
-      for (let j = i + 1; j < placements.length; j++) {
-        const itemA = itemById.get(placements[i].id);
-        const itemB = itemById.get(placements[j].id);
-        if (!itemA || !itemB) continue;
-        const centerDistance = Math.hypot(placements[i].x - placements[j].x, placements[i].y - placements[j].y);
-        const edgeGap = centerDistance - itemA.diameter / 2 - itemB.diameter / 2;
-        if (edgeGap >= FOURREAU_GAP - 1 && edgeGap <= FOURREAU_GAP * 2.5) distances.push(edgeGap);
-      }
-    }
-    if (distances.length > 0) {
-      const avgGap = distances.reduce((sum, d) => sum + d, 0) / distances.length;
-      const variance = distances.reduce((sum, d) => sum + Math.abs(d - avgGap), 0) / distances.length;
-      regularGapScore = Math.max(0, 20 - variance);
-    }
-
-    const businessScore = largeConduitsAtBottomScore + diameterGroupingScore + regularGapScore + smallUnderLargePenalty;
-
-    return compacityScore + symmetryScore + alignmentScore + businessScore;
-  }
-
-  /**
-   * Stratégie COMPLEX: Génération multi-variantes avec scoring
-   * Génère 3 variantes et retourne la meilleure
-   * @param {Array} items - Fourreaux avec {id, diameter}
-   * @param {Object} container - {width, height}
-   * @param {Object} options - {margin, gap}
-   * @param {Object} analysis - Résultat de analyzeConduitMix
-   * @returns {Object} - Résultat placement (meilleure variante)
-   */
-  function placeComplex(items, container, options) {
-    const variants = [];
-
-    // Variante 1: Smart Pyramid (placement pyramidal par rangées, gros en bas)
-    const variant1 = placeSmartPyramid(items, container, options);
-    variants.push({
-      layout: variant1,
-      name: 'SmartPyramid',
-      score: scoreLayout(variant1, container, items)
-    });
-
-    // Variante 2: Grille, gros fourreaux d'abord
-    const variant2 = calculateGridPlacement(items, container, { ...options, sort: 'desc' });
-    variants.push({
-      layout: variant2,
-      name: 'GridDesc',
-      score: scoreLayout(variant2, container, items)
-    });
-
-    // Variante 3: Grille, petits fourreaux d'abord (remplissage inverse)
-    const variant3 = calculateGridPlacement(items, container, { ...options, sort: 'asc' });
-    variants.push({
-      layout: variant3,
-      name: 'GridAsc',
-      score: scoreLayout(variant3, container, items)
-    });
-
-    // Variante 4: Packing hexagonal (quinconce, plus dense pour cercles)
-    const variant4 = placeHexagonal(items, container, options);
-    variants.push({
-      layout: variant4,
-      name: 'Hexagonal',
-      score: scoreLayout(variant4, container, items)
-    });
-
-    // Trier par score décroissant
-    variants.sort((a, b) => b.score - a.score);
-
-    const best = variants[0];
-    console.log(`[COMPLEX] Variantes:`, variants.map(v => `${v.name}=${v.score.toFixed(1)}`).join(', '));
-    console.log(`[COMPLEX] Meilleure: ${best.name} (${best.score.toFixed(2)})`);
-
-    // Exposer les variantes pour le panel preview (filtrées : seulement celles qui rentrent)
-    lastLayoutVariants = variants
-      .filter(v => v.layout.fits)
-      .map(v => ({ name: v.name, score: v.score, layout: v.layout, container, items }));
-
-    return best.layout;
-  }
-
-  /**
-   * Stratégie UNIFORM: Placement rectangulaire pour fourreaux identiques
-   * Optimisé pour rapidité (tous même diamètre = calculs simplifiés)
-   * @param {Array} items - Fourreaux avec {id, diameter}
-   * @param {Object} container - {width, height}
-   * @param {Object} options - {margin, gap}
-   * @returns {Object} - Résultat placement
-   */
-  function placeUniform(items, container, options) {
-    const { margin = 0, gap = 0 } = options || {};
-    const numItems = items.length;
-
-    if (numItems === 0) {
-      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
-    }
-
-    // Tous identiques => diamètre unique
-    const diameter = items[0].diameter;
-    const cellSize = diameter + gap;
-
-    const availableWidth = container.width - 2 * margin;
-    const availableHeight = container.height - 2 * margin;
-
-    // Chercher TOUTES les grilles valides avant de décider si ça rentre
-    // (évite les faux "ne rentre pas" de l'heuristique sqrt)
-    let validGrids = [];
-    for (let cols = 1; cols <= numItems; cols++) {
-      const rows = Math.ceil(numItems / cols);
-      const w = cols * cellSize;
-      const h = rows * cellSize;
-      if (w <= availableWidth && h <= availableHeight) {
-        validGrids.push({ cols, rows, ratio: cols / rows, w, h });
-      }
-    }
-
-    let bestCols, bestRows;
-    if (validGrids.length > 0) {
-      // Privilégier grille la plus carrée (ratio proche de 1) pour uniformité
-      validGrids.sort((a, b) => Math.abs(a.ratio - 1) - Math.abs(b.ratio - 1));
-      bestCols = validGrids[0].cols;
-      bestRows = validGrids[0].rows;
-    } else {
-      // Aucune grille ne rentre => suggérer une taille minimale
-      const aspectRatio = availableWidth / availableHeight;
-      bestCols = Math.max(1, Math.ceil(Math.sqrt(numItems * aspectRatio)));
-      bestRows = Math.ceil(numItems / bestCols);
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols: bestCols, rows: bestRows },
-        suggestedContainer: {
-          width: bestCols * cellSize + 2 * margin,
-          height: bestRows * cellSize + 2 * margin
-        }
-      };
-    }
-
-    // Placements centrés
-    const gridWidth = bestCols * cellSize;
-    const gridHeight = bestRows * cellSize;
-    const startX = (container.width - gridWidth) / 2 + cellSize / 2;
-    const startY = (container.height - gridHeight) / 2 + cellSize / 2;
-
-    const placements = [];
-    const cells = []; // Stockage des cellules pour affichage visuel
-    let itemIndex = 0;
-
-    // Remplissage bas→haut (r décroissant)
-    for (let r = bestRows - 1; r >= 0; r--) {
-      for (let c = 0; c < bestCols; c++) {
-        if (itemIndex < numItems) {
-          const cellX = startX + c * cellSize;
-          const cellY = startY + r * cellSize;
-
-          placements.push({
-            id: items[itemIndex].id,
-            x: cellX,
-            y: cellY
-          });
-
-          // Enregistrer la cellule (coordonnées coin haut-gauche + dimensions)
-          cells.push({
-            x: cellX - cellSize / 2,
-            y: cellY - cellSize / 2,
-            width: cellSize,
-            height: cellSize
-          });
-
-          itemIndex++;
-        }
-      }
-    }
-
-    return {
-      fits: true,
-      placements,
-      grid: { cols: bestCols, rows: bestRows },
-      cells // Retourner les cellules pour affichage
-    };
-  }
-
-  /**
-   * Stratégie HEXAGONAL: packing en quinconce (nid d'abeille) pour cercles.
-   * Les rangées impaires sont décalées de cellSize/2 et le pas vertical vaut
-   * cellSize·√3/2, ce qui loge plus de fourreaux ronds qu'une grille carrée à
-   * boîte égale. Le pas (cellSize) est basé sur le PLUS GROS diamètre pour
-   * rester valide en mix hétérogène.
-   * @param {Array} items - Fourreaux avec {id, diameter}
-   * @param {Object} container - {width, height}
-   * @param {Object} options - {margin, gap}
-   * @returns {Object} - Résultat placement (même contrat que les autres stratégies)
-   */
-  function placeHexagonal(items, container, options) {
-    const { margin = 0, gap = 0 } = options || {};
-    const numItems = items.length;
-
-    if (numItems === 0) {
-      return { fits: true, placements: [], grid: { cols: 0, rows: 0 }, cells: [] };
-    }
-
-    const maxDiameter = Math.max(...items.map(it => it.diameter));
-    const cellSize = maxDiameter + gap;
-    const vPitch = cellSize * Math.sqrt(3) / 2;
-
-    const availableWidth = container.width - 2 * margin;
-    const availableHeight = container.height - 2 * margin;
-
-    const cols = Math.max(1, Math.floor(availableWidth / cellSize));
-    const colsOffset = (cols * cellSize + cellSize / 2 <= availableWidth) ? cols : Math.max(1, cols - 1);
-
-    // Répartir les items en rangées (bas → haut) en alternant les capacités
-    const rowCaps = [];
-    let remaining = numItems;
-    let rIndex = 0;
-    while (remaining > 0) {
-      const cap = (rIndex % 2 === 0) ? cols : colsOffset;
-      const take = Math.min(cap, remaining);
-      rowCaps.push(take);
-      remaining -= take;
-      rIndex++;
-    }
-    const numRows = rowCaps.length;
-
-    const verticalExtent = (numRows - 1) * vPitch + cellSize;
-    if (verticalExtent > availableHeight) {
-      return {
-        fits: false,
-        placements: [],
-        grid: { cols, rows: numRows },
-        suggestedContainer: {
-          width: Math.ceil(container.width),
-          height: Math.ceil(verticalExtent + 2 * margin)
-        }
-      };
-    }
-
-    const blockWidth = Math.max(cols * cellSize, colsOffset * cellSize + cellSize / 2);
-    const firstColCenter = (container.width - blockWidth) / 2 + cellSize / 2;
-    const bottomY = container.height - margin - cellSize / 2;
-
-    const sorted = [...items].sort((a, b) => b.diameter - a.diameter);
-    const placements = [];
-    const cells = [];
-    let itemIndex = 0;
-
-    for (let r = 0; r < numRows && itemIndex < numItems; r++) {
-      const cap = rowCaps[r];
-      const offset = (r % 2 === 0) ? 0 : cellSize / 2;
-      const rowY = bottomY - r * vPitch;
-      for (let c = 0; c < cap && itemIndex < numItems; c++) {
-        const cx = firstColCenter + offset + c * cellSize;
-        placements.push({ id: sorted[itemIndex].id, x: cx, y: rowY });
-        cells.push({ x: cx - cellSize / 2, y: rowY - cellSize / 2, width: cellSize, height: cellSize });
-        itemIndex++;
-      }
-    }
-
-    return {
-      fits: true,
-      placements,
-      grid: { cols, rows: numRows },
-      cells
-    };
-  }
-
-  /**
-   * Analyse le mix de fourreaux et détermine la stratégie de placement optimale
-   * @param {Array} fourreaux - Tableau des fourreaux à analyser
-   * @returns {Object} - { type: 'UNIFORM'|'PYRAMID'|'COMPLEX', strategy: string, stats: Object }
-   */
-  function analyzeConduitMix(fourreaux) {
-    if (!fourreaux || fourreaux.length === 0) {
-      return { type: 'EMPTY', strategy: 'none', stats: {} };
-    }
-
-    // Extraire et analyser les diamètres
-    const diameters = fourreaux.map(f => f.od).sort((a, b) => b - a);
-    const uniqueDiameters = [...new Set(diameters)];
-    const maxDiameter = diameters[0];
-    const minDiameter = diameters[diameters.length - 1];
-    const totalCount = fourreaux.length;
-
-    // Compter occurrences de chaque diamètre
-    const diameterCounts = {};
-    diameters.forEach(d => {
-      diameterCounts[d] = (diameterCounts[d] || 0) + 1;
-    });
-
-    // Calculer le nombre de fourreaux du plus gros diamètre
-    const maxDiameterCount = diameterCounts[maxDiameter];
-
-    // Stats pour debug/logging
-    const stats = {
-      total: totalCount,
-      uniqueDiameters: uniqueDiameters.length,
-      maxDiameter,
-      minDiameter,
-      ratio: maxDiameter / minDiameter,
-      diameterCounts
-    };
-
-    // CLASSIFICATION
-
-    // CAS A: UNIFORM - Tous les fourreaux ont le même diamètre
-    if (uniqueDiameters.length === 1) {
-      return {
-        type: 'UNIFORM',
-        strategy: 'rectangular',
-        stats,
-        description: `${totalCount} fourreaux identiques Ø${maxDiameter}mm`
-      };
-    }
-
-    // CAS B: PYRAMID - Un seul gros fourreau (ou très peu) + plusieurs moyens/petits
-    // Condition: 1 seul gros OU gros représente <20% du total
-    const isOneLarge = maxDiameterCount === 1;
-    const isFewLarge = maxDiameterCount <= Math.max(1, Math.floor(totalCount * 0.2));
-    const hasSignificantSizeDifference = stats.ratio >= 2.0; // Gros au moins 2× plus grand que petits
-
-    if ((isOneLarge || isFewLarge) && hasSignificantSizeDifference && uniqueDiameters.length <= 4) {
-      return {
-        type: 'PYRAMID',
-        strategy: 'hierarchical',
-        stats,
-        description: `${maxDiameterCount}×Ø${maxDiameter}mm + ${totalCount - maxDiameterCount} plus petits`
-      };
-    }
-
-    // CAS C: COMPLEX - Mix complexe de plusieurs tailles
-    return {
-      type: 'COMPLEX',
-      strategy: 'multi-variant',
-      stats,
-      description: `Mix complexe: ${uniqueDiameters.length} diamètres différents`
-    };
-  }
-
   /* ── Preview panel des variantes de placement ───────────────────── */
 
   function renderVariantSVG(variant) {
@@ -2644,38 +1899,6 @@
     </svg>`;
   }
 
-  function applyLayoutVariant(variantIndex) {
-    const variant = lastLayoutVariants[variantIndex];
-    if (!variant) return;
-    const { layout, container } = variant;
-    if (!layout.fits) return;
-
-    layout.placements.forEach(p => {
-      const f = fourreaux.find(f => f.id === p.id);
-      if (f) moveFourreauWithChildren(f, p.x * MM_TO_PX, p.y * MM_TO_PX);
-    });
-
-    lastGridCells = (layout.cells || []).map(cell => ({
-      x: cell.x * MM_TO_PX, y: cell.y * MM_TO_PX,
-      width: cell.width * MM_TO_PX, height: cell.height * MM_TO_PX
-    }));
-
-    // Mettre en évidence la carte active
-    document.querySelectorAll('.layout-preview-card').forEach((el, i) => {
-      el.classList.toggle('active', i === variantIndex);
-    });
-
-    // Rotation paysage si nécessaire
-    const lockWidth = document.getElementById('lockWidth')?.checked;
-    const lockHeight = document.getElementById('lockHeight')?.checked;
-    if (!lockWidth && !lockHeight && SHAPE === 'rect' && WORLD_H_MM > WORLD_W_MM * 1.2) {
-      rotateBoxAndContents('cw');
-    }
-
-    updateStats();
-    redraw();
-  }
-
   function applyNappeVariant(variantIndex) {
     const variant = lastLayoutVariants[variantIndex];
     if (!variant || !variant.isNappeLayout) return;
@@ -2701,19 +1924,19 @@
       return;
     }
 
+    // La 1re carte réduit la boîte au contenu ; la 2e est le placement qui
+    // vient d'être posé (étoile) ; les suivantes sont les autres formes.
     const STRATEGY_FR = {
-      compact:  'Compact',
+      compact:  'Placement proposé',
+      locked:   'Cote imposée',
+      cercle:   'Conduit',
       tranchee: 'Tranchée',
       rect43:   'Rectangle 4/3',
-      locked:   'Ajusté',
     };
 
-    const CARD_LABELS  = ['COMPACT', 'OPTIMISÉ', 'RECTANGLE'];
-    const CARD_DESCS   = ['Boîte serrée', 'Meilleur score', 'Grille basique'];
-
     cardsEl.innerHTML = visibleVariants.map(({ v, originalIdx }, i) => {
-      const label      = CARD_LABELS[i]  || (STRATEGY_FR[v.name] || v.name);
-      const desc       = CARD_DESCS[i]   || (STRATEGY_FR[v.name] || v.name);
+      const label      = v.isCompact ? 'BOÎTE SERRÉE' : (STRATEGY_FR[v.name] || v.name).toUpperCase();
+      const desc       = v.isCompact ? 'Boîte réduite au contenu' : (STRATEGY_FR[v.name] || v.name);
       const isOptimized = i === 1;
       const scoreLabel = v.isNappeLayout
         ? `${v.container.width.toFixed(0)}×${v.container.height.toFixed(0)}mm · ${v.score.toFixed(0)}%`
@@ -2740,8 +1963,6 @@
           resizeTrayToCurrentFourreaux();
         } else if (v && v.isNappeLayout) {
           applyNappeVariant(idx);
-        } else {
-          applyLayoutVariant(idx);
         }
         // Fermer le panel une fois le choix appliqué (il rouvre au prochain placement)
         closeRightToolsPane();
@@ -2755,6 +1976,12 @@
     if (rightToolsState.active === 'variantes') closeRightToolsPane();
   }
 
+  function occupancyPercent(positions, w, h, shape) {
+    const area = shape === 'circ' ? Math.PI * w * w / 4 : w * h;
+    if (!(area > 0)) return 0;
+    return positions.reduce((sum, p) => sum + Math.PI * p.d * p.d / 4, 0) / area * 100;
+  }
+
   function buildNappeVariants(configs, boxW, boxH, input) {
     const lockW = document.getElementById('lockWidth')?.checked;
     const lockH = document.getElementById('lockHeight')?.checked;
@@ -2762,12 +1989,13 @@
       // Aperçu fidèle : même ancrage que applyNappeVariant (boîte conservée,
       // nappe au fond, centrée) — sinon la carte montre une boîte redimensionnée.
       const anchored = window.PACKER.anchorLayout(cfg, {
-        w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH,
+        w: boxW, h: boxH, lockW: !!lockW, lockH: !!lockH, shape: shapeSel.value,
       });
       return {
         isNappeLayout: true,
         name:  cfg.tag || 'auto',
-        score: (cfg.fill || 0) * 100,
+        // vrai taux d'occupation : surface des fourreaux / surface de la boîte
+        score: occupancyPercent(anchored.positions, anchored.w, anchored.h, shapeSel.value),
         nappe: cfg,
         container: { width: anchored.w, height: anchored.h },
         items: input,
@@ -2780,190 +2008,6 @@
       };
     });
   }
-
-  function arrangeConduitGridOptimized(behaviorOptions = {}) {
-    const allowResize = behaviorOptions.allowResize === true;
-    const reduceAfterFit = behaviorOptions.reduceAfterFit === true;
-    const source = behaviorOptions.source || 'grid';
-    lastLayoutVariants = []; // Réinitialiser les variantes à chaque nouveau placement
-    hideLayoutPreviewPanel();
-
-    if (fourreaux.length === 0) {
-      showToast('Aucun fourreau à disposer en grille');
-      return;
-    }
-
-    arrangeInProgress = true;
-
-    const shape = shapeSel.value;
-    if (shape === 'chemin_de_cable') {
-      showToast('Grille non supportée pour les chemins de câbles');
-      arrangeInProgress = false;
-      return;
-    }
-
-    // Analyser le mix de fourreaux pour déterminer la stratégie
-    const analysis = analyzeConduitMix(fourreaux);
-    console.log('[GRID] Analyse:', analysis.type, '-', analysis.description);
-
-    const itemsToPlace = fourreaux.map(f => ({ id: f.id, diameter: f.od }));
-    const container = {
-      width: (shape === 'rect' ? parseFloat(boxWInput.value) : parseFloat(boxDInput.value)),
-      height: (shape === 'rect' ? parseFloat(boxHInput.value) : parseFloat(boxDInput.value))
-    };
-    const placementOptions = { margin: getContainerMarginMm(), gap: FOURREAU_GAP };
-
-    // Router vers la stratégie appropriée selon l'analyse du mix de fourreaux
-    let result;
-    switch (analysis.type) {
-      case 'UNIFORM': {
-        // Comparer grille carrée et packing hexagonal, garder le meilleur
-        const uni = placeUniform(itemsToPlace, container, placementOptions);
-        const hex = placeHexagonal(itemsToPlace, container, placementOptions);
-        const uniScore = scoreLayout(uni, container, itemsToPlace);
-        const hexScore = scoreLayout(hex, container, itemsToPlace);
-        result = hexScore > uniScore ? hex : uni;
-        // Exposer les variantes pour le panel preview
-        lastLayoutVariants = [
-          { name: 'Grille', score: uniScore, layout: uni, container, items: itemsToPlace },
-          { name: 'Hexagonal', score: hexScore, layout: hex, container, items: itemsToPlace },
-        ].filter(v => v.layout.fits).sort((a, b) => b.score - a.score);
-        break;
-      }
-      case 'PYRAMID':
-        // Utiliser le placement pyramidal intelligent pour les mix de tailles
-        result = placeSmartPyramid(itemsToPlace, container, placementOptions);
-        break;
-      case 'COMPLEX':
-        // placeComplex teste déjà plusieurs variantes dont SmartPyramid
-        result = placeComplex(itemsToPlace, container, placementOptions);
-        break;
-      default:
-        // Fallback sur le placement pyramidal intelligent
-        result = placeSmartPyramid(itemsToPlace, container, placementOptions);
-    }
-
-    if (result.fits) {
-      const candidates = result.placements.map(p => {
-        const fourreau = fourreaux.find(f => f.id === p.id);
-        if (!fourreau) return null;
-        return {
-          x: p.x * MM_TO_PX,
-          y: p.y * MM_TO_PX,
-          r: fourreau.od * MM_TO_PX / 2,
-          id: fourreau.id
-        };
-      }).filter(Boolean);
-
-      const layoutValidation = validatePlacementBatch(candidates, {
-        enforceGap: true,
-        requireSafetyMargin: false
-      });
-
-      if (!layoutValidation.valid) {
-        placementDebug('auto-layout refused', layoutValidation);
-        result = {
-          fits: false,
-          suggestedContainer: {
-            width: Math.ceil((container.width + FOURREAU_GAP) / 10) * 10,
-            height: Math.ceil((container.height + FOURREAU_GAP) / 10) * 10
-          },
-          grid: result.grid,
-          cells: []
-        };
-      }
-    }
-
-    if (result.fits) {
-      arrangeRetryCount = 0;
-      result.placements.forEach(p => {
-        const fourreau = fourreaux.find(f => f.id === p.id);
-        if (fourreau) {
-          moveFourreauWithChildren(fourreau, p.x * MM_TO_PX, p.y * MM_TO_PX);
-        }
-      });
-
-      // Stocker les cellules pour affichage visuel (convertir en pixels)
-      lastGridCells = (result.cells || []).map(cell => ({
-        x: cell.x * MM_TO_PX,
-        y: cell.y * MM_TO_PX,
-        width: cell.width * MM_TO_PX,
-        height: cell.height * MM_TO_PX
-      }));
-
-      if (reduceAfterFit) {
-        reduceBoxToCurrentLayout();
-        arrangeInProgress = false;
-        return;
-      }
-
-      // Rotation automatique paysage : si la boite est portrait et non verrouillée, la coucher
-      const lockWidthFinal = document.getElementById('lockWidth')?.checked;
-      const lockHeightFinal = document.getElementById('lockHeight')?.checked;
-      if (!lockWidthFinal && !lockHeightFinal && SHAPE === 'rect' && WORLD_H_MM > WORLD_W_MM * 1.2) {
-        rotateBoxAndContents('cw');
-      }
-
-      // Afficher le panel de sélection des variantes si plusieurs disponibles
-      showLayoutPreviewPanel();
-
-      const suffix = source === 'auto-resize' ? 'avec redimensionnement auto' : 'dans la boite actuelle';
-      showToast(`OK ${fourreaux.length} fourreaux placés en grille ${result.grid.cols}x${result.grid.rows} ${suffix} (Ctrl+X pour dégeler)`);
-    } else {
-      const { width: newWidth, height: newHeight } = result.suggestedContainer;
-      const lockWidth = document.getElementById('lockWidth')?.checked;
-      const lockHeight = document.getElementById('lockHeight')?.checked;
-
-
-      if (!allowResize) {
-        showToast(`Impossible de placer en grille dans la boite actuelle (${newWidth}x${newHeight}mm requis)`);
-        arrangeRetryCount = 0;
-        arrangeInProgress = false;
-        return;
-      }
-
-      if (lockWidth && lockHeight) {
-        showToast(`🔒 Impossible : dimensions verrouillées (${newWidth}×${newHeight}mm requis)`);
-        arrangeInProgress = false;
-        return;
-      }
-
-      const finalWidth = lockWidth ? container.width : newWidth;
-      const finalHeight = lockHeight ? container.height : newHeight;
-      const dimensionsChanged = Math.abs(finalWidth - container.width) > 0.5 || Math.abs(finalHeight - container.height) > 0.5;
-
-      if (!dimensionsChanged || arrangeRetryCount >= MAX_ARRANGE_RETRIES) {
-        showToast(`Impossible de placer automatiquement sans dépasser les limites (${newWidth}×${newHeight}mm requis)`);
-        arrangeRetryCount = 0;
-        arrangeInProgress = false;
-        return;
-      }
-
-      arrangeRetryCount++;
-
-      if (shape === 'rect') {
-        if (!lockWidth) boxWInput.value = finalWidth;
-        if (!lockHeight) boxHInput.value = finalHeight;
-      } else if (shape === 'circ') {
-        const newDiameter = Math.max(finalWidth, finalHeight);
-        boxDInput.value = newDiameter;
-      }
-
-      applyDimensions();
-      showToast(`🔧 Redimensionnement à ${finalWidth}x${finalHeight}mm. Relance de l'arrangement...`);
-
-      // Utiliser un timeout pour laisser le DOM se mettre à jour avant de relancer
-      setTimeout(() => {
-        arrangeConduitGridOptimized(behaviorOptions);
-      }, 100);
-      return; // Sortir pour éviter de déverrouiller arrangeInProgress trop tôt
-    }
-
-    arrangeInProgress = false;
-    updateStats();
-    redraw();
-  }
-
 
   // Cache pour éviter les recalculs inutiles
   let dimensionsCache = { signature: null, result: null };
@@ -3048,54 +2092,28 @@
   }
   window.getResizeMinimumDimensions = getResizeMinimumDimensions;
 
+  // Dimensions minimales qu'aurait la boîte si on relançait le placement
+  // automatique (même moteur que « Réduire »), axes verrouillés conservés.
   function calculateMinimumDimensionsAfterAutoArrange() {
     if (fourreaux.length === 0) return null;
-
     const lockWidth = document.getElementById('lockWidth')?.checked;
     const lockHeight = document.getElementById('lockHeight')?.checked;
+    if (lockWidth && lockHeight) return null;
+    const shape = shapeSel.value;
     const currentWidth = SHAPE === 'rect' ? WORLD_W_MM : WORLD_D_MM;
     const currentHeight = SHAPE === 'rect' ? WORLD_H_MM : WORLD_D_MM;
-    const margin = getContainerMarginMm();
-
-    if (lockWidth && lockHeight) return null;
-
-    const uniformDiameters = new Set(fourreaux.map(f => f.od));
-    if (uniformDiameters.size !== 1) {
-      return calculateMinimumDimensions(true);
-    }
-
-    const itemsToPlace = fourreaux.map(f => ({ id: f.id, diameter: f.od }));
-    const result = placeUniform(itemsToPlace, {
-      width: currentWidth,
-      height: currentHeight
-    }, {
-      margin,
-      gap: FOURREAU_GAP
+    const tubes = fourreaux.map(f => ({ id: f.id, d: f.od }));
+    const opts = lockWidth ? { lock: 'w', w: currentWidth }
+               : lockHeight ? { lock: 'h', h: currentHeight }
+               : { lock: null };
+    opts.shape = shape;
+    const anchored = window.PACKER.anchorLayout(window.PACKER.solve(tubes, opts), {
+      w: lockWidth ? currentWidth : 0, h: lockHeight ? currentHeight : 0,
+      lockW: !!lockWidth, lockH: !!lockHeight, shape,
     });
-
-    if (!result.fits) {
-      return {
-        width: lockWidth ? currentWidth : Math.ceil(result.suggestedContainer.width / 10) * 10,
-        height: lockHeight ? currentHeight : Math.ceil(result.suggestedContainer.height / 10) * 10
-      };
-    }
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const p of result.placements) {
-      const item = itemsToPlace.find(f => f.id === p.id);
-      if (!item) continue;
-      const radius = item.diameter / 2;
-      minX = Math.min(minX, p.x - radius);
-      minY = Math.min(minY, p.y - radius);
-      maxX = Math.max(maxX, p.x + radius);
-      maxY = Math.max(maxY, p.y + radius);
-    }
-
-    return {
-      width: lockWidth ? currentWidth : Math.ceil(((maxX - minX) + 2 * margin) / 10) * 10,
-      height: lockHeight ? currentHeight : Math.ceil(((maxY - minY) + 2 * margin) / 10) * 10
-    };
+    return { width: anchored.w, height: anchored.h };
   }
+
 
   function fitContentsToBox(targetW, targetH) {
     if (SHAPE !== 'rect' && SHAPE !== 'chemin_de_cable') return true;
@@ -3375,13 +2393,26 @@
           return;
         }
         saveStateToHistory();
-        const cx = WORLD_W / 2, cy = WORLD_H / 2;
-        itemsToAdd.forEach(({ spec, remaining }) => {
-          for (let i = 0; i < remaining; i++) {
-            fourreaux.push(makeFourreauObject(nextId++, cx, cy, spec, ''));
-          }
-        });
-        if (typeof arrangeConduitGrid === 'function') arrangeConduitGrid();
+        // Ajouter = ne JAMAIS déplacer ce qui est déjà posé : chaque nouveau
+        // fourreau (du plus gros au plus petit) prend la place libre la plus
+        // basse, au plus près du centre. Ce qui ne rentre pas est signalé.
+        const toPlace = [];
+        itemsToAdd.forEach(({ spec, remaining }) => { for (let i = 0; i < remaining; i++) toPlace.push(spec); });
+        toPlace.sort((a, b) => b.od - a.od);
+        let added = 0, missing = 0;
+        for (const spec of toPlace) {
+          const spot = findLowestFreeSpot(spec.od * MM_TO_PX / 2);
+          if (!spot) { missing++; continue; }
+          const f = makeFourreauObject(nextId++, spot.x, spot.y, spec, '');
+          f.frozen = true; f._frozenByMode = true;
+          fourreaux.push(f);
+          added++;
+        }
+        if (missing) {
+          showToast(`${added} fourreau(x) ajouté(s), ${missing} sans place libre : agrandis la boîte ou choisis « Remplacer »`);
+        } else {
+          showToast(`✅ ${added} fourreau(x) ajouté(s) sans déplacer le plan existant`);
+        }
         updateInventoryPlacedCount();
         renderPlanInventory();
         updateStats();
@@ -3401,6 +2432,7 @@
       const optsPacker = {};
       if (lockWidth)  { optsPacker.lock = 'w'; optsPacker.w = boxWidth; }
       else if (lockHeight) { optsPacker.lock = 'h'; optsPacker.h = boxHeight; }
+      optsPacker.shape = shape;
 
       const bestConfig = window.solve(tubes, optsPacker);
 
@@ -3416,7 +2448,7 @@
 
       const anchored = window.PACKER.anchorLayout(bestConfig, {
         w: lockWidth ? boxWidth : 0, h: lockHeight ? boxHeight : 0,
-        lockW: !!lockWidth, lockH: !!lockHeight,
+        lockW: !!lockWidth, lockH: !!lockHeight, shape,
       });
 
       anchored.positions.forEach(p => {
@@ -3458,7 +2490,7 @@
       updateStats();
       redraw();
 
-      const fillPercent = (bestConfig.fill * 100).toFixed(0);
+      const fillPercent = calculateBoxOccupancy().toFixed(0);
       showToast(`✅ ${fourreaux.length} fourreaux placés depuis l'inventaire (Occupation: ${fillPercent}%)`);
 
     } catch (err) {
@@ -3469,37 +2501,6 @@
 
   function reduceToMinimum() {
     reduceToMinimumNew();
-  }
-
-  function reduceBoxToCurrentLayout() {
-    const minDims = calculateMinimumDimensions(true);
-    if (!minDims) {
-      hideReduceButton();
-      return;
-    }
-
-    const lockWidth = document.getElementById('lockWidth')?.checked;
-    const lockHeight = document.getElementById('lockHeight')?.checked;
-
-    if (lockWidth && lockHeight) {
-      showToast('Dimensions verrouillées');
-      hideReduceButton();
-      return;
-    }
-
-    if (SHAPE === 'rect') {
-      if (!lockWidth) boxWInput.value = minDims.width;
-      if (!lockHeight) boxHInput.value = minDims.height;
-    } else if (SHAPE === 'circ') {
-      const newDiameter = Math.max(minDims.width, minDims.height);
-      boxDInput.value = newDiameter;
-    }
-
-    applyDimensions({ fitContents: true });
-    hideReduceButton();
-    showToast(`✅ Boîte redimensionnée à ${minDims.width}×${minDims.height}mm`);
-    updateStats();
-    redraw();
   }
 
   /**
@@ -3531,6 +2532,7 @@
       const optsPacker = {};
       if (lockWidth) { optsPacker.lock = 'w'; optsPacker.w = boxWidth; }
       else if (lockHeight) { optsPacker.lock = 'h'; optsPacker.h = boxHeight; }
+      optsPacker.shape = shape;
 
       // Meilleur placement (dimensions déjà serrées au minimum par le packer)
       const bestConfig = window.solve(tubes, optsPacker);
@@ -3539,7 +2541,7 @@
       // ancrage cohérent avec les autres flux (nappe posée sur le lit de pose).
       const anchored = window.PACKER.anchorLayout(bestConfig, {
         w: lockWidth ? boxWidth : 0, h: lockHeight ? boxHeight : 0,
-        lockW: !!lockWidth, lockH: !!lockHeight,
+        lockW: !!lockWidth, lockH: !!lockHeight, shape,
       });
 
       anchored.positions.forEach(p => {
@@ -3573,7 +2575,7 @@
       showLayoutPreviewPanel();
 
       // Afficher taux d'occupation et feedback
-      const fillPercent = (bestConfig.fill * 100).toFixed(0);
+      const fillPercent = calculateBoxOccupancy().toFixed(0);
       showToast(`✅ Boîte redimensionnée à ${newWidth}×${newHeight}mm (Occupation: ${fillPercent}%)`);
 
       updateStats();
@@ -6901,7 +5903,7 @@
   // Vrai si un fourreau du groupe déplacé de (dx, dy) chevaucherait un
   // fourreau fixe. La tangence exacte (accrochage osnap bord à bord) est
   // tolérée via un gap négatif — on ne bloque que le chevauchement réel
-  // (contrairement au drag simple qui impose l'entraxe via validatePlacement).
+  // (contrairement au drag simple qui impose l'écart via validatePlacement).
   function groupCollides(dx, dy, ignore) {
     const EPS = 0.5; // px
     return moveTargets.some(t =>
@@ -8496,6 +7498,332 @@
     return dataUrl;
   }
 
+
+
+  /* ── Mode chambre : un projet = une chambre à 4 faces (une coupe par face) ── */
+  // chambreProjet = { nom, ref (null = automatique), faceActive, faces: { cle: état sauvegardé | null } }
+  // La face ACTIVE vit dans le plan affiché (fourreaux/câbles/boîte) ; les autres
+  // faces sont des états complets (même format qu'un projet enregistré).
+  let chambreProjet = null;
+  const FACES_CHAMBRE = ['pignonA', 'pignonB', 'longPanA', 'longPanB'];
+
+  function exporterChambre() {
+    if (!chambreProjet) return undefined;
+    return { nom: chambreProjet.nom, ref: chambreProjet.ref, faceActive: chambreProjet.faceActive,
+      faces: { ...chambreProjet.faces, [chambreProjet.faceActive]: null } };
+  }
+  function importerChambre(c) {
+    if (!c || !c.faces) { chambreProjet = null; return; }
+    const faces = {};
+    FACES_CHAMBRE.forEach(k => { faces[k] = c.faces[k] || null; });
+    chambreProjet = { nom: c.nom || 'Chambre', ref: c.ref || null, faceActive: FACES_CHAMBRE.includes(c.faceActive) ? c.faceActive : 'pignonA', faces };
+  }
+  function etatFace(k) {
+    if (!chambreProjet) return null;
+    return k === chambreProjet.faceActive ? etatPlanCourant() : (chambreProjet.faces[k] ? etatDepuisSauvegarde(chambreProjet.faces[k]) : null);
+  }
+  function compterFourreaux(k) { const st = etatFace(k); return st ? st.fourreaux.length : 0; }
+
+  // Étude de la chambre (chambre-faces.js) à partir des faces renseignées.
+  function etudeChambreCourante() {
+    if (!chambreProjet || !window.ChambreFaces) return null;
+    const masques = {};
+    FACES_CHAMBRE.forEach(k => {
+      const st = etatFace(k);
+      if (!st || !st.fourreaux.length) return;
+      const n = st.fourreaux.length;
+      const m = buildMasqueFromState(st, `${n} fourreau${n > 1 ? 'x' : ''}`, false);
+      if (m && m.forme === 'rect') masques[k] = m;
+    });
+    if (!Object.keys(masques).length) return null;
+    const etude = window.ChambreFaces.etudierChambre(masques, CHAMBRES_TIRAGE, window.CompatChambres,
+      { ref: chambreProjet.ref || undefined, infos: window.ChambresInfos && window.ChambresInfos.infosChambre });
+    return { etude, masques };
+  }
+
+  function activerChambre() {
+    if (!chambreProjet) {
+      chambreProjet = { nom: 'Chambre', ref: null, faceActive: 'pignonA', faces: { pignonA: null, pignonB: null, longPanA: null, longPanB: null } };
+      showToast('Mode chambre : le plan actuel devient la face pignon A');
+    }
+    afficherVueChambre();
+  }
+
+  // Passe sur une autre face : la face courante est enregistrée, la cible chargée.
+  function ouvrirFace(k) {
+    if (!chambreProjet || !FACES_CHAMBRE.includes(k)) return;
+    if (k !== chambreProjet.faceActive) {
+      const pm = window.projectManager;
+      const courant = pm.captureCurrentState();
+      delete courant.chambre;
+      chambreProjet.faces[chambreProjet.faceActive] = courant;
+      const cible = chambreProjet.faces[k];
+      chambreProjet.faceActive = k;
+      chambreProjet.faces[k] = null;
+      if (cible) pm.restoreState(cible, { garderChambre: true });
+      else {
+        fourreaux.length = 0; cables.length = 0;
+        updateStats(); updateInventory(); updateSelectedInfo(); redraw();
+      }
+      actionHistory.length = 0; // pas d'annulation d'une face à l'autre
+    }
+    masquerVueChambre();
+    showToast(`Face ${window.ChambreFaces.LIBELLE[k]} : dessinez ou générez sa coupe`);
+  }
+
+  function quitterChambre() {
+    chambreProjet = null;
+    masquerVueChambre();
+    majBandeauChambre();
+    showToast('Mode chambre désactivé : le plan reste la face qui était ouverte');
+  }
+
+  function majBandeauChambre() {
+    let b = document.getElementById('chambreBandeau');
+    if (!chambreProjet) { if (b) b.hidden = true; return; }
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'chambreBandeau';
+      b.className = 'chambre-bandeau';
+      document.querySelector('.canvas-wrap')?.appendChild(b);
+    }
+    b.hidden = false;
+    b.innerHTML = '';
+    const t = document.createElement('span');
+    t.textContent = `${chambreProjet.nom} — face ${window.ChambreFaces.LIBELLE[chambreProjet.faceActive]}`;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'chambre-btn'; btn.textContent = 'Vue chambre';
+    btn.addEventListener('click', afficherVueChambre);
+    b.append(t, btn);
+  }
+
+  function construireVueChambre() {
+    let o = document.getElementById('chambreOverlay');
+    if (o) return o;
+    o = document.createElement('div');
+    o.id = 'chambreOverlay';
+    o.className = 'chambre-overlay';
+    o.hidden = true;
+    o.innerHTML = `
+      <div class="chambre-dessin"><canvas id="chambreCanvas" aria-label="Vue de dessus de la chambre de tirage"></canvas></div>
+      <aside class="chambre-panneau">
+        <h3>Chambre de tirage</h3>
+        <label class="chambre-champ">Nom <input id="chambreNom" type="text" maxlength="40"></label>
+        <label class="chambre-champ">Modèle <select id="chambreRef"></select></label>
+        <div class="chambre-faces" id="chambreFaces"></div>
+        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Une liaison présente sur deux faces traverse la chambre.</p>
+        <div class="chambre-actions">
+          <button type="button" class="chambre-btn" id="chambreRetour">Retour à la coupe</button>
+          <button type="button" class="chambre-btn chambre-btn-discret" id="chambreQuitter">Quitter le mode chambre</button>
+        </div>
+      </aside>`;
+    document.querySelector('.canvas-wrap')?.appendChild(o);
+    o.querySelector('#chambreRetour').addEventListener('click', masquerVueChambre);
+    o.querySelector('#chambreQuitter').addEventListener('click', quitterChambre);
+    o.querySelector('#chambreNom').addEventListener('input', (e) => { if (chambreProjet) { chambreProjet.nom = e.target.value || 'Chambre'; dessinerVueChambre(); majBandeauChambre(); } });
+    o.querySelector('#chambreRef').addEventListener('change', (e) => { if (chambreProjet) { chambreProjet.ref = e.target.value || null; dessinerVueChambre(); } });
+    window.addEventListener('resize', () => { if (!o.hidden) dessinerVueChambre(); });
+    return o;
+  }
+
+  function afficherVueChambre() {
+    if (!chambreProjet) return;
+    const o = construireVueChambre();
+    const sel = o.querySelector('#chambreRef');
+    const models = window.CompatChambres ? window.CompatChambres.getChamberModels(CHAMBRES_TIRAGE) : [];
+    sel.innerHTML = '<option value="">Automatique (la plus petite qui convient)</option>' +
+      models.map(m => `<option value="${m.ref}">${m.ref} — ${m.L} × ${m.l} mm</option>`).join('');
+    sel.value = chambreProjet.ref || '';
+    o.querySelector('#chambreNom').value = chambreProjet.nom;
+    o.hidden = false;
+    dessinerVueChambre();
+    majBandeauChambre();
+  }
+  function masquerVueChambre() {
+    const o = document.getElementById('chambreOverlay');
+    if (o) o.hidden = true;
+    majBandeauChambre();
+  }
+
+  function dessinerVueChambre() {
+    const o = document.getElementById('chambreOverlay');
+    if (!o || o.hidden || !chambreProjet) return;
+    // boutons de face
+    const box = o.querySelector('#chambreFaces');
+    box.innerHTML = '';
+    FACES_CHAMBRE.forEach(k => {
+      const n = compterFourreaux(k);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chambre-face' + (k === chambreProjet.faceActive ? ' active' : '');
+      b.innerHTML = `<strong></strong><span></span>`;
+      b.querySelector('strong').textContent = window.ChambreFaces.LIBELLE[k];
+      b.querySelector('span').textContent = n ? `${n} fourreau${n > 1 ? 'x' : ''} — ouvrir` : 'vide — dessiner';
+      b.addEventListener('click', () => ouvrirFace(k));
+      box.appendChild(b);
+    });
+    // dessin (même rendu que la page PDF)
+    const cv = o.querySelector('#chambreCanvas');
+    const zone = cv.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
+    cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const V = window.Vue3D;
+    const r = etudeChambreCourante();
+    const W = zone.width, H = zone.height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const res = o.querySelector('#chambreResultat') || (() => {
+      const d = document.createElement('div'); d.id = 'chambreResultat'; d.className = 'chambre-resultat';
+      o.querySelector('.chambre-aide').before(d); return d;
+    })();
+    res.innerHTML = '';
+    if (!r) {
+      ctx.fillStyle = '#555'; ctx.font = '15px Helvetica, Arial, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Aucune face renseignée : ouvrez une face et dessinez ou générez sa coupe.', W / 2, H / 2);
+      return;
+    }
+    const e = r.etude;
+    if (!e.ok) {
+      ctx.fillStyle = '#b3261e'; ctx.font = 'bold 15px Helvetica, Arial, sans-serif'; ctx.textAlign = 'center';
+      (e.erreurs || []).forEach((t, i) => ctx.fillText(t, W / 2, H / 2 + i * 20));
+      return;
+    }
+    // dessin plein cadre (même tracé que la page PDF)
+    const page = new V.Page({ emitText: false, ombre: false });
+    const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 16, W - 32, H - 32);
+    V.rejouerSurCanvas(ctx, page, H);
+    // résultat dans le panneau
+    const ligne = (txt, cls, couleur) => { const p = document.createElement('div'); p.className = cls; p.textContent = txt; if (couleur) p.style.color = couleur; res.appendChild(p); };
+    const css = (c) => c ? `rgb(${c.map(v => Math.round(v * 255)).join(',')})` : '';
+    ligne(`Chambre ${e.ref} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
+    Object.values(e.faces).forEach(f => ligne(`${f.tient ? '✓' : '✗'} ${f.face} : ${f.largeurMasque} × ${f.hauteurMasque} dans ${f.largeurFace} × ${f.hauteurFace}`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
+    if (e.traversees.length) ligne('Traversées', 'chambre-res-titre');
+    e.traversees.forEach((t, i) => ligne(`${i + 1}. ${t.liaison} — ${t.entree} → ${t.sortie} (${t.type})${t.changementFourreau ? ', ' + t.changementFourreau : ''}`, 'chambre-res-ligne', css(couleurs.get(t.liaison))));
+    if (e.arrets.length) ligne('S\'arrêtent dans la chambre', 'chambre-res-titre');
+    e.arrets.forEach(a => ligne(`• ${a.liaison} (${a.face})`, 'chambre-res-ligne', css(couleurs.get(a.liaison))));
+    (e.avertissements || []).forEach(a => ligne(`⚠ ${a}`, 'chambre-res-ko'));
+  }
+
+  window.chambre = { activer: activerChambre, ouvrirFace, quitter: quitterChambre, etude: etudeChambreCourante };
+
+  /* ── Vue 3D dans l'export PDF (dessin partagé avec le MCP : vue3d.js) ── */
+
+  // État d'un plan : le plan affiché, ou une face de chambre enregistrée.
+  function etatPlanCourant() {
+    return { shape: SHAPE, width: WORLD_W_MM, height: WORLD_H_MM, diameter: WORLD_D_MM, fourreaux, cables };
+  }
+  function etatDepuisSauvegarde(d) {
+    const c = (d && d.container) || {};
+    return { shape: c.shape || 'rect', width: c.width, height: c.height, diameter: c.diameter,
+      fourreaux: (d && d.fourreaux) || [], cables: (d && d.cables) || [] };
+  }
+
+  // État de plan → « masque » au format de vue3d.js (mm, Y vers le haut).
+  function buildMasqueFromState(st, titre, avecChambre = true) {
+    const isCirc = st.shape === 'circ';
+    if (st.shape === 'chemin_de_cable') return null; // chemin de câble : pas de vue 3D
+    const W = isCirc ? st.diameter : st.width, H = isCirc ? st.diameter : st.height;
+    const valid = (st.fourreaux || []).filter(f => Number.isFinite(f.x) && Number.isFinite(f.y) && f.od > 0);
+    if (!valid.length || !(W > 0 && H > 0)) return null;
+    const ids = new Map();
+    const fo = valid.map((f, i) => {
+      const id = `F${i + 1}`;
+      ids.set(f.id, id);
+      const noms = [...new Set((st.cables || []).filter(c => c.parent === f.id && c.liaison).map(c => c.liaison))];
+      return { id, type: f.type || '', code: String(f.code || ''), od: f.od, di: f.idm > 0 ? f.idm : f.od * 0.8,
+        x: f.x / MM_TO_PX, y: H - f.y / MM_TO_PX, libelle: f.label || '',
+        liaisons: noms.length ? noms : (f.label ? [f.label] : []) };
+    });
+    const cb = (st.cables || []).filter(c => ids.has(c.parent) && c.od > 0).map(c => ({
+      fourreau: ids.get(c.parent), od: c.od, x: c.x / MM_TO_PX, y: H - c.y / MM_TO_PX, phase: getCablePhaseLabel(c) || null,
+    }));
+    let chambre = null;
+    if (avecChambre && !isCirc && window.ChambresInfos && window.CompatChambres) {
+      chambre = window.ChambresInfos.chambrePourNappe(Math.round(W), Math.round(H), CHAMBRES_TIRAGE, window.CompatChambres);
+      if (chambre && !chambre.face) chambre = null; // aucune préformée : pas de page chambre
+    }
+    const liaisons = [...new Set(fo.flatMap(f => f.liaisons))];
+    return {
+      nom: String(titre || 'Plan').replace(/→/g, '->'), ok: true, forme: isCirc ? 'circ' : 'rect',
+      largeur: W, hauteur: H, tranchee: null, chambre, fourreaux: fo, cables: cb, liaisons,
+      reglages: { ecart: FOURREAU_GAP, litDePose: (window.PACKER && window.PACKER.GEO.margin) || 0 },
+    };
+  }
+  function buildMasqueFromPlan(titre) { return buildMasqueFromState(etatPlanCourant(), titre); }
+
+  // Écrit une page Vue3D (opérateurs bruts) dans jsPDF, textes via l'API jsPDF.
+  function writeVue3DPage(pdf, page) {
+    const V = window.Vue3D, k = 25.4 / 72; // pt → mm
+    pdf.addPage('a4', 'landscape');
+    pdf.internal.write('q');
+    pdf.internal.write(page.ops.join('\n'));
+    pdf.internal.write('Q');
+    for (const l of page.labels) {
+      pdf.setFont('helvetica', l.bold ? 'bold' : 'normal');
+      pdf.setFontSize(l.size);
+      pdf.setTextColor(Math.round(l.rgb[0] * 255), Math.round(l.rgb[1] * 255), Math.round(l.rgb[2] * 255));
+      pdf.text(l.text.replace(/→/g, '->').replace(/≥/g, '>='), l.x * k, (V.PAGE_H - l.y) * k, { align: l.align });
+    }
+    pdf.setTextColor(0, 0, 0);
+  }
+
+  function addVue3DPages(pdf, titre) {
+    const V = window.Vue3D;
+    if (!V) return;
+    const m = buildMasqueFromPlan(chambreProjet ? `${titre} — ${window.ChambreFaces.LIBELLE[chambreProjet.faceActive]}` : titre);
+    if (!m) return;
+    const { PAGE_W, PAGE_H, MARGE } = V;
+    // Page 1 : coupe + vue 3D + légende
+    const p = new V.Page({ emitText: false, ombre: false });
+    p.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — vue 3D`, { bold: true });
+    p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+    const zoneY = 175, zoneH = PAGE_H - MARGE - 40 - zoneY;
+    p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
+    V.drawCoupe(p, m, MARGE + 50, zoneY, 300, zoneH - 10);
+    p.text(440, zoneY + zoneH + 10, 9, 'Vue 3D (tronçon de 1.5 m, perspective cavalière)', { bold: true });
+    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500);
+    let y = 140;
+    p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
+    p.text(MARGE, y, 9, 'Fourreaux', { bold: true }); y -= 13;
+    const parId = new Map();
+    m.cables.forEach(c => parId.set(c.fourreau, (parId.get(c.fourreau) || 0) + 1));
+    for (const f of m.fourreaux.slice(0, 8)) {
+      p.text(MARGE, y, 8, `${f.id}  ${f.type} ${f.code}  (Øint ${f.di})  ${f.libelle}  ${parId.get(f.id) || 0} câble(s)`); y -= 11;
+    }
+    if (m.fourreaux.length > 8) p.text(MARGE, y, 8, `… et ${m.fourreaux.length - 8} autres (voir le tableau du rapport)`);
+    writeVue3DPage(pdf, p);
+    // Page 2 : chambre de tirage compatible
+    const etude = etudeChambreCourante();
+    if (etude && etude.etude.ok) {
+      const pc = new V.Page({ emitText: false, ombre: false });
+      etude.etude.nom = chambreProjet.nom || 'Chambre';
+      V.dessinerEtudeChambre(pc, etude.etude, etude.masques);
+      writeVue3DPage(pdf, pc);
+    }
+    if (m.chambre && !etude) {
+      const c = new V.Page({ emitText: false, ombre: false });
+      const ch = m.chambre;
+      c.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — chambre de tirage ${ch.ref}`, { bold: true });
+      c.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+      V.drawChambre3D(c, m, MARGE + 20, 120, 520, PAGE_H - MARGE - 60 - 120);
+      let yy = PAGE_H - MARGE - 50;
+      c.rgb([0, 0, 0], false).text(590, yy, 11, `Chambre ${ch.ref}`, { bold: true }); yy -= 16;
+      for (const l of [
+        `Intérieur : ${ch.L} × ${ch.l} mm, H ${ch.H} mm`,
+        `Entrée par le ${ch.entree} (${ch.face.largeur} × ${ch.face.hauteur} mm)`,
+        `Boîte : ${Math.round(m.largeur)} × ${Math.round(m.hauteur)} mm`,
+        `Marge : ${Math.round(ch.marge.largeur)} mm en largeur, ${Math.round(ch.marge.hauteur)} mm en hauteur`,
+      ]) { c.text(590, yy, 8, l); yy -= 12; }
+      yy -= 6;
+      c.rgb([0.4, 0.4, 0.4], false);
+      for (const l of ['Chambre suggérée (rien n\'est appliqué au plan).', 'Parois, tampons, hauteur totale : indicatifs,', 'sources publiques, pas une fiche fabricant.']) { c.text(590, yy, 7, l); yy -= 10; }
+      writeVue3DPage(pdf, c);
+    }
+  }
+
   async function exportToPDF() {
     // Pour compatibilité avec l'ancienne modal HTML
     const formData = {
@@ -8504,7 +7832,8 @@
       author: document.getElementById('pdfAuthor')?.value || 'TontonKAD',
       client: document.getElementById('pdfClient')?.value || '',
       description: document.getElementById('pdfDescription')?.value || '',
-      includeStats: document.getElementById('pdfIncludeStats')?.checked || true
+      includeStats: document.getElementById('pdfIncludeStats')?.checked || true,
+      include3D: document.getElementById('pdfInclude3D')?.checked !== false
     };
 
     return exportToPDFWithData(formData);
@@ -9317,6 +8646,12 @@
         }
       }
 
+      // Vue 3D (coupe en perspective + chambre de tirage compatible)
+      if (formData.include3D) {
+        try { addVue3DPages(pdf, formData.projectName); }
+        catch (err) { errorPdf('vue 3D impossible', err); }
+      }
+
       // Sauvegarder le PDF avec horodatage
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
@@ -9524,7 +8859,7 @@
       reduceToMinimumNew();
     }
 
-    // Event listener pour le slider de gap (entraxe entre fourreaux)
+    // Event listener pour le slider de gap (écart bord à bord entre fourreaux)
     if (gapSlider && gapValue) {
       gapSlider.addEventListener('input', (e) => {
         const newGap = parseInt(e.target.value, 10);
@@ -9991,6 +9326,10 @@
       console.error('[PDF] exportPDF button not found!');
     }
     if (confirmPdfExport) confirmPdfExport.addEventListener('click', exportToPDF);
+    document.getElementById('chambreModeBtn')?.addEventListener('click', () => {
+      const o = document.getElementById('chambreOverlay');
+      if (o && !o.hidden) masquerVueChambre(); else activerChambre();
+    });
     if (cancelPdfExport) cancelPdfExport.addEventListener('click', closePdfExportModal);
     if (closePdfExportBtn) closePdfExportBtn.addEventListener('click', closePdfExportModal);
 
@@ -10742,6 +10081,8 @@
             diameter: WORLD_D_MM,
             chamberRef: compatChambresState.appliedUnit?.ref || null
           },
+          // Chambre à plusieurs faces (mode chambre) : absente des anciens projets
+          chambre: exporterChambre(),
           fourreaux: fourreaux.map(f => ({
             ...f,
             // Assurer la sérialisation complète
@@ -10806,7 +10147,7 @@
       }
 
       // Restaure l'état de l'application
-      restoreState(projectData) {
+      restoreState(projectData, opts = {}) {
         try {
           // Validation des données
           if (!projectData || !projectData.container) {
@@ -10875,6 +10216,10 @@
               });
             });
           }
+
+          // Chambre : rechargée avec le projet ; conservée quand on change de face
+          if (!opts.garderChambre) { importerChambre(projectData.chambre); masquerVueChambre(); }
+          majBandeauChambre();
 
           // Mettre à jour l'affichage
           toggleInputGroups();

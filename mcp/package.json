@@ -1,0 +1,22 @@
+{
+  "name": "tontonkad-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Serveur MCP TONTONKAD : masques de liaisons (note de calcul Caneco → fourreaux → DXF / géométrie pour la CAO)",
+  "main": "src/server.js",
+  "bin": {
+    "tontonkad-mcp": "src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "xlsx": "^0.18.5",
+    "zod": "^4.6.7"
+  }
+}

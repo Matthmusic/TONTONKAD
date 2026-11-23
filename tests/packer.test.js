@@ -263,3 +263,152 @@ describe('packer — variants', () => {
     expect(vs[0].w).toBe(700);
   });
 });
+
+// ── Gravité / stabilité / conduit circulaire ─────────────────────────────
+describe('packer — gravité et stabilité', () => {
+  const DIAMS = [40, 63, 90, 110, 160, 200];
+  // Générateur pseudo-aléatoire déterministe
+  const randomSets = (count) => {
+    const sets = [];
+    for (let s = 1; s <= count; s++) {
+      let r = s;
+      const rnd = () => ((r = (r * 1103515245 + 12345) % 2147483648) / 2147483648);
+      const n = 3 + Math.floor(rnd() * 20);
+      const t = [];
+      for (let i = 0; i < n; i++) t.push({ id: 'x' + i, d: DIAMS[Math.floor(rnd() * DIAMS.length)] });
+      sets.push(t);
+    }
+    return sets;
+  };
+  const local = (L) => L.items.map(i => ({ ...i, x: i.x - pkg.GEO.margin, y: i.y - pkg.GEO.margin }));
+
+  for (const gap of [0, 30]) {
+    test(`gap ${gap} : aucun fourreau en l'air, aucun chevauchement, marges respectées`, () => {
+      pkg.GEO.gap = gap; pkg.GEO.margin = 40;
+      for (const tubes of randomSets(60)) {
+        const L = pkg.solve(tubes, { lock: null });
+        expect(L.items).toHaveLength(tubes.length);
+        const it = local(L);
+        for (const a of it) expect(pkg.__test.isStable(a, it)).toBe(true);
+        for (let i = 0; i < L.items.length; i++) {
+          const A = L.items[i], ca = pkg.cell(A.d);
+          expect(A.x + ca).toBeLessThanOrEqual(L.w - pkg.GEO.margin + 1e-6);
+          expect(A.y + ca).toBeLessThanOrEqual(L.h - pkg.GEO.margin + 1e-6);
+          for (let j = i + 1; j < L.items.length; j++) {
+            const B = L.items[j], cb = pkg.cell(B.d);
+            const sep = (A.x + ca <= B.x + 1e-6) || (B.x + cb <= A.x + 1e-6) ||
+                        (A.y + ca <= B.y + 1e-6) || (B.y + cb <= A.y + 1e-6);
+            expect(sep).toBe(true);
+          }
+        }
+      }
+    });
+  }
+
+  test('cas réel : le 40 ne reste pas suspendu au-dessus du 200', () => {
+    pkg.GEO.gap = 30; pkg.GEO.margin = 40;
+    const tubes = [40, 63, 110, 200, 110, 63].map((d, i) => ({ id: 't' + i, d }));
+    const it = local(pkg.solve(tubes, { lock: null }));
+    for (const a of it) expect(pkg.__test.isStable(a, it)).toBe(true);
+  });
+
+  test('lock:w : la stabilisation ne dépasse jamais la largeur imposée', () => {
+    pkg.GEO.gap = 30; pkg.GEO.margin = 40;
+    for (const tubes of randomSets(30)) {
+      const L = pkg.solve(tubes, { lock: 'w', w: 700 });
+      if (!L.items.length) continue;
+      for (const a of L.items) expect(a.x + pkg.cell(a.d)).toBeLessThanOrEqual(700 - pkg.GEO.margin + 1e-6);
+    }
+  });
+
+  test('variants : la carte « compact » est le layout de solve()', () => {
+    pkg.GEO.gap = 30; pkg.GEO.margin = 40;
+    const tubes = [[200, 4], [63, 10]].flatMap(([d, n]) => Array.from({ length: n }, (_, i) => ({ id: `${d}-${i}`, d })));
+    const L = pkg.solve(tubes, { lock: null });
+    const compact = pkg.variants(tubes, { lock: null }).find(v => v.tag === 'compact');
+    expect([compact.w, compact.h]).toEqual([L.w, L.h]);
+  });
+});
+
+describe('packer — conduit circulaire', () => {
+  beforeEach(() => { pkg.GEO.gap = 30; pkg.GEO.margin = 40; });
+  const inside = (A) => {
+    const R = A.w / 2;
+    for (const p of A.positions) {
+      const dist = Math.hypot(p.x - R, p.y - R);
+      // conduit : pas d'écart entre fourreaux, seul le lit de pose compte
+      expect(dist + p.d / 2 + pkg.GEO.margin).toBeLessThanOrEqual(R + 1e-3);
+    }
+    for (let i = 0; i < A.positions.length; i++) {
+      for (let j = i + 1; j < A.positions.length; j++) {
+        const P = A.positions[i], Q = A.positions[j];
+        expect(Math.hypot(P.x - Q.x, P.y - Q.y)).toBeGreaterThanOrEqual((P.d + Q.d) / 2 - 1e-3);
+      }
+    }
+  };
+  const tubes = [[110, 4], [63, 3]].flatMap(([d, n]) => Array.from({ length: n }, (_, i) => ({ id: `${d}-${i}`, d })));
+
+  test('tous les fourreaux sont DANS le cercle (pas seulement dans le carré)', () => {
+    const L = pkg.solve(tubes, { shape: 'circ' });
+    const A = pkg.anchorLayout(L, { w: 0, h: 0, shape: 'circ' });
+    expect(A.w).toBe(A.h);
+    expect(A.positions).toHaveLength(tubes.length);
+    inside(A);
+  });
+
+  test('un layout rectangulaire reçu pour un conduit est recalculé pour le cercle', () => {
+    const L = pkg.solve(tubes, { lock: null }); // layout pensé pour un rectangle
+    const A = pkg.anchorLayout(L, { w: 0, h: 0, shape: 'circ' });
+    expect(A.positions).toHaveLength(tubes.length);
+    inside(A);
+  });
+
+  test('7 fourreaux identiques : nid d\'abeille, D = 3·d', () => {
+    pkg.GEO.gap = 30; pkg.GEO.margin = 0; // l'écart est ignoré dans un conduit
+    const t = Array.from({ length: 7 }, (_, i) => ({ id: i, d: 63 }));
+    expect(pkg.solve(t, { shape: 'circ' }).w).toBeCloseTo(189, 0);
+  });
+
+  test('diamètre verrouillé suffisant : conservé', () => {
+    const A = pkg.anchorLayout(pkg.solve(tubes, { shape: 'circ' }), { w: 1000, h: 1000, lockW: true, shape: 'circ' });
+    expect(A.w).toBe(1000);
+    inside(A);
+  });
+
+  test('4 fourreaux identiques sans écart : D ≈ (1 + √2)·d', () => {
+    pkg.GEO.gap = 0; pkg.GEO.margin = 0;
+    const t = [0, 1, 2, 3].map(i => ({ id: i, d: 100 }));
+    const L = pkg.solve(t, { shape: 'circ' });
+    expect(L.w).toBeCloseTo((1 + Math.SQRT2) * 100, 0);
+  });
+});
+
+describe('packer — rangement par groupes de diamètre', () => {
+  beforeEach(() => { pkg.GEO.gap = 30; pkg.GEO.margin = 40; });
+  const mk = (spec) => spec.flatMap(([d, n]) => Array.from({ length: n }, (_, i) => ({ id: `${d}-${i}`, d })));
+
+  test('un plus gros fourreau n\'est jamais posé au-dessus d\'un plus petit', () => {
+    for (const spec of [[[90, 8], [63, 6], [40, 4]], [[160, 8], [110, 10], [63, 12]], [[200, 1], [110, 2], [63, 2], [40, 1]]]) {
+      const L = pkg.solve(mk(spec), { lock: null });
+      for (const a of L.items) for (const b of L.items) {
+        if (a.d <= b.d) continue;
+        const ca = pkg.cell(a.d), cb = pkg.cell(b.d);
+        const above = a.y >= b.y + cb - 1e-6 && a.x < b.x + cb - 1e-6 && b.x < a.x + ca - 1e-6;
+        expect(above).toBe(false);
+      }
+    }
+  });
+
+  test('hauteur imposée : les fourreaux s\'empilent plutôt que de s\'étaler', () => {
+    const L = pkg.solve(mk([[160, 3], [110, 5], [63, 6]]), { lock: 'h', h: 400 });
+    expect(L.items).toHaveLength(14);
+    expect(L.w).toBeLessThan(1150); // l'ancien moteur donnait 1350
+  });
+
+  test('les 40 d\'une petite rangée sont centrés sur le bloc qui les porte', () => {
+    const L = pkg.solve(mk([[110, 6], [40, 8]]), { lock: 'h', h: 300 });
+    const big = L.items.filter(i => i.d === 110), small = L.items.filter(i => i.d === 40);
+    const mid = (arr) => (Math.min(...arr.map(i => i.x)) + Math.max(...arr.map(i => i.x + pkg.cell(i.d)))) / 2;
+    expect(Math.abs(mid(big) - mid(small))).toBeLessThan(1);
+  });
+});
