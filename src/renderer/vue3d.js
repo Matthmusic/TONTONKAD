@@ -538,14 +538,13 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   const s = Math.min(zw / (X1 - X0), zh / (Y1 - Y0), 1.8);
   const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
   const P = (x, y, z = 0) => { const [u, v] = iso(x, y, z); return [ox + u * s, oy + v * s]; };
+  const LARG = 7, HAUT = 6; // demi-largeur et demi-hauteur des tranchées
   // Point de raccordement d'un bout de tranchée : sur la face de la chambre
   // (pignon A/B, long-pan A/B), à mi-hauteur du caisson ; au pied sinon.
-  const bout = (e, autre) => {
-    if (e.type !== 'chambre') { // coffret / sortie : sur la face tournée vers l'autre bout, au pied
-      const [a, b] = dims[e.type] || dims.sortie, dx = autre.x - e.x, dy = autre.y - e.y;
-      const k = Math.min(dx ? (a / 2) / Math.abs(dx) : Infinity, dy ? (b / 2) / Math.abs(dy) : Infinity);
-      return Number.isFinite(k) ? { x: e.x + dx * k, y: e.y + dy * k, z: 0 } : { x: e.x, y: e.y, z: 0 };
-    }
+  const bout = (e) => {
+    // coffret / sortie : les fourreaux remontent par le dessous → arrivée sous le
+    // centre du socle, tranchée enterrée (dessus au niveau du sol)
+    if (e.type !== 'chambre') return { x: e.x, y: e.y, z: -HAUT };
     const [a, b, h] = dims.chambre, z = -8 + h / 2;
     const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
     return { x: e.x + off[0], y: e.y + off[1], z };
@@ -553,10 +552,9 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   // Tranchée en volume : prisme de terre (largeur 14, hauteur 12) entre les
   // deux raccordements, centré sur leur hauteur. On dessine le flanc et
   // l'extrémité tournés vers l'observateur, puis le dessus (grillage rouge).
-  const LARG = 7, HAUT = 6;
   const vue = (vx, vy) => vx + vy; // > 0 : tourné vers l'observateur (x + y croissant)
   function tranchee(t) {
-    const A = bout(t.a, t.b), B = bout(t.b, t.a);
+    const A = bout(t.a), B = bout(t.b);
     const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * LARG, ny = dx / L * LARG;
     const coin = (E, sgn, dz) => P(E.x + sgn * nx, E.y + sgn * ny, E.z + dz);
     const terre = MAT.terre, bord = [0.3, 0.22, 0.15];
@@ -601,7 +599,14 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   const etiquettes = [];
   const elements = [
     ...data.troncons.map((t) => ({ cle: (t.a.x + t.a.y + t.b.x + t.b.y) / 2, dessiner: () => tranchee(t) })),
-    ...data.noeuds.map((n) => ({ cle: n.x + n.y, dessiner: () => volume(n) })),
+    ...data.noeuds.map((n) => {
+      let cle = n.x + n.y;
+      if (n.type !== 'chambre') data.troncons.forEach((t) => {
+        const ici = (t.a.x === n.x && t.a.y === n.y) || (t.b.x === n.x && t.b.y === n.y);
+        if (ici) cle = Math.max(cle, (t.a.x + t.a.y + t.b.x + t.b.y) / 2 + 0.01); // recouvre l'arrivée
+      });
+      return { cle, dessiner: () => volume(n) };
+    }),
   ].sort((u, v) => u.cle - v.cle);
   elements.forEach((e) => e.dessiner());
   etiquettes.forEach((f) => f());

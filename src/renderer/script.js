@@ -7516,9 +7516,10 @@
   function resumeFourreaux(t) {
     const st = etatTroncon(t);
     if (!st || !st.fourreaux.length) return 'coupe vide';
+    // notation par diamètre, du plus gros au plus petit : « 6 Ø200 + 2 Ø160 »
     const n = new Map();
-    st.fourreaux.forEach((f) => { const k = `${f.type || ''}${f.code || ''}`; n.set(k, (n.get(k) || 0) + 1); });
-    return [...n].map(([k, q]) => `${q}×${k}`).join(' + ');
+    st.fourreaux.forEach((f) => { const d = Math.round(f.od || Number(f.code) || 0); n.set(d, (n.get(d) || 0) + 1); });
+    return [...n].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q} Ø${d}`).join(' + ');
   }
 
 
