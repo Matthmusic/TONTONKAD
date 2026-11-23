@@ -11625,6 +11625,12 @@
       });
 
       // Import projet
+      // Electron : Fichier → Ouvrir un projet (Ctrl+O) envoie le contenu lu par le processus principal
+      window.addEventListener('electron-load-project', (e) => {
+        const data = e.detail;
+        if (!data || (!data.container && !data.fourreaux && !data.cables)) { showToast('Fichier invalide ou corrompu', 'error'); return; }
+        if (window.projectManager.restoreState(data)) showToast('Projet ouvert', 'success');
+      });
       document.getElementById('importProject').addEventListener('click', () => {
         document.getElementById('importProjectFile').click();
       });

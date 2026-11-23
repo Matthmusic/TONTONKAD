@@ -6179,3 +6179,5 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .reseau-ajout select, .reseau-ajout input { min-width: 0; }
 .reseau-ajout { grid-template-columns: 1fr 1fr; }
 .reseau-ajout input { width: 100%; }
+.projects-header { gap: 8px; }
+.projects-header h4 { margin-right: auto; }
