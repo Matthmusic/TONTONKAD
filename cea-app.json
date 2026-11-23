@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.7.2",
+    "version": "2.8.0",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,23 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.7.2.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.8.0.exe"
   },
   "changelog": {
+    "2.8.0": {
+      "date": "2026-11-23",
+      "changes": [
+        "Nouveau moteur de placement des fourreaux : regroupement par diamètre, gros fourreaux en bas, tranchée large plutôt que profonde ; variantes métier (la plus étroite, la moins profonde, compatible chambre)",
+        "Mode Réseau : synoptique 2D et isométrique des chambres, coffrets et sorties, une coupe par tronçon, navigation d'une chambre à la suivante, continuité des liaisons et métré des fourreaux",
+        "Répartition des fourreaux par tronçon depuis le synoptique (reprise en un clic des fourreaux des tronçons voisins)",
+        "Vue chambre de tirage : vue de dessus par face (pignons, long-pans), traversées et arrêts des liaisons, couleur de liaison identique d'une chambre à l'autre, double-clic sur une face pour ouvrir sa coupe",
+        "Chambre maçonnée sur mesure : dimensions déduites des nappes, épaisseur de paroi, tampon (ouverture, classe NF EN 124 contrôlée selon la zone) — valeurs par défaut à valider",
+        "Export PDF : vues 3D (coupe, tranchée, chambre), vues de dessus des chambres et pages réseau",
+        "Projet : bouton « Ouvrir un fichier… » et Ctrl+O fonctionnel ; projet de test complet dans exemples/",
+        "Notifications plus calmes (bas à droite, 3 au maximum) et interface harmonisée (icônes dessinées, thèmes clair et sombre)",
+        "Serveur MCP pour Claude : masques depuis une note de calcul Caneco, DXF et PDF avec 3D, étude de chambres multi-faces (préfabriquée ou maçonnée), règles NF P 98-331 / NF T 54-080 à valider"
+      ]
+    },
     "2.7.2": {
       "date": "2026-09-07",
       "changes": [
