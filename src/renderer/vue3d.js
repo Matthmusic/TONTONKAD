@@ -340,7 +340,13 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
     longPanB: { long: L, at: (t) => [t, l], n: [0, -1], out: [0, 1] },
   };
   const couleur = new Map();
-  [...etude.traversees.map((t) => t.liaison), ...etude.arrets.map((a) => a.liaison)].forEach((n, i) => couleur.set(n, COUL_LIAISON[i % COUL_LIAISON.length]));
+  // Une couleur par liaison pour TOUT le projet : etude.ordreLiaisons (fourni par
+  // l'appelant, ordre stable sur le réseau) ; à défaut, ordre propre à la chambre.
+  const ordre = Array.isArray(etude.ordreLiaisons) ? etude.ordreLiaisons : [];
+  [...etude.traversees.map((t) => t.liaison), ...etude.arrets.map((a) => a.liaison)].forEach((n, i) => {
+    const j = ordre.indexOf(n);
+    couleur.set(n, COUL_LIAISON[(j >= 0 ? j : ordre.length + i) % COUL_LIAISON.length]);
+  });
   const ancre = {}; // ancre[face][liaison] = point intérieur moyen
 
   for (const k of Object.keys(faceGeo)) {

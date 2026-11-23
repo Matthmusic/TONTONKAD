@@ -103,3 +103,19 @@ describe('coupe vue des deux côtés d\'un tronçon (symétrie)', () => {
     expect(V.coupeEnMiroir('pignonB', undefined)).toBe(false);
   });
 });
+
+describe('couleurs de liaison stables d\'une chambre à l\'autre', () => {
+  const V = require('../src/renderer/vue3d.js');
+  const mq = (nom, liaisons) => ({ nom, largeur: 200, hauteur: 200, fourreaux: liaisons.map((l, i) => ({ id: `F${i}`, od: 110, x: 60 + i * 120, y: 60, liaisons: [l] })), liaisons });
+  const etude = (traversees, arrets) => ({ ok: true, ref: 'X', L: 1000, l: 600, H: 600, infos: {}, faces: { pignonA: { face: 'pignon A' }, pignonB: { face: 'pignon B' } }, traversees, arrets });
+  test('la même liaison garde sa couleur quand l\'ordre global est fourni', () => {
+    const ordre = ['A', 'B', 'C'];
+    const e1 = etude([{ liaison: 'A', cles: ['pignonA', 'pignonB'], type: 'droite' }, { liaison: 'C', cles: ['pignonA', 'pignonB'], type: 'droite' }], []);
+    const e2 = etude([{ liaison: 'C', cles: ['pignonA', 'pignonB'], type: 'droite' }], []);
+    e1.ordreLiaisons = ordre; e2.ordreLiaisons = ordre;
+    const m1 = { pignonA: mq('T1', ['A', 'C']), pignonB: mq('T2', ['A', 'C']) }, m2 = { pignonA: mq('T2', ['C']), pignonB: mq('T3', ['C']) };
+    const c1 = V.drawChambreDessus(new V.Page({ emitText: false }), e1, m1, 0, 0, 500, 400);
+    const c2 = V.drawChambreDessus(new V.Page({ emitText: false }), e2, m2, 0, 0, 500, 400);
+    expect(c2.get('C')).toEqual(c1.get('C'));
+  });
+});

@@ -7605,6 +7605,18 @@
   }
 
   const MACONNEE = '__maconnee'; // valeur de n.ref pour une chambre maçonnée sur mesure
+  // Liaisons du réseau dans un ordre stable (première apparition, tronçon par tronçon) :
+  // l'index donne la couleur d'une liaison, identique d'une chambre à l'autre.
+  function ordreLiaisonsReseau() {
+    const vus = [];
+    const ajoute = (n) => { if (n && !vus.includes(n)) vus.push(n); };
+    (reseau ? reseau.troncons : []).forEach((t) => {
+      liaisonsDeTroncon(t).forEach(ajoute);
+      const st = etatTroncon(t); // fourreaux de réserve : liaison = libellé, sans câble
+      (st ? st.fourreaux : []).forEach((f) => ajoute(f.label));
+    });
+    return vus;
+  }
   // Étude d'une chambre (chambre-faces.js) à partir des coupes de ses tronçons.
   function etudeChambre(nd) {
     if (!reseau || !nd || nd.type !== 'chambre' || !window.ChambreFaces) return null;
@@ -7630,6 +7642,7 @@
       if (!etude.ok && !nd.ref && CI) { etude = maconnee(); etude.avertissements.unshift('Aucune chambre préformée ne convient : chambre maçonnée proposée'); }
     }
     etude.nom = nd.nom;
+    etude.ordreLiaisons = ordreLiaisonsReseau(); // mêmes couleurs dans toutes les chambres
     return { etude, masques };
   }
 

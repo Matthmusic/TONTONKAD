@@ -185,6 +185,8 @@ server.registerTool('generer_masques', {
         e.avertissements.unshift('Aucune chambre préfabriquée ne reçoit toutes ces faces : chambre maçonnée proposée (valeurs par défaut à valider)');
       }
       e.nom = c.nom;
+      // mêmes couleurs de liaison dans toutes les chambres de la demande
+      e.ordreLiaisons = [...new Set(out.filter((m) => m.ok).flatMap((m) => [...(m.liaisons || []), ...(m.fourreaux || []).flatMap((f) => f.liaisons || [])]))];
       if (manquants.length) (e.avertissements = e.avertissements || []).unshift(`Masque(s) introuvable(s) : ${manquants.join(', ')} (utiliser le nom exact d'un masque de cette demande)`);
       e._masques = faces;
       return e;
