@@ -78,7 +78,8 @@
       const r = await api.mcpEtat();
       if (!r.success) { mcpEtatEl.textContent = `Erreur : ${r.error}`; return; }
       if (!r.serveurPresent) { mcpEtatEl.textContent = 'Serveur MCP introuvable dans cette installation.'; mcpBtn.disabled = true; return; }
-      mcpEtatEl.textContent = LIBELLES[r.etat] || r.etat;
+      const code = (r.etats || []).find((e) => /Code/.test(e.nom));
+      mcpEtatEl.textContent = (LIBELLES[r.etat] || r.etat) + (code ? (code.etat === 'branche' ? ' Claude Code : branché pour toutes les sessions.' : code.etat === 'absent' ? '' : ' Claude Code : pas encore branché.') : '');
       mcpEtatEl.dataset.etat = r.etat;
       mcpBtn.disabled = r.etat === 'illisible';
       mcpBtn.textContent = r.etat === 'branche' ? 'Rebrancher' : r.etat === 'a_mettre_a_jour' ? 'Mettre à jour' : 'Brancher à Claude';
@@ -88,14 +89,15 @@
       const api = window.electronAPI;
       if (!api || !api.mcpBrancherClaude) return;
       const ok = typeof window.customConfirm === 'function'
-        ? await window.customConfirm('TONTONKAD va s\'ajouter à la configuration de l\'application de bureau Claude. Les autres serveurs ne sont pas modifiés et une copie de sauvegarde est faite.', 'Brancher à Claude', 'Brancher', 'Annuler')
+        ? await window.customConfirm('TONTONKAD va s\'ajouter à Claude (application de bureau, et Claude Code pour toutes vos sessions s\'il est installé). Les autres serveurs ne sont pas modifiés et une copie de sauvegarde est faite. Fermez Claude Code avant de continuer.', 'Brancher à Claude', 'Brancher', 'Annuler')
         : window.confirm('Ajouter TONTONKAD à la configuration de Claude ?');
       if (!ok) return;
       mcpBtn.disabled = true;
       const r = await api.mcpBrancherClaude();
       mcpBtn.disabled = false;
       if (!r.success) { window.showToast && window.showToast(`Branchement impossible : ${r.error}`, 'error', 7000); return; }
-      const msg = r.etat === 'deja_a_jour' ? 'Claude est déjà branché à TONTONKAD.' : 'TONTONKAD est branché : redémarrez l\'application Claude pour l\'utiliser.';
+      const faits = (r.resultats || []).filter((x) => ['ajoute', 'mis_a_jour', 'deja_a_jour'].includes(x.etat)).map((x) => x.nom);
+      const msg = `TONTONKAD est branché à : ${faits.join(', ')}. Fermez puis rouvrez Claude pour l'utiliser.`;
       window.showToast && window.showToast(msg, 'success', 6000);
       majMcp();
     });
