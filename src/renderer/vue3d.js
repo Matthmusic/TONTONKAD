@@ -540,32 +540,45 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   const P = (x, y, z = 0) => { const [u, v] = iso(x, y, z); return [ox + u * s, oy + v * s]; };
   // Point de raccordement d'un bout de tranchée : sur la face de la chambre
   // (pignon A/B, long-pan A/B), à mi-hauteur du caisson ; au pied sinon.
-  const bout = (e) => {
-    if (e.type !== 'chambre') return { x: e.x, y: e.y, z: 0 };
+  const bout = (e, autre) => {
+    if (e.type !== 'chambre') { // coffret / sortie : sur la face tournée vers l'autre bout, au pied
+      const [a, b] = dims[e.type] || dims.sortie, dx = autre.x - e.x, dy = autre.y - e.y;
+      const k = Math.min(dx ? (a / 2) / Math.abs(dx) : Infinity, dy ? (b / 2) / Math.abs(dy) : Infinity);
+      return Number.isFinite(k) ? { x: e.x + dx * k, y: e.y + dy * k, z: 0 } : { x: e.x, y: e.y, z: 0 };
+    }
     const [a, b, h] = dims.chambre, z = -8 + h / 2;
     const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
     return { x: e.x + off[0], y: e.y + off[1], z };
   };
-  // tranchées (bandes de terre) avec leur longueur, d'une face à l'autre
-  for (const t of data.troncons) {
-    const A = bout(t.a), B = bout(t.b);
-    const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * 7, ny = dx / L * 7;
-    const band = [P(A.x + nx, A.y + ny, A.z), P(B.x + nx, B.y + ny, B.z), P(B.x - nx, B.y - ny, B.z), P(A.x - nx, A.y - ny, A.z)];
-    p.texture(band, MAT.terre, { seed: 31, taille: 0.6, contour: [0.35, 0.26, 0.18] });
-    p.rgb([0.85, 0.12, 0.1]).width(0.8).line(...P(A.x, A.y, A.z + 0.5), ...P(B.x, B.y, B.z + 0.5)); // grillage rouge
-    // fourreaux qui débouchent dans la face de la chambre
-    [A, B].forEach((E, i) => {
-      if ((i ? t.b : t.a).type !== 'chambre') return;
-      const [ex, ey] = P(E.x, E.y, E.z);
-      p.rgb(MAT.tpc, false).rgb([0.35, 0.05, 0.05]).width(0.5).circle(ex, ey, 2.6 * s, 'B');
+  // Tranchée en volume : prisme de terre (largeur 14, hauteur 12) entre les
+  // deux raccordements, centré sur leur hauteur. On dessine le flanc et
+  // l'extrémité tournés vers l'observateur, puis le dessus (grillage rouge).
+  const LARG = 7, HAUT = 6;
+  const vue = (vx, vy) => vx + vy; // > 0 : tourné vers l'observateur (x + y croissant)
+  function tranchee(t) {
+    const A = bout(t.a, t.b), B = bout(t.b, t.a);
+    const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * LARG, ny = dx / L * LARG;
+    const coin = (E, sgn, dz) => P(E.x + sgn * nx, E.y + sgn * ny, E.z + dz);
+    const terre = MAT.terre, bord = [0.3, 0.22, 0.15];
+    // flanc visible : celui dont la normale regarde l'observateur
+    const sg = vue(nx, ny) >= 0 ? 1 : -1;
+    p.texture([coin(A, sg, -HAUT), coin(B, sg, -HAUT), coin(B, sg, HAUT), coin(A, sg, HAUT)], nuance(terre, 0.78), { seed: 33, taille: 0.6, contour: bord });
+    // extrémité visible (côté coffret / sortie uniquement : côté chambre elle entre dans la face)
+    [[B, t.b, 1], [A, t.a, -1]].forEach(([E, e, sens]) => {
+      if (e.type === 'chambre' || vue(dx * sens, dy * sens) <= 0) return;
+      p.texture([coin(E, 1, -HAUT), coin(E, -1, -HAUT), coin(E, -1, HAUT), coin(E, 1, HAUT)], nuance(terre, 0.66), { seed: 34, taille: 0.6, contour: bord });
     });
-    const [mx, my] = P((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2 + 14);
-    const w = t.label.length * 4.2 + 10;
-    p.rgb([1, 1, 1], false).rgb([0.6, 0.6, 0.6]).width(0.5).rect(mx - w / 2, my - 7, w, 14, 'B');
-    p.rgb([0.1, 0.1, 0.1], false).text(mx, my - 3, 7.5, t.label, { align: 'center' });
+    // dessus
+    p.texture([coin(A, 1, HAUT), coin(B, 1, HAUT), coin(B, -1, HAUT), coin(A, -1, HAUT)], nuance(terre, 1.08), { seed: 31, taille: 0.6, contour: bord });
+    p.rgb([0.85, 0.12, 0.1]).width(0.9).line(...P(A.x, A.y, A.z + HAUT + 0.3), ...P(B.x, B.y, B.z + HAUT + 0.3)); // grillage
+    const [mx, my] = P((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2 + HAUT + 12);
+    etiquettes.push(() => {
+      const w = t.label.length * 4.2 + 10;
+      p.rgb([1, 1, 1], false).rgb([0.6, 0.6, 0.6]).width(0.5).rect(mx - w / 2, my - 7, w, 14, 'B');
+      p.rgb([0.1, 0.1, 0.1], false).text(mx, my - 3, 7.5, t.label, { align: 'center' });
+    });
   }
-  // volumes, du fond vers l'avant (x + y croissant = plus près)
-  for (const n of [...data.noeuds].sort((a, b) => (a.x + a.y) - (b.x + b.y))) {
+  function volume(n) {
     const [a, b, h] = dims[n.type] || dims.sortie, c = hexRgb(n.couleur);
     const x0 = n.x - a / 2, x1 = n.x + a / 2, y0 = n.y - b / 2, y1 = n.y + b / 2;
     const z0 = n.type === 'chambre' ? -8 : 0, z1 = z0 + h;
@@ -573,14 +586,25 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
     p.texture([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)], nuance(mat, 0.72), { seed: 41, taille: 0.6, contour: [0.25, 0.25, 0.25] });
     p.texture([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)], nuance(mat, 0.88), { seed: 42, taille: 0.6, contour: [0.25, 0.25, 0.25] });
     p.texture([P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)], nuance(mat, 1.12), { seed: 43, taille: 0.6, contour: [0.25, 0.25, 0.25] });
-    if (n.type === 'chambre') { // tampon(s) de la couleur de la chambre
+    if (n.type === 'chambre') { // tampon de la couleur de la chambre
       p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6)
         .poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], 'B');
     }
     const [tx, ty] = P(n.x, n.y, z1 + 10);
-    p.rgb([0.08, 0.08, 0.08], false).text(tx, ty, 8.5, n.nom, { align: 'center', bold: true });
-    if (n.sous) p.rgb([0.3, 0.3, 0.3], false).text(tx, ty - 9, 6.5, n.sous, { align: 'center' });
+    etiquettes.push(() => {
+      p.rgb([0.08, 0.08, 0.08], false).text(tx, ty, 8.5, n.nom, { align: 'center', bold: true });
+      if (n.sous) p.rgb([0.3, 0.3, 0.3], false).text(tx, ty - 9, 6.5, n.sous, { align: 'center' });
+    });
   }
+  // Ordre de profondeur commun (peintre) : du fond (x + y petit) vers l'avant ;
+  // une tranchée se range à son milieu. Étiquettes en dernier, toujours lisibles.
+  const etiquettes = [];
+  const elements = [
+    ...data.troncons.map((t) => ({ cle: (t.a.x + t.a.y + t.b.x + t.b.y) / 2, dessiner: () => tranchee(t) })),
+    ...data.noeuds.map((n) => ({ cle: n.x + n.y, dessiner: () => volume(n) })),
+  ].sort((u, v) => u.cle - v.cle);
+  elements.forEach((e) => e.dessiner());
+  etiquettes.forEach((f) => f());
 }
 
 const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
