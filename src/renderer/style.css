@@ -6162,3 +6162,7 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .notification-container .notification.error { border-left-color: #d93025; } .notification.error .notification-titre { color: #d93025; }
 .notification-container .notification.warning { border-left-color: #c78a00; } .notification.warning .notification-titre { color: #c78a00; }
 .notification-container .notification.info { border-left-color: var(--primary-orange); } .notification.info .notification-titre { color: var(--primary-orange); }
+/* Notifications : coin bas-droite, au-dessus de la barre d'outils, à gauche du rail */
+.notification-container, body.electron-mode .notification-container {
+    left: auto; right: 84px; bottom: 150px; transform: none; align-items: flex-end;
+}
