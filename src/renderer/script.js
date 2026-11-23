@@ -5506,6 +5506,13 @@
     const content = document.createElement('span');
     content.className = 'notification-content';
     content.textContent = cleanMsg;
+    const TITRES = { success: 'Fait', error: 'Erreur', warning: 'Attention', info: 'Info' };
+    if (TITRES[type]) {
+      const titre = document.createElement('strong');
+      titre.className = 'notification-titre';
+      titre.textContent = TITRES[type];
+      content.prepend(titre);
+    }
 
     notification.appendChild(icon);
     notification.appendChild(content);

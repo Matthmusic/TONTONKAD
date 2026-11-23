@@ -6148,3 +6148,17 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 @media (prefers-reduced-motion: reduce) {
     .notification-container .notification, .notification-container .notification.removing { animation-duration: 0.01ms; }
 }
+/* Notifications : cartes lisibles (titre + message, bandeau de couleur) */
+.notification-container { gap: 10px; }
+.notification-container .notification {
+    min-width: 340px; max-width: 520px; padding: 14px 20px 14px 16px; gap: 14px;
+    font-size: 14px; border-radius: var(--radius-md, 12px); border-left-width: 5px;
+    align-items: center;
+}
+.notification-container .notification-icon { width: 12px; height: 12px; flex: none; }
+.notification-container .notification-content { display: flex; flex-direction: column; gap: 2px; }
+.notification-titre { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.notification-container .notification.success { border-left-color: #059669; } .notification.success .notification-titre { color: #059669; }
+.notification-container .notification.error { border-left-color: #d93025; } .notification.error .notification-titre { color: #d93025; }
+.notification-container .notification.warning { border-left-color: #c78a00; } .notification.warning .notification-titre { color: #c78a00; }
+.notification-container .notification.info { border-left-color: var(--primary-orange); } .notification.info .notification-titre { color: var(--primary-orange); }
