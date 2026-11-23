@@ -1,6 +1,6 @@
 {
   "name": "tontonkad",
-  "version": "2.8.1",
+  "version": "2.8.2",
   "description": "TONTONKAD - Dimensionnement de chemins de câbles et fourreaux",
   "main": "src/main/main.js",
   "author": "TONTONKAD Team",
@@ -60,6 +60,33 @@
         "to": "data",
         "filter": [
           "**/*"
+        ]
+      },
+      {
+        "from": "mcp",
+        "to": "mcp",
+        "filter": [
+          "src/**/*",
+          "package.json",
+          "node_modules/**/*"
+        ]
+      },
+      {
+        "from": "src/renderer",
+        "to": "src/renderer",
+        "filter": [
+          "big-brain.js",
+          "cable-assign.js",
+          "caneco-import.js",
+          "chambre-faces.js",
+          "chambres-infos.js",
+          "circuit.js",
+          "compat-chambres.js",
+          "csv.js",
+          "packer.js",
+          "phase-assign.js",
+          "reseau.js",
+          "vue3d.js"
         ]
       }
     ],

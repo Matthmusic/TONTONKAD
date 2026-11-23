@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.8.1",
+    "version": "2.8.2",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,16 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.8.1.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.8.2.exe"
   },
   "changelog": {
+    "2.8.2": {
+      "date": "2026-11-23",
+      "changes": [
+        "Serveur MCP pour Claude intégré à l'installation : plus besoin du dépôt ni de Node.js, il tourne avec TONTONKAD lui-même et se met à jour avec l'application",
+        "Paramètres › Claude (serveur MCP) : bouton « Brancher à Claude » qui ajoute TONTONKAD à l'application de bureau Claude (copie de sauvegarde, autres serveurs inchangés), et commande prête à copier pour Claude Code"
+      ]
+    },
     "2.8.1": {
       "date": "2026-11-23",
       "changes": [

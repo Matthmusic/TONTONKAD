@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
+const McpClaude = require('./mcp-claude.js');
 
 let mainWindow;
 let autoUpdater = null; // Chargé de façon lazy après que l'app soit prête
@@ -543,6 +544,53 @@ ipcMain.handle('open-path', async (event, fullPath) => {
   } catch (error) {
     return { success: false, error: error.message };
   }
+});
+
+
+// ─── Serveur MCP intégré (Claude) ─────────────────────────────────────────
+// Livré dans resources/mcp ; lancé par TONTONKAD.exe en mode Node.
+function infosMcp() {
+  const serveur = app.isPackaged
+    ? path.join(process.resourcesPath, 'mcp', 'src', 'server.js')
+    : path.join(__dirname, '..', '..', 'mcp', 'src', 'server.js');
+  const entree = McpClaude.entreeServeur({ execPath: process.execPath, serveur, dataDir: activeDataFolder });
+  const fichier = McpClaude.cheminConfigClaude(process.platform, process.env, app.getPath('home'));
+  return { serveur, entree, fichier };
+}
+async function lireSiExiste(f) {
+  try { return await fs.readFile(f, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
+}
+
+ipcMain.handle('mcp-etat', async () => {
+  try {
+    const { serveur, entree, fichier } = infosMcp();
+    let serveurPresent = true;
+    try { await fs.access(serveur); } catch (_) { serveurPresent = false; }
+    const texte = await lireSiExiste(fichier);
+    return {
+      success: true, serveurPresent, fichier,
+      etat: McpClaude.etatBranchement(texte, entree),
+      commandeClaudeCode: McpClaude.commandeClaudeCode(entree, process.platform),
+    };
+  } catch (error) { return { success: false, error: error.message }; }
+});
+
+ipcMain.handle('mcp-brancher-claude', async () => {
+  try {
+    const { serveur, entree, fichier } = infosMcp();
+    await fs.access(serveur);
+    const texte = await lireSiExiste(fichier);
+    const res = McpClaude.fusionnerConfig(texte, entree); // lève si JSON illisible : rien n'est écrit
+    if (res.etat === 'deja_a_jour') return { success: true, etat: res.etat, fichier };
+    await fs.mkdir(path.dirname(fichier), { recursive: true });
+    let sauvegarde = null;
+    if (texte != null) {
+      sauvegarde = fichier.replace(/\.json$/i, `.sauvegarde-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+      await fs.writeFile(sauvegarde, texte, 'utf8');
+    }
+    await fs.writeFile(fichier, res.texte, 'utf8');
+    return { success: true, etat: res.etat, fichier, sauvegarde };
+  } catch (error) { return { success: false, error: error.message }; }
 });
 
 // Obtenir la configuration actuelle

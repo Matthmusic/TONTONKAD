@@ -10,7 +10,16 @@ placement des fourreaux) : un masque produit ici est identique à celui que
 TONTONKAD ferait à la main. Il ne fait aucun appel réseau et ne modifie jamais
 un fichier existant.
 
-## Installation (sur le PC de chaque utilisateur)
+## Installation
+
+**Depuis TONTONKAD 2.8.2, le serveur est livré avec l'application.** Dans
+TONTONKAD : *Paramètres › Claude (serveur MCP) › Brancher à Claude*, puis
+redémarrer l'application Claude. Il tourne avec l'exécutable de TONTONKAD en
+mode Node (`ELECTRON_RUN_AS_NODE=1`) : ni dépôt ni Node.js à installer, et il
+se met à jour avec l'application. Pour Claude Code, le même panneau donne la
+commande `claude mcp add …` à copier.
+
+### Installation manuelle depuis le dépôt (développement)
 
 Prérequis : Node.js 18 ou plus, et une copie du dépôt TONTONKAD (le serveur lit
 les catalogues `data/*.csv` du dépôt).

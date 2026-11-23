@@ -53,6 +53,55 @@
       await loadCurrentConfig();
       settingsModal.style.display = 'flex';
       settingsStatus.style.display = 'none';
+      majMcp();
+    });
+
+    // ─── Serveur MCP intégré : branchement dans Claude ───
+    const mcpEtatEl = document.getElementById('mcp-etat');
+    const mcpBtn = document.getElementById('mcp-brancher-btn');
+    const mcpCmd = document.getElementById('mcp-commande');
+    const mcpCopier = document.getElementById('mcp-copier-btn');
+    const LIBELLES = {
+      branche: 'Branché à Claude (application de bureau).',
+      non_branche: 'Pas encore branché à Claude.',
+      absent: 'Application de bureau Claude non configurée sur ce poste (le branchement créera sa configuration).',
+      a_mettre_a_jour: 'Branché, mais vers un autre emplacement : à mettre à jour.',
+      illisible: 'Configuration de Claude illisible : à corriger à la main avant de brancher.',
+    };
+    async function majMcp() {
+      if (!mcpEtatEl) return;
+      const api = window.electronAPI;
+      if (!api || !api.mcpEtat) {
+        mcpEtatEl.textContent = 'Disponible dans l\'application de bureau TONTONKAD.';
+        mcpBtn.disabled = true; mcpCopier.disabled = true; return;
+      }
+      const r = await api.mcpEtat();
+      if (!r.success) { mcpEtatEl.textContent = `Erreur : ${r.error}`; return; }
+      if (!r.serveurPresent) { mcpEtatEl.textContent = 'Serveur MCP introuvable dans cette installation.'; mcpBtn.disabled = true; return; }
+      mcpEtatEl.textContent = LIBELLES[r.etat] || r.etat;
+      mcpEtatEl.dataset.etat = r.etat;
+      mcpBtn.disabled = r.etat === 'illisible';
+      mcpBtn.textContent = r.etat === 'branche' ? 'Rebrancher' : r.etat === 'a_mettre_a_jour' ? 'Mettre à jour' : 'Brancher à Claude';
+      mcpCmd.textContent = r.commandeClaudeCode;
+    }
+    if (mcpBtn) mcpBtn.addEventListener('click', async () => {
+      const api = window.electronAPI;
+      if (!api || !api.mcpBrancherClaude) return;
+      const ok = typeof window.customConfirm === 'function'
+        ? await window.customConfirm('TONTONKAD va s\'ajouter à la configuration de l\'application de bureau Claude. Les autres serveurs ne sont pas modifiés et une copie de sauvegarde est faite.', 'Brancher à Claude', 'Brancher', 'Annuler')
+        : window.confirm('Ajouter TONTONKAD à la configuration de Claude ?');
+      if (!ok) return;
+      mcpBtn.disabled = true;
+      const r = await api.mcpBrancherClaude();
+      mcpBtn.disabled = false;
+      if (!r.success) { window.showToast && window.showToast(`Branchement impossible : ${r.error}`, 'error', 7000); return; }
+      const msg = r.etat === 'deja_a_jour' ? 'Claude est déjà branché à TONTONKAD.' : 'TONTONKAD est branché : redémarrez l\'application Claude pour l\'utiliser.';
+      window.showToast && window.showToast(msg, 'success', 6000);
+      majMcp();
+    });
+    if (mcpCopier) mcpCopier.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(mcpCmd.textContent); window.showToast && window.showToast('Commande copiée', 'success'); }
+      catch (_) { window.showToast && window.showToast('Copie impossible : sélectionnez la commande à la main', 'warning'); }
     });
 
     // Fermer la modal
