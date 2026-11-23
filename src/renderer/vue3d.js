@@ -538,13 +538,28 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   const s = Math.min(zw / (X1 - X0), zh / (Y1 - Y0), 1.8);
   const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
   const P = (x, y, z = 0) => { const [u, v] = iso(x, y, z); return [ox + u * s, oy + v * s]; };
-  // tranchées au sol (bandes de terre) avec leur longueur
+  // Point de raccordement d'un bout de tranchée : sur la face de la chambre
+  // (pignon A/B, long-pan A/B), à mi-hauteur du caisson ; au pied sinon.
+  const bout = (e) => {
+    if (e.type !== 'chambre') return { x: e.x, y: e.y, z: 0 };
+    const [a, b, h] = dims.chambre, z = -8 + h / 2;
+    const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
+    return { x: e.x + off[0], y: e.y + off[1], z };
+  };
+  // tranchées (bandes de terre) avec leur longueur, d'une face à l'autre
   for (const t of data.troncons) {
-    const dx = t.b.x - t.a.x, dy = t.b.y - t.a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * 7, ny = dx / L * 7;
-    const band = [P(t.a.x + nx, t.a.y + ny), P(t.b.x + nx, t.b.y + ny), P(t.b.x - nx, t.b.y - ny), P(t.a.x - nx, t.a.y - ny)];
+    const A = bout(t.a), B = bout(t.b);
+    const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * 7, ny = dx / L * 7;
+    const band = [P(A.x + nx, A.y + ny, A.z), P(B.x + nx, B.y + ny, B.z), P(B.x - nx, B.y - ny, B.z), P(A.x - nx, A.y - ny, A.z)];
     p.texture(band, MAT.terre, { seed: 31, taille: 0.6, contour: [0.35, 0.26, 0.18] });
-    p.rgb([0.85, 0.12, 0.1]).width(0.8).line(...P(t.a.x, t.a.y, 0.5), ...P(t.b.x, t.b.y, 0.5)); // grillage rouge
-    const [mx, my] = P((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2, 14);
+    p.rgb([0.85, 0.12, 0.1]).width(0.8).line(...P(A.x, A.y, A.z + 0.5), ...P(B.x, B.y, B.z + 0.5)); // grillage rouge
+    // fourreaux qui débouchent dans la face de la chambre
+    [A, B].forEach((E, i) => {
+      if ((i ? t.b : t.a).type !== 'chambre') return;
+      const [ex, ey] = P(E.x, E.y, E.z);
+      p.rgb(MAT.tpc, false).rgb([0.35, 0.05, 0.05]).width(0.5).circle(ex, ey, 2.6 * s, 'B');
+    });
+    const [mx, my] = P((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2 + 14);
     const w = t.label.length * 4.2 + 10;
     p.rgb([1, 1, 1], false).rgb([0.6, 0.6, 0.6]).width(0.5).rect(mx - w / 2, my - 7, w, 14, 'B');
     p.rgb([0.1, 0.1, 0.1], false).text(mx, my - 3, 7.5, t.label, { align: 'center' });

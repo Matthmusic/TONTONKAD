@@ -7545,7 +7545,7 @@
     });
     const troncons = reseau.troncons.map((t) => {
       const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
-      return { a: { x: A.x, y: A.y }, b: { x: B.x, y: B.y }, label: `${t.longueurM ? t.longueurM + ' m' : '? m'} · ${resumeFourreaux(t)}` };
+      return { a: { x: A.x, y: A.y, face: t.a.face, type: A.type }, b: { x: B.x, y: B.y, face: t.b.face, type: B.type }, label: `${t.longueurM ? t.longueurM + ' m' : '? m'} · ${resumeFourreaux(t)}` };
     });
     return { noeuds, troncons };
   }
