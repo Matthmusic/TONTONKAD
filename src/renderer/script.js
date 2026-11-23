@@ -7714,7 +7714,7 @@
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="sortie">Ajouter une sortie</button>
         </div>
         <div id="reseauEdition" class="reseau-edition"></div>
-        <p class="chambre-aide">Glissez un élément pour le déplacer. Tirez depuis son <b>+</b> vers un autre pour les relier. Double-clic : ouvrir la chambre ou la coupe.</p>
+        <p class="chambre-aide">Glissez un élément pour le déplacer. Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
         <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
@@ -7736,7 +7736,7 @@
       if (SYN.mode === 'iso') return; // vue de consultation
       const p = pos(ev);
       const pg = poigneeSous(p.x, p.y);
-      if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y }; return; }
+      if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y, x0: p.x, y0: p.y }; return; }
       const n = noeudSous(p.x, p.y);
       if (n) { SYN.sel = { noeud: n.id }; SYN.drag = { id: n.id, dx: p.x - n.x, dy: p.y - n.y }; dessinerSynoptique(); return; }
       const t = tronconSous(p.x, p.y);
@@ -7746,13 +7746,21 @@
       const p = pos(ev);
       if (SYN.drag) { const n = R().noeud(reseau, SYN.drag.id); n.x = Math.round(p.x - SYN.drag.dx); n.y = Math.round(p.y - SYN.drag.dy); dessinerSynoptique(false); return; }
       if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; dessinerSynoptique(false); return; }
-      cv.style.cursor = poigneeSous(p.x, p.y) ? 'crosshair' : (noeudSous(p.x, p.y) || tronconSous(p.x, p.y)) ? 'pointer' : 'default';
+      const surPlus = !!poigneeSous(p.x, p.y);
+      cv.style.cursor = surPlus ? 'crosshair' : (noeudSous(p.x, p.y) || tronconSous(p.x, p.y)) ? 'pointer' : 'default';
+      cv.title = surPlus ? 'Tirer vers un élément pour le relier · Clic : ajouter une chambre reliée' : '';
     });
     window.addEventListener('mouseup', (ev) => {
       if (SYN.lien && !o.hidden) {
         const p = pos(ev), cible = noeudSous(p.x, p.y), de = SYN.lien.de;
+        const clic = Math.hypot(p.x - SYN.lien.x0, p.y - SYN.lien.y0) < 4;
         SYN.lien = null;
-        if (cible && cible.id !== de) {
+        if (clic) { // clic simple sur « + » : prolonger le réseau d'une chambre reliée
+          const src = R().noeud(reseau, de);
+          const n = R().ajouterNoeud(reseau, 'chambre', { x: src.x + 220, y: src.y });
+          try { const t = R().relier(reseau, de, n.id); SYN.sel = { troncon: t.id }; showToast(`${n.nom} ajoutée et reliée : indiquez la longueur du tronçon`); }
+          catch (e) { R().supprimerNoeud(reseau, n.id); showToast(e.message); }
+        } else if (cible && cible.id !== de) {
           try { const t = R().relier(reseau, de, cible.id); SYN.sel = { troncon: t.id }; showToast(`Tronçon ${R().nomTroncon(reseau, t)} créé : indiquez sa longueur`); }
           catch (e) { showToast(e.message); }
         }
@@ -7834,13 +7842,14 @@
     // nœuds
     for (const n of reseau.noeuds) {
       const { w, h } = tailleNoeud(n), sel = SYN.sel && SYN.sel.noeud === n.id;
-      ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = n.couleur; ctx.fillStyle = th.surface;
+      ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = n.couleur; ctx.fillStyle = th.fond; // opaque : le tronçon passe derrière
       ctx.beginPath();
       if (n.type === 'chambre') ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, 6);
       else if (n.type === 'coffret') ctx.rect(n.x - w / 2, n.y - h / 2, w, h);
       else { ctx.moveTo(n.x - w / 2, n.y - h / 2); ctx.lineTo(n.x + w / 2 - 14, n.y - h / 2); ctx.lineTo(n.x + w / 2, n.y); ctx.lineTo(n.x + w / 2 - 14, n.y + h / 2); ctx.lineTo(n.x - w / 2, n.y + h / 2); ctx.closePath(); }
-      ctx.fill(); ctx.stroke();
+      ctx.fill();
       ctx.fillStyle = n.couleur; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.stroke();
       if (sel) { ctx.strokeStyle = th.cuivre; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(n.x - w / 2 - 5, n.y - h / 2 - 5, w + 10, h + 10); ctx.setLineDash([]); }
       ctx.fillStyle = th.encre; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.font = `600 13px ${th.sans}`; ctx.fillText(n.nom, n.x, n.y - (n.type === 'chambre' ? 7 : 0));
