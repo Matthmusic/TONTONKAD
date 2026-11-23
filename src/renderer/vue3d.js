@@ -329,7 +329,7 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
     p.rgb([0.45, 0.45, 0.45]).width(0.6).dash(true);
     for (let k = 0; k < nt; k++) { const cx = L * (k + 0.5) / nt; p.poly([P(cx - a / 2, (l - b) / 2), P(cx + a / 2, (l - b) / 2), P(cx + a / 2, (l + b) / 2), P(cx - a / 2, (l + b) / 2)], 'S'); }
     p.dash(false);
-    p.rgb([0.35, 0.35, 0.35], false).text(...P(L / 2, l - 40).map((v, i) => i ? v - 9 : v), 7, `${nt} tampon(s) ${tp.L}×${tp.l} ${tp.classe} — paroi ${e} mm (à valider)`, { align: 'center' });
+    p.rgb([0.35, 0.35, 0.35], false).text(...P(L / 2, l).map((v, i) => i ? v - 35 : v), 7, `${nt} tampon(s) ${tp.L}×${tp.l} ${tp.classe} — paroi ${e} mm (à valider)`, { align: 'center' });
   } else if (nt > 1) { p.rgb([0.6, 0.6, 0.6]).width(0.4).dash(true); for (let k = 1; k < nt; k++) p.line(...P(L * k / nt, 0), ...P(L * k / nt, l)); p.dash(false); }
 
   // géométrie d'une face : point le long du mur, normale vers l'intérieur
@@ -353,43 +353,49 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
     // face, la coupe est posée telle quelle ou en miroir (vue de dos).
     const miroir = coupeEnMiroir(k, mq.sens);
     ancre[k] = {};
-    const vus = new Set();
+    // Vue de dessus : les fourreaux superposés d'une même colonne se confondent.
+    // Une bande par colonne, teintée de la couleur de sa liaison, cerclée, cotée Ø.
+    const colonnes = new Map();
     for (const f of mq.fourreaux) {
-      const t = off + (miroir ? mq.largeur - f.x : f.x), [bx, by] = g.at(t);
-      const r = f.od / 2;
-      // tube vu de dessus : bande de largeur od, du dehors jusqu'à 40 mm dans la chambre
-      const a0 = [bx + g.out[0] * (e + sortie), by + g.out[1] * (e + sortie)], a1 = [bx - g.out[0] * 40, by - g.out[1] * 40];
-      const tx = g.out[1] !== 0 ? 1 : 0, ty = g.out[0] !== 0 ? 1 : 0; // axe le long de la face
-      const key = Math.round(t);
-      const bandes = [[-1, -0.5, 0.75], [-0.5, 0, 1.05], [0, 0.5, 0.95], [0.5, 1, 0.65]];
-      for (const [u0, u1, k2] of bandes) {
-        p.rgb(MAT.tpc.map((c) => Math.min(1, c * k2)), false).poly([
-          P(a0[0] + tx * r * u0, a0[1] + ty * r * u0), P(a1[0] + tx * r * u0, a1[1] + ty * r * u0),
-          P(a1[0] + tx * r * u1, a1[1] + ty * r * u1), P(a0[0] + tx * r * u1, a0[1] + ty * r * u1)], 'f');
-      }
-      if (!vus.has(key)) {
-        vus.add(key);
-        const nb = mq.fourreaux.filter((x) => Math.round(off + (miroir ? mq.largeur - x.x : x.x)) === key).length;
-        const [lx, ly] = P(a0[0] + g.out[0] * 30, a0[1] + g.out[1] * 30);
-        p.rgb([0, 0, 0], false).text(lx, ly - 3, 6, nb > 1 ? `${f.id}…×${nb}` : f.id, { align: g.out[0] < 0 ? 'right' : g.out[0] > 0 ? 'left' : 'center', bold: true });
-      }
+      const t = off + (miroir ? mq.largeur - f.x : f.x), key = Math.round(t);
+      const c = colonnes.get(key) || { t, od: 0, n: 0, liaisons: [] };
+      c.od = Math.max(c.od, f.od); c.n++;
+      (f.liaisons || []).forEach((nom) => { if (!c.liaisons.includes(nom)) c.liaisons.push(nom); });
+      colonnes.set(key, c);
+      const [bx, by] = g.at(t), a1 = [bx - g.out[0] * 40, by - g.out[1] * 40];
       for (const nom of f.liaisons || []) {
         const A = ancre[k][nom] || (ancre[k][nom] = { x: 0, y: 0, n: 0 });
         A.x += a1[0]; A.y += a1[1]; A.n++;
       }
     }
-    // nom de la face et du masque, côté extérieur
-    const libelle = `${etude.faces[k].face} : ${mq.nom}`;
-    if (estPignonCle(k)) {
-      // pignon : au-dessus du mur, aligné sur l'extrémité intérieure du mur
-      const [px, py] = P(g.out[0] < 0 ? -e : L + e, l + e + 25);
-      p.rgb([0.15, 0.15, 0.15], false).text(px, py, 8, libelle, { align: g.out[0] < 0 ? 'right' : 'left', bold: true });
-    } else {
-      const [mx, my] = g.at(g.long / 2);
-      const d = e + sortie + 45;
-      const [tx2, ty2] = P(mx + g.out[0] * d, my + g.out[1] * d);
-      p.rgb([0.15, 0.15, 0.15], false).text(tx2, ty2 + (g.out[1] > 0 ? 4 : -10), 8, libelle, { align: 'center', bold: true });
+    const tx = g.out[1] !== 0 ? 1 : 0, ty = g.out[0] !== 0 ? 1 : 0; // axe le long de la face
+    for (const c of colonnes.values()) {
+      const [bx, by] = g.at(c.t), r = c.od / 2 * 0.9;
+      const a0 = [bx + g.out[0] * (e + sortie), by + g.out[1] * (e + sortie)], a1 = [bx - g.out[0] * 40, by - g.out[1] * 40];
+      const base = c.liaisons.length ? couleur.get(c.liaisons[0]) || [0.45, 0.45, 0.45] : [0.45, 0.45, 0.45];
+      p.rgb(nuance(base, 1.75), false).rgb(nuance(base, 0.7)).width(0.7).poly([
+        P(a0[0] - tx * r, a0[1] - ty * r), P(a1[0] - tx * r, a1[1] - ty * r),
+        P(a1[0] + tx * r, a1[1] + ty * r), P(a0[0] + tx * r, a0[1] + ty * r)], 'B');
+      // axe du tube
+      p.rgb(nuance(base, 0.85)).width(0.4).dash(true).line(...P(...a0), ...P(...a1)).dash(false);
+      // cote Ø dans le tube, à mi-longueur de sa partie hors chambre
+      const m = e + sortie / 2, [lx, ly] = P(bx + g.out[0] * m, by + g.out[1] * m);
+      const txt = `Ø${Math.round(c.od)}${c.n > 1 ? ` ×${c.n}` : ''}`;
+      const fs = Math.max(5, Math.min(7.5, c.od * 0.9 * s * 0.75));
+      p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs * 0.35, fs, txt, { align: 'center', bold: true });
     }
+    // nom de la face et du tronçon, dans un cadre, côté extérieur
+    const libelle = `${etude.faces[k].face.toUpperCase()} · ${mq.nom}`;
+    const lw = libelle.length * 8 * 0.5 + 10, lh = 13;
+    // un coin par face (les flèches et les tubes occupent le milieu des faces) :
+    // pignon A en haut à gauche, long-pan B en haut à droite,
+    // long-pan A en bas à gauche, pignon B en bas à droite
+    const coin = { pignonA: [-1, 1], longPanB: [1, 1], longPanA: [-1, -1], pignonB: [1, -1] }[k];
+    let [cx2, cy2] = P(coin[0] < 0 ? -e : L + e, coin[1] > 0 ? l + e : -e);
+    cx2 += coin[0] < 0 ? lw / 2 : -lw / 2;
+    cy2 += coin[1] > 0 ? lh / 2 + 6 : -lh / 2 - 6;
+    p.rgb([1, 1, 1], false).rgb([0.55, 0.55, 0.55]).width(0.6).rect(cx2 - lw / 2, cy2 - lh / 2, lw, lh, 'B');
+    p.rgb([0.12, 0.12, 0.12], false).text(cx2, cy2 - 3, 8, libelle, { align: 'center', bold: true });
   }
   const pt = (k, nom) => { const A = ancre[k] && ancre[k][nom]; return A && A.n ? [A.x / A.n, A.y / A.n] : null; };
   // traversées : droite ou en angle (en L), de face à face
@@ -409,23 +415,23 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
       const na = faceGeo[a].n;
       chemin = [A, na[0] !== 0 ? [B[0], A[1]] : [A[0], B[1]], B];
     }
-    p.rgb(c).width(1.6);
+    p.rgb(c).width(2.2);
     for (let j = 0; j + 1 < chemin.length; j++) p.line(...P(...chemin[j]), ...P(...chemin[j + 1]));
     const mid = chemin[Math.floor(chemin.length / 2)];
     const [qx, qy] = P(...mid);
-    p.rgb([1, 1, 1], false).rgb(c).width(1).circle(qx, qy, 6, 'B');
-    p.rgb(c, false).text(qx, qy - 2.5, 7, String(i + 1), { align: 'center', bold: true });
+    p.rgb([1, 1, 1], false).rgb(c).width(1.2).circle(qx, qy, 7.5, 'B');
+    p.rgb(c, false).text(qx, qy - 3, 8.5, String(i + 1), { align: 'center', bold: true });
   });
   etude.arrets.forEach((a) => {
     const A = pt(a.cle, a.liaison);
     if (!A) return;
     const [qx, qy] = P(A[0] + faceGeo[a.cle].n[0] * 60, A[1] + faceGeo[a.cle].n[1] * 60);
-    p.rgb(couleur.get(a.liaison), false).circle(qx, qy, 3, 'f');
+    p.rgb(couleur.get(a.liaison), false).rgb([1, 1, 1]).width(1).circle(qx, qy, 4.5, 'B');
   });
   // cotes
-  p.rgb([0.8, 0, 0], false);
-  const [c1x, c1y] = P(L / 2, l * 0.12);
-  p.text(c1x, c1y, 8, `${etude.ref} — ${L} × ${l} mm (intérieur)`, { align: 'center' });
+  const [c1x, c1y] = P(L / 2, l);
+  p.rgb([0.1, 0.1, 0.1], false).text(c1x, c1y - 14, 10, `${etude.nom ? etude.nom + ' — ' : ''}${etude.ref}`, { align: 'center', bold: true });
+  p.rgb([0.35, 0.35, 0.35], false).text(c1x, c1y - 25, 7, `${L} × ${l} mm intérieur`, { align: 'center' });
   p.rgb([0, 0, 0], false);
   return couleur;
 }
