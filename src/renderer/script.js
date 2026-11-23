@@ -1448,7 +1448,7 @@
 
   // Fonction principale d'arrangement - utilise toujours le nouveau moteur intelligent
   function arrangeConduitGrid(options = {}) {
-    arrangeConduitGridNew();
+    arrangeConduitGridNew(options);
   }
 
   // Rendre la fonction accessible globalement
@@ -1457,7 +1457,7 @@
   /**
    * Système de placement utilisant le packer (window.solve / window.variants)
    */
-  function arrangeConduitGridNew() {
+  function arrangeConduitGridNew(options = {}) {
     if (fourreaux.length === 0) {
       showToast('Aucun fourreau à disposer en grille');
       return;
@@ -1505,7 +1505,7 @@
 
       // Afficher taux d'occupation et feedback
       const fillPercent = calculateBoxOccupancy().toFixed(0);
-      showToast(`✅ ${fourreaux.length} fourreaux placés (Occupation: ${fillPercent}%) - Ctrl+X pour dégeler`);
+      if (!options.silencieux) showToast(`✅ ${fourreaux.length} fourreaux placés (Occupation: ${fillPercent}%) - Ctrl+X pour dégeler`);
 
       updateStats();
       redraw();
@@ -7900,6 +7900,102 @@
     if (panneau) remplirEdition();
   }
 
+  /* ── Répartition des fourreaux par tronçon (depuis le synoptique) ── */
+  // Le tronçon devient la coupe active sans quitter la vue courante.
+  function activerCoupeSansVue(t) {
+    if (t.id === reseau.actif.troncon) return;
+    sauverCoupeActive();
+    const cible = t.coupe;
+    reseau.actif.troncon = t.id;
+    t.coupe = null;
+    if (cible) window.projectManager.restoreState(cible, { garderChambre: true });
+    else { fourreaux.length = 0; cables.length = 0; }
+    actionHistory.length = 0;
+  }
+  function apresRepartition() {
+    if (fourreaux.length) arrangeConduitGridNew({ silencieux: true });
+    updateStats(); updateInventory(); updateSelectedInfo(); redraw();
+    dessinerSynoptique(false); remplirEdition(); majBandeau();
+  }
+  function ajouterFourreauxTroncon(t, type, code, n = 1) {
+    const spec = FOURREAUX.find((f) => f.type === type && String(f.code) === String(code));
+    if (!spec) { showToast(`Fourreau ${type} ${code} absent du catalogue`, 'error'); return; }
+    activerCoupeSansVue(t);
+    for (let i = 0; i < n; i++) fourreaux.push(makeFourreauObject(nextId++, 0, 0, spec, ''));
+    apresRepartition();
+  }
+  function retirerFourreauTroncon(t, type, code) {
+    activerCoupeSansVue(t);
+    // de préférence un fourreau vide ; ses câbles partent avec lui sinon
+    const cand = fourreaux.filter((f) => f.type === type && String(f.code) === String(code));
+    const f = cand.find((x) => !cables.some((c) => c.parent === x.id)) || cand[cand.length - 1];
+    if (!f) return;
+    fourreaux.splice(fourreaux.indexOf(f), 1);
+    for (let i = cables.length - 1; i >= 0; i--) if (cables[i].parent === f.id) cables.splice(i, 1);
+    apresRepartition();
+  }
+  // Fourreaux d'un tronçon regroupés par type/code, du plus gros au plus petit.
+  function groupesFourreaux(t) {
+    const st = etatTroncon(t), g = new Map();
+    (st ? st.fourreaux : []).forEach((f) => {
+      const k = `${f.type}|${f.code}`;
+      if (!g.has(k)) g.set(k, { type: f.type, code: String(f.code), od: Math.round(f.od || Number(f.code) || 0), n: 0 });
+      g.get(k).n++;
+    });
+    return [...g.values()].sort((a, b) => b.od - a.od);
+  }
+  function repartitionTroncon(t, box) {
+    const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const mini = (txt, titre, fn) => { const b = el('button', 'reseau-mini', txt); b.type = 'button'; b.title = titre; b.setAttribute('aria-label', titre); b.addEventListener('click', fn); return b; };
+    box.appendChild(el('h4', null, 'Fourreaux du tronçon'));
+    const ici = groupesFourreaux(t);
+    if (!ici.length) box.appendChild(el('div', 'chambre-aide', 'Aucun fourreau. Reprenez-en d\'un tronçon voisin ou ajoutez-en ci-dessous.'));
+    ici.forEach((g) => {
+      const l = el('div', 'reseau-fourreau');
+      l.append(el('span', 'reseau-valeur', `${g.n} × ${g.type} Ø${g.od}`),
+        mini('−', `Retirer un ${g.type} Ø${g.od}`, () => retirerFourreauTroncon(t, g.type, g.code)),
+        mini('+', `Ajouter un ${g.type} Ø${g.od}`, () => ajouterFourreauxTroncon(t, g.type, g.code)));
+      box.appendChild(l);
+    });
+    // Reprise depuis les tronçons qui arrivent aux mêmes chambres / coffrets
+    const nIci = new Map(ici.map((g) => [`${g.type}|${g.code}`, g.n]));
+    const voisins = [];
+    [t.a.noeud, t.b.noeud].forEach((id) => R().tronconsDe(reseau, id).forEach((v) => {
+      if (v.troncon.id !== t.id && !voisins.some((x) => x.id === v.troncon.id)) voisins.push(v.troncon);
+    }));
+    voisins.forEach((tv) => {
+      const gs = groupesFourreaux(tv);
+      if (!gs.length) return;
+      box.appendChild(el('div', 'chambre-aide', `Repris de ${R().nomTroncon(reseau, tv)} :`));
+      const ligne = el('div', 'reseau-reprise');
+      gs.forEach((g) => {
+        const deja = nIci.get(`${g.type}|${g.code}`) || 0;
+        const b = mini(`+ Ø${g.od}`, `Faire suivre un ${g.type} Ø${g.od} de ${R().nomTroncon(reseau, tv)}`, () => ajouterFourreauxTroncon(t, g.type, g.code));
+        b.classList.add('reseau-chip');
+        b.append(el('small', null, ` ${Math.min(deja, g.n)}/${g.n}`));
+        if (deja >= g.n) b.classList.add('complet');
+        ligne.appendChild(b);
+      });
+      box.appendChild(ligne);
+    });
+    // Ajout depuis le catalogue
+    const types = [...new Set(FOURREAUX.map((f) => f.type))];
+    if (!types.length) return;
+    const ajout = el('div', 'reseau-ajout');
+    const sT = el('select'), sC = el('select'), q = el('input');
+    sT.setAttribute('aria-label', 'Type de fourreau'); sC.setAttribute('aria-label', 'Diamètre'); q.setAttribute('aria-label', 'Quantité');
+    sT.innerHTML = types.map((x) => `<option>${x}</option>`).join('');
+    const codes = () => { sC.innerHTML = FOURREAUX.filter((f) => f.type === sT.value).map((f) => `<option value="${f.code}">Ø${Math.round(f.od)} (${f.code})</option>`).join(''); };
+    sT.value = (ici[0] && ici[0].type) || types[0]; codes();
+    sT.addEventListener('change', codes);
+    q.type = 'number'; q.min = 1; q.max = 50; q.value = 1;
+    const b = el('button', 'chambre-btn', 'Ajouter'); b.type = 'button';
+    b.addEventListener('click', () => ajouterFourreauxTroncon(t, sT.value, sC.value, Math.max(1, Math.min(50, Number(q.value) || 1))));
+    ajout.append(sT, sC, q, b);
+    box.appendChild(ajout);
+    box.appendChild(el('div', 'chambre-aide', 'Les fourreaux sont rangés automatiquement ; « Ouvrir la coupe » pour y placer les câbles.'));
+  }
+
   function remplirEdition() {
     const box = document.getElementById('reseauEdition');
     if (!box) return;
@@ -7996,7 +8092,7 @@
       sel.addEventListener('change', () => { try { R().changerFace(reseau, t.id, bout, sel.value); } catch (e) { showToast(e.message); } dessinerSynoptique(); });
       champ(`Face côté ${nd.nom}`, sel);
     });
-    note(resumeFourreaux(t));
+    repartitionTroncon(t, box);
     bouton('Ouvrir la coupe', () => ouvrirTroncon(t.id));
     bouton('Supprimer le tronçon', () => { R().supprimerTroncon(reseau, t.id); if (reseau.actif.troncon === t.id) reseau.actif.troncon = null; SYN.sel = null; dessinerSynoptique(); majBandeau(); }, true);
   }
@@ -8155,6 +8251,7 @@
   window.reseauTontonkad = {
     activer: activerReseau, vue: afficherVue, ouvrirTroncon, etat: () => reseau, etudeChambre: (id) => etudeChambre(R().noeud(reseau, id)),
     faceAt: (x, y) => faceSousPoint(x, y), fleches: () => vueChambreFleches, cadrage: () => ({ ...SYN.vue }),
+    selectionner: (sel) => { SYN.sel = sel; dessinerSynoptique(false); remplirEdition(); },
   };
 
   /* ── Vue 3D dans l'export PDF (dessin partagé avec le MCP : vue3d.js) ── */

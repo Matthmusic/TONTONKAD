@@ -6166,3 +6166,16 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .notification-container, body.electron-mode .notification-container {
     left: auto; right: 84px; bottom: 150px; transform: none; align-items: flex-end;
 }
+/* Répartition des fourreaux par tronçon (synoptique) */
+.reseau-fourreau { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.reseau-fourreau .reseau-valeur { flex: 1; }
+.reseau-mini { min-width: 28px; height: 28px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--glass-border); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.reseau-mini:hover { border-color: var(--primary-orange); color: var(--primary-orange); }
+.reseau-reprise { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.reseau-chip { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.reseau-chip small { opacity: 0.65; }
+.reseau-chip.complet { opacity: 0.55; }
+.reseau-ajout { display: grid; grid-template-columns: 1fr 1.3fr 56px auto; gap: 6px; margin: 10px 0 4px; }
+.reseau-ajout select, .reseau-ajout input { min-width: 0; }
+.reseau-ajout { grid-template-columns: 1fr 1fr; }
+.reseau-ajout input { width: 100%; }
