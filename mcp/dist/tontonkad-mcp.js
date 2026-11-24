@@ -79261,6 +79261,135 @@ var require_vue3d = __commonJS({
         return { s, ox, oy };
       }
       const FORMATS_PAGE = { a4: [842, 595], a3: [1191, 842], a2: [1684, 1191], a1: [2384, 1684], a0: [3370, 2384] };
+      const MISE_EN_PAGE_CHAMBRE = [
+        { type: "vuedessus", x: 0, y: 0, w: 5, h: 5 },
+        { type: "masque", cote: 1, x: 5, y: 0, w: 3.5, h: 3 },
+        { type: "masque", cote: 2, x: 8.5, y: 0, w: 3.5, h: 3 },
+        { type: "masque", cote: 3, x: 5, y: 3, w: 3.5, h: 3 },
+        { type: "masque", cote: 4, x: 8.5, y: 3, w: 3.5, h: 3 },
+        { type: "fourreaux", x: 0, y: 5, w: 5, h: 3 },
+        { type: "cables", x: 5, y: 6, w: 4, h: 2 },
+        { type: "cartouche", x: 9, y: 6, w: 3, h: 2 }
+      ];
+      const FACE_DU_COTE = { 1: "longPanB", 2: "pignonB", 3: "longPanA", 4: "pignonA" };
+      const couper = (t, taille, largeur) => {
+        t = String(t);
+        const n = Math.max(3, Math.floor(largeur / (taille * 0.5)));
+        return t.length > n ? t.slice(0, n - 1) + "\u2026" : t;
+      };
+      function dessinerPageChambreA3(p, e, masques, opts = {}) {
+        const [PW, PH] = FORMATS_PAGE.a3, M = 28, ENT = 34;
+        const gx = M, gy = M, gw = PW - 2 * M, gh = PH - 2 * M - ENT, CW = gw / 12, CH = gh / 8, G = 5;
+        const zone = (b) => ({ x: gx + b.x * CW + G / 2, y: gy + (8 - b.y - b.h) * CH + G / 2, w: b.w * CW - G, h: b.h * CH - G });
+        const masquesM = masques || {};
+        p.rgb([0.1, 0.1, 0.1], false).text(M, PH - M - 16, 18, `${e.nom || "Chambre"} \u2014 ${e.ok ? e.ref : "aucune chambre"}`, { bold: true });
+        p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 16, 9, `${opts.projet || ""} \xB7 TONTONKAD \u2014 \xE9tude de chambre`, { align: "right" });
+        p.rgb([0.66, 0.27, 0.04]).width(1.2).line(M, PH - M - 24, PW - M, PH - M - 24);
+        const cadre = (z2, titre) => {
+          p.rgb([0.995, 0.995, 0.99], false).rgb([0.78, 0.8, 0.84]).width(0.7).rect(z2.x, z2.y, z2.w, z2.h, "B");
+          if (titre) {
+            p.rgb([0.93, 0.94, 0.96], false).rect(z2.x, z2.y + z2.h - 15, z2.w, 15, "f");
+            p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 6, z2.y + z2.h - 11, 8.5, couper(titre, 8.5, z2.w - 12), { bold: true });
+          }
+        };
+        const etudeOk = e && e.ok;
+        for (const b of MISE_EN_PAGE_CHAMBRE) {
+          const z2 = zone(b);
+          if (b.type === "vuedessus") {
+            cadre(z2, "Vue de dessus");
+            if (etudeOk) drawChambreDessus(p, e, masquesM, z2.x + 4, z2.y + 4, z2.w - 8, z2.h - 24);
+          } else if (b.type === "masque") {
+            const k = FACE_DU_COTE[b.cote], mq = masquesM[k];
+            const L = mq && mq.longueurM ? ` \xB7 ${String(mq.longueurM).replace(".", ",")} m` : "";
+            cadre(z2, `${e.nom || "C"}.${b.cote} \xB7 ${mq ? mq.nom + L : "c\xF4t\xE9 libre"}`);
+            if (mq) {
+              drawCoupe(p, mq, z2.x + 40, z2.y + 34, z2.w - 80, z2.h - 64);
+              const nb = /* @__PURE__ */ new Map();
+              mq.fourreaux.forEach((f2) => {
+                const d = Math.round(f2.od);
+                nb.set(d, (nb.get(d) || 0) + 1);
+              });
+              p.rgb([0.25, 0.25, 0.25], false).text(z2.x + 6, z2.y + 6, 7, couper([...nb].sort((a, c) => c[0] - a[0]).map(([d, q]) => `${q} \xD7 \xD8${d}`).join("   ") + `   \xB7   nappe ${Math.round(mq.largeur)} \xD7 ${Math.round(mq.hauteur)} mm`, 7, z2.w - 12));
+            }
+          } else if (b.type === "fourreaux") {
+            cadre(z2, "Contenu des fourreaux, par c\xF4t\xE9 et par liaison");
+            const lignes = [];
+            for (let c = 1; c <= 4; c++) {
+              const mq = masquesM[FACE_DU_COTE[c]];
+              if (!mq) continue;
+              const parLiaison = /* @__PURE__ */ new Map();
+              mq.fourreaux.forEach((f2) => {
+                const nom = String(f2.liaisons && f2.liaisons[0] || f2.libelle || "r\xE9serve").replace(/\s*-\s*PE$/i, "");
+                if (!parLiaison.has(nom)) parLiaison.set(nom, { f: /* @__PURE__ */ new Map(), c: /* @__PURE__ */ new Map() });
+                const g = parLiaison.get(nom), d = Math.round(f2.od);
+                g.f.set(d, (g.f.get(d) || 0) + 1);
+                (mq.cables || []).filter((x) => x.fourreau === f2.id).forEach((x) => {
+                  const k2 = x.code || `\xD8${x.od}`;
+                  g.c.set(k2, (g.c.get(k2) || 0) + 1);
+                });
+              });
+              [...parLiaison].sort((a, c2) => a[0].localeCompare(c2[0], "fr", { numeric: true })).forEach(([nom, g]) => lignes.push([
+                `${e.nom}.${c}`,
+                nomCourt(nom),
+                [...g.f].sort((a, c2) => c2[0] - a[0]).map(([d, q]) => `${q}\xD7\xD8${d}`).join(" "),
+                [...g.c].map(([k2, q]) => `${q}\xD7${k2}`).join(" + ") || "\u2014"
+              ]));
+            }
+            tableauPdf(p, z2, ["Masque", "Liaison", "Fourreaux", "C\xE2bles"], [0.11, 0.42, 0.17, 0.3], lignes);
+          } else if (b.type === "cables") {
+            cadre(z2, "Travers\xE9es de la chambre (faisceaux)");
+            const LIB = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+            const lignes = [];
+            regrouperFaisceaux(e).forEach((fx, i) => [...new Set(fx.liaisons.map((x) => String(x).replace(/\s*-\s*PE$/i, "")))].forEach((l, j) => lignes.push([j ? "" : `${i + 1}`, j ? "" : `${e.nom}.${LIB[fx.cles[0]]} \u2192 ${e.nom}.${LIB[fx.cles[1]]}`, nomCourt(l)])));
+            const arr = /* @__PURE__ */ new Map();
+            (e.arrets || []).forEach((a) => {
+              if (!arr.has(a.cle)) arr.set(a.cle, []);
+              arr.get(a.cle).push(a.liaison);
+            });
+            arr.forEach((noms, k) => [...new Set(noms.map((x) => String(x).replace(/\s*-\s*PE$/i, "")))].forEach((l, j) => lignes.push([j ? "" : "\u25A0", j ? "" : `s'arr\xEAte en ${e.nom}.${LIB[k]}`, nomCourt(l)])));
+            tableauPdf(p, z2, ["N\xB0", "C\xF4t\xE9s", "Liaison"], [0.08, 0.3, 0.62], lignes);
+          } else if (b.type === "cartouche") {
+            cadre(z2, "Cartouche");
+            const L2 = [
+              ["Projet", opts.projet || "\u2014"],
+              ["Chambre", `${e.nom || "\u2014"} \xB7 ${etudeOk ? e.ref : "\u2014"}`],
+              ["Int\xE9rieur", etudeOk ? `${e.L} \xD7 ${e.l} \xD7 ${e.H} mm` : "\u2014"],
+              ["Date", opts.date || ""],
+              ["Indice", opts.indice || "A"],
+              ["\xC9tabli par", "CEA \u2014 TONTONKAD"]
+            ];
+            L2.forEach(([k, v], i) => {
+              const y = z2.y + z2.h - 30 - i * 13;
+              p.rgb([0.4, 0.4, 0.4], false).text(z2.x + 8, y, 7.5, k);
+              p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 70, y, 8, couper(v, 8, z2.w - 78), { bold: true });
+            });
+          }
+        }
+        p.rgb([0.45, 0.45, 0.45], false).text(M, M - 14, 7, "C\xF4t\xE9s num\xE9rot\xE9s dans le sens horaire vus de dessus : 1 en haut, 2 \xE0 droite, 3 en bas, 4 \xE0 gauche. Valeurs de chambre ma\xE7onn\xE9e et r\xE8gles normatives \xE0 valider.");
+        return p;
+      }
+      function tableauPdf(p, z2, entetes, parts, lignes) {
+        const f2 = 6.6, lh = 8.6, x0 = z2.x + 4, w = z2.w - 8;
+        let y = z2.y + z2.h - 15 - 11;
+        const xs = [];
+        let acc = x0;
+        parts.forEach((q) => {
+          xs.push(acc);
+          acc += q * w;
+        });
+        p.rgb([0.25, 0.27, 0.32], false);
+        entetes.forEach((t, i) => p.text(xs[i] + 2, y, f2, t, { bold: true }));
+        p.rgb([0.8, 0.82, 0.86]).width(0.4).line(x0, y - 2.5, x0 + w, y - 2.5);
+        y -= lh + 1;
+        const max = Math.floor((y - z2.y - 4) / lh) + 1;
+        const vis = lignes.length > max ? lignes.slice(0, max - 1) : lignes;
+        vis.forEach((l, k) => {
+          if (k % 2) p.rgb([0.96, 0.97, 0.98], false).rect(x0, y - 2.4, w, lh, "f");
+          l.forEach((c, i) => p.rgb(i === 0 ? [0.1, 0.1, 0.1] : [0.2, 0.22, 0.26], false).text(xs[i] + 2, y, f2, couper(c, f2, parts[i] * w - 4), { bold: i === 0 }));
+          y -= lh;
+        });
+        if (lignes.length > vis.length) p.rgb([0.55, 0.2, 0.1], false).text(x0 + 2, y, f2, `\u2026 et ${lignes.length - vis.length} autres lignes (voir les tableaux d\xE9taill\xE9s du rapport)`);
+      }
       function drawSynoptique2D(p, data, zx, zy, zw, zh) {
         if (!data.noeuds.length) return;
         const xs = data.noeuds.map((n) => n.x), ys = data.noeuds.map((n) => n.y);
@@ -79359,7 +79488,7 @@ var require_vue3d = __commonJS({
         elements.forEach((e) => e.dessiner());
         etiquettes.forEach((f2) => f2());
       }
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, mesureEtiquetteSyn, FORMATS_PAGE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);

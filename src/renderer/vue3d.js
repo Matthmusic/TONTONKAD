@@ -635,6 +635,106 @@ function drawSynoptiqueAncre(p, data, zx, zy, zw, zh, echelleMax = 2) {
 // Formats de page (pt, paysage) pour le synoptique.
 const FORMATS_PAGE = { a4: [842, 595], a3: [1191, 842], a2: [1684, 1191], a1: [2384, 1684], a0: [3370, 2384] };
 
+// ─── Page chambre A3 (mise en page choisie dans l'atelier) ──────────────────
+// Grille 12 × 8 : vue de dessus à gauche, masques des côtés 1 à 4 en 2 × 2 à
+// droite, contenu des fourreaux en bas à gauche, câbles par liaison et
+// cartouche en bas à droite.
+const MISE_EN_PAGE_CHAMBRE = [
+  { type: 'vuedessus', x: 0, y: 0, w: 5, h: 5 },
+  { type: 'masque', cote: 1, x: 5, y: 0, w: 3.5, h: 3 }, { type: 'masque', cote: 2, x: 8.5, y: 0, w: 3.5, h: 3 },
+  { type: 'masque', cote: 3, x: 5, y: 3, w: 3.5, h: 3 }, { type: 'masque', cote: 4, x: 8.5, y: 3, w: 3.5, h: 3 },
+  { type: 'fourreaux', x: 0, y: 5, w: 5, h: 3 }, { type: 'cables', x: 5, y: 6, w: 4, h: 2 }, { type: 'cartouche', x: 9, y: 6, w: 3, h: 2 },
+];
+const FACE_DU_COTE = { 1: 'longPanB', 2: 'pignonB', 3: 'longPanA', 4: 'pignonA' };
+const couper = (t, taille, largeur) => { t = String(t); const n = Math.max(3, Math.floor(largeur / (taille * 0.5))); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+function dessinerPageChambreA3(p, e, masques, opts = {}) {
+  const [PW, PH] = FORMATS_PAGE.a3, M = 28, ENT = 34;
+  const gx = M, gy = M, gw = PW - 2 * M, gh = PH - 2 * M - ENT, CW = gw / 12, CH = gh / 8, G = 5;
+  const zone = (b) => ({ x: gx + b.x * CW + G / 2, y: gy + (8 - b.y - b.h) * CH + G / 2, w: b.w * CW - G, h: b.h * CH - G });
+  const masquesM = masques || {};
+  // en-tête
+  p.rgb([0.1, 0.1, 0.1], false).text(M, PH - M - 16, 18, `${e.nom || 'Chambre'} — ${e.ok ? e.ref : 'aucune chambre'}`, { bold: true });
+  p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 16, 9, `${opts.projet || ''} · TONTONKAD — étude de chambre`, { align: 'right' });
+  p.rgb([0.66, 0.27, 0.04]).width(1.2).line(M, PH - M - 24, PW - M, PH - M - 24);
+  const cadre = (z, titre) => {
+    p.rgb([0.995, 0.995, 0.99], false).rgb([0.78, 0.8, 0.84]).width(0.7).rect(z.x, z.y, z.w, z.h, 'B');
+    if (titre) {
+      p.rgb([0.93, 0.94, 0.96], false).rect(z.x, z.y + z.h - 15, z.w, 15, 'f');
+      p.rgb([0.1, 0.1, 0.1], false).text(z.x + 6, z.y + z.h - 11, 8.5, couper(titre, 8.5, z.w - 12), { bold: true });
+    }
+  };
+  const etudeOk = e && e.ok;
+  for (const b of MISE_EN_PAGE_CHAMBRE) {
+    const z = zone(b);
+    if (b.type === 'vuedessus') {
+      cadre(z, 'Vue de dessus');
+      if (etudeOk) drawChambreDessus(p, e, masquesM, z.x + 4, z.y + 4, z.w - 8, z.h - 24);
+    } else if (b.type === 'masque') {
+      const k = FACE_DU_COTE[b.cote], mq = masquesM[k];
+      const L = mq && mq.longueurM ? ` · ${String(mq.longueurM).replace('.', ',')} m` : '';
+      cadre(z, `${e.nom || 'C'}.${b.cote} · ${mq ? mq.nom + L : 'côté libre'}`);
+      if (mq) {
+        drawCoupe(p, mq, z.x + 40, z.y + 34, z.w - 80, z.h - 64);
+        const nb = new Map(); mq.fourreaux.forEach((f) => { const d = Math.round(f.od); nb.set(d, (nb.get(d) || 0) + 1); });
+        p.rgb([0.25, 0.25, 0.25], false).text(z.x + 6, z.y + 6, 7, couper([...nb].sort((a, c) => c[0] - a[0]).map(([d, q]) => `${q} × Ø${d}`).join('   ') + `   ·   nappe ${Math.round(mq.largeur)} × ${Math.round(mq.hauteur)} mm`, 7, z.w - 12));
+      }
+    } else if (b.type === 'fourreaux') {
+      cadre(z, 'Contenu des fourreaux, par côté et par liaison');
+      const lignes = [];
+      for (let c = 1; c <= 4; c++) {
+        const mq = masquesM[FACE_DU_COTE[c]]; if (!mq) continue;
+        const parLiaison = new Map();
+        mq.fourreaux.forEach((f) => {
+          const nom = String((f.liaisons && f.liaisons[0]) || f.libelle || 'réserve').replace(/\s*-\s*PE$/i, '');
+          if (!parLiaison.has(nom)) parLiaison.set(nom, { f: new Map(), c: new Map() });
+          const g = parLiaison.get(nom), d = Math.round(f.od); g.f.set(d, (g.f.get(d) || 0) + 1);
+          (mq.cables || []).filter((x) => x.fourreau === f.id).forEach((x) => { const k2 = x.code || `Ø${x.od}`; g.c.set(k2, (g.c.get(k2) || 0) + 1); });
+        });
+        [...parLiaison].sort((a, c2) => a[0].localeCompare(c2[0], 'fr', { numeric: true })).forEach(([nom, g]) => lignes.push([
+          `${e.nom}.${c}`, nomCourt(nom), [...g.f].sort((a, c2) => c2[0] - a[0]).map(([d, q]) => `${q}×Ø${d}`).join(' '), [...g.c].map(([k2, q]) => `${q}×${k2}`).join(' + ') || '—']));
+      }
+      tableauPdf(p, z, ['Masque', 'Liaison', 'Fourreaux', 'Câbles'], [0.11, 0.42, 0.17, 0.30], lignes);
+    } else if (b.type === 'cables') {
+      cadre(z, 'Traversées de la chambre (faisceaux)');
+      const LIB = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+      const lignes = [];
+      regrouperFaisceaux(e).forEach((fx, i) => [...new Set(fx.liaisons.map((x) => String(x).replace(/\s*-\s*PE$/i, '')))].forEach((l, j) => lignes.push([j ? '' : `${i + 1}`, j ? '' : `${e.nom}.${LIB[fx.cles[0]]} → ${e.nom}.${LIB[fx.cles[1]]}`, nomCourt(l)])));
+      const arr = new Map(); (e.arrets || []).forEach((a) => { if (!arr.has(a.cle)) arr.set(a.cle, []); arr.get(a.cle).push(a.liaison); });
+      arr.forEach((noms, k) => [...new Set(noms.map((x) => String(x).replace(/\s*-\s*PE$/i, '')))].forEach((l, j) => lignes.push([j ? '' : '■', j ? '' : `s'arrête en ${e.nom}.${LIB[k]}`, nomCourt(l)])));
+      tableauPdf(p, z, ['N°', 'Côtés', 'Liaison'], [0.08, 0.3, 0.62], lignes);
+    } else if (b.type === 'cartouche') {
+      cadre(z, 'Cartouche');
+      const L2 = [['Projet', opts.projet || '—'], ['Chambre', `${e.nom || '—'} · ${etudeOk ? e.ref : '—'}`],
+        ['Intérieur', etudeOk ? `${e.L} × ${e.l} × ${e.H} mm` : '—'], ['Date', opts.date || ''], ['Indice', opts.indice || 'A'], ['Établi par', 'CEA — TONTONKAD']];
+      L2.forEach(([k, v], i) => {
+        const y = z.y + z.h - 30 - i * 13;
+        p.rgb([0.4, 0.4, 0.4], false).text(z.x + 8, y, 7.5, k);
+        p.rgb([0.1, 0.1, 0.1], false).text(z.x + 70, y, 8, couper(v, 8, z.w - 78), { bold: true });
+      });
+    }
+  }
+  p.rgb([0.45, 0.45, 0.45], false).text(M, M - 14, 7, 'Côtés numérotés dans le sens horaire vus de dessus : 1 en haut, 2 à droite, 3 en bas, 4 à gauche. Valeurs de chambre maçonnée et règles normatives à valider.');
+  return p;
+}
+// Petit tableau dans une case (texte tronqué ; « … et n autres » si ça déborde).
+function tableauPdf(p, z, entetes, parts, lignes) {
+  const f = 6.6, lh = 8.6, x0 = z.x + 4, w = z.w - 8;
+  let y = z.y + z.h - 15 - 11;
+  const xs = []; let acc = x0; parts.forEach((q) => { xs.push(acc); acc += q * w; });
+  p.rgb([0.25, 0.27, 0.32], false);
+  entetes.forEach((t, i) => p.text(xs[i] + 2, y, f, t, { bold: true }));
+  p.rgb([0.8, 0.82, 0.86]).width(0.4).line(x0, y - 2.5, x0 + w, y - 2.5);
+  y -= lh + 1;
+  const max = Math.floor((y - z.y - 4) / lh) + 1;
+  const vis = lignes.length > max ? lignes.slice(0, max - 1) : lignes;
+  vis.forEach((l, k) => {
+    if (k % 2) p.rgb([0.96, 0.97, 0.98], false).rect(x0, y - 2.4, w, lh, 'f');
+    l.forEach((c, i) => p.rgb(i === 0 ? [0.1, 0.1, 0.1] : [0.2, 0.22, 0.26], false).text(xs[i] + 2, y, f, couper(c, f, parts[i] * w - 4), { bold: i === 0 }));
+    y -= lh;
+  });
+  if (lignes.length > vis.length) p.rgb([0.55, 0.2, 0.1], false).text(x0 + 2, y, f, `… et ${lignes.length - vis.length} autres lignes (voir les tableaux détaillés du rapport)`);
+}
+
 function drawSynoptique2D(p, data, zx, zy, zw, zh) {
   if (!data.noeuds.length) return;
   const xs = data.noeuds.map((n) => n.x), ys = data.noeuds.map((n) => n.y);
@@ -746,7 +846,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   etiquettes.forEach((f) => f());
 }
 
-const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, mesureEtiquetteSyn, FORMATS_PAGE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Vue3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);

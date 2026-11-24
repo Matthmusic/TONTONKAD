@@ -7656,6 +7656,7 @@
       if (!m) return;
       // sens du tronçon sur cette face : la coupe est vue de dos à l'arrivée
       m.sens = v.troncon.a.noeud === nd.id && v.troncon.a.face === f ? 'depart' : 'arrivee';
+      m.longueurM = v.troncon.longueurM || null;
       masques[f] = m;
     });
     if (!Object.keys(masques).length) return null;
@@ -8393,6 +8394,7 @@
     });
     const cb = (st.cables || []).filter(c => ids.has(c.parent) && c.od > 0).map(c => ({
       fourreau: ids.get(c.parent), od: c.od, x: c.x / MM_TO_PX, y: H - c.y / MM_TO_PX, phase: getCablePhaseLabel(c) || null,
+      code: c.code || '', fam: c.fam || '', liaison: c.liaison || '',
     }));
     let chambre = null;
     if (avecChambre && !isCirc && window.ChambresInfos && window.CompatChambres) {
@@ -8503,9 +8505,10 @@
     // Page 2 : chambre de tirage compatible
     const etudes = etudesChambresReseau();
     for (const et of etudes) {
+      // une page A3 par chambre : vue de dessus, masques C?.1 à C?.4, tableaux, cartouche
       const pc = new V.Page({ emitText: false, ombre: false });
-      V.dessinerEtudeChambre(pc, et.etude, et.masques);
-      writeVue3DPage(pdf, pc);
+      V.dessinerPageChambreA3(pc, et.etude, et.masques, { projet: titre, date: new Date().toLocaleDateString('fr-FR') });
+      writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1]);
     }
     if (m.chambre && !etudes.length) {
       const c = new V.Page({ emitText: false, ombre: false });
