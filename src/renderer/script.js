@@ -7621,16 +7621,23 @@
   }
   // Données du synoptique pour vue3d.js (2D / isométrique, écran et PDF).
   function donneesSynoptique() {
-    synoptiqueAncre(1.414); // positions ancrées (aussi pour l'isométrique)
+    // Isométrique : disposition ancrée calculée avec SES tailles (volumes et petites
+    // étiquettes), sinon les écarts du synoptique 2D (grosses étiquettes) écrasent tout.
+    const dis = R().dispositionAncree(reseau, {
+      tailleNoeud: (n) => (n.type === 'chambre' ? { w: 150, h: 110 } : { w: 120, h: 90 }),
+      tailleEtiquette: (t) => { const l = etiquetteIso(t); return { w: Math.max(...l.map((x) => x.length)) * 4.3 + 30, h: 80 }; },
+      ecart: 0.6, ratio: 1.6,
+    });
+    const pos = (n) => dis.noeuds[n.id] || { x: n.x, y: n.y };
     const noeuds = reseau.noeuds.map((n) => {
       let sous = '';
       if (n.type === 'chambre') { const e = etudeChambre(n); sous = e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'); }
       if (n.type === 'coffret') sous = n.coffret.genre + (n.coffret.largeur && n.coffret.profondeur ? ` ${n.coffret.largeur}×${n.coffret.profondeur}` : '');
-      return { nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, sous };
+      return { nom: n.nom, type: n.type, couleur: n.couleur, ...pos(n), sous };
     });
     const troncons = reseau.troncons.map((t) => {
-      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
-      return { a: { x: A.x, y: A.y, face: t.a.face, type: A.type }, b: { x: B.x, y: B.y, face: t.b.face, type: B.type }, label: etiquetteIso(t) };
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud), pa = pos(A), pb = pos(B);
+      return { a: { x: pa.x, y: pa.y, face: t.a.face, type: A.type }, b: { x: pb.x, y: pb.y, face: t.b.face, type: B.type }, label: etiquetteIso(t) };
     });
     return { noeuds, troncons };
   }

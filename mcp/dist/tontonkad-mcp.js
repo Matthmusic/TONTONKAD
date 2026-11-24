@@ -79445,7 +79445,8 @@ var require_vue3d = __commonJS({
         });
         const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
         const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
-        const s = Math.min(zw / (X1 - X0), zh / (Y1 - Y0), 1.8);
+        const MX = Math.min(90, zw * 0.12), MY = Math.min(40, zh * 0.08);
+        const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), 1.8);
         const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
         const P = (x, y, z2 = 0) => {
           const [u, v] = iso(x, y, z2);
@@ -79458,22 +79459,85 @@ var require_vue3d = __commonJS({
           const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
           return { x: e.x + off[0], y: e.y + off[1], z: z2 };
         };
-        const vue = (vx, vy) => vx + vy;
-        function tranchee(t) {
+        const NORMALE = { pignonA: [-1, 0], pignonB: [1, 0], longPanA: [0, 1], longPanB: [0, -1] };
+        const SORTIE = 30;
+        function trace(t) {
           const A = bout(t.a), B = bout(t.b);
+          const na = t.a.type === "chambre" && NORMALE[t.a.face], nb = t.b.type === "chambre" && NORMALE[t.b.face];
+          const A2 = na ? { x: A.x + na[0] * SORTIE, y: A.y + na[1] * SORTIE } : { x: A.x, y: A.y };
+          const B2 = nb ? { x: B.x + nb[0] * SORTIE, y: B.y + nb[1] * SORTIE } : { x: B.x, y: B.y };
+          const horizA = na ? na[0] !== 0 : Math.abs(B2.x - A2.x) >= Math.abs(B2.y - A2.y);
+          const coude = horizA ? { x: B2.x, y: A2.y } : { x: A2.x, y: B2.y };
+          const pts2 = [A, A2, coude, B2, B].map((q) => ({ x: q.x, y: q.y }));
+          const net = pts2.filter((q, k) => k === 0 || Math.hypot(q.x - pts2[k - 1].x, q.y - pts2[k - 1].y) > 0.5);
+          let L = 0;
+          const cum = net.map((q, k) => k ? L += Math.hypot(q.x - net[k - 1].x, q.y - net[k - 1].y) : 0);
+          return net.map((q, k) => ({ ...q, z: A.z + (B.z - A.z) * (L ? cum[k] / L : 0) }));
+        }
+        const vue = (vx, vy) => vx + vy;
+        function segment(A0, B0, extA, extB, finA, finB) {
+          const dx0 = B0.x - A0.x, dy0 = B0.y - A0.y, L0 = Math.hypot(dx0, dy0) || 1, ux = dx0 / L0, uy = dy0 / L0;
+          const A = { ...A0, x: A0.x - (extA ? ux * LARG : 0), y: A0.y - (extA ? uy * LARG : 0) };
+          const B = { ...B0, x: B0.x + (extB ? ux * LARG : 0), y: B0.y + (extB ? uy * LARG : 0) };
           const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * LARG, ny = dx / L * LARG;
           const coin = (E, sgn, dz) => P(E.x + sgn * nx, E.y + sgn * ny, E.z + dz);
           const terre = MAT.terre, bord = [0.3, 0.22, 0.15];
           const sg = vue(nx, ny) >= 0 ? 1 : -1;
           p.texture([coin(A, sg, -HAUT), coin(B, sg, -HAUT), coin(B, sg, HAUT), coin(A, sg, HAUT)], nuance(terre, 0.78), { seed: 33, taille: 0.6, contour: bord });
-          [[B, t.b, 1], [A, t.a, -1]].forEach(([E, e, sens]) => {
-            if (e.type === "chambre" || vue(dx * sens, dy * sens) <= 0) return;
+          [[B, finB, 1], [A, finA, -1]].forEach(([E, fin, sens]) => {
+            if (!fin || vue(dx * sens, dy * sens) <= 0) return;
             p.texture([coin(E, 1, -HAUT), coin(E, -1, -HAUT), coin(E, -1, HAUT), coin(E, 1, HAUT)], nuance(terre, 0.66), { seed: 34, taille: 0.6, contour: bord });
           });
           p.texture([coin(A, 1, HAUT), coin(B, 1, HAUT), coin(B, -1, HAUT), coin(A, -1, HAUT)], nuance(terre, 1.08), { seed: 31, taille: 0.6, contour: bord });
-          p.rgb([0.85, 0.12, 0.1]).width(0.9).line(...P(A.x, A.y, A.z + HAUT + 0.3), ...P(B.x, B.y, B.z + HAUT + 0.3));
-          const [mx, my] = P((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2 + HAUT + 12);
-          etiquettes.push(() => cartouche(p, mx, my, t.label));
+          p.rgb([0.85, 0.12, 0.1]).width(0.9).line(...P(A0.x, A0.y, A0.z + HAUT + 0.3), ...P(B0.x, B0.y, B0.z + HAUT + 0.3));
+        }
+        const occupes = [];
+        const chevauche = (r) => occupes.reduce((acc, o) => {
+          const ix = Math.min(r.x1, o.x1) - Math.max(r.x0, o.x0), iy = Math.min(r.y1, o.y1) - Math.max(r.y0, o.y0);
+          return acc + (ix > 0 && iy > 0 ? ix * iy : 0);
+        }, 0);
+        const tailleCartouche = (label) => {
+          const l = Array.isArray(label) ? label : [String(label)];
+          return [Math.max(...l.map((x) => x.length)) * 4.3 + 12, l.length * 9.5 + 5];
+        };
+        const etiquettesTroncons = [];
+        function placerEtiquetteTroncon(t, pts2) {
+          const [w, h] = tailleCartouche(t.label);
+          const segs = pts2.slice(1).map((q, k) => ({ a: pts2[k], b: q, L: Math.hypot(q.x - pts2[k].x, q.y - pts2[k].y) })).sort((u, v) => v.L - u.L);
+          let best = null;
+          const decalages = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1], [0, 2], [0, -2], [2, 0], [-2, 0]];
+          for (const sg of segs) {
+            for (const f2 of [0.5, 0.35, 0.65, 0.2, 0.8]) {
+              for (const [ox2, oy2] of decalages) {
+                const x = sg.a.x + (sg.b.x - sg.a.x) * f2, y = sg.a.y + (sg.b.y - sg.a.y) * f2, z2 = sg.a.z + (sg.b.z - sg.a.z) * f2;
+                const [cx, cy] = P(x, y, z2 + HAUT + 12), mx = cx + ox2 * (w / 2 + 8), my = cy + oy2 * (h + 4);
+                const r = { x0: mx - w / 2 - 2, x1: mx + w / 2 + 2, y0: my - h / 2 - 2, y1: my + h / 2 + 2 };
+                const c = chevauche(r);
+                if (!best || c < best.c) best = { c, mx, my, r, cx, cy, decale: ox2 !== 0 || oy2 !== 0 };
+                if (c === 0) break;
+              }
+              if (best.c === 0) break;
+            }
+            if (best && best.c === 0) break;
+          }
+          if (best) {
+            occupes.push(best.r);
+            etiquettesTroncons.push(() => {
+              if (best.decale) {
+                const bx = Math.max(best.r.x0 + 2, Math.min(best.r.x1 - 2, best.cx)), by = Math.max(best.r.y0 + 2, Math.min(best.r.y1 - 2, best.cy));
+                p.rgb([0.45, 0.45, 0.45]).width(0.6).line(bx, by, best.cx, best.cy);
+                p.rgb([0.45, 0.45, 0.45], false).circle(best.cx, best.cy, 1.6, "F");
+              }
+              cartouche(p, best.mx, best.my, t.label);
+            });
+          }
+        }
+        function tranchee(t) {
+          const pts2 = trace(t);
+          return pts2.slice(1).map((q, k) => ({
+            cle: (pts2[k].x + pts2[k].y + q.x + q.y) / 2,
+            dessiner: () => segment(pts2[k], q, k > 0, k < pts2.length - 2, k === 0 && t.a.type !== "chambre", k === pts2.length - 2 && t.b.type !== "chambre")
+          }));
         }
         function volume(n) {
           const [a, b, h] = dims[n.type] || dims.sortie, c = hexRgb(n.couleur);
@@ -79486,7 +79550,7 @@ var require_vue3d = __commonJS({
           if (n.type === "chambre") {
             p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6).poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], "B");
           }
-          const [tx, ty] = P(n.x, n.y, z1 + 14);
+          const [tx, ty] = n._etiq || P(n.x, n.y, z1 + 14);
           etiquettes.push(() => {
             const w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h2 = n.sous ? 22 : 14;
             p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(tx - w / 2, ty - h2 + 10, w, h2, "B");
@@ -79495,8 +79559,22 @@ var require_vue3d = __commonJS({
           });
         }
         const etiquettes = [];
+        data.noeuds.forEach((n) => {
+          const [, , h0] = dims[n.type] || dims.sortie, z1 = (n.type === "chambre" ? -8 : 0) + h0;
+          const [tx0, ty0] = P(n.x, n.y, z1 + 14), w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h = n.sous ? 22 : 14;
+          const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
+          let best = null;
+          for (const [dx, dy] of [[0, 0], [0, 1], [0, 2], [1, 0], [-1, 0], [1, 1], [-1, 1], [0, -2]]) {
+            const tx = tx0 + dx * (w / 2 + 10), ty = ty0 + dy * (h + 6), c = chevauche(rect(tx, ty));
+            if (!best || c < best.c) best = { c, tx, ty };
+            if (c === 0) break;
+          }
+          n._etiq = [best.tx, best.ty];
+          occupes.push(rect(best.tx, best.ty));
+        });
+        data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
         const elements = [
-          ...data.troncons.map((t) => ({ cle: (t.a.x + t.a.y + t.b.x + t.b.y) / 2, dessiner: () => tranchee(t) })),
+          ...data.troncons.flatMap((t) => tranchee(t)),
           ...data.noeuds.map((n) => {
             let cle = n.x + n.y;
             if (n.type !== "chambre") data.troncons.forEach((t) => {
@@ -79507,6 +79585,7 @@ var require_vue3d = __commonJS({
           })
         ].sort((u, v) => u.cle - v.cle);
         elements.forEach((e) => e.dessiner());
+        etiquettesTroncons.forEach((f2) => f2());
         etiquettes.forEach((f2) => f2());
       }
       const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };

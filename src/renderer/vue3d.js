@@ -793,7 +793,9 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   data.noeuds.forEach((n) => { const [a, b, h] = dims[n.type] || dims.sortie; [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z + 18))); });
   const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
   const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
-  const s = Math.min(zw / (X1 - X0), zh / (Y1 - Y0), 1.8);
+  // marge pour les étiquettes (taille fixe en points, elles débordent des volumes)
+  const MX = Math.min(90, zw * 0.12), MY = Math.min(40, zh * 0.08);
+  const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), 1.8);
   const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
   const P = (x, y, z = 0) => { const [u, v] = iso(x, y, z); return [ox + u * s, oy + v * s]; };
   const LARG = 7, HAUT = 6; // demi-largeur et demi-hauteur des tranchées
@@ -807,28 +809,90 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
     const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
     return { x: e.x + off[0], y: e.y + off[1], z };
   };
-  // Tranchée en volume : prisme de terre (largeur 14, hauteur 12) entre les
-  // deux raccordements, centré sur leur hauteur. On dessine le flanc et
-  // l'extrémité tournés vers l'observateur, puis le dessus (grillage rouge).
-  const vue = (vx, vy) => vx + vy; // > 0 : tourné vers l'observateur (x + y croissant)
-  function tranchee(t) {
+  // Tracé d'une tranchée : sortie perpendiculaire au côté de la chambre, puis
+  // virages à angle droit jusqu'à l'autre bout (plus de diagonale qui part du côté).
+  const NORMALE = { pignonA: [-1, 0], pignonB: [1, 0], longPanA: [0, 1], longPanB: [0, -1] };
+  const SORTIE = 30; // longueur droite à la sortie d'une face
+  function trace(t) {
     const A = bout(t.a), B = bout(t.b);
+    const na = t.a.type === 'chambre' && NORMALE[t.a.face], nb = t.b.type === 'chambre' && NORMALE[t.b.face];
+    const A2 = na ? { x: A.x + na[0] * SORTIE, y: A.y + na[1] * SORTIE } : { x: A.x, y: A.y };
+    const B2 = nb ? { x: B.x + nb[0] * SORTIE, y: B.y + nb[1] * SORTIE } : { x: B.x, y: B.y };
+    // premier virage : on prolonge d'abord dans l'axe de la sortie de A
+    const horizA = na ? na[0] !== 0 : Math.abs(B2.x - A2.x) >= Math.abs(B2.y - A2.y);
+    const coude = horizA ? { x: B2.x, y: A2.y } : { x: A2.x, y: B2.y };
+    const pts = [A, A2, coude, B2, B].map((q) => ({ x: q.x, y: q.y }));
+    const net = pts.filter((q, k) => k === 0 || Math.hypot(q.x - pts[k - 1].x, q.y - pts[k - 1].y) > 0.5);
+    // hauteur interpolée le long du tracé
+    let L = 0; const cum = net.map((q, k) => (k ? (L += Math.hypot(q.x - net[k - 1].x, q.y - net[k - 1].y)) : 0));
+    return net.map((q, k) => ({ ...q, z: A.z + (B.z - A.z) * (L ? cum[k] / L : 0) }));
+  }
+  // Un tronçon droit de tranchée en volume (prisme de terre) ; ext* : prolongé
+  // d'une demi-largeur pour fermer les coudes.
+  const vue = (vx, vy) => vx + vy; // > 0 : tourné vers l'observateur (x + y croissant)
+  function segment(A0, B0, extA, extB, finA, finB) {
+    const dx0 = B0.x - A0.x, dy0 = B0.y - A0.y, L0 = Math.hypot(dx0, dy0) || 1, ux = dx0 / L0, uy = dy0 / L0;
+    const A = { ...A0, x: A0.x - (extA ? ux * LARG : 0), y: A0.y - (extA ? uy * LARG : 0) };
+    const B = { ...B0, x: B0.x + (extB ? ux * LARG : 0), y: B0.y + (extB ? uy * LARG : 0) };
     const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * LARG, ny = dx / L * LARG;
     const coin = (E, sgn, dz) => P(E.x + sgn * nx, E.y + sgn * ny, E.z + dz);
     const terre = MAT.terre, bord = [0.3, 0.22, 0.15];
-    // flanc visible : celui dont la normale regarde l'observateur
     const sg = vue(nx, ny) >= 0 ? 1 : -1;
     p.texture([coin(A, sg, -HAUT), coin(B, sg, -HAUT), coin(B, sg, HAUT), coin(A, sg, HAUT)], nuance(terre, 0.78), { seed: 33, taille: 0.6, contour: bord });
-    // extrémité visible (côté coffret / sortie uniquement : côté chambre elle entre dans la face)
-    [[B, t.b, 1], [A, t.a, -1]].forEach(([E, e, sens]) => {
-      if (e.type === 'chambre' || vue(dx * sens, dy * sens) <= 0) return;
+    [[B, finB, 1], [A, finA, -1]].forEach(([E, fin, sens]) => {
+      if (!fin || vue(dx * sens, dy * sens) <= 0) return;
       p.texture([coin(E, 1, -HAUT), coin(E, -1, -HAUT), coin(E, -1, HAUT), coin(E, 1, HAUT)], nuance(terre, 0.66), { seed: 34, taille: 0.6, contour: bord });
     });
-    // dessus
     p.texture([coin(A, 1, HAUT), coin(B, 1, HAUT), coin(B, -1, HAUT), coin(A, -1, HAUT)], nuance(terre, 1.08), { seed: 31, taille: 0.6, contour: bord });
-    p.rgb([0.85, 0.12, 0.1]).width(0.9).line(...P(A.x, A.y, A.z + HAUT + 0.3), ...P(B.x, B.y, B.z + HAUT + 0.3)); // grillage
-    const [mx, my] = P((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2 + HAUT + 12);
-    etiquettes.push(() => cartouche(p, mx, my, t.label));
+    p.rgb([0.85, 0.12, 0.1]).width(0.9).line(...P(A0.x, A0.y, A0.z + HAUT + 0.3), ...P(B0.x, B0.y, B0.z + HAUT + 0.3)); // grillage
+  }
+  // Étiquettes sans chevauchement : celles des éléments d'abord (fixes), puis
+  // celles des tronçons, placées au premier endroit libre le long du tracé.
+  const occupes = [];
+  const chevauche = (r) => occupes.reduce((acc, o) => {
+    const ix = Math.min(r.x1, o.x1) - Math.max(r.x0, o.x0), iy = Math.min(r.y1, o.y1) - Math.max(r.y0, o.y0);
+    return acc + (ix > 0 && iy > 0 ? ix * iy : 0);
+  }, 0);
+  const tailleCartouche = (label) => { const l = Array.isArray(label) ? label : [String(label)]; return [Math.max(...l.map((x) => x.length)) * 4.3 + 12, l.length * 9.5 + 5]; };
+  const etiquettesTroncons = [];
+  function placerEtiquetteTroncon(t, pts) {
+    const [w, h] = tailleCartouche(t.label);
+    // segments du plus long au plus court, positions du milieu vers les bouts
+    const segs = pts.slice(1).map((q, k) => ({ a: pts[k], b: q, L: Math.hypot(q.x - pts[k].x, q.y - pts[k].y) })).sort((u, v) => v.L - u.L);
+    let best = null;
+    const decalages = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1], [0, 2], [0, -2], [2, 0], [-2, 0]];
+    for (const sg of segs) {
+      for (const f of [0.5, 0.35, 0.65, 0.2, 0.8]) {
+        for (const [ox2, oy2] of decalages) {
+          const x = sg.a.x + (sg.b.x - sg.a.x) * f, y = sg.a.y + (sg.b.y - sg.a.y) * f, z = sg.a.z + (sg.b.z - sg.a.z) * f;
+          const [cx, cy] = P(x, y, z + HAUT + 12), mx = cx + ox2 * (w / 2 + 8), my = cy + oy2 * (h + 4);
+          const r = { x0: mx - w / 2 - 2, x1: mx + w / 2 + 2, y0: my - h / 2 - 2, y1: my + h / 2 + 2 };
+          const c = chevauche(r);
+          if (!best || c < best.c) best = { c, mx, my, r, cx, cy, decale: ox2 !== 0 || oy2 !== 0 };
+          if (c === 0) break;
+        }
+        if (best.c === 0) break;
+      }
+      if (best && best.c === 0) break;
+    }
+    if (best) {
+      occupes.push(best.r);
+      etiquettesTroncons.push(() => {
+        if (best.decale) { // trait de rappel vers la tranchée
+          const bx = Math.max(best.r.x0 + 2, Math.min(best.r.x1 - 2, best.cx)), by = Math.max(best.r.y0 + 2, Math.min(best.r.y1 - 2, best.cy));
+          p.rgb([0.45, 0.45, 0.45]).width(0.6).line(bx, by, best.cx, best.cy);
+          p.rgb([0.45, 0.45, 0.45], false).circle(best.cx, best.cy, 1.6, 'F');
+        }
+        cartouche(p, best.mx, best.my, t.label);
+      });
+    }
+  }
+  function tranchee(t) { // conservé pour l'ordre de dessin : un élément par segment
+    const pts = trace(t);
+    return pts.slice(1).map((q, k) => ({
+      cle: (pts[k].x + pts[k].y + q.x + q.y) / 2,
+      dessiner: () => segment(pts[k], q, k > 0, k < pts.length - 2, k === 0 && t.a.type !== 'chambre', k === pts.length - 2 && t.b.type !== 'chambre'),
+    }));
   }
   function volume(n) {
     const [a, b, h] = dims[n.type] || dims.sortie, c = hexRgb(n.couleur);
@@ -842,7 +906,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
       p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6)
         .poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], 'B');
     }
-    const [tx, ty] = P(n.x, n.y, z1 + 14);
+    const [tx, ty] = n._etiq || P(n.x, n.y, z1 + 14);
     etiquettes.push(() => {
       // cadre à fond blanc bordé de la couleur de l'élément : lisible sur les volumes
       const w = Math.max(n.nom.length * 5.4, (n.sous || '').length * 3.9) + 12, h = n.sous ? 22 : 14;
@@ -854,8 +918,22 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   // Ordre de profondeur commun (peintre) : du fond (x + y petit) vers l'avant ;
   // une tranchée se range à son milieu. Étiquettes en dernier, toujours lisibles.
   const etiquettes = [];
+  // réserve des étiquettes d'éléments (fixes), puis placement de celles des tronçons
+  data.noeuds.forEach((n) => {
+    const [, , h0] = dims[n.type] || dims.sortie, z1 = (n.type === 'chambre' ? -8 : 0) + h0;
+    const [tx0, ty0] = P(n.x, n.y, z1 + 14), w = Math.max(n.nom.length * 5.4, (n.sous || '').length * 3.9) + 12, h = n.sous ? 22 : 14;
+    const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
+    let best = null; // au-dessus du volume de préférence, sinon décalé
+    for (const [dx, dy] of [[0, 0], [0, 1], [0, 2], [1, 0], [-1, 0], [1, 1], [-1, 1], [0, -2]]) {
+      const tx = tx0 + dx * (w / 2 + 10), ty = ty0 + dy * (h + 6), c = chevauche(rect(tx, ty));
+      if (!best || c < best.c) best = { c, tx, ty };
+      if (c === 0) break;
+    }
+    n._etiq = [best.tx, best.ty]; occupes.push(rect(best.tx, best.ty));
+  });
+  data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
   const elements = [
-    ...data.troncons.map((t) => ({ cle: (t.a.x + t.a.y + t.b.x + t.b.y) / 2, dessiner: () => tranchee(t) })),
+    ...data.troncons.flatMap((t) => tranchee(t)),
     ...data.noeuds.map((n) => {
       let cle = n.x + n.y;
       if (n.type !== 'chambre') data.troncons.forEach((t) => {
@@ -866,6 +944,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
     }),
   ].sort((u, v) => u.cle - v.cle);
   elements.forEach((e) => e.dessiner());
+  etiquettesTroncons.forEach((f) => f());
   etiquettes.forEach((f) => f());
 }
 
