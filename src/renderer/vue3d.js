@@ -35,13 +35,15 @@ class Page {
       + `${f(cx + k)} ${f(cy - r)} ${f(cx + r)} ${f(cy - k)} ${f(cx + r)} ${f(cy)} c ${mode}`);
     return this;
   }
-  text(x, y, size, s, { bold = false, align = 'left' } = {}) {
-    this.labels.push({ x, y, size, text: String(s), bold, align, rgb: this.fill });
+  // vertical = true : texte tourné de 90° (se lit de bas en haut), (x, y) = point d'ancrage.
+  text(x, y, size, s, { bold = false, align = 'left', vertical = false } = {}) {
+    this.labels.push({ x, y, size, text: String(s), bold, align, rgb: this.fill, vertical });
     if (!this.emitText) return this;
     // largeur approximative Helvetica (0.5 em / caractère) pour centrer / aligner à droite
     const w = String(s).length * size * 0.5;
     const dx = align === 'center' ? -w / 2 : align === 'right' ? -w : 0;
-    this.ops.push(`BT /${bold ? 'F2' : 'F1'} ${f(size)} Tf ${f(x + dx)} ${f(y)} Td ${pdfStr(s)} Tj ET`);
+    if (vertical) this.ops.push(`BT /${bold ? 'F2' : 'F1'} ${f(size)} Tf 0 1 -1 0 ${f(x)} ${f(y + dx)} Tm ${pdfStr(s)} Tj ET`);
+    else this.ops.push(`BT /${bold ? 'F2' : 'F1'} ${f(size)} Tf ${f(x + dx)} ${f(y)} Td ${pdfStr(s)} Tj ET`);
     return this;
   }
   // Dessine fn() à l'intérieur du polygone seulement.
@@ -405,10 +407,12 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
       const m = e + sortie / 2, [lx, ly] = P(bx + g.out[0] * m, by + g.out[1] * m);
       const txt = `Ø${Math.round(c.od)}${c.n > 1 ? ` ×${c.n}` : ''}`;
       const fs = Math.max(5, Math.min(7.5, c.od * 0.9 * s * 0.75));
-      // sur un côté où les tubes sont vus en travers (bande étroite), le texte ne tient
-      // pas : on l'omet plutôt que de le superposer (le détail est dans la légende)
-      const place = g.out[0] !== 0 ? Infinity : c.od * 0.9 * s;
-      if (txt.length * fs * 0.55 <= place) p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs * 0.35, fs, txt, { align: 'center', bold: true });
+      // tubes verticaux (côtés 1 et 3) : texte tourné dans l'axe du tube ;
+      // tubes horizontaux (côtés 2 et 4) : texte à plat. Omis s'il ne tient pas.
+      const vertical = g.out[0] === 0;
+      if (vertical) {
+        if (fs <= c.od * 0.9 * s && txt.length * fs * 0.55 <= sortie * s) p.rgb([0.08, 0.08, 0.08], false).text(lx + fs * 0.35, ly, fs, txt, { align: 'center', bold: true, vertical: true });
+      } else p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs * 0.35, fs, txt, { align: 'center', bold: true });
     }
     // nom de la face et du tronçon, dans un cadre, côté extérieur
     const libelle = `${etude.nom ? etude.nom + '.' + NUMERO_COTE[k] : etude.faces[k].face.toUpperCase()} · ${mq.nom}`;
@@ -575,7 +579,8 @@ function rejouerSurCanvas(ctx, page, hauteurPt) {
     ctx.fillStyle = rgb(l.rgb);
     ctx.font = `${l.bold ? 'bold ' : ''}${l.size}px Helvetica, Arial, sans-serif`;
     ctx.textAlign = l.align === 'center' ? 'center' : l.align === 'right' ? 'right' : 'left';
-    ctx.fillText(l.text, l.x, hauteurPt - l.y);
+    if (l.vertical) { ctx.translate(l.x, hauteurPt - l.y); ctx.rotate(-Math.PI / 2); ctx.fillText(l.text, 0, 0); }
+    else ctx.fillText(l.text, l.x, hauteurPt - l.y);
     ctx.restore();
   }
 }

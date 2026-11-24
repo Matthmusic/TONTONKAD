@@ -8606,7 +8606,11 @@
       pdf.setFont('helvetica', l.bold ? 'bold' : 'normal');
       pdf.setFontSize(l.size);
       pdf.setTextColor(Math.round(l.rgb[0] * 255), Math.round(l.rgb[1] * 255), Math.round(l.rgb[2] * 255));
-      pdf.text(l.text.replace(/→/g, '->').replace(/≥/g, '>='), l.x * k, (HP - l.y) * k, { align: l.align });
+      const txt = l.text.replace(/→/g, '->').replace(/≥/g, '>=');
+      if (l.vertical) { // tourné de 90° : alignement calculé à la main le long du texte
+        const w = pdf.getTextWidth(txt), d = l.align === 'center' ? w / 2 : l.align === 'right' ? w : 0;
+        pdf.text(txt, l.x * k, (HP - l.y) * k + d, { angle: 90 });
+      } else pdf.text(txt, l.x * k, (HP - l.y) * k, { align: l.align });
     }
     pdf.setTextColor(0, 0, 0);
   }

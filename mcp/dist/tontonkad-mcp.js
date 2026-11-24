@@ -78641,12 +78641,14 @@ var require_vue3d = __commonJS({
           this.ops.push(`${f(cx + r)} ${f(cy)} m ${f(cx + r)} ${f(cy + k)} ${f(cx + k)} ${f(cy + r)} ${f(cx)} ${f(cy + r)} c ${f(cx - k)} ${f(cy + r)} ${f(cx - r)} ${f(cy + k)} ${f(cx - r)} ${f(cy)} c ${f(cx - r)} ${f(cy - k)} ${f(cx - k)} ${f(cy - r)} ${f(cx)} ${f(cy - r)} c ${f(cx + k)} ${f(cy - r)} ${f(cx + r)} ${f(cy - k)} ${f(cx + r)} ${f(cy)} c ${mode}`);
           return this;
         }
-        text(x, y, size, s, { bold = false, align = "left" } = {}) {
-          this.labels.push({ x, y, size, text: String(s), bold, align, rgb: this.fill });
+        // vertical = true : texte tourné de 90° (se lit de bas en haut), (x, y) = point d'ancrage.
+        text(x, y, size, s, { bold = false, align = "left", vertical = false } = {}) {
+          this.labels.push({ x, y, size, text: String(s), bold, align, rgb: this.fill, vertical });
           if (!this.emitText) return this;
           const w = String(s).length * size * 0.5;
           const dx = align === "center" ? -w / 2 : align === "right" ? -w : 0;
-          this.ops.push(`BT /${bold ? "F2" : "F1"} ${f(size)} Tf ${f(x + dx)} ${f(y)} Td ${pdfStr(s)} Tj ET`);
+          if (vertical) this.ops.push(`BT /${bold ? "F2" : "F1"} ${f(size)} Tf 0 1 -1 0 ${f(x)} ${f(y + dx)} Tm ${pdfStr(s)} Tj ET`);
+          else this.ops.push(`BT /${bold ? "F2" : "F1"} ${f(size)} Tf ${f(x + dx)} ${f(y)} Td ${pdfStr(s)} Tj ET`);
           return this;
         }
         // Dessine fn() à l'intérieur du polygone seulement.
@@ -78731,7 +78733,6 @@ var require_vue3d = __commonJS({
         for (const fo of m.fourreaux) {
           p.rgb([1, 1, 1], false).rgb([0.85, 0.4, 0.05]).width(1).circle(X(fo.x), Y(fo.y), fo.od / 2 * s, "B");
           p.width(0.5).circle(X(fo.x), Y(fo.y), fo.di / 2 * s);
-          p.rgb([0, 0, 0], false).text(X(fo.x), Y(fo.y + fo.od / 2) + 2, 7, fo.id, { align: "center", bold: true });
         }
         for (const c of m.cables) {
           p.rgb(PHASE_RGB[c.phase] || [0.2, 0.2, 0.2]).width(0.6).circle(X(c.x), Y(c.y), c.od / 2 * s);
@@ -78965,8 +78966,10 @@ var require_vue3d = __commonJS({
             const m = e + sortie / 2, [lx, ly] = P(bx + g.out[0] * m, by + g.out[1] * m);
             const txt = `\xD8${Math.round(c.od)}${c.n > 1 ? ` \xD7${c.n}` : ""}`;
             const fs2 = Math.max(5, Math.min(7.5, c.od * 0.9 * s * 0.75));
-            const place = g.out[0] !== 0 ? Infinity : c.od * 0.9 * s;
-            if (txt.length * fs2 * 0.55 <= place) p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs2 * 0.35, fs2, txt, { align: "center", bold: true });
+            const vertical = g.out[0] === 0;
+            if (vertical) {
+              if (fs2 <= c.od * 0.9 * s && txt.length * fs2 * 0.55 <= sortie * s) p.rgb([0.08, 0.08, 0.08], false).text(lx + fs2 * 0.35, ly, fs2, txt, { align: "center", bold: true, vertical: true });
+            } else p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs2 * 0.35, fs2, txt, { align: "center", bold: true });
           }
           const libelle = `${etude.nom ? etude.nom + "." + NUMERO_COTE[k] : etude.faces[k].face.toUpperCase()} \xB7 ${mq.nom}`;
           const lw = libelle.length * 8 * 0.5 + 10, lh = 13;
@@ -79204,7 +79207,11 @@ var require_vue3d = __commonJS({
           ctx.fillStyle = rgb(l.rgb);
           ctx.font = `${l.bold ? "bold " : ""}${l.size}px Helvetica, Arial, sans-serif`;
           ctx.textAlign = l.align === "center" ? "center" : l.align === "right" ? "right" : "left";
-          ctx.fillText(l.text, l.x, hauteurPt - l.y);
+          if (l.vertical) {
+            ctx.translate(l.x, hauteurPt - l.y);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(l.text, 0, 0);
+          } else ctx.fillText(l.text, l.x, hauteurPt - l.y);
           ctx.restore();
         }
       }
