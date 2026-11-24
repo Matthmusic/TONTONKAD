@@ -555,7 +555,7 @@
             </div>
           </div>
           <div class="row">
-            <div>Taux d'occupation</div>
+            <div title="Taux d'occupation de la boîte">Occupation</div>
             <div class="kpi">
               <span id="statOccupation">0.0 %</span>
             </div>
@@ -611,6 +611,16 @@
                de position flottante à gérer. -->
           <aside class="right-tools" aria-label="Outils du plan">
             <div class="right-tools-rail">
+              <button id="chambreModeBtn" class="rail-btn rail-btn-reseau" type="button" aria-label="Réseau : synoptique des chambres, coffrets et sorties" title="Réseau : synoptique, chambres, tronçons">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="5" y="7" width="14" height="10" rx="1"></rect>
+                  <line x1="1" y1="12" x2="5" y2="12"></line>
+                  <line x1="19" y1="12" x2="23" y2="12"></line>
+                  <line x1="12" y1="2" x2="12" y2="7"></line>
+                </svg>
+                <span class="rail-btn-label">Réseau</span>
+              </button>
+              <div class="rail-divider" role="separator"></div>
               <button id="zoomFitBtn" class="rail-btn" aria-label="Zoom étendu — voir tout le plan" title="Zoom étendu (voir tout le plan)" type="button">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M4 8V5a1 1 0 0 1 1-1h3"></path>
@@ -694,15 +704,6 @@
                   <line x1="3" y1="21" x2="10" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
                 <span class="ctrl-label">Réduire</span>
-              </button>
-              <button id="chambreModeBtn" class="ctrl-btn" aria-label="Réseau : synoptique des chambres, coffrets et sorties" title="Réseau : synoptique, chambres, tronçons">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="5" y="7" width="14" height="10" stroke="currentColor" stroke-width="2" fill="none"/>
-                  <line x1="1" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <line x1="19" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <line x1="12" y1="2" x2="12" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                <span class="ctrl-label">Réseau</span>
               </button>
               <button id="rotateBoxCcw" class="ctrl-btn ctrl-btn-square" aria-label="Tourner la boîte de 90° antihoraire" title="90° gauche">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1282,6 +1283,11 @@
           </div>
           <div class="pdf-a4-sheet">
             <img id="pdfPreviewImage" class="pdf-preview-image" alt="Aperçu de l'export PDF">
+          </div>
+          <div id="pdfReseauResume" class="pdf-reseau-resume" hidden>
+            <p class="pdf-reseau-resume-titre">Fichiers générés</p>
+            <ol id="pdfReseauFichiers" class="pdf-reseau-fichiers"></ol>
+            <p class="pdf-checkbox-subtitle">Un PDF par partie cochée. La vue principale n'est pas exportée en mode réseau.</p>
           </div>
         </aside>
       </div>

@@ -6251,3 +6251,86 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .pdf-reseau-options[hidden] { display: none; }
 .pdf-reseau-groupes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 13px; color: var(--text-primary); }
 .pdf-reseau-groupes label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* ── Barre d'outils du bas : une seule rangée qui se compacte ─────────────────
+   Les groupes gardent leur largeur naturelle (jamais de retour à la ligne ni
+   de débordement) ; quand la place manque, les boutons s'étroitisent, puis
+   passent en icône seule (libellé conservé en infobulle et pour les lecteurs
+   d'écran via aria-label). Le pas dépend de la largeur de la barre, pas de
+   la fenêtre : le panneau de gauche replié rend la place. */
+.command-center-wrapper { container: barre-outils / inline-size; }
+.control-strip {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 6px;
+}
+.control-strip .control-zone { flex: 0 0 auto; }
+.control-strip .control-zone-actions { flex-wrap: nowrap; }
+
+@container barre-outils (max-width: 1180px) {
+    .control-strip .ctrl-btn { min-width: 40px; padding: 5px 5px; }
+    .control-strip .ctrl-btn-square { min-width: 36px; width: 36px; }
+    .control-strip .ctrl-settings-pill { min-width: 0; max-width: none; }
+    .control-strip .control-zone { padding: 4px 3px; gap: 3px; }
+}
+@container barre-outils (max-width: 1100px) {
+    .control-strip .ctrl-label,
+    .control-strip .ctrl-pill-text { display: none; }
+    .control-strip .ctrl-btn { height: 40px; min-width: 38px; }
+    .control-strip .ctrl-btn-square { width: 34px; min-width: 34px; }
+    .control-strip .control-zone-title { display: none; }
+}
+@container barre-outils (max-width: 880px) {
+    .control-strip .ctrl-key, .control-strip .ctrl-led { display: none; }
+    .control-strip .ctrl-btn { min-width: 32px; padding: 4px 3px; }
+    .control-strip { gap: 2px; }
+}
+
+/* Panneau de gauche étroit (1366 px, panneau réduit) : inventaires l'un sous
+   l'autre plutôt que deux colonnes écrasées. */
+#panneauGauche { container: panneau / inline-size; }
+@container panneau (max-width: 560px) {
+    .two-cols { grid-template-columns: 1fr; }
+}
+
+/* Métré du synoptique : tableau compact, valeurs en afficheur (mono, cuivre) */
+.reseau-metre { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.reseau-metre th, .reseau-metre td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--glass-border); }
+.reseau-metre thead th { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-muted); }
+.reseau-metre td:nth-child(2), .reseau-metre td:nth-child(3), .reseau-metre th:nth-child(2), .reseau-metre th:nth-child(3) { text-align: right; }
+.reseau-metre td:nth-child(2) { font-family: 'JetBrains Mono', monospace; color: var(--primary-orange); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.reseau-metre td:nth-child(3) { font-family: 'JetBrains Mono', monospace; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.reseau-metre tfoot th, .reseau-metre tfoot td { border-bottom: 0; font-weight: 700; color: var(--text-primary); }
+.reseau-metre tfoot td:nth-child(2) { color: var(--primary-orange); }
+
+/* Bouton Réseau : en tête du rail de droite (il pilote ce qu'affiche le canvas :
+   coupe, synoptique, chambre). Plus grand que les outils, libellé sous l'icône ;
+   cuivre quand une vue réseau est affichée. */
+.rail-btn.rail-btn-reseau {
+    width: 40px; height: 52px; margin: 0 -4px; flex-direction: column; gap: 3px;
+    border-color: var(--glass-border); color: var(--text-secondary);
+}
+.rail-btn-reseau .rail-btn-label { font-size: 9px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; line-height: 1; }
+.rail-btn.rail-btn-reseau.active { color: #ffffff; background: var(--primary-orange); border-color: var(--primary-orange); }
+.rail-btn.rail-btn-reseau:focus-visible { outline: 2px solid var(--primary-orange); outline-offset: 2px; }
+
+/* Cadenas de dimension : gris discret quand libre, cuivre quand verrouillé
+   (le vert / rouge saturés sortaient de la palette Verre & Cuivre). */
+.cadenas-icon { filter: grayscale(1) brightness(0.55); opacity: 0.7; }
+[data-theme="dark"] .cadenas-icon { filter: grayscale(1) invert(1) brightness(0.9); opacity: 0.6; }
+.lock-icon:hover .cadenas-icon { opacity: 1; }
+.lock-icon:has(input:checked) .cadenas-icon,
+[data-theme="dark"] .lock-icon:has(input:checked) .cadenas-icon {
+    filter: brightness(0) saturate(100%) invert(64%) sepia(74%) saturate(1600%) hue-rotate(330deg) brightness(102%);
+    opacity: 1;
+}
+.bb-liaison-add-btn[hidden] { display: none; }
+
+/* Export PDF en mode réseau : l'aperçu devient la liste des fichiers produits */
+.pdf-reseau-resume { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--glass-border); border-radius: 12px; background: var(--bg-card); }
+.pdf-reseau-resume[hidden], .pdf-a4-sheet[hidden] { display: none; }
+.pdf-reseau-resume-titre { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-muted); }
+.pdf-reseau-fichiers { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--text-primary); }
+.pdf-reseau-fichiers li::marker { color: var(--primary-orange); font-weight: 700; }
+.pdf-reseau-vide { color: var(--warning-color, #ed8936); }

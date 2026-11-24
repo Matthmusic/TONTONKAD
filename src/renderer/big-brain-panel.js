@@ -329,6 +329,9 @@
   function renderDetail() {
     if (!detailEl) return;
     const liaison = liaisons[selectedIndex];
+    // Liste vide : l'état vide porte déjà « + Nouvelle liaison » ; le bouton du
+    // pied ferait doublon (trois entrées pour la même action).
+    if (addLiaisonFootBtn) addLiaisonFootBtn.hidden = liaisons.length === 0;
     if (!liaison) {
       // Vide : mêmes actions que l'en-tête (+ Nouvelle / + Réserve), mais à
       // portée de clic direct — évite l'aller-retour vers le petit bouton

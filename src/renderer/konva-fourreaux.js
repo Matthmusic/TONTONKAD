@@ -131,10 +131,11 @@
         text:        String(idx + 1),
         fontSize:    fontSize,
         fontStyle:   'bold',
-        // blanc lisible : contour sombre fin peint SOUS le remplissage
-        fill:        '#fff',
-        stroke:      sombre ? 'rgba(0,0,0,0.85)' : '#000',
-        strokeWidth: Math.max(0.5, (sombre ? 3 : 2.5) / scale),
+        // contraste selon le thème : blanc sur halo sombre (sombre), encre sur
+        // halo blanc (clair) ; le halo est peint SOUS le remplissage
+        fill:        sombre ? '#ffffff' : '#1a1d1f',
+        stroke:      sombre ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)',
+        strokeWidth: Math.max(0.5, 3 / scale),
         fillAfterStrokeEnabled: true,
       }));
 

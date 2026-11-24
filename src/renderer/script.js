@@ -3785,8 +3785,9 @@
 
     // Afficher le numéro du fourreau en haut du cercle (toujours visible)
     if (numero !== undefined) {
-      ctx.fillStyle = "#fff";
-      ctx.strokeStyle = "#000";
+      const sombre = document.documentElement.getAttribute('data-theme') === 'dark';
+      ctx.fillStyle = sombre ? "#ffffff" : "#1a1d1f";
+      ctx.strokeStyle = sombre ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.95)";
       ctx.lineWidth = getScaledLineWidth(3);
       ctx.font = `bold ${getScaledLineWidth(14)}px Arial`;
       ctx.textAlign = "center";
@@ -5151,20 +5152,14 @@
       selInfo.classList.remove('muted');
       const type = selectedMultiple[0].type === 'fourreau' ? 'fourreaux' : 'câbles';
       selInfo.innerHTML = `<div><b>SÉLECTION MULTIPLE</b> — ${selectedMultiple.length} ${type}</div><div><em>Utilisez Éditer (E) pour modifier tous les éléments sélectionnés</em></div>`;
-      if (freezeBtn) {
-        freezeBtn.disabled = false;
-        freezeBtn.textContent = 'Figer sélection (X)';
-      }
+      majBoutonFiger(true, 'Figer la sélection');
       return;
     }
 
     if (!selected) {
       selInfo.classList.add('muted');
       selInfo.innerHTML = '<em>Aucun objet sélectionné.</em>';
-      if (freezeBtn) {
-        freezeBtn.disabled = true;
-        freezeBtn.textContent = 'Figer (X)';
-      }
+      majBoutonFiger(false, 'Figer');
       return;
     }
     selInfo.classList.remove('muted');
@@ -5194,10 +5189,17 @@
       const customLabel = f.label ? `<div>Libellé : <b>${f.label}</b></div>` : '';
       selInfo.innerHTML = `<div><span class='swatch' style='background:${displayColor}'></span><b>${f.type} ${f.code}</b></div>${customLabel}<div>Ø extérieur : <b>${f.od}</b> — Ø intérieur min : <b>${f.idm}</b> mm</div><div>Aire intérieure : <b>${inner.toFixed(1)}</b> mm²</div><div>Câbles contenus : <b>${f.children.length}</b></div><div>Occupation : <b>${used.toFixed(1)}%</b> — Libre : <b>${free.toFixed(1)}%</b></div><div>Gelé : <b>${frozen ? 'Oui' : 'Non'}</b></div>`;
     }
-    if (freezeBtn) {
-      freezeBtn.disabled = false;
-      freezeBtn.textContent = frozen ? 'Dégeler (X)' : 'Figer (X)';
-    }
+    majBoutonFiger(true, frozen ? 'Dégeler' : 'Figer');
+  }
+  // Bouton Figer : seuls le libellé, l'infobulle et le nom accessible changent
+  // (l'icône et la touche X restent ; textContent les effaçait).
+  function majBoutonFiger(actif, libelle) {
+    if (!freezeBtn) return;
+    freezeBtn.disabled = !actif;
+    const lab = freezeBtn.querySelector('.ctrl-label');
+    if (lab) lab.textContent = libelle.replace('Figer la sélection', 'Figer');
+    freezeBtn.title = `${libelle} — X`;
+    freezeBtn.setAttribute('aria-label', `${libelle} (X)`);
   }
 
   // Occupation extraite dans geometry.js (pure, testée). Wrapper : passe les globales.
@@ -7278,7 +7280,33 @@
     if (!box) return;
     const actif = !!(reseau && reseau.noeuds && reseau.noeuds.length && reseau.troncons.length);
     box.hidden = !actif;
-    if (!actif) return;
+    const feuille = document.querySelector('#pdfExportModal .pdf-a4-sheet'), resume = document.getElementById('pdfReseauResume');
+    if (feuille) feuille.hidden = actif;
+    if (resume) resume.hidden = !actif;
+    if (!actif) { const go = document.getElementById('confirmPdfExport'); if (go) go.disabled = false; return; }
+    // Aperçu réseau : liste des fichiers qui seront produits (selon les cases)
+    const listeFichiers = () => {
+      const ol = document.getElementById('pdfReseauFichiers'); if (!ol) return;
+      const coche = (id) => document.getElementById(id)?.checked !== false;
+      const fmtS = (document.getElementById('pdfFormatSyn') || {}).value || 'auto';
+      const dS = fmtS === 'auto' ? window.Vue3D.formatOptimalSynoptique(synoptiqueAncre(1.414)) : window.Vue3D.decouperFolios(synoptiqueAncre(1.414), fmtS);
+      const nCh = etudesChambresReseau().length, nCo = reseau.troncons.filter((t) => { const st = etatTroncon(t); return st && st.fourreaux.length; }).length;
+      const fmtC = ((document.getElementById('pdfFormatCoupes') || {}).value || 'a3').toUpperCase();
+      const items = [
+        coche('pdfGrpSyn') && `Synoptique — ${dS.folios} folio${dS.folios > 1 ? 's' : ''} ${dS.fmt.toUpperCase()} + métré et continuité`,
+        coche('pdfGrpChambres') && nCh && `Chambres — ${nCh} page${nCh > 1 ? 's' : ''} A3`,
+        coche('pdfGrpCoupes') && nCo && `Coupes — ${nCo} tronçon${nCo > 1 ? 's' : ''} en ${fmtC}`,
+        coche('pdfGrpTableaux') && 'Tableaux fourreaux et câbles — A4 paysage',
+      ].filter(Boolean);
+      ol.innerHTML = '';
+      items.forEach((t) => { const li = document.createElement('li'); li.textContent = t; ol.appendChild(li); });
+      if (!items.length) { const li = document.createElement('li'); li.className = 'pdf-reseau-vide'; li.textContent = 'Aucune partie cochée : rien à exporter.'; ol.appendChild(li); }
+      const go = document.getElementById('confirmPdfExport'); if (go) go.disabled = !items.length;
+    };
+    ['pdfGrpSyn', 'pdfGrpChambres', 'pdfGrpCoupes', 'pdfGrpTableaux', 'pdfFormatCoupes', 'pdfFormatSyn'].forEach((id) => {
+      const el = document.getElementById(id); if (el && !el._ttkListe) { el._ttkListe = true; el.addEventListener('change', listeFichiers); }
+    });
+    listeFichiers();
     const D = window.Vue3D.formatOptimalSynoptique(synoptiqueAncre(1.414));
     const txt = `${D.fmt.toUpperCase()} — ${D.folios} folio${D.folios > 1 ? 's' : ''}, texte ${D.texte.toFixed(1).replace('.', ',')} pt`;
     const opt = document.querySelector('#pdfFormatSyn option[value="auto"]');
@@ -7582,6 +7610,7 @@
     if (data && Array.isArray(data.noeuds)) reseau = JSON.parse(JSON.stringify(data));
     else if (ancienneChambre && window.Reseau) reseau = window.Reseau.depuisAncienneChambre(ancienneChambre, null);
     else reseau = null;
+    try { SYN.zoom = null; } catch (e) { /* SYN pas encore initialisé (chargement au démarrage) */ } // nouveau projet : cadrage initial
   }
   // Coupe du plan affiché → tronçon actif (copie propre, sans le réseau).
   function sauverCoupeActive() {
@@ -7783,6 +7812,12 @@
   }
 
   function majBandeau() {
+    const btnReseau = document.getElementById('chambreModeBtn'); // cuivre quand une vue réseau est affichée
+    if (btnReseau) {
+      const vueReseau = !!(reseau && reseau.actif && reseau.actif.vue && reseau.actif.vue !== 'coupe');
+      btnReseau.classList.toggle('active', vueReseau); btnReseau.setAttribute('aria-pressed', String(vueReseau));
+      btnReseau.title = vueReseau ? 'Revenir à la coupe' : 'Réseau : synoptique, chambres, tronçons';
+    }
     let b = document.getElementById('reseauBandeau');
     if (!reseau) { if (b) b.hidden = true; return; }
     if (!b) {
@@ -7957,7 +7992,7 @@
     document.querySelector('.canvas-wrap')?.appendChild(o);
     o.querySelector('#reseauAuto').addEventListener('click', () => {
       reseau.noeuds.forEach((n) => { delete n.decal; });
-      SYN.zoom = { k: 1, px: 0, py: 0 }; dessinerSynoptique();
+      SYN.zoom = null; dessinerSynoptique();
       showToast('Disposition automatique rétablie');
     });
     o.querySelectorAll('[data-ajout]').forEach((b) => b.addEventListener('click', () => {
@@ -7967,7 +8002,7 @@
     o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
 
     o.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
-      SYN.mode = b.dataset.mode; SYN.zoom = { k: 1, px: 0, py: 0 }; // chaque vue repart cadrée
+      SYN.mode = b.dataset.mode; SYN.zoom = null; // chaque vue repart cadrée
       o.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('actif', x === b));
       o.querySelector('.reseau-ajouts').hidden = SYN.mode === 'iso';
       dessinerSynoptique();
@@ -8093,7 +8128,13 @@
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height);
     const data = synoptiqueAncre(zone.width / Math.max(1, zone.height), rapide);
     SYN.data = data;
-    const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 });
+    if (!SYN.zoom) { // cadrage initial lisible : texte ~ 8 px, début du réseau à gauche
+      const zw0 = zone.width - 40, zh0 = zone.height - 40, sFit = Math.min(zw0 / data.largeur, zh0 / data.hauteur);
+      const k = Math.max(1, Math.min(12, 0.75 / sFit, zh0 / (data.hauteur * sFit)));
+      const zw1 = zw0 * k, s1 = sFit * k;
+      SYN.zoom = { k, px: k > 1 ? 20 - (zone.width - zw1) / 2 - (zw1 - data.largeur * s1) / 2 : 0, py: 0 };
+    }
+    const z = SYN.zoom;
     const zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
     const page = new window.Vue3D.Page({ emitText: false, ombre: false });
     const res = window.Vue3D.drawSynoptiqueAncre(page, data, (zone.width - zw) / 2 + z.px, (zone.height - zh) / 2 + z.py, zw, zh, Infinity);
@@ -8110,7 +8151,11 @@
       D.coupes.slice(1, -1).forEach((x) => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, data.hauteur); ctx.stroke(); });
       ctx.setLineDash([]);
       ctx.fillStyle = 'rgba(90,96,110,0.85)'; ctx.font = `600 ${12 / SYN.vue.k}px 'IBM Plex Sans', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      D.coupes.slice(0, -1).forEach((x, i) => ctx.fillText(`Folio ${i + 1} / ${D.folios} · ${D.fmt.toUpperCase()}`, (x + D.coupes[i + 1]) / 2, 6 / SYN.vue.k));
+      D.coupes.slice(0, -1).forEach((x, i) => { // libellé court si le folio est étroit à l'écran
+        const larg = D.coupes[i + 1] - x, long = `Folio ${i + 1} / ${D.folios} · ${D.fmt.toUpperCase()}`;
+        const txt = ctx.measureText(long).width < larg - 16 / SYN.vue.k ? long : ctx.measureText(`F${i + 1}`).width < larg ? `F${i + 1}` : '';
+        if (txt) ctx.fillText(txt, x + larg / 2, 6 / SYN.vue.k);
+      });
       ctx.restore();
     }
     // sélection, tronçon en cours de tirage, poignées « + »
@@ -8358,8 +8403,18 @@
       c.problemes.forEach((x) => note(`À vérifier : ${x}`, 'chambre-res-ko'));
       h('Métré des fourreaux');
       if (!m.lignes.length) note('Aucun fourreau sur des tronçons de longueur connue.');
-      m.lignes.forEach((l) => note(`${l.fourreau} : [${l.metres.toLocaleString('fr-FR')} m] (${l.nombre} tube(s)-tronçon)`, 'chambre-res-ligne reseau-valeur'));
-      if (m.lignes.length) note(`Total : [${m.totalMetres.toLocaleString('fr-FR')} m] de fourreaux sur [${m.longueurReseau.toLocaleString('fr-FR')} m] de tranchée`, 'chambre-res-titre reseau-valeur');
+      if (m.lignes.length) { // tableau compact : type · longueur · tubes × tronçons
+        const fr = (v) => v.toLocaleString('fr-FR');
+        const t = document.createElement('table'); t.className = 'reseau-metre';
+        t.innerHTML = '<thead><tr><th scope="col">Fourreau</th><th scope="col">Longueur</th><th scope="col" title="Tubes × tronçons">Tubes</th></tr></thead>';
+        const tb = document.createElement('tbody');
+        m.lignes.forEach((l) => { const tr = document.createElement('tr'); [l.fourreau, `${fr(l.metres)} m`, String(l.nombre)].forEach((v) => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }); tb.appendChild(tr); });
+        t.appendChild(tb);
+        const tf = document.createElement('tfoot'); tf.innerHTML = '<tr><th scope="row">Total</th><td></td><td></td></tr>';
+        tf.querySelector('td').textContent = `${fr(m.totalMetres)} m`;
+        t.appendChild(tf); box.appendChild(t);
+        note(`sur ${fr(m.longueurReseau)} m de tranchée`, 'chambre-aide');
+      }
       m.sansLongueur.forEach((t) => note(`Longueur manquante : ${t} (non compté)`, 'chambre-res-ko'));
       return;
     }
