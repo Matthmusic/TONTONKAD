@@ -79633,14 +79633,7 @@ var require_vue3d = __commonJS({
         etiquettesTroncons.forEach((f2) => f2());
         etiquettes.forEach((f2) => f2());
       }
-      function decouperFolios(data, fmt, { texteMax = 10, texteMin = 7 } = {}) {
-        const [PW, PH] = FORMATS_PAGE[fmt] || FORMATS_PAGE.a3, k = PW / PAGE_W, M = MARGE * k;
-        const bandeTitre = 30 * k, bandePied = 18, garde = 46;
-        const zx = M, zy = M + bandePied, zw = PW - 2 * M, zh = PH - 2 * M - bandeTitre - bandePied;
-        const sMax = texteMax / SYN.police, sH = zh / data.hauteur;
-        const sUne = Math.min(sMax, sH, (zw - 2 * garde) / data.largeur);
-        const s = SYN.police * sUne >= texteMin ? sUne : Math.min(sH, sMax);
-        const Wu = (zw - 2 * garde) / s;
+      function couperEnLargeur(data, Wu) {
         const pris = [];
         data.noeuds.forEach((n) => pris.push([n.x - n.w / 2 - 34, n.x + n.w / 2 + 34]));
         data.troncons.forEach((t) => {
@@ -79658,6 +79651,120 @@ var require_vue3d = __commonJS({
           coupes.push(x == null ? cible : x);
         }
         coupes.push(data.largeur);
+        return coupes;
+      }
+      function renvoisCoupes(data, coupes) {
+        const renvois = [];
+        data.troncons.forEach((t) => {
+          const x0 = Math.min(t.a.x, t.b.x), x1 = Math.max(t.a.x, t.b.x), y = t.a.y;
+          coupes.slice(1, -1).forEach((c) => {
+            if (c > x0 && c < x1) renvois.push({ x: c, y, n: renvois.length + 1 });
+          });
+        });
+        return renvois;
+      }
+      function decouperBandes(data, fmt, { texteMax = 10, texteMin = 7 } = {}) {
+        const [PW, PH] = FORMATS_PAGE[fmt] || FORMATS_PAGE.a0, k = PW / PAGE_W, M = MARGE * k;
+        const bandeTitre = 30 * k, bandePied = 18, garde = 46, ecartB = 28;
+        const zx = M, zy = M + bandePied, zw = PW - 2 * M, zh = PH - 2 * M - bandeTitre - bandePied;
+        const boites = [];
+        data.noeuds.forEach((n) => boites.push([n.x - n.w / 2, n.x + n.w / 2 + 30, n.y - n.h / 2, n.y + n.h / 2]));
+        data.troncons.forEach((t) => {
+          if (t.e) boites.push([t.e.x - t.e.w / 2, t.e.x + t.e.w / 2, t.e.y - t.e.h / 2, t.e.y + t.e.h / 2]);
+        });
+        const etendue = (c0, c1) => {
+          let y0 = Infinity, y1 = -Infinity;
+          boites.forEach(([a, b, h0, h1]) => {
+            if (b > c0 && a < c1) {
+              y0 = Math.min(y0, h0);
+              y1 = Math.max(y1, h1);
+            }
+          });
+          return Number.isFinite(y0) ? [y0 - 14, y1 + 14] : [0, data.hauteur];
+        };
+        const essai = (s2) => {
+          const coupes = couperEnLargeur(data, (zw - 2 * garde) / s2), n = coupes.length - 1;
+          const ys = coupes.slice(0, -1).map((c, b) => etendue(c, coupes[b + 1]));
+          const feuille = [], places = [];
+          let f2 = 0, h = 0;
+          ys.forEach(([y0, y1]) => {
+            const hb = (y1 - y0) * s2, besoin = (h ? ecartB : 0) + hb;
+            if (h && h + besoin > zh) {
+              f2 += 1;
+              h = 0;
+            }
+            places.push({ f: f2, haut: h ? h + ecartB : 0, hb });
+            h += (h ? ecartB : 0) + hb;
+            feuille[f2] = h;
+          });
+          return { s: s2, coupes, bandes: n, ys, places, feuilles: f2 + 1 };
+        };
+        const sMax = Math.min(texteMax / SYN.police, zh / data.hauteur), sMin = texteMin / SYN.police;
+        let r = null;
+        for (let s2 = sMax; s2 >= sMin * 0.999; s2 *= 0.96) {
+          const e = essai(s2);
+          if (e.feuilles === 1) {
+            r = e;
+            break;
+          }
+        }
+        if (!r) r = essai(Math.min(sMax, sMin));
+        return { fmt, PW, PH, k, M, bandeTitre, bandePied, garde, ecartB, zx, zy, zw, zh, ...r, folios: r.bandes, texte: SYN.police * r.s };
+      }
+      function formatOptimalBandes(data, { texteMin = 7 } = {}) {
+        const essais = ["a4", "a3", "a2", "a1", "a0"].map((f2) => decouperBandes(data, f2, { texteMin }));
+        return essais.find((d) => d.feuilles === 1 && d.texte >= texteMin) || essais[essais.length - 1];
+      }
+      function synoptiqueEnBandes(data, fmt, titre, opts = {}) {
+        const D = decouperBandes(data, fmt, opts);
+        const { PW, PH, k, M, garde, ecartB, zx, zy, zh, s, coupes, ys, places, feuilles } = D, N = coupes.length - 1;
+        const renvois = renvoisCoupes(data, coupes), pages = [];
+        for (let f2 = 0; f2 < feuilles; f2++) {
+          const p = new Page({ emitText: false, ombre: false });
+          p.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * k, `${titre} \u2014 synoptique du r\xE9seau`, { bold: true });
+          if (feuilles > 1) p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 4, 11 * k, `Feuille ${f2 + 1} / ${feuilles}`, { align: "right", bold: true });
+          p.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * k, PW - M, PH - M - 12 * k);
+          for (let b = 0; b < N; b++) {
+            if (places[b].f !== f2) continue;
+            const c0 = coupes[b], c1 = coupes[b + 1], lw = (c1 - c0) * s, y1 = ys[b][1], hb = places[b].hb;
+            const gx = zx + garde, ybb = zy + zh - places[b].haut - hb;
+            const oy = ybb - (data.hauteur - y1) * s, Y = (y) => oy + (data.hauteur - y) * s;
+            const n0 = p.labels.length;
+            p.clip([[gx, ybb], [gx + lw, ybb], [gx + lw, ybb + hb], [gx, ybb + hb]], () => {
+              drawSynoptiqueAncre(p, data, gx - c0 * s, oy, data.largeur * s, data.hauteur * s, s);
+            });
+            const garder = p.labels.slice(n0).filter((l) => l.x >= gx - 1 && l.x <= gx + lw + 1 && l.y >= ybb - 1 && l.y <= ybb + hb + 1);
+            p.labels.length = n0;
+            p.labels.push(...garder);
+            const bord = (x, sens, cx0) => {
+              renvois.filter((r) => Math.abs(r.x - cx0) < 1e-6).forEach((r) => {
+                const y = Y(r.y), cx = x + sens * 22;
+                p.rgb([0.36, 0.39, 0.45]).width(1.4).line(x, y, cx - sens * 10, y);
+                p.rgb([1, 1, 1], false).rgb([0.66, 0.27, 0.04]).width(1.2).circle(cx, y, 10, "B");
+                p.rgb([0.66, 0.27, 0.04], false).text(cx, y - 3, 8, `R${r.n}`, { align: "center", bold: true });
+              });
+              const yr = renvois.find((r) => Math.abs(r.x - cx0) < 1e-6);
+              p.rgb([0.45, 0.45, 0.45], false).text(x + sens * 42, (yr ? Y(yr.y) : ybb + hb / 2) - 5, 16, "\u2026", { align: "center", bold: true });
+            };
+            if (b < N - 1) bord(gx + lw, 1, c1);
+            if (b > 0) bord(gx, -1, c0);
+            const suivante = places[b + 1];
+            if (suivante && suivante.f === f2) p.rgb([0.82, 0.83, 0.86]).width(0.5).dash(true).line(zx, ybb - ecartB / 2, PW - M, ybb - ecartB / 2).dash(false);
+          }
+          p.rgb([0.45, 0.45, 0.45], false).text(M, M + 4, 7, `${N} bande${N > 1 ? "s" : ""} : \xAB \u2026 \xBB et renvois R en bout de bande, la suite reprend \xE0 gauche en dessous${f2 < feuilles - 1 ? ` \u2014 suite feuille ${f2 + 2}` : ""}.`, {});
+          pages.push(p);
+        }
+        return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH, bandes: N, feuilles };
+      }
+      function decouperFolios(data, fmt, { texteMax = 10, texteMin = 7 } = {}) {
+        const [PW, PH] = FORMATS_PAGE[fmt] || FORMATS_PAGE.a3, k = PW / PAGE_W, M = MARGE * k;
+        const bandeTitre = 30 * k, bandePied = 18, garde = 46;
+        const zx = M, zy = M + bandePied, zw = PW - 2 * M, zh = PH - 2 * M - bandeTitre - bandePied;
+        const sMax = texteMax / SYN.police, sH = zh / data.hauteur;
+        const sUne = Math.min(sMax, sH, (zw - 2 * garde) / data.largeur);
+        const s = SYN.police * sUne >= texteMin ? sUne : Math.min(sH, sMax);
+        const Wu = (zw - 2 * garde) / s;
+        const coupes = couperEnLargeur(data, Wu);
         return { fmt, PW, PH, k, M, bandeTitre, bandePied, garde, zx, zy, zw, zh, s, Wu, coupes, folios: coupes.length - 1, texte: SYN.police * s };
       }
       function formatOptimalSynoptique(data, { texteMin = 7 } = {}) {
@@ -79667,14 +79774,7 @@ var require_vue3d = __commonJS({
       function synoptiqueEnFolios(data, fmt, titre, opts = {}) {
         const D = decouperFolios(data, fmt, opts);
         const { PW, PH, k, M, garde, zx, zy, zw, zh, s, Wu, coupes } = D;
-        const N = coupes.length - 1;
-        const renvois = [];
-        data.troncons.forEach((t) => {
-          const x0 = Math.min(t.a.x, t.b.x), x1 = Math.max(t.a.x, t.b.x), y = t.a.y;
-          coupes.slice(1, -1).forEach((c) => {
-            if (c > x0 && c < x1) renvois.push({ x: c, y, n: renvois.length + 1 });
-          });
-        });
+        const N = coupes.length - 1, renvois = renvoisCoupes(data, coupes);
         const pages = [];
         for (let i = 0; i < N; i++) {
           const p = new Page({ emitText: false, ombre: false }), c0 = coupes[i], c1 = coupes[i + 1];
@@ -79707,7 +79807,7 @@ var require_vue3d = __commonJS({
         }
         return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH };
       }
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);

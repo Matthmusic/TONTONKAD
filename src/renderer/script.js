@@ -7289,11 +7289,11 @@
       const ol = document.getElementById('pdfReseauFichiers'); if (!ol) return;
       const coche = (id) => document.getElementById(id)?.checked !== false;
       const fmtS = (document.getElementById('pdfFormatSyn') || {}).value || 'auto';
-      const dS = fmtS === 'auto' ? window.Vue3D.formatOptimalSynoptique(synoptiqueAncre(1.414)) : window.Vue3D.decouperFolios(synoptiqueAncre(1.414), fmtS);
+      const dS = decoupageSyn(synoptiqueAncre(1.414), fmtS);
       const nCh = etudesChambresReseau().length, nCo = reseau.troncons.filter((t) => { const st = etatTroncon(t); return st && st.fourreaux.length; }).length;
       const fmtC = ((document.getElementById('pdfFormatCoupes') || {}).value || 'a3').toUpperCase();
       const items = [
-        coche('pdfGrpSyn') && `Synoptique — ${dS.folios} folio${dS.folios > 1 ? 's' : ''} ${dS.fmt.toUpperCase()} + métré et continuité`,
+        coche('pdfGrpSyn') && `Synoptique — ${resumeDecoupage(dS)} + métré et continuité`,
         coche('pdfGrpChambres') && nCh && `Chambres — ${nCh} page${nCh > 1 ? 's' : ''} A3`,
         coche('pdfGrpCoupes') && nCo && `Coupes — ${nCo} tronçon${nCo > 1 ? 's' : ''} en ${fmtC}`,
         coche('pdfGrpTableaux') && 'Tableaux fourreaux et câbles — A4 paysage',
@@ -7307,24 +7307,34 @@
       const el = document.getElementById(id); if (el && !el._ttkListe) { el._ttkListe = true; el.addEventListener('change', listeFichiers); }
     });
     listeFichiers();
-    const D = window.Vue3D.formatOptimalSynoptique(synoptiqueAncre(1.414));
-    const txt = `${D.fmt.toUpperCase()} — ${D.folios} folio${D.folios > 1 ? 's' : ''}, texte ${D.texte.toFixed(1).replace('.', ',')} pt`;
+    const D = decoupageSyn(synoptiqueAncre(1.414), 'auto');
+    const txt = resumeDecoupage(D);
     const opt = document.querySelector('#pdfFormatSyn option[value="auto"]');
     if (opt) opt.textContent = `Automatique (conseillé : ${txt})`;
     const sel = document.getElementById('pdfFormatSyn'), conseil = document.getElementById('pdfFormatConseil');
     const maj = () => {
       if (!conseil || !sel) return;
       if (sel.value === 'auto') { conseil.textContent = `Format le plus petit qui reste lisible : ${txt}.`; return; }
-      const d = window.Vue3D.decouperFolios(synoptiqueAncre(1.414), sel.value);
-      conseil.textContent = `${sel.value.toUpperCase()} : ${d.folios} folio${d.folios > 1 ? 's' : ''}, texte ${d.texte.toFixed(1).replace('.', ',')} pt${d.texte < 7 ? ' — petit, préférez un format plus grand' : ''}.`;
+      const d = decoupageSyn(synoptiqueAncre(1.414), sel.value);
+      conseil.textContent = `${resumeDecoupage(d)}${d.texte < 7 ? ' — petit, préférez un format plus grand' : ''}.`;
     };
     if (sel && !sel._ttk) { sel._ttk = true; sel.addEventListener('change', () => { maj(); dessinerSynoptique(false); }); }
+    const mep = document.getElementById('pdfMiseEnPageSyn');
+    if (mep && !mep._ttk) { mep._ttk = true; mep.addEventListener('change', () => { majOptionsPdfReseau(); dessinerSynoptique(false); }); }
     maj();
   }
-  // Format des folios affichés dans le synoptique (pointillés) = celui de l'export.
-  function formatFoliosSyn(data) {
-    const v = (document.getElementById('pdfFormatSyn') || {}).value || 'auto';
-    return v === 'auto' ? window.Vue3D.formatOptimalSynoptique(data).fmt : v;
+  // Découpage du synoptique tel que l'export le fera (mise en page + format
+  // choisis dans la fenêtre PDF) : sert aux pointillés de l'app et au conseil.
+  function miseEnPageSyn() { return (document.getElementById('pdfMiseEnPageSyn') || {}).value || 'bandes'; }
+  function decoupageSyn(data, fmtChoisi) {
+    const V = window.Vue3D, v = fmtChoisi || (document.getElementById('pdfFormatSyn') || {}).value || 'auto';
+    if (miseEnPageSyn() === 'bandes') return v === 'auto' ? V.formatOptimalBandes(data) : V.decouperBandes(data, v);
+    return v === 'auto' ? V.formatOptimalSynoptique(data) : V.decouperFolios(data, v);
+  }
+  function resumeDecoupage(D) {
+    const t = `texte ${D.texte.toFixed(1).replace('.', ',')} pt`;
+    if (D.bandes != null) return `${D.fmt.toUpperCase()} — ${D.bandes} bande${D.bandes > 1 ? 's' : ''}${D.feuilles > 1 ? ` sur ${D.feuilles} feuilles` : ' sur 1 feuille'}, ${t}`;
+    return `${D.fmt.toUpperCase()} — ${D.folios} folio${D.folios > 1 ? 's' : ''}, ${t}`;
   }
   function openPdfExportModal() {
     const modal = document.getElementById('pdfExportModal');
@@ -8145,15 +8155,15 @@
     ctx.setTransform(dpr * SYN.vue.k, 0, 0, dpr * SYN.vue.k, dpr * SYN.vue.ox, dpr * SYN.vue.oy);
     // limites des folios du PDF (format de l'export) : pointillés gris + numéros
     {
-      const D = window.Vue3D.decouperFolios(data, formatFoliosSyn(data));
+      const D = decoupageSyn(data), nomPart = D.bandes != null ? 'Bande' : 'Folio';
       ctx.save();
       ctx.strokeStyle = 'rgba(110,116,128,0.7)'; ctx.lineWidth = 1.2 / SYN.vue.k; ctx.setLineDash([7 / SYN.vue.k, 6 / SYN.vue.k]);
       D.coupes.slice(1, -1).forEach((x) => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, data.hauteur); ctx.stroke(); });
       ctx.setLineDash([]);
       ctx.fillStyle = 'rgba(90,96,110,0.85)'; ctx.font = `600 ${12 / SYN.vue.k}px 'IBM Plex Sans', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       D.coupes.slice(0, -1).forEach((x, i) => { // libellé court si le folio est étroit à l'écran
-        const larg = D.coupes[i + 1] - x, long = `Folio ${i + 1} / ${D.folios} · ${D.fmt.toUpperCase()}`;
-        const txt = ctx.measureText(long).width < larg - 16 / SYN.vue.k ? long : ctx.measureText(`F${i + 1}`).width < larg ? `F${i + 1}` : '';
+        const larg = D.coupes[i + 1] - x, long = `${nomPart} ${i + 1} / ${D.folios} · ${D.fmt.toUpperCase()}`;
+        const txt = ctx.measureText(long).width < larg - 16 / SYN.vue.k ? long : ctx.measureText(`${nomPart[0]}${i + 1}`).width < larg ? `${nomPart[0]}${i + 1}` : '';
         if (txt) ctx.fillText(txt, x + larg / 2, 6 / SYN.vue.k);
       });
       ctx.restore();
@@ -9045,10 +9055,12 @@
     if (groupes.synoptique !== false) {
       const syn = synoptiqueAncre(1.414), choix = formData.formatSyn || 'auto';
       // en longueur, découpé en folios au format choisi (A3 par défaut)
-      const fmt = choix === 'auto' ? V.formatOptimalSynoptique(syn).fmt : choix, f = V.synoptiqueEnFolios(syn, fmt, formData.projectName);
+      const bandes = (formData.miseEnPageSyn || 'bandes') === 'bandes';
+      const fmt = choix !== 'auto' ? choix : (bandes ? V.formatOptimalBandes(syn) : V.formatOptimalSynoptique(syn)).fmt;
+      const f = bandes ? V.synoptiqueEnBandes(syn, fmt, formData.projectName) : V.synoptiqueEnFolios(syn, fmt, formData.projectName);
       const pdf = new JsPDF('landscape', 'mm', fmt);
       f.pages.forEach((pg, i) => writeVue3DPage(pdf, pg, fmt, f.PH, { nouvelle: i > 0 }));
-      const fmtSyn = `${fmt.toUpperCase()}_${f.pages.length}folio${f.pages.length > 1 ? 's' : ''}`;
+      const fmtSyn = bandes ? `${fmt.toUpperCase()}_${f.bandes}bandes` : `${fmt.toUpperCase()}_${f.pages.length}folio${f.pages.length > 1 ? 's' : ''}`;
       pagesMetreContinuite(formData.projectName).forEach((pg) => writeVue3DPage(pdf, pg));
       fichiers.push([pdf, `${base}_synoptique_${fmtSyn}.pdf`]);
     }
@@ -9153,6 +9165,7 @@
       includeStats: document.getElementById('pdfIncludeStats')?.checked || true,
       include3D: document.getElementById('pdfInclude3D')?.checked !== false,
       formatSyn: document.getElementById('pdfFormatSyn')?.value || 'auto',
+      miseEnPageSyn: document.getElementById('pdfMiseEnPageSyn')?.value || 'bandes',
       formatCoupes: document.getElementById('pdfFormatCoupes')?.value || 'a3',
       groupes: {
         synoptique: document.getElementById('pdfGrpSyn')?.checked !== false,
