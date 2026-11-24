@@ -124,7 +124,6 @@ function drawCoupe(p, m, x0, y0, wPt, hPt) {
   for (const fo of m.fourreaux) {
     p.rgb([1, 1, 1], false).rgb([0.85, 0.4, 0.05]).width(1).circle(X(fo.x), Y(fo.y), fo.od / 2 * s, 'B');
     p.width(0.5).circle(X(fo.x), Y(fo.y), fo.di / 2 * s);
-    p.rgb([0, 0, 0], false).text(X(fo.x), Y(fo.y + fo.od / 2) + 2, 7, fo.id, { align: 'center', bold: true });
   }
   for (const c of m.cables) {
     p.rgb(PHASE_RGB[c.phase] || [0.2, 0.2, 0.2]).width(0.6).circle(X(c.x), Y(c.y), c.od / 2 * s);
