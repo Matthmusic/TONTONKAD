@@ -332,7 +332,8 @@ function regrouperFaisceaux(etude) {
 function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
   const L = etude.L, l = etude.l, e = (etude.infos && etude.infos.paroi) || 0, sortie = 350;
   const ext = e + sortie + 110; // place pour l'étiquette de chaque côté, au bout des tubes
-  const s = fit(L + 2 * ext, l + 2 * ext, zw, zh);
+  // marge fixe (pt) en plus : étiquettes et pastilles des côtés restent dans le cadre
+  const MPT = 30, s = fit(L + 2 * ext, l + 2 * ext, Math.max(10, zw - 2 * MPT), Math.max(10, zh - 2 * MPT));
   const ox = zx + (zw - (L + 2 * ext) * s) / 2 + ext * s, oy = zy + (zh - (l + 2 * ext) * s) / 2 + ext * s;
   const P = (x, y) => [ox + x * s, oy + y * s];
   p.geoDessus = { ox, oy, s, L, l, e }; // pour retrouver une face à partir d'un clic
@@ -348,7 +349,6 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
     p.rgb([0.45, 0.45, 0.45]).width(0.6).dash(true);
     for (let k = 0; k < nt; k++) { const cx = L * (k + 0.5) / nt; p.poly([P(cx - a / 2, (l - b) / 2), P(cx + a / 2, (l - b) / 2), P(cx + a / 2, (l + b) / 2), P(cx - a / 2, (l + b) / 2)], 'S'); }
     p.dash(false);
-    p.rgb([0.35, 0.35, 0.35], false).text(...P(L / 2, l).map((v, i) => i ? v - 35 : v), 7, `${nt} tampon(s) ${tp.L}×${tp.l} ${tp.classe} — paroi ${e} mm (à valider)`, { align: 'center' });
   } else if (nt > 1) { p.rgb([0.6, 0.6, 0.6]).width(0.4).dash(true); for (let k = 1; k < nt; k++) p.line(...P(L * k / nt, 0), ...P(L * k / nt, l)); p.dash(false); }
 
   // géométrie d'une face : point le long du mur, normale vers l'intérieur
@@ -435,19 +435,15 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
   // du mur, à côté des fourreaux (pas dessus). Positions gardées pour le clic dans l'app.
   p.pastillesCotes = {};
   for (const k of Object.keys(faceGeo)) {
-    const g = faceGeo[k], mq = masques[k], rp = 10;
-    let t = g.long / 2;
-    if (mq && mq.fourreaux.length) {
-      const off = (g.long - mq.largeur) / 2, miroir = coupeEnMiroir(k, mq.sens);
-      const ts = mq.fourreaux.map((f) => off + (miroir ? mq.largeur - f.x : f.x));
-      const lo = Math.min(...mq.fourreaux.map((f, i) => ts[i] - f.od / 2)), hi = Math.max(...mq.fourreaux.map((f, i) => ts[i] + f.od / 2));
-      const gap = rp / s + 40;
-      t = lo - gap >= gap ? lo - gap : hi + gap <= g.long - gap ? hi + gap : g.long / 2;
+    const g = faceGeo[k], rp = 10, lb = p.libellesCotes && p.libellesCotes[k];
+    let qx, qy;
+    if (lb) { // collée à l'étiquette du masque : à gauche (côtés 1, 3), au-dessus (côtés 2, 4)
+      // décalée vers l'extérieur pour ne pas toucher le bout des tubes
+      if (g.out[0] !== 0) { qx = lb.x + g.out[0] * (rp + 4 - lb.w / 2); qy = lb.y + lb.h / 2 + rp + 5; }
+      else { qx = lb.x - lb.w / 2 - rp - 5; qy = lb.y + g.out[1] * (rp + 4 - lb.h / 2); }
+    } else { // côté libre : au milieu, juste à l'extérieur du mur
+      const [bx, by] = g.at(g.long / 2); [qx, qy] = P(bx + g.out[0] * (e + 120), by + g.out[1] * (e + 120));
     }
-    // pas de place à côté des tubes : pastille posée sur les tubes, au ras du mur
-    // (au-delà, la flèche « élément suivant » de l'app occupe le milieu du côté)
-    const d = e + (mq && t === g.long / 2 ? 90 : 120);
-    const [bx, by] = g.at(t), [qx, qy] = P(bx + g.out[0] * d, by + g.out[1] * d);
     p.rgb([0.1, 0.12, 0.16], false).rgb([1, 1, 1]).width(1.5).circle(qx, qy, rp, 'B');
     p.rgb([1, 1, 1], false).text(qx, qy - 4, 11, String(NUMERO_COTE[k]), { align: 'center', bold: true });
     p.pastillesCotes[k] = { x: qx, y: qy, r: rp };
@@ -484,9 +480,8 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
     p.rgb([1, 1, 1], false).text(qx, qy - 3, 7.5, String(noms.length), { align: 'center', bold: true });
   });
   // cotes
-  const [c1x, c1y] = P(L / 2, l);
-  p.rgb([0.1, 0.1, 0.1], false).text(c1x, c1y - 14, 10, `${etude.nom ? etude.nom + ' — ' : ''}${etude.ref}`, { align: 'center', bold: true });
-  p.rgb([0.35, 0.35, 0.35], false).text(c1x, c1y - 25, 7, `${L} × ${l} mm intérieur`, { align: 'center' });
+  // Nom, modèle, dimensions et tampons : dans l'en-tête et le cartouche de la page,
+  // et dans le panneau de l'app (dans le dessin, ils se superposaient aux faisceaux).
   p.rgb([0, 0, 0], false);
   return couleur;
 }
@@ -738,7 +733,8 @@ function dessinerPageChambreA3(p, e, masques, opts = {}) {
     } else if (b.type === 'cartouche') {
       cadre(z, 'Cartouche');
       const L2 = [['Projet', opts.projet || '—'], ['Chambre', `${e.nom || '—'} · ${etudeOk ? e.ref : '—'}`],
-        ['Intérieur', etudeOk ? `${e.L} × ${e.l} × ${e.H} mm` : '—'], ['Date', opts.date || ''], ['Indice', opts.indice || 'A'], ['Établi par', 'CEA — TONTONKAD']];
+        ['Intérieur', etudeOk ? `${e.L} × ${e.l} × ${e.H} mm` : '—'],
+        ...(etudeOk && e.infos && e.infos.tampon && e.infos.tampons ? [['Tampons', `${e.infos.tampons} × ${e.infos.tampon.L}×${e.infos.tampon.l} ${e.infos.tampon.classe} (à valider)`]] : []), ['Date', opts.date || ''], ['Indice', opts.indice || 'A'], ['Établi par', 'CEA — TONTONKAD']];
       L2.forEach(([k, v], i) => {
         const y = z.y + z.h - 30 - i * 13;
         p.rgb([0.4, 0.4, 0.4], false).text(z.x + 8, y, 7.5, k);

@@ -78892,7 +78892,7 @@ var require_vue3d = __commonJS({
       function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
         const L = etude.L, l = etude.l, e = etude.infos && etude.infos.paroi || 0, sortie = 350;
         const ext = e + sortie + 110;
-        const s = fit(L + 2 * ext, l + 2 * ext, zw, zh);
+        const MPT = 30, s = fit(L + 2 * ext, l + 2 * ext, Math.max(10, zw - 2 * MPT), Math.max(10, zh - 2 * MPT));
         const ox = zx + (zw - (L + 2 * ext) * s) / 2 + ext * s, oy = zy + (zh - (l + 2 * ext) * s) / 2 + ext * s;
         const P = (x, y) => [ox + x * s, oy + y * s];
         p.geoDessus = { ox, oy, s, L, l, e };
@@ -78908,7 +78908,6 @@ var require_vue3d = __commonJS({
             p.poly([P(cx - a / 2, (l - b) / 2), P(cx + a / 2, (l - b) / 2), P(cx + a / 2, (l + b) / 2), P(cx - a / 2, (l + b) / 2)], "S");
           }
           p.dash(false);
-          p.rgb([0.35, 0.35, 0.35], false).text(...P(L / 2, l).map((v, i) => i ? v - 35 : v), 7, `${nt} tampon(s) ${tp.L}\xD7${tp.l} ${tp.classe} \u2014 paroi ${e} mm (\xE0 valider)`, { align: "center" });
         } else if (nt > 1) {
           p.rgb([0.6, 0.6, 0.6]).width(0.4).dash(true);
           for (let k = 1; k < nt; k++) p.line(...P(L * k / nt, 0), ...P(L * k / nt, l));
@@ -78987,17 +78986,20 @@ var require_vue3d = __commonJS({
         }
         p.pastillesCotes = {};
         for (const k of Object.keys(faceGeo)) {
-          const g = faceGeo[k], mq = masques[k], rp = 10;
-          let t = g.long / 2;
-          if (mq && mq.fourreaux.length) {
-            const off = (g.long - mq.largeur) / 2, miroir = coupeEnMiroir(k, mq.sens);
-            const ts = mq.fourreaux.map((f2) => off + (miroir ? mq.largeur - f2.x : f2.x));
-            const lo = Math.min(...mq.fourreaux.map((f2, i) => ts[i] - f2.od / 2)), hi = Math.max(...mq.fourreaux.map((f2, i) => ts[i] + f2.od / 2));
-            const gap = rp / s + 40;
-            t = lo - gap >= gap ? lo - gap : hi + gap <= g.long - gap ? hi + gap : g.long / 2;
+          const g = faceGeo[k], rp = 10, lb = p.libellesCotes && p.libellesCotes[k];
+          let qx, qy;
+          if (lb) {
+            if (g.out[0] !== 0) {
+              qx = lb.x + g.out[0] * (rp + 4 - lb.w / 2);
+              qy = lb.y + lb.h / 2 + rp + 5;
+            } else {
+              qx = lb.x - lb.w / 2 - rp - 5;
+              qy = lb.y + g.out[1] * (rp + 4 - lb.h / 2);
+            }
+          } else {
+            const [bx, by] = g.at(g.long / 2);
+            [qx, qy] = P(bx + g.out[0] * (e + 120), by + g.out[1] * (e + 120));
           }
-          const d = e + (mq && t === g.long / 2 ? 90 : 120);
-          const [bx, by] = g.at(t), [qx, qy] = P(bx + g.out[0] * d, by + g.out[1] * d);
           p.rgb([0.1, 0.12, 0.16], false).rgb([1, 1, 1]).width(1.5).circle(qx, qy, rp, "B");
           p.rgb([1, 1, 1], false).text(qx, qy - 4, 11, String(NUMERO_COTE[k]), { align: "center", bold: true });
           p.pastillesCotes[k] = { x: qx, y: qy, r: rp };
@@ -79036,9 +79038,6 @@ var require_vue3d = __commonJS({
           p.rgb([0.55, 0.12, 0.1], false).rgb([1, 1, 1]).width(1).circle(qx, qy, 7, "B");
           p.rgb([1, 1, 1], false).text(qx, qy - 3, 7.5, String(noms.length), { align: "center", bold: true });
         });
-        const [c1x, c1y] = P(L / 2, l);
-        p.rgb([0.1, 0.1, 0.1], false).text(c1x, c1y - 14, 10, `${etude.nom ? etude.nom + " \u2014 " : ""}${etude.ref}`, { align: "center", bold: true });
-        p.rgb([0.35, 0.35, 0.35], false).text(c1x, c1y - 25, 7, `${L} \xD7 ${l} mm int\xE9rieur`, { align: "center" });
         p.rgb([0, 0, 0], false);
         return couleur;
       }
@@ -79389,6 +79388,7 @@ var require_vue3d = __commonJS({
               ["Projet", opts.projet || "\u2014"],
               ["Chambre", `${e.nom || "\u2014"} \xB7 ${etudeOk ? e.ref : "\u2014"}`],
               ["Int\xE9rieur", etudeOk ? `${e.L} \xD7 ${e.l} \xD7 ${e.H} mm` : "\u2014"],
+              ...etudeOk && e.infos && e.infos.tampon && e.infos.tampons ? [["Tampons", `${e.infos.tampons} \xD7 ${e.infos.tampon.L}\xD7${e.infos.tampon.l} ${e.infos.tampon.classe} (\xE0 valider)`]] : [],
               ["Date", opts.date || ""],
               ["Indice", opts.indice || "A"],
               ["\xC9tabli par", "CEA \u2014 TONTONKAD"]

@@ -8570,12 +8570,16 @@
       dessinerFleches(); return;
     }
     const e = r.etude, page = new V.Page({ emitText: false, ombre: false });
-    const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 40, W - 32, H - 80);
+    // bandes réservées sur les bords pour les flèches « élément suivant » : la
+    // chambre est dessinée dans ce qui reste, rien ne peut se chevaucher
+    const B = bandesFleches(ctx, nd);
+    const couleurs = V.drawChambreDessus(page, e, r.masques, B.g, B.b, W - B.g - B.d, H - B.h - B.b);
     V.rejouerSurCanvas(ctx, page, H);
     vueChambreGeo = { ...page.geoDessus, H, pastilles: page.pastillesCotes || {}, libelles: page.libellesCotes || {} };
     const ligne = (txt, cls, c) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; if (c) d.style.color = c; res.appendChild(d); };
     const css = (c) => c ? `rgb(${c.map((v) => Math.round(v * 255)).join(',')})` : '';
     ligne(`Modèle ${e.ref}${nd.ref ? ' (imposé)' : ' (automatique)'} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
+    if (e.infos && e.infos.tampon && e.infos.tampons) ligne(`${e.infos.tampons} tampon(s) ${e.infos.tampon.L} × ${e.infos.tampon.l} ${e.infos.tampon.classe}${e.infos.paroi ? ` — paroi ${e.infos.paroi} mm` : ''} (à valider)`, 'chambre-res-ligne');
     Object.values(e.faces).forEach((f) => ligne(`${f.tient ? 'OK' : 'NON'} · ${f.face} : [${Math.round(f.largeurMasque)} × ${Math.round(f.hauteurMasque)}] dans [${f.largeurFace} × ${f.hauteurFace}] mm`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
     const faisceaux = window.ChambreFaces.regrouperTraversees(e);
     if (faisceaux.length) ligne('Traversées (faisceaux)', 'chambre-res-titre');
@@ -8591,6 +8595,23 @@
   }
 
   // Flèches « → suivant » au-delà de chaque face reliée (clic : y aller).
+  // Flèches de la chambre par bord (haut = côté 1, droite = 2, bas = 3, gauche = 4)
+  // et largeur des bandes à réserver pour elles.
+  const BORD_FACE = { longPanB: 'haut', pignonB: 'droite', longPanA: 'bas', pignonA: 'gauche' };
+  function flechesParBord(ctx, nd) {
+    const res = { haut: [], droite: [], bas: [], gauche: [] };
+    ctx.font = `600 13px 'IBM Plex Sans', system-ui, sans-serif`;
+    R().FACES_CHAMBRE.forEach((f) => R().surFaceTous(reseau, nd.id, f).forEach((v) => {
+      const txt = `${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
+      res[BORD_FACE[f]].push({ f, v, txt, w: ctx.measureText(txt).width + 34, h: 26 });
+    }));
+    return res;
+  }
+  function bandesFleches(ctx, nd) {
+    const F = flechesParBord(ctx, nd), M = 12, H0 = 26 + 2 * M;
+    return { h: F.haut.length ? H0 : M, b: F.bas.length ? H0 : M,
+      g: F.gauche.length ? Math.max(...F.gauche.map((a) => a.w)) + 2 * M : M, d: F.droite.length ? Math.max(...F.droite.map((a) => a.w)) + 2 * M : M };
+  }
   function dessinerFleches() {
     const o = document.getElementById('chambreOverlay'), nd = chambreCourante(), g = vueChambreGeo;
     if (!o || !nd || !g) return;
@@ -8599,8 +8620,6 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const W = cv.width / dpr, H = cv.height / dpr;
     const pt = (x, y) => [g.ox + x * g.s, g.H - (g.oy + y * g.s)];
-    const ancres = { pignonA: [...pt(-g.e - 380, g.l / 2), 'right'], pignonB: [...pt(g.L + g.e + 380, g.l / 2), 'left'],
-      longPanA: [...pt(g.L / 2, -g.e - 380), 'top'], longPanB: [...pt(g.L / 2, g.l + g.e + 380), 'bottom'] };
     vueChambreFleches = [];
     // Pastilles de côté : anneau d'appel + bulle « coupe » au survol (clic : ouvre le masque).
     Object.entries(g.pastilles || {}).forEach(([k, q]) => {
@@ -8615,31 +8634,25 @@
         ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + w / 2, by + h / 2 + 1);
       }
     });
-    R().FACES_CHAMBRE.forEach((f) => R().surFaceTous(reseau, nd.id, f).forEach((v, rang, tous) => {
+    // flèches dans les bandes réservées : rangée centrée en haut / en bas, pile
+    // centrée à gauche / à droite (centrées sur la chambre quand c'est possible)
+    const F = flechesParBord(ctx, nd), [cxC, cyC] = pt(g.L / 2, g.l / 2), M = 12, ESP = 8;
+    const poses = [];
+    ['haut', 'bas'].forEach((bord) => {
+      const L = F[bord]; if (!L.length) return;
+      const total = L.reduce((a, f2) => a + f2.w, 0) + ESP * (L.length - 1);
+      let x = Math.max(4, Math.min(W - total - 4, cxC - total / 2));
+      L.forEach((a) => { poses.push({ ...a, x, y: bord === 'haut' ? M : H - M - a.h }); x += a.w + ESP; });
+    });
+    ['gauche', 'droite'].forEach((bord) => {
+      const L = F[bord]; if (!L.length) return;
+      const total = L.reduce((a, f2) => a + f2.h, 0) + ESP * (L.length - 1);
+      let y = Math.max(4, Math.min(H - total - 4, cyC - total / 2));
+      L.forEach((a) => { poses.push({ ...a, x: bord === 'gauche' ? M : W - M - a.w, y }); y += a.h + ESP; });
+    });
+    poses.forEach(({ f, v, txt, w, h, x, y }) => {
       const dir = { pignonA: 'left', pignonB: 'right', longPanA: 'down', longPanB: 'up' }[f];
-      const txt = `${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
       ctx.font = `600 13px 'IBM Plex Sans', system-ui, sans-serif`;
-      const w = ctx.measureText(txt).width + 34, h = 26;
-      let [x, y, cote] = ancres[f];
-      x = cote === 'right' ? x - w : cote === 'left' ? x : x - w / 2;
-      y = cote === 'top' ? y : cote === 'bottom' ? y - h : y - h / 2;
-      // côté partagé : flèches empilées le long du côté
-      const decal = (rang - (tous.length - 1) / 2);
-      if (cote === 'left' || cote === 'right') y += decal * (h + 6); else x += decal * (w + 8);
-      x = Math.max(4, Math.min(W - w - 4, x)); y = Math.max(4, Math.min(H - h - 4, y));
-      // ne jamais couvrir la pastille ni l'étiquette du côté : on décale la flèche
-      const gene = [];
-      const q = g.pastilles && g.pastilles[f];
-      if (q) gene.push({ x0: q.x - q.r - 6, x1: q.x + q.r + 6, y0: g.H - q.y - q.r - 6, y1: g.H - q.y + q.r + 6 });
-      const lb = g.libelles && g.libelles[f];
-      if (lb) gene.push({ x0: lb.x - lb.w / 2 - 4, x1: lb.x + lb.w / 2 + 4, y0: g.H - lb.y - lb.h / 2 - 4, y1: g.H - lb.y + lb.h / 2 + 4 });
-      vueChambreFleches.forEach((a) => gene.push({ x0: a.x - 4, x1: a.x + a.w + 4, y0: a.y - 4, y1: a.y + a.h + 4 })); // flèches déjà posées
-      for (let essai = 0; essai < 6; essai++) {
-        const r0 = gene.find((r) => r.x1 > x && r.x0 < x + w && r.y1 > y && r.y0 < y + h);
-        if (!r0) break;
-        if (cote === 'left' || cote === 'right') y = r0.y1 + 4 + h <= H - 4 ? r0.y1 + 4 : Math.max(4, r0.y0 - 4 - h);
-        else x = r0.x1 + 4 + w <= W - 4 ? r0.x1 + 4 : Math.max(4, r0.x0 - 4 - w);
-      }
       const survol = g.survol === v.autre.id;
       ctx.fillStyle = survol ? v.autre.couleur : '#ffffff'; ctx.strokeStyle = v.autre.couleur; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(x, y, w, h, 13); ctx.fill(); ctx.stroke();
@@ -8647,7 +8660,7 @@
       dessinerFleche(ctx, x + 13, y + h / 2, dir, 5);
       ctx.fillText(txt, x + 24, y + h / 2 + 1);
       vueChambreFleches.push({ x, y, w, h, vers: v.autre.id });
-    }));
+    });
   }
 
   // PDF : une page « vue de dessus » par chambre qui a des coupes.
