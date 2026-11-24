@@ -8214,6 +8214,12 @@
     const d = { pignonA: Math.abs(x), pignonB: Math.abs(x - g.L), longPanA: Math.abs(y), longPanB: Math.abs(y - g.l) };
     return Object.keys(d).reduce((a, b) => (d[b] < d[a] ? b : a));
   }
+  // Pastille de côté sous le pointeur (repère écran) → clé de face.
+  function pastilleSousPoint(px, py) {
+    const g = vueChambreGeo;
+    if (!g || !g.pastilles) return null;
+    return Object.keys(g.pastilles).find((k) => { const q = g.pastilles[k]; return Math.hypot(px - q.x, py - (g.H - q.y)) <= q.r + 6; }) || null;
+  }
   function chambreCourante() { return reseau && reseau.actif.noeud ? R().noeud(reseau, reseau.actif.noeud) : null; }
 
   function construireVueChambre() {
@@ -8227,7 +8233,7 @@
         <h3 id="chambreTitre">Chambre</h3>
         <div class="chambre-faces" id="chambreFaces"></div>
         <div id="chambreResultat" class="chambre-resultat"></div>
-        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Flèche : élément suivant. Double-clic sur une face : sa coupe.</p>
+        <p class="chambre-aide">Vue de dessus : côté 1 en haut, 2 à droite, 3 en bas, 4 à gauche. Cliquez une pastille numérotée (ou double-cliquez une face) pour ouvrir sa coupe. Flèche : élément suivant.</p>
         <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="chambreSyn">Modifier dans le synoptique</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
@@ -8235,19 +8241,28 @@
     const cv = o.querySelector('#chambreCanvas');
     const pos = (ev) => { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
     const flecheSous = (p) => vueChambreFleches.find((f) => p.x >= f.x && p.x <= f.x + f.w && p.y >= f.y && p.y <= f.y + f.h);
-    cv.addEventListener('click', (ev) => { const f = flecheSous(pos(ev)); if (f) allerA(f.vers); });
-    cv.addEventListener('dblclick', (ev) => {
-      const p = pos(ev); if (flecheSous(p)) return;
-      const face = faceSousPoint(p.x, p.y), nd = chambreCourante();
-      if (!face || !nd) return;
+    const ouvrirFace = (face) => {
+      const nd = chambreCourante(); if (!face || !nd) return;
       const v = R().surFace(reseau, nd.id, face);
       ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, face).id);
+    };
+    cv.addEventListener('click', (ev) => {
+      const p = pos(ev), f = flecheSous(p);
+      if (f) { allerA(f.vers); return; }
+      const k = pastilleSousPoint(p.x, p.y);
+      if (k) ouvrirFace(k); // la pastille numérotée ouvre la coupe du côté en un clic
+    });
+    cv.addEventListener('dblclick', (ev) => {
+      const p = pos(ev); if (flecheSous(p) || pastilleSousPoint(p.x, p.y)) return;
+      ouvrirFace(faceSousPoint(p.x, p.y));
     });
     cv.addEventListener('mousemove', (ev) => {
       const p = pos(ev), f = flecheSous(p);
-      const survol = f ? f.vers : null;
-      if (survol !== vueChambreGeo?.survol) { if (vueChambreGeo) vueChambreGeo.survol = survol; dessinerFleches(); }
-      cv.style.cursor = f || faceSousPoint(p.x, p.y) ? 'pointer' : 'default';
+      const survol = f ? f.vers : null, pa = f ? null : pastilleSousPoint(p.x, p.y);
+      if (vueChambreGeo && (survol !== vueChambreGeo.survol || pa !== vueChambreGeo.survolPastille)) {
+        vueChambreGeo.survol = survol; vueChambreGeo.survolPastille = pa; dessinerFleches();
+      }
+      cv.style.cursor = f || pa || faceSousPoint(p.x, p.y) ? 'pointer' : 'default';
     });
     window.addEventListener('resize', () => { if (!o.hidden) dessinerVueChambre(); });
     return o;
@@ -8301,7 +8316,7 @@
     const e = r.etude, page = new V.Page({ emitText: false, ombre: false });
     const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 40, W - 32, H - 80);
     V.rejouerSurCanvas(ctx, page, H);
-    vueChambreGeo = { ...page.geoDessus, H };
+    vueChambreGeo = { ...page.geoDessus, H, pastilles: page.pastillesCotes || {} };
     const ligne = (txt, cls, c) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; if (c) d.style.color = c; res.appendChild(d); };
     const css = (c) => c ? `rgb(${c.map((v) => Math.round(v * 255)).join(',')})` : '';
     ligne(`Modèle ${e.ref}${nd.ref ? ' (imposé)' : ' (automatique)'} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
@@ -8331,6 +8346,19 @@
     const ancres = { pignonA: [...pt(-g.e - 380, g.l / 2), 'right'], pignonB: [...pt(g.L + g.e + 380, g.l / 2), 'left'],
       longPanA: [...pt(g.L / 2, -g.e - 380), 'top'], longPanB: [...pt(g.L / 2, g.l + g.e + 380), 'bottom'] };
     vueChambreFleches = [];
+    // Pastilles de côté : anneau d'appel + bulle « coupe » au survol (clic : ouvre le masque).
+    Object.entries(g.pastilles || {}).forEach(([k, q]) => {
+      const x = q.x, y = g.H - q.y, chaud = g.survolPastille === k;
+      ctx.strokeStyle = chaud ? '#e8661c' : 'rgba(232,102,28,0.55)'; ctx.lineWidth = chaud ? 3 : 2;
+      ctx.beginPath(); ctx.arc(x, y, q.r + 4, 0, Math.PI * 2); ctx.stroke();
+      if (chaud) {
+        const txt = 'Ouvrir la coupe de ce côté';
+        ctx.font = `600 12px 'IBM Plex Sans', system-ui, sans-serif`;
+        const w = ctx.measureText(txt).width + 16, h = 22, bx = Math.max(4, Math.min(W - w - 4, x - w / 2)), by = Math.max(4, y - q.r - 10 - h);
+        ctx.fillStyle = '#1a1d1f'; ctx.beginPath(); ctx.roundRect(bx, by, w, h, 6); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + w / 2, by + h / 2 + 1);
+      }
+    });
     R().FACES_CHAMBRE.forEach((f) => {
       const v = R().surFace(reseau, nd.id, f);
       if (!v) return;
@@ -8342,6 +8370,15 @@
       x = cote === 'right' ? x - w : cote === 'left' ? x : x - w / 2;
       y = cote === 'top' ? y : cote === 'bottom' ? y - h : y - h / 2;
       x = Math.max(4, Math.min(W - w - 4, x)); y = Math.max(4, Math.min(H - h - 4, y));
+      // ne jamais couvrir la pastille numérotée du côté : on décale la flèche
+      const q = g.pastilles && g.pastilles[f];
+      if (q) {
+        const qx = q.x, qy = g.H - q.y, rr = q.r + 6;
+        if (qx + rr > x && qx - rr < x + w && qy + rr > y && qy - rr < y + h) {
+          if (cote === 'left' || cote === 'right') y = Math.min(H - h - 4, qy + rr + 4);
+          else x = Math.min(W - w - 4, qx + rr + 4);
+        }
+      }
       const survol = g.survol === v.autre.id;
       ctx.fillStyle = survol ? v.autre.couleur : '#ffffff'; ctx.strokeStyle = v.autre.couleur; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(x, y, w, h, 13); ctx.fill(); ctx.stroke();
@@ -8370,10 +8407,56 @@
   function etatPlanCourant() {
     return { shape: SHAPE, width: WORLD_W_MM, height: WORLD_H_MM, diameter: WORLD_D_MM, fourreaux, cables };
   }
+  // Tassement par gravité des câbles d'un fourreau (comme la simulation de l'app) :
+  // chaque câble, du plus gros au plus petit, descend au point le plus bas possible
+  // (fond du fourreau, appui sur la paroi et un câble, ou sur deux câbles). Repère écran (y vers le bas).
+  function tasserCablesFourreau(f, cables) {
+    const R = (f.idm > 0 ? f.idm : f.od * 0.8) / 2 * MM_TO_PX, eps = 1e-6, poses = [];
+    const libre = (x, y, r) => Math.hypot(x - f.x, y - f.y) <= R - r + 1e-3
+      && poses.every((q) => Math.hypot(x - q.x, y - q.y) >= q.r + r - 1e-3);
+    [...cables].sort((a, b) => b.od - a.od).forEach((c) => {
+      const r = c.od / 2 * MM_TO_PX, Rr = R - r, cand = [];
+      if (Rr < 0) { cand.push([f.x, f.y]); }
+      else {
+        cand.push([f.x, f.y + Rr]);
+        poses.forEach((q) => {
+          // paroi (cercle Rr centré fourreau) ∩ cercle (q, q.r + r)
+          const d = Math.hypot(q.x - f.x, q.y - f.y), rq = q.r + r;
+          if (d > eps) {
+            const a = (Rr * Rr - rq * rq + d * d) / (2 * d), h2 = Rr * Rr - a * a;
+            if (h2 >= 0) { const h = Math.sqrt(h2), ux = (q.x - f.x) / d, uy = (q.y - f.y) / d, mx = f.x + a * ux, my = f.y + a * uy;
+              cand.push([mx - h * uy, my + h * ux], [mx + h * uy, my - h * ux]); }
+          }
+          poses.forEach((o) => {
+            if (o === q) return;
+            const dd = Math.hypot(o.x - q.x, o.y - q.y), r1 = q.r + r, r2 = o.r + r;
+            if (dd < eps || dd > r1 + r2) return;
+            const a = (r1 * r1 - r2 * r2 + dd * dd) / (2 * dd), h2 = r1 * r1 - a * a;
+            if (h2 < 0) return;
+            const h = Math.sqrt(h2), ux = (o.x - q.x) / dd, uy = (o.y - q.y) / dd, mx = q.x + a * ux, my = q.y + a * uy;
+            cand.push([mx - h * uy, my + h * ux], [mx + h * uy, my - h * ux]);
+          });
+        });
+      }
+      let best = null;
+      cand.forEach(([x, y]) => { if (libre(x, y, r) && (!best || y > best[1] + 1e-6 || (Math.abs(y - best[1]) < 1e-6 && Math.abs(x - f.x) < Math.abs(best[0] - f.x)))) best = [x, y]; });
+      if (!best) best = [c.x, c.y];
+      poses.push({ x: best[0], y: best[1], r, c });
+    });
+    return poses.map((q) => ({ ...q.c, x: q.x, y: q.y }));
+  }
   function etatDepuisSauvegarde(d) {
     const c = (d && d.container) || {};
-    return { shape: c.shape || 'rect', width: c.width, height: c.height, diameter: c.diameter,
-      fourreaux: (d && d.fourreaux) || [], cables: (d && d.cables) || [] };
+    const fourreaux = (d && d.fourreaux) || [], cables = (d && d.cables) || [];
+    // Les positions enregistrées peuvent précéder la simulation : on les tasse comme l'app.
+    const parF = new Map(fourreaux.map((f) => [f.id, f]));
+    const tasses = new Map();
+    fourreaux.forEach((f) => {
+      const dedans = cables.filter((cb) => cb.parent === f.id && cb.od > 0);
+      if (dedans.length && Number.isFinite(f.x) && Number.isFinite(f.y)) tasserCablesFourreau(f, dedans).forEach((cb) => { if (cb.id != null) tasses.set(cb.id, cb); });
+    });
+    return { shape: c.shape || 'rect', width: c.width, height: c.height, diameter: c.diameter, fourreaux,
+      cables: cables.map((cb) => (parF.has(cb.parent) && tasses.get(cb.id)) || cb) };
   }
 
   // État de plan → « masque » au format de vue3d.js (mm, Y vers le haut).
@@ -8411,14 +8494,16 @@
   function buildMasqueFromPlan(titre) { return buildMasqueFromState(etatPlanCourant(), titre); }
 
   // Écrit une page Vue3D (opérateurs bruts) dans jsPDF, textes via l'API jsPDF.
-  function writeVue3DPage(pdf, page, format = 'a4', hauteurPt = null) {
+  function writeVue3DPage(pdf, page, format = 'a4', hauteurPt = null, { nouvelle = true, echelle = 1 } = {}) {
     const V = window.Vue3D, k = 25.4 / 72; // pt → mm
-    pdf.addPage(format, 'landscape');
-    const HP = hauteurPt || V.PAGE_H;
+    if (nouvelle) pdf.addPage(format, 'landscape');
+    const HP = hauteurPt || V.PAGE_H * echelle;
     pdf.internal.write('q');
+    if (echelle !== 1) pdf.internal.write(`${echelle} 0 0 ${echelle} 0 0 cm`);
     pdf.internal.write(page.ops.join('\n'));
     pdf.internal.write('Q');
-    for (const l of page.labels) {
+    for (const l0 of page.labels) {
+      const l = echelle === 1 ? l0 : { ...l0, x: l0.x * echelle, y: l0.y * echelle, size: l0.size * echelle };
       pdf.setFont('helvetica', l.bold ? 'bold' : 'normal');
       pdf.setFontSize(l.size);
       pdf.setTextColor(Math.round(l.rgb[0] * 255), Math.round(l.rgb[1] * 255), Math.round(l.rgb[2] * 255));
@@ -8474,6 +8559,207 @@
       p3.rgb([0.25, 0.25, 0.25], false).text(x2 + 14, y2, 7, `${l.chemin.join(' → ')} · ${l.longueurM.toLocaleString('fr-FR')} m${l.longueurIncomplete ? ' (incomplète)' : ''}${ok ? '' : ' · ' + l.problemes.join(', ')}`.slice(0, 95)); y2 -= 12;
     });
     writeVue3DPage(pdf, p3);
+  }
+
+
+  // ─── Dossier PDF d'un réseau : un fichier par groupe ──────────────────────
+  // synoptique + métré/continuité · une page A3 par chambre · une coupe par
+  // tronçon (A3 ou plus) · tableaux de tous les tronçons. Pas de « vue
+  // principale » ni d'isométrique (illisibles sur un gros réseau).
+  function teintePdf(css, k = 0.8) {
+    let r = 200, g = 200, b = 200;
+    const s0 = String(css || ''), hx = /^#([0-9a-f]{6})$/i.exec(s0), hs = /hsla?\(\s*([\d.]+)[ ,]+([\d.]+)%[ ,]+([\d.]+)%/i.exec(s0);
+    if (hx) { const n = parseInt(hx[1], 16); r = n >> 16 & 255; g = n >> 8 & 255; b = n & 255; }
+    else if (hs) {
+      const h = Number(hs[1]) / 360, sa = Number(hs[2]) / 100, li = Number(hs[3]) / 100;
+      const q = li < 0.5 ? li * (1 + sa) : li + sa - li * sa, pp = 2 * li - q;
+      const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? pp + (q - pp) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp; };
+      r = f(h + 1 / 3) * 255; g = f(h) * 255; b = f(h - 1 / 3) * 255;
+    }
+    return [r, g, b].map((v) => Math.round(v + (255 - v) * k));
+  }
+  // Tableau paginé en A4 paysage (en-tête répété, fond de ligne optionnel).
+  function tableauPaysage(pdf, titre, sousTitre, colonnes, lignes, fond, premiere = false) {
+    if (!premiere) pdf.addPage('a4', 'landscape');
+    const PW = pdf.internal.pageSize.getWidth(), PH = pdf.internal.pageSize.getHeight(), mg = 12, LU = PW - 2 * mg;
+    const somme = colonnes.reduce((s2, c) => s2 + c.poids, 0);
+    colonnes.forEach((c) => { c.l = LU * c.poids / somme; });
+    let y = 0;
+    const entete = (suite) => {
+      pdf.setTextColor(26, 29, 31); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13);
+      pdf.text(titre + (suite ? ' (suite)' : ''), mg, mg + 6);
+      if (sousTitre && !suite) { pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8.5); pdf.setTextColor(90, 96, 110); pdf.text(sousTitre, mg, mg + 11.5); }
+      y = mg + 15;
+      pdf.setFillColor(40, 44, 52); pdf.rect(mg, y, LU, 7, 'F');
+      pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5);
+      let x = mg; colonnes.forEach((c) => { pdf.text(c.titre, c.droite ? x + c.l - 2 : x + 2, y + 4.8, { align: c.droite ? 'right' : 'left' }); x += c.l; });
+      y += 7;
+    };
+    entete(false);
+    lignes.forEach((ln, i) => {
+      pdf.setFontSize(8); pdf.setFont('helvetica', 'normal');
+      const cel = colonnes.map((c) => pdf.splitTextToSize(String(ln[c.cle] == null ? '' : ln[c.cle]), Math.max(4, c.l - 4)));
+      const h = 2.6 + Math.max(1, ...cel.map((t) => t.length)) * 3.4;
+      if (y + h > PH - mg) { pdf.addPage('a4', 'landscape'); entete(true); pdf.setFontSize(8); }
+      const f = fond ? fond(ln, i) : null;
+      if (f) { pdf.setFillColor(f[0], f[1], f[2]); pdf.rect(mg, y, LU, h, 'F'); }
+      pdf.setDrawColor(205, 210, 218); pdf.setLineWidth(0.15); pdf.line(mg, y + h, mg + LU, y + h);
+      let x = mg;
+      colonnes.forEach((c, k) => {
+        pdf.setFont('helvetica', k === 0 || c.gras ? 'bold' : 'normal');
+        const coul = c.couleur ? c.couleur(ln) : [26, 29, 31]; pdf.setTextColor(coul[0], coul[1], coul[2]);
+        pdf.text(cel[k], c.droite ? x + c.l - 2 : x + 2, y + 3.7, { align: c.droite ? 'right' : 'left' });
+        x += c.l;
+      });
+      y += h;
+    });
+    pdf.setTextColor(26, 29, 31);
+  }
+  // Tableaux fourreaux + câbles de plusieurs plans (tronçons) : groupes = [{ nom, fourreaux, cables }].
+  function ajouterTableauxPdf(pdf, groupes, premiere = false) {
+    const avecTroncon = groupes.length > 1;
+    const lignesF = [], lignesC = [];
+    const PALETTE = ['#e8661c', '#2459c9', '#16857a', '#b0302a', '#6b4fd0', '#c78a00', '#3f8f3a', '#c2185b', '#00838f', '#795548'];
+    const coulLiaison = new Map();
+    const fondL = (nom) => { if (!coulLiaison.has(nom)) coulLiaison.set(nom, teintePdf(PALETTE[coulLiaison.size % PALETTE.length], 0.84)); return coulLiaison.get(nom); };
+    groupes.forEach((g) => {
+      const fo = g.fourreaux || [], ca = g.cables || [];
+      fo.forEach((f, idx) => {
+        const dedans = ca.filter((c) => c.parent === f.id);
+        const aire = (d) => Math.PI * d * d / 4, inter = aire(f.idm || 0);
+        const occ = inter > 0 ? dedans.reduce((s2, c) => s2 + aire(c.od), 0) / inter * 100 : 0;
+        const parSection = new Map();
+        dedans.forEach((c) => { const ph = getCablePhaseLabel(c), k2 = `${c.code}${ph ? ' ' + ph : ''}`; parSection.set(k2, (parSection.get(k2) || 0) + 1); });
+        lignesF.push({ tr: g.nom || '', n: `F${idx + 1}`, nom: getPdfFourreauName(f, idx + 1), type: `${f.type || ''} ${f.code || ''}`.trim(),
+          diam: `${Number(f.od).toFixed(0)} / ${Number(f.idm).toFixed(0)}`, nb: String(dedans.length),
+          cables: [...parSection].map(([k2, q]) => `${q}× ${k2}`).join(', ') || 'réserve (vide)', occ: `${occ.toFixed(1)} %`, _occ: occ, _col: f.customColor || f.color });
+      });
+      ca.forEach((c, idx) => {
+        const pi = fo.findIndex((f) => f.id === c.parent);
+        lignesC.push({ tr: g.nom || '', liaison: c.liaison || '—', nom: getPdfCableName(c, idx), fam: c.fam || '', section: `${c.code}`,
+          fourreau: pi >= 0 ? `F${pi + 1} · ${fo[pi].type || ''} ${fo[pi].code || ''}`.trim() : 'hors fourreau', phase: getCablePhaseLabel(c) || '—', _l: c.liaison || c.label || '—' });
+      });
+    });
+    const colTr = avecTroncon ? [{ titre: 'Tronçon', cle: 'tr', poids: 14 }] : [];
+    if (lignesF.length) tableauPaysage(pdf, 'DÉTAIL DES FOURREAUX', 'Fond de ligne = couleur du fourreau · taux : vert ≤ 33 %, orange ≤ 50 %, rouge au-delà', [
+      ...colTr, { titre: 'N°', cle: 'n', poids: 4 }, { titre: 'Liaison / nom', cle: 'nom', poids: 26 }, { titre: 'Type', cle: 'type', poids: 8 },
+      { titre: 'Ø ext / int', cle: 'diam', poids: 8 }, { titre: 'Câbles', cle: 'nb', poids: 5, droite: true }, { titre: 'Contenu', cle: 'cables', poids: 28 },
+      { titre: 'Taux', cle: 'occ', poids: 7, droite: true, gras: true, couleur: (l) => (l._occ <= 33 ? [26, 122, 60] : l._occ <= 50 ? [180, 110, 0] : [200, 30, 30]) },
+    ], lignesF, (l) => teintePdf(l._col, 0.8), premiere);
+    if (lignesC.length) tableauPaysage(pdf, 'LISTING DÉTAILLÉ DES CÂBLES', 'Fond de ligne = une couleur par liaison', [
+      ...colTr, { titre: 'Liaison', cle: 'liaison', poids: 28 }, { titre: 'Repère', cle: 'nom', poids: 8 }, { titre: 'Famille', cle: 'fam', poids: 13 },
+      { titre: 'Section', cle: 'section', poids: 8 }, { titre: 'Fourreau', cle: 'fourreau', poids: 13 }, { titre: 'Phase', cle: 'phase', poids: 6 },
+    ], lignesC, (l) => fondL(l._l), premiere && !lignesF.length);
+  }
+  // Page « coupe d'un tronçon » (repère A4 paysage ; agrandie à l'écriture).
+  function pageCoupeTroncon(m, titre) {
+    const V = window.Vue3D, { PAGE_W, PAGE_H, MARGE } = V;
+    const p = new V.Page({ emitText: false, ombre: false });
+    p.text(MARGE, PAGE_H - MARGE - 4, 16, titre, { bold: true });
+    p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+    const zoneY = 175, zoneH = PAGE_H - MARGE - 40 - zoneY;
+    p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
+    V.drawCoupe(p, m, MARGE + 60, zoneY, 290, zoneH - 10);
+    p.text(440, zoneY + zoneH + 10, 9, 'Vue 3D (tronçon de 1,5 m)', { bold: true });
+    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500);
+    let y = 140;
+    p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
+    p.text(MARGE, y, 9, 'Fourreaux', { bold: true }); y -= 13;
+    const parId = new Map(); m.cables.forEach((c) => parId.set(c.fourreau, (parId.get(c.fourreau) || 0) + 1));
+    const col = (i) => MARGE + (i % 2) * 390;
+    m.fourreaux.slice(0, 20).forEach((f, i) => { p.text(col(i), y - Math.floor(i / 2) * 10, 7.5, `${f.id}  ${f.type} ${f.code}  ${String(f.libelle || '').slice(0, 52)}  · ${parId.get(f.id) || 0} câble(s)`); });
+    if (m.fourreaux.length > 20) p.text(MARGE, y - 10 * 10 - 2, 7.5, `… et ${m.fourreaux.length - 20} autres (voir les tableaux)`);
+    return p;
+  }
+  // Pages « métré et continuité » paginées (A4 paysage).
+  function pagesMetreContinuite(titre) {
+    const V = window.Vue3D, { PAGE_W, PAGE_H, MARGE } = V, pages = [];
+    const m = R().metre(reseau, fourreauxDeTroncon), c = R().continuite(reseau, liaisonsDeTroncon);
+    let p = null, y = 0, x = 0, colonne = 0;
+    const nouvelle = (suite) => {
+      p = new V.Page({ emitText: false, ombre: false }); pages.push(p);
+      p.rgb([0, 0, 0], false).text(MARGE, PAGE_H - MARGE - 4, 16, `${titre} — métré et continuité${suite ? ' (suite)' : ''}`, { bold: true });
+      p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+      y = PAGE_H - MARGE - 40; colonne = 0; x = MARGE;
+    };
+    nouvelle(false);
+    p.rgb([0, 0, 0], false).text(MARGE, y, 11, 'Métré des fourreaux', { bold: true }); y -= 16;
+    p.text(MARGE, y, 8, 'Fourreau', { bold: true }); p.text(MARGE + 120, y, 8, 'Tubes × tronçons', { bold: true }); p.text(MARGE + 220, y, 8, 'Longueur (m)', { bold: true }); y -= 12;
+    m.lignes.forEach((l) => { p.text(MARGE, y, 8, l.fourreau); p.text(MARGE + 120, y, 8, String(l.nombre)); p.text(MARGE + 220, y, 8, l.metres.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')); y -= 11; });
+    p.text(MARGE, y - 2, 8.5, `Total : ${m.totalMetres.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} m de fourreaux — ${m.longueurReseau.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} m de tranchée`, { bold: true }); y -= 16;
+    m.sansLongueur.forEach((t) => { p.rgb([0.7, 0.15, 0.1], false).text(MARGE, y, 7.5, `Longueur manquante, non compté : ${t}`); y -= 10; });
+    // continuité sur deux colonnes, puis pages suivantes
+    const largeurCol = (PAGE_W - 2 * MARGE - 300 - 10) / 2;
+    x = MARGE + 300; y = PAGE_H - MARGE - 40; colonne = 0;
+    p.rgb([0, 0, 0], false).text(x, y, 11, 'Continuité des liaisons', { bold: true }); y -= 16;
+    c.liaisons.forEach((l) => {
+      if (y < MARGE + 24) {
+        colonne += 1;
+        if (colonne > 1) { nouvelle(true); x = MARGE; colonne = 0; } else x += largeurCol + 10;
+        y = PAGE_H - MARGE - 40;
+      }
+      const ok = !l.problemes.length, n = Math.floor(largeurCol / 4.1);
+      p.rgb(ok ? [0.1, 0.45, 0.2] : [0.75, 0.12, 0.1], false).text(x, y, 7.5, `${ok ? 'OK' : 'NON'}  ${l.nom}`.slice(0, n), { bold: true }); y -= 9;
+      p.rgb([0.3, 0.3, 0.3], false).text(x + 12, y, 6.5, `${l.chemin.join(' → ')} · ${l.longueurM.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} m${l.longueurIncomplete ? ' (incomplète)' : ''}${ok ? '' : ' · ' + l.problemes.join(', ')}`.slice(0, Math.floor(largeurCol / 3.5))); y -= 11;
+    });
+    return pages;
+  }
+  async function exporterDossierReseau(formData, JsPDF) {
+    const V = window.Vue3D, base = `${(formData.projectName || 'projet').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}`;
+    const groupes = formData.groupes || {}, fichiers = [];
+    if (sauverCoupeActive) sauverCoupeActive(); // la coupe affichée rejoint son tronçon
+    // 1. synoptique + métré et continuité
+    if (groupes.synoptique !== false) {
+      const syn = synoptiqueAncre(1.414), choix = formData.formatSyn || 'auto', { PAGE_W, MARGE } = V;
+      const essai = (fmt) => {
+        const [PW, PH] = V.FORMATS_PAGE[fmt], M = MARGE * PW / PAGE_W;
+        const pg = new V.Page({ emitText: false, ombre: false });
+        pg.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * PW / PAGE_W, `${formData.projectName} — synoptique du réseau`, { bold: true });
+        pg.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * PW / PAGE_W, PW - M, PH - M - 12 * PW / PAGE_W);
+        const res = V.drawSynoptiqueAncre(pg, syn, M, M, PW - 2 * M, PH - 2 * M - 30 * PW / PAGE_W);
+        return { fmt, pg, PH, texte: res ? 11 * res.s : 99 };
+      };
+      let r1 = null;
+      if (choix !== 'auto') r1 = essai(choix);
+      else for (const f of ['a4', 'a3', 'a2', 'a1', 'a0']) { r1 = essai(f); if (r1.texte >= 6) break; }
+      const pdf = new JsPDF('landscape', 'mm', r1.fmt);
+      writeVue3DPage(pdf, r1.pg, r1.fmt, r1.PH, { nouvelle: false });
+      pagesMetreContinuite(formData.projectName).forEach((pg) => writeVue3DPage(pdf, pg));
+      fichiers.push([pdf, `${base}_synoptique_${r1.fmt.toUpperCase()}.pdf`]);
+    }
+    // 2. une page A3 par chambre
+    const etudes = etudesChambresReseau();
+    if (groupes.chambres !== false && etudes.length) {
+      const pdf = new JsPDF('landscape', 'mm', 'a3');
+      etudes.forEach((et, i) => {
+        const pc = new V.Page({ emitText: false, ombre: false });
+        V.dessinerPageChambreA3(pc, et.etude, et.masques, { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR') });
+        writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: i > 0 });
+      });
+      fichiers.push([pdf, `${base}_chambres_A3.pdf`]);
+    }
+    // 3. une page par tronçon : coupe + vue 3D, au format choisi (A3 par défaut)
+    if (groupes.coupes !== false) {
+      const fmt = formData.formatCoupes || 'a3', ech = V.FORMATS_PAGE[fmt][0] / V.PAGE_W;
+      const pdf = new JsPDF('landscape', 'mm', fmt); let n = 0;
+      reseau.troncons.forEach((t) => {
+        const st = etatTroncon(t); if (!st || !st.fourreaux.length) return;
+        const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false); if (!m) return;
+        const L = t.longueurM ? ` · ${String(t.longueurM).replace('.', ',')} m` : '';
+        writeVue3DPage(pdf, pageCoupeTroncon(m, `Coupe ${R().nomTroncon(reseau, t)}${L}`), fmt, V.FORMATS_PAGE[fmt][1], { nouvelle: n > 0, echelle: ech });
+        n += 1;
+      });
+      if (n) fichiers.push([pdf, `${base}_coupes_${fmt.toUpperCase()}.pdf`]);
+    }
+    // 4. tableaux de tous les tronçons
+    if (groupes.tableaux !== false) {
+      const pdf = new JsPDF('landscape', 'mm', 'a4');
+      const gr = reseau.troncons.map((t) => { const st = etatTroncon(t); return st && st.fourreaux.length ? { nom: R().nomTroncon(reseau, t), fourreaux: st.fourreaux, cables: st.cables } : null; }).filter(Boolean);
+      if (gr.length) { ajouterTableauxPdf(pdf, gr, true); fichiers.push([pdf, `${base}_tableaux.pdf`]); }
+    }
+    for (const [pdf, nom] of fichiers) { pdf.save(nom); await new Promise((r) => setTimeout(r, 400)); }
+    showToast(`Dossier PDF : ${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''} enregistré${fichiers.length > 1 ? 's' : ''}`, 'success', 6000);
+    return fichiers.map((f) => f[1]);
   }
 
   function addVue3DPages(pdf, titre) {
@@ -8540,7 +8826,9 @@
       client: document.getElementById('pdfClient')?.value || '',
       description: document.getElementById('pdfDescription')?.value || '',
       includeStats: document.getElementById('pdfIncludeStats')?.checked || true,
-      include3D: document.getElementById('pdfInclude3D')?.checked !== false
+      include3D: document.getElementById('pdfInclude3D')?.checked !== false,
+      formatSyn: document.getElementById('pdfFormatSyn')?.value || 'auto',
+      formatCoupes: document.getElementById('pdfFormatCoupes')?.value || 'a3',
     };
 
     return exportToPDFWithData(formData);
@@ -8607,6 +8895,13 @@
       }
 
       logPdf('jsPDFClass résolue');
+
+      // Réseau : dossier en plusieurs PDF (synoptique, chambres A3, coupes, tableaux), sans vue principale.
+      if (reseau && reseau.noeuds && reseau.noeuds.length && reseau.troncons.length) {
+        const fichiers = await exporterDossierReseau(formData, jsPDFClass);
+        console.timeEnd('[PDF] total');
+        return { success: true, fichiers };
+      }
 
       // Créer le PDF en format A4 portrait
       const pdf = new jsPDFClass('portrait', 'mm', 'a4');

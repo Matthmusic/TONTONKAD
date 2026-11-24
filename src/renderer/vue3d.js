@@ -131,8 +131,8 @@ function drawCoupe(p, m, x0, y0, wPt, hPt) {
   }
   // cotes
   p.rgb([0.8, 0, 0], false);
-  p.text(X(m.largeur / 2), oy - 12, 8, m.forme === 'circ' ? `Ø ${m.largeur} mm` : `L = ${m.largeur} mm`, { align: 'center' });
-  if (m.forme !== 'circ') p.text(X(0) - 4, Y(top / 2), 8, `P = ${top} mm`, { align: 'right' });
+  // cotes regroupées sous la coupe : rien ne déborde à gauche sur un cadre voisin
+  p.text(X(m.largeur / 2), oy - 12, 8, m.forme === 'circ' ? `Ø ${m.largeur} mm` : `L = ${m.largeur} mm × P = ${top} mm`, { align: 'center' });
   p.rgb([0, 0, 0], false);
   return s;
 }
@@ -424,6 +424,27 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
     p.rgb([1, 1, 1], false).rgb([0.55, 0.55, 0.55]).width(0.6).rect(cx2 - lw / 2, cy2 - lh / 2, lw, lh, 'B');
     p.rgb([0.12, 0.12, 0.12], false).text(cx2, cy2 - 3, 8, libelle, { align: 'center', bold: true });
   }
+  // Pastilles « numéro de côté » (1 haut, 2 droite, 3 bas, 4 gauche), à l'extérieur
+  // du mur, à côté des fourreaux (pas dessus). Positions gardées pour le clic dans l'app.
+  p.pastillesCotes = {};
+  for (const k of Object.keys(faceGeo)) {
+    const g = faceGeo[k], mq = masques[k], rp = 10;
+    let t = g.long / 2;
+    if (mq && mq.fourreaux.length) {
+      const off = (g.long - mq.largeur) / 2, miroir = coupeEnMiroir(k, mq.sens);
+      const ts = mq.fourreaux.map((f) => off + (miroir ? mq.largeur - f.x : f.x));
+      const lo = Math.min(...mq.fourreaux.map((f, i) => ts[i] - f.od / 2)), hi = Math.max(...mq.fourreaux.map((f, i) => ts[i] + f.od / 2));
+      const gap = rp / s + 40;
+      t = lo - gap >= gap ? lo - gap : hi + gap <= g.long - gap ? hi + gap : g.long / 2;
+    }
+    // pas de place à côté des tubes : pastille posée sur les tubes, au ras du mur
+    // (au-delà, la flèche « élément suivant » de l'app occupe le milieu du côté)
+    const d = e + (mq && t === g.long / 2 ? 90 : 120);
+    const [bx, by] = g.at(t), [qx, qy] = P(bx + g.out[0] * d, by + g.out[1] * d);
+    p.rgb([0.1, 0.12, 0.16], false).rgb([1, 1, 1]).width(1.5).circle(qx, qy, rp, 'B');
+    p.rgb([1, 1, 1], false).text(qx, qy - 4, 11, String(NUMERO_COTE[k]), { align: 'center', bold: true });
+    p.pastillesCotes[k] = { x: qx, y: qy, r: rp };
+  }
   const pt = (k, nom) => { const A = ancre[k] && ancre[k][nom]; return A && A.n ? [A.x / A.n, A.y / A.n] : null; };
   // Traversées regroupées en FAISCEAUX : un trait par couple de côtés (épaisseur
   // selon le nombre de liaisons), numéroté ; la liste détaillée est dans la légende.
@@ -508,7 +529,6 @@ function dessinerEtudeChambre(p, e, masques) {
     y -= 4; p.rgb([0, 0, 0], false).text(x, y, 9, 'À vérifier', { bold: true }); y -= 12;
     for (const a of e.avertissements.slice(0, 6)) { p.rgb([0.6, 0.2, 0.1], false).text(x, y, 7, `• ${a}`.slice(0, 62)); y -= 10; }
   }
-  p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, 'Vue de dessus, côtés numérotés dans le sens horaire : 1 en haut, 2 à droite, 3 en bas, 4 à gauche (masque « C7.1 » = côté 1 de C7). Fourreaux placés comme dans les masques.');
   return p;
 }
 
@@ -713,7 +733,6 @@ function dessinerPageChambreA3(p, e, masques, opts = {}) {
       });
     }
   }
-  p.rgb([0.45, 0.45, 0.45], false).text(M, M - 14, 7, 'Côtés numérotés dans le sens horaire vus de dessus : 1 en haut, 2 à droite, 3 en bas, 4 à gauche. Valeurs de chambre maçonnée et règles normatives à valider.');
   return p;
 }
 // Petit tableau dans une case (texte tronqué ; « … et n autres » si ça déborde).

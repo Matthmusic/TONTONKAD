@@ -78737,8 +78737,7 @@ var require_vue3d = __commonJS({
           p.rgb(PHASE_RGB[c.phase] || [0.2, 0.2, 0.2]).width(0.6).circle(X(c.x), Y(c.y), c.od / 2 * s);
         }
         p.rgb([0.8, 0, 0], false);
-        p.text(X(m.largeur / 2), oy - 12, 8, m.forme === "circ" ? `\xD8 ${m.largeur} mm` : `L = ${m.largeur} mm`, { align: "center" });
-        if (m.forme !== "circ") p.text(X(0) - 4, Y(top / 2), 8, `P = ${top} mm`, { align: "right" });
+        p.text(X(m.largeur / 2), oy - 12, 8, m.forme === "circ" ? `\xD8 ${m.largeur} mm` : `L = ${m.largeur} mm \xD7 P = ${top} mm`, { align: "center" });
         p.rgb([0, 0, 0], false);
         return s;
       }
@@ -78978,6 +78977,23 @@ var require_vue3d = __commonJS({
           p.rgb([1, 1, 1], false).rgb([0.55, 0.55, 0.55]).width(0.6).rect(cx2 - lw / 2, cy2 - lh / 2, lw, lh, "B");
           p.rgb([0.12, 0.12, 0.12], false).text(cx2, cy2 - 3, 8, libelle, { align: "center", bold: true });
         }
+        p.pastillesCotes = {};
+        for (const k of Object.keys(faceGeo)) {
+          const g = faceGeo[k], mq = masques[k], rp = 10;
+          let t = g.long / 2;
+          if (mq && mq.fourreaux.length) {
+            const off = (g.long - mq.largeur) / 2, miroir = coupeEnMiroir(k, mq.sens);
+            const ts = mq.fourreaux.map((f2) => off + (miroir ? mq.largeur - f2.x : f2.x));
+            const lo = Math.min(...mq.fourreaux.map((f2, i) => ts[i] - f2.od / 2)), hi = Math.max(...mq.fourreaux.map((f2, i) => ts[i] + f2.od / 2));
+            const gap = rp / s + 40;
+            t = lo - gap >= gap ? lo - gap : hi + gap <= g.long - gap ? hi + gap : g.long / 2;
+          }
+          const d = e + (mq && t === g.long / 2 ? 90 : 120);
+          const [bx, by] = g.at(t), [qx, qy] = P(bx + g.out[0] * d, by + g.out[1] * d);
+          p.rgb([0.1, 0.12, 0.16], false).rgb([1, 1, 1]).width(1.5).circle(qx, qy, rp, "B");
+          p.rgb([1, 1, 1], false).text(qx, qy - 4, 11, String(NUMERO_COTE[k]), { align: "center", bold: true });
+          p.pastillesCotes[k] = { x: qx, y: qy, r: rp };
+        }
         const pt = (k, nom) => {
           const A = ancre[k] && ancre[k][nom];
           return A && A.n ? [A.x / A.n, A.y / A.n] : null;
@@ -79099,7 +79115,6 @@ var require_vue3d = __commonJS({
             y -= 10;
           }
         }
-        p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, "Vue de dessus, c\xF4t\xE9s num\xE9rot\xE9s dans le sens horaire : 1 en haut, 2 \xE0 droite, 3 en bas, 4 \xE0 gauche (masque \xAB C7.1 \xBB = c\xF4t\xE9 1 de C7). Fourreaux plac\xE9s comme dans les masques.");
         return p;
       }
       function rejouerSurCanvas(ctx, page, hauteurPt) {
@@ -79365,7 +79380,6 @@ var require_vue3d = __commonJS({
             });
           }
         }
-        p.rgb([0.45, 0.45, 0.45], false).text(M, M - 14, 7, "C\xF4t\xE9s num\xE9rot\xE9s dans le sens horaire vus de dessus : 1 en haut, 2 \xE0 droite, 3 en bas, 4 \xE0 gauche. Valeurs de chambre ma\xE7onn\xE9e et r\xE8gles normatives \xE0 valider.");
         return p;
       }
       function tableauPdf(p, z2, entetes, parts, lignes) {
