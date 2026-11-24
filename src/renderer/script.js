@@ -7897,10 +7897,6 @@
           <button type="button" class="reseau-onglet actif" data-mode="2d">2D</button>
           <button type="button" class="reseau-onglet" data-mode="iso">Isométrique</button>
         </div>
-        <div class="reseau-mode" role="group" aria-label="Disposition du synoptique" id="reseauDisposition">
-          <button type="button" class="reseau-onglet" data-dispo="ligne" title="Toutes les chambres en longueur ; PDF découpé en folios avec renvois">En longueur</button>
-          <button type="button" class="reseau-onglet" data-dispo="replie" title="Rangées repliées pour tenir sur une seule page">Replié</button>
-        </div>
         <div class="reseau-ajouts">
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="chambre">Ajouter une chambre</button>
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="coffret">Ajouter un coffret / tableau</button>
@@ -7921,10 +7917,7 @@
       SYN.sel = { noeud: n.id }; dessinerSynoptique();
     }));
     o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
-    o.querySelectorAll('[data-dispo]').forEach((b) => b.addEventListener('click', () => {
-      reseau.synoptique = { ...(reseau.synoptique || {}), disposition: b.dataset.dispo };
-      SYN.zoom = { k: 1, px: 0, py: 0 }; dessinerSynoptique();
-    }));
+
     o.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
       SYN.mode = b.dataset.mode;
       o.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('actif', x === b));
@@ -8045,8 +8038,6 @@
       if (panneau) remplirEdition();
       return;
     }
-    o.querySelectorAll('[data-dispo]').forEach((x) => x.classList.toggle('actif', x.dataset.dispo === dispositionSyn()));
-    o.querySelector('#reseauDisposition').hidden = SYN.mode === 'iso';
     // Synoptique ancré : disposition calculée (pas de placement libre), même dessin que le PDF.
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height);
     const data = synoptiqueAncre(zone.width / Math.max(1, zone.height), rapide);
@@ -8117,11 +8108,12 @@
   // rapide = true : réutilise le dernier calcul (pan, zoom, glisser) et garde le
   // cadrage figé ; sinon tout est recalculé puis recadré.
   let synBase = null;
-  // Disposition du synoptique : 'ligne' (défaut, toutes les chambres en longueur,
-  // PDF en folios) ou 'replie' (rangées en serpentin pour tenir sur une page).
-  function dispositionSyn() { return (reseau && reseau.synoptique && reseau.synoptique.disposition) || 'ligne'; }
+  // Synoptique toujours en longueur : la disposition suit la construction de la VRD
+  // (chaîne de chambres, dérivations, déplacements à la main), jamais repliée en
+  // serpentin. Le PDF le découpe en folios.  Le premier argument (ancien ratio de
+  // page) est ignoré.
   function synoptiqueAncre(ratio0, rapide = false) {
-    const V = window.Vue3D, ratio = dispositionSyn() === 'replie' ? ratio0 : null;
+    const V = window.Vue3D, ratio = null;
     if (!rapide || !synBase || synBase.ratio !== ratio) {
       const contenus = new Map(reseau.troncons.map((t) => [t.id, contenuTroncon(t)]));
       const dis = R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
@@ -8904,30 +8896,12 @@
     if (sauverCoupeActive) sauverCoupeActive(); // la coupe affichée rejoint son tronçon
     // 1. synoptique + métré et continuité
     if (groupes.synoptique !== false) {
-      const syn = synoptiqueAncre(1.414), choix = formData.formatSyn || 'auto', { PAGE_W, MARGE } = V;
-      const essai = (fmt) => {
-        const [PW, PH] = V.FORMATS_PAGE[fmt], M = MARGE * PW / PAGE_W;
-        const pg = new V.Page({ emitText: false, ombre: false });
-        pg.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * PW / PAGE_W, `${formData.projectName} — synoptique du réseau`, { bold: true });
-        pg.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * PW / PAGE_W, PW - M, PH - M - 12 * PW / PAGE_W);
-        const res = V.drawSynoptiqueAncre(pg, syn, M, M, PW - 2 * M, PH - 2 * M - 30 * PW / PAGE_W);
-        return { fmt, pg, PH, texte: res ? 11 * res.s : 99 };
-      };
-      let pdf, fmtSyn;
-      if (dispositionSyn() === 'ligne') { // en longueur : folios au format choisi (A3 par défaut)
-        fmtSyn = choix === 'auto' ? 'a3' : choix;
-        const f = V.synoptiqueEnFolios(syn, fmtSyn, formData.projectName);
-        pdf = new JsPDF('landscape', 'mm', fmtSyn);
-        f.pages.forEach((pg, i) => writeVue3DPage(pdf, pg, fmtSyn, f.PH, { nouvelle: i > 0 }));
-        fmtSyn = `${fmtSyn.toUpperCase()}_${f.pages.length}folios`;
-      } else {
-        let r1 = null;
-        if (choix !== 'auto') r1 = essai(choix);
-        else for (const f of ['a4', 'a3', 'a2', 'a1', 'a0']) { r1 = essai(f); if (r1.texte >= 6) break; }
-        pdf = new JsPDF('landscape', 'mm', r1.fmt);
-        writeVue3DPage(pdf, r1.pg, r1.fmt, r1.PH, { nouvelle: false });
-        fmtSyn = r1.fmt.toUpperCase();
-      }
+      const syn = synoptiqueAncre(1.414), choix = formData.formatSyn || 'auto';
+      // en longueur, découpé en folios au format choisi (A3 par défaut)
+      const fmt = choix === 'auto' ? 'a3' : choix, f = V.synoptiqueEnFolios(syn, fmt, formData.projectName);
+      const pdf = new JsPDF('landscape', 'mm', fmt);
+      f.pages.forEach((pg, i) => writeVue3DPage(pdf, pg, fmt, f.PH, { nouvelle: i > 0 }));
+      const fmtSyn = `${fmt.toUpperCase()}_${f.pages.length}folio${f.pages.length > 1 ? 's' : ''}`;
       pagesMetreContinuite(formData.projectName).forEach((pg) => writeVue3DPage(pdf, pg));
       fichiers.push([pdf, `${base}_synoptique_${fmtSyn}.pdf`]);
     }
