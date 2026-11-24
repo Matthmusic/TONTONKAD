@@ -6231,3 +6231,12 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .wrap.panneau-replie .replier-panneau svg { transform: rotate(180deg); }
 .wrap.panneau-replie > .panel { display: none; }
 .wrap.panneau-replie > .replier-panneau { margin-left: 0; margin-right: 0; }
+
+/* Menu « nouvel élément relié » du synoptique */
+.syn-menu { position: absolute; z-index: 40; min-width: 180px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--modal-bg-solid, #ffffff); border: 1px solid var(--glass-border); border-radius: 10px;
+  box-shadow: 0 10px 28px var(--shadow-color, rgba(0,0,0,0.18)); }
+.syn-menu-titre { padding: 4px 8px 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.syn-menu button { text-align: left; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer; }
+.syn-menu button:hover, .syn-menu button:focus-visible { background: var(--primary-orange); color: #ffffff; outline: none; }
+.chambre-dessin { position: relative; }

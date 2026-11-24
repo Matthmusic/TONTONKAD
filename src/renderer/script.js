@@ -7806,6 +7806,58 @@
     }) || null;
   }
 
+  // Bord d'une chambre sous le pointeur (bande extérieure du cadre) : on y tire
+  // une nouvelle liaison ; le centre sert à déplacer la chambre.
+  function bordChambreSous(x, y) {
+    const n = noeudSous(x, y);
+    if (!n || n.type !== 'chambre') return null;
+    const { w, h } = tailleNoeud(n), bx = w / 2 - Math.abs(x - n.x), by = h / 2 - Math.abs(y - n.y);
+    const bande = Math.max(10, Math.min(w, h) * 0.22);
+    return bx <= bande || by <= bande ? n : null;
+  }
+  // Côté de départ selon la direction du tirage (y vers le bas à l'écran) :
+  // haut = côté 1 (long-pan B), droite = 2 (pignon B), bas = 3 (long-pan A), gauche = 4 (pignon A).
+  function faceVers(n, x, y) {
+    const dx = x - n.x, dy = y - n.y;
+    return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'pignonB' : 'pignonA') : (dy < 0 ? 'longPanB' : 'longPanA');
+  }
+  const FACE_OPPOSEE = { pignonA: 'pignonB', pignonB: 'pignonA', longPanA: 'longPanB', longPanB: 'longPanA' };
+  // Liaison tirée depuis `de` et lâchée dans le vide : menu « Chambre / Coffret / Sortie ».
+  function menuNouvelElement(o, de, face, ev) {
+    o.querySelector('.syn-menu')?.remove();
+    const m = document.createElement('div');
+    m.className = 'syn-menu'; m.setAttribute('role', 'menu');
+    const src = R().noeud(reseau, de);
+    const titre = document.createElement('div'); titre.className = 'syn-menu-titre';
+    titre.textContent = src.type === 'chambre' && face ? `Depuis ${src.nom}.${{ longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 }[face]} :` : `Depuis ${src.nom} :`;
+    m.appendChild(titre);
+    const fermer = () => { m.remove(); document.removeEventListener('keydown', echap, true); document.removeEventListener('mousedown', dehors, true); };
+    const echap = (e) => { if (e.key === 'Escape') fermer(); };
+    const dehors = (e) => { if (!m.contains(e.target)) fermer(); };
+    [['chambre', 'Chambre'], ['coffret', 'Coffret / tableau'], ['sortie', 'Sortie']].forEach(([type, lib]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.textContent = lib;
+      b.addEventListener('click', () => {
+        fermer();
+        const n = R().ajouterNoeud(reseau, type, { x: src.x, y: src.y });
+        const opts = {};
+        if (src.type === 'chambre' && face) opts.faceA = face;
+        if (type === 'chambre' && face) opts.faceB = FACE_OPPOSEE[face];
+        try {
+          const t = R().relier(reseau, de, n.id, opts);
+          SYN.sel = { troncon: t.id };
+          showToast(`${n.nom} ajouté${type === 'chambre' || type === 'sortie' ? 'e' : ''} et relié${type === 'chambre' || type === 'sortie' ? 'e' : ''} : indiquez la longueur du tronçon`);
+        } catch (e) { R().supprimerNoeud(reseau, n.id); showToast(e.message); }
+        dessinerSynoptique();
+      });
+      m.appendChild(b);
+    });
+    const zone = o.querySelector('.chambre-dessin').getBoundingClientRect();
+    m.style.left = `${Math.min(ev.clientX - zone.left + 8, zone.width - 190)}px`;
+    m.style.top = `${Math.min(ev.clientY - zone.top + 8, zone.height - 150)}px`;
+    o.querySelector('.chambre-dessin').appendChild(m);
+    m.querySelector('button')?.focus();
+    setTimeout(() => { document.addEventListener('keydown', echap, true); document.addEventListener('mousedown', dehors, true); }, 0);
+  }
   // Étiquette de tronçon sous le pointeur (repère du schéma).
   function etiquetteSous(x, y) {
     const d = SYN.data; if (!d) return null;
@@ -7856,13 +7908,17 @@
           <button type="button" class="reseau-onglet actif" data-mode="2d">2D</button>
           <button type="button" class="reseau-onglet" data-mode="iso">Isométrique</button>
         </div>
+        <div class="reseau-mode" role="group" aria-label="Disposition du synoptique" id="reseauDisposition">
+          <button type="button" class="reseau-onglet" data-dispo="ligne" title="Toutes les chambres en longueur ; PDF découpé en folios avec renvois">En longueur</button>
+          <button type="button" class="reseau-onglet" data-dispo="replie" title="Rangées repliées pour tenir sur une seule page">Replié</button>
+        </div>
         <div class="reseau-ajouts">
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="chambre">Ajouter une chambre</button>
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="coffret">Ajouter un coffret / tableau</button>
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="sortie">Ajouter une sortie</button>
         </div>
         <div id="reseauEdition" class="reseau-edition"></div>
-        <p class="chambre-aide">Glissez un élément pour le déplacer : il s'aligne sur les éléments reliés (Alt : libre). Ses étiquettes suivent ; « Disposition automatique » annule. Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
+        <p class="chambre-aide">Tirez depuis le <b>bord</b> d'une chambre vers un côté et lâchez dans le vide : chambre, coffret ou sortie reliée sur ce côté. Glissez le centre d'un élément pour le déplacer : il s'aligne sur les éléments reliés (Alt : libre). Ses étiquettes suivent ; « Disposition automatique » annule. Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
         <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauAuto">Disposition automatique</button><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
@@ -7876,6 +7932,10 @@
       SYN.sel = { noeud: n.id }; dessinerSynoptique();
     }));
     o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
+    o.querySelectorAll('[data-dispo]').forEach((b) => b.addEventListener('click', () => {
+      reseau.synoptique = { ...(reseau.synoptique || {}), disposition: b.dataset.dispo };
+      SYN.zoom = { k: 1, px: 0, py: 0 }; dessinerSynoptique();
+    }));
     o.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
       SYN.mode = b.dataset.mode;
       o.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('actif', x === b));
@@ -7889,7 +7949,9 @@
       if (SYN.mode === 'iso') return; // vue de consultation
       const p = pos(ev);
       const pg = poigneeSous(p.x, p.y);
-      if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y, x0: p.x, y0: p.y }; return; }
+      if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y, x0: p.x, y0: p.y, plus: true }; return; }
+      const bordure = bordChambreSous(p.x, p.y);
+      if (bordure) { SYN.sel = { noeud: bordure.id }; SYN.lien = { de: bordure.id, x: p.x, y: p.y, x0: p.x, y0: p.y, bord: true }; return; }
       const n = noeudSous(p.x, p.y);
       if (n) {
         SYN.sel = { noeud: n.id };
@@ -7915,22 +7977,31 @@
       }
       if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; planifierSyn(); return; }
       const surPlus = !!poigneeSous(p.x, p.y);
-      cv.style.cursor = surPlus ? 'crosshair' : noeudSous(p.x, p.y) ? 'grab' : (tronconSous(p.x, p.y) || etiquetteSous(p.x, p.y)) ? 'pointer' : 'default';
-      cv.title = surPlus ? 'Tirer vers un élément pour le relier · Clic : ajouter une chambre reliée' : '';
+      const surBord = !surPlus && bordChambreSous(p.x, p.y);
+      cv.style.cursor = surPlus || surBord ? 'crosshair' : noeudSous(p.x, p.y) ? 'grab' : (tronconSous(p.x, p.y) || etiquetteSous(p.x, p.y)) ? 'pointer' : 'default';
+      cv.title = surPlus ? 'Tirer vers un élément pour le relier · Clic : ajouter une chambre reliée'
+        : surBord ? 'Tirer vers un côté : nouvelle liaison (lâcher dans le vide pour créer une chambre, un coffret ou une sortie)' : '';
     });
     window.addEventListener('mouseup', (ev) => {
       if (SYN.lien && !o.hidden) {
         const p = pos(ev), cible = noeudSous(p.x, p.y), de = SYN.lien.de;
-        const clic = Math.hypot(p.x - SYN.lien.x0, p.y - SYN.lien.y0) < 4;
+        const clic = Math.hypot(p.x - SYN.lien.x0, p.y - SYN.lien.y0) < 4, lien = SYN.lien;
         SYN.lien = null;
-        if (clic) { // clic simple sur « + » : prolonger le réseau d'une chambre reliée
+        const src0 = R().noeud(reseau, de), face = src0 && src0.type === 'chambre' && !clic ? faceVers(src0, p.x, p.y) : null;
+        if (clic && lien.bord) { /* simple clic sur le bord : sélection seulement */ }
+        else if (clic) { // clic simple sur « + » : prolonger le réseau d'une chambre reliée
           const src = R().noeud(reseau, de);
           const n = R().ajouterNoeud(reseau, 'chambre', { x: src.x + 220, y: src.y });
           try { const t = R().relier(reseau, de, n.id); SYN.sel = { troncon: t.id }; showToast(`${n.nom} ajoutée et reliée : indiquez la longueur du tronçon`); }
           catch (e) { R().supprimerNoeud(reseau, n.id); showToast(e.message); }
         } else if (cible && cible.id !== de) {
-          try { const t = R().relier(reseau, de, cible.id); SYN.sel = { troncon: t.id }; showToast(`Tronçon ${R().nomTroncon(reseau, t)} créé : indiquez sa longueur`); }
+          const opts = face ? { faceA: face } : {};
+          if (face && cible.type === 'chambre' && R().facesLibres(reseau, cible).includes(FACE_OPPOSEE[face])) opts.faceB = FACE_OPPOSEE[face];
+          try { const t = R().relier(reseau, de, cible.id, opts); SYN.sel = { troncon: t.id }; showToast(`Tronçon ${R().nomTroncon(reseau, t)} créé : indiquez sa longueur`); }
           catch (e) { showToast(e.message); }
+        } else if (!cible) {
+          if (face && !R().facesLibres(reseau, src0).includes(face)) showToast(`${src0.nom} : ce côté est déjà occupé`);
+          else { dessinerSynoptique(); menuNouvelElement(o, de, face, ev); return; }
         }
         dessinerSynoptique();
       }
@@ -7985,6 +8056,8 @@
       if (panneau) remplirEdition();
       return;
     }
+    o.querySelectorAll('[data-dispo]').forEach((x) => x.classList.toggle('actif', x.dataset.dispo === dispositionSyn()));
+    o.querySelector('#reseauDisposition').hidden = SYN.mode === 'iso';
     // Synoptique ancré : disposition calculée (pas de placement libre), même dessin que le PDF.
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height);
     const data = synoptiqueAncre(zone.width / Math.max(1, zone.height), rapide);
@@ -8011,8 +8084,24 @@
     }
     if (SYN.lien) {
       const A = R().noeud(reseau, SYN.lien.de);
-      ctx.strokeStyle = th.cuivre; ctx.setLineDash([8, 6]); ctx.lineWidth = 2.5 / SYN.vue.k;
-      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(SYN.lien.x, SYN.lien.y); ctx.stroke(); ctx.setLineDash([]);
+      let x0 = A.x, y0 = A.y;
+      if (A.type === 'chambre' && Math.hypot(SYN.lien.x - SYN.lien.x0, SYN.lien.y - SYN.lien.y0) >= 4) {
+        // départ au milieu du côté visé, côté surligné et numéroté
+        const f = faceVers(A, SYN.lien.x, SYN.lien.y), { w, h } = tailleNoeud(A);
+        const d = { pignonA: [-w / 2, 0], pignonB: [w / 2, 0], longPanA: [0, h / 2], longPanB: [0, -h / 2] }[f];
+        x0 = A.x + d[0]; y0 = A.y + d[1];
+        const libre = R().facesLibres(reseau, A).includes(f);
+        ctx.strokeStyle = libre ? th.cuivre : '#b3261e'; ctx.lineWidth = 5 / SYN.vue.k;
+        ctx.beginPath();
+        if (d[0]) { ctx.moveTo(x0, A.y - h / 2); ctx.lineTo(x0, A.y + h / 2); } else { ctx.moveTo(A.x - w / 2, y0); ctx.lineTo(A.x + w / 2, y0); }
+        ctx.stroke();
+        ctx.fillStyle = libre ? th.cuivre : '#b3261e'; ctx.beginPath(); ctx.arc(SYN.lien.x, SYN.lien.y, 11 / SYN.vue.k, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.font = `700 ${12 / SYN.vue.k}px 'IBM Plex Sans', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(String({ longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 }[f]), SYN.lien.x, SYN.lien.y + 0.5 / SYN.vue.k);
+        ctx.strokeStyle = libre ? th.cuivre : '#b3261e';
+      } else ctx.strokeStyle = th.cuivre;
+      ctx.setLineDash([8 / SYN.vue.k, 6 / SYN.vue.k]); ctx.lineWidth = 2.5 / SYN.vue.k;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(SYN.lien.x, SYN.lien.y); ctx.stroke(); ctx.setLineDash([]);
     }
     for (const n of reseau.noeuds) {
       const { w, h } = tailleNoeud(n);
@@ -8039,8 +8128,11 @@
   // rapide = true : réutilise le dernier calcul (pan, zoom, glisser) et garde le
   // cadrage figé ; sinon tout est recalculé puis recadré.
   let synBase = null;
-  function synoptiqueAncre(ratio, rapide = false) {
-    const V = window.Vue3D;
+  // Disposition du synoptique : 'ligne' (défaut, toutes les chambres en longueur,
+  // PDF en folios) ou 'replie' (rangées en serpentin pour tenir sur une page).
+  function dispositionSyn() { return (reseau && reseau.synoptique && reseau.synoptique.disposition) || 'ligne'; }
+  function synoptiqueAncre(ratio0, rapide = false) {
+    const V = window.Vue3D, ratio = dispositionSyn() === 'replie' ? ratio0 : null;
     if (!rapide || !synBase || synBase.ratio !== ratio) {
       const contenus = new Map(reseau.troncons.map((t) => [t.id, contenuTroncon(t)]));
       const dis = R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
@@ -8829,13 +8921,23 @@
         const res = V.drawSynoptiqueAncre(pg, syn, M, M, PW - 2 * M, PH - 2 * M - 30 * PW / PAGE_W);
         return { fmt, pg, PH, texte: res ? 11 * res.s : 99 };
       };
-      let r1 = null;
-      if (choix !== 'auto') r1 = essai(choix);
-      else for (const f of ['a4', 'a3', 'a2', 'a1', 'a0']) { r1 = essai(f); if (r1.texte >= 6) break; }
-      const pdf = new JsPDF('landscape', 'mm', r1.fmt);
-      writeVue3DPage(pdf, r1.pg, r1.fmt, r1.PH, { nouvelle: false });
+      let pdf, fmtSyn;
+      if (dispositionSyn() === 'ligne') { // en longueur : folios au format choisi (A3 par défaut)
+        fmtSyn = choix === 'auto' ? 'a3' : choix;
+        const f = V.synoptiqueEnFolios(syn, fmtSyn, formData.projectName);
+        pdf = new JsPDF('landscape', 'mm', fmtSyn);
+        f.pages.forEach((pg, i) => writeVue3DPage(pdf, pg, fmtSyn, f.PH, { nouvelle: i > 0 }));
+        fmtSyn = `${fmtSyn.toUpperCase()}_${f.pages.length}folios`;
+      } else {
+        let r1 = null;
+        if (choix !== 'auto') r1 = essai(choix);
+        else for (const f of ['a4', 'a3', 'a2', 'a1', 'a0']) { r1 = essai(f); if (r1.texte >= 6) break; }
+        pdf = new JsPDF('landscape', 'mm', r1.fmt);
+        writeVue3DPage(pdf, r1.pg, r1.fmt, r1.PH, { nouvelle: false });
+        fmtSyn = r1.fmt.toUpperCase();
+      }
       pagesMetreContinuite(formData.projectName).forEach((pg) => writeVue3DPage(pdf, pg));
-      fichiers.push([pdf, `${base}_synoptique_${r1.fmt.toUpperCase()}.pdf`]);
+      fichiers.push([pdf, `${base}_synoptique_${fmtSyn}.pdf`]);
     }
     // 2. une page A3 par chambre
     const etudes = etudesChambresReseau();

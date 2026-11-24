@@ -948,7 +948,74 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   etiquettes.forEach((f) => f());
 }
 
-const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+
+// ─── Synoptique en longueur, découpé en folios ───────────────────────────
+// Le schéma reste sur une seule ligne (entrées et sorties dans l'ordre) ; il est
+// coupé en pages de même format, à une échelle lisible. Les coupes tombent dans
+// un espace libre (entre chambres et étiquettes) ; chaque liaison coupée porte un
+// renvoi numéroté (R1, R2…) au bord droit d'un folio et au bord gauche du suivant.
+// Retourne { pages: [Page], echelle, texte (pt) }.
+function synoptiqueEnFolios(data, fmt, titre, { texteMax = 10 } = {}) {
+  const [PW, PH] = FORMATS_PAGE[fmt] || FORMATS_PAGE.a3, k = PW / PAGE_W, M = MARGE * k;
+  const bandeTitre = 30 * k, bandePied = 18, garde = 46; // garde : place des renvois de chaque côté
+  const zx = M, zy = M + bandePied, zw = PW - 2 * M, zh = PH - 2 * M - bandeTitre - bandePied;
+  const s = Math.min(zh / data.hauteur, texteMax / SYN.police);
+  const Wu = (zw - 2 * garde) / s; // largeur utile d'un folio, en unités du schéma
+  // intervalles occupés (éléments, étiquettes) : on ne coupe pas dedans
+  const pris = [];
+  data.noeuds.forEach((n) => pris.push([n.x - n.w / 2 - 34, n.x + n.w / 2 + 34])); // + poignée « + »
+  data.troncons.forEach((t) => { if (t.e) pris.push([t.e.x - t.e.w / 2 - 8, t.e.x + t.e.w / 2 + 8]); });
+  const libre = (x) => pris.every(([a, b]) => x <= a || x >= b);
+  const coupes = [0];
+  while (data.largeur - coupes[coupes.length - 1] > Wu) {
+    const c = coupes[coupes.length - 1], cible = c + Wu;
+    let x = null;
+    for (let v = cible; v > c + Wu * 0.4; v -= 4) if (libre(v)) { x = v; break; }
+    coupes.push(x == null ? cible : x);
+  }
+  coupes.push(data.largeur);
+  const N = coupes.length - 1;
+  // liaisons coupées : segments horizontaux du dessin (droits ou en équerre)
+  const renvois = []; // { x, y, n }
+  data.troncons.forEach((t) => {
+    const x0 = Math.min(t.a.x, t.b.x), x1 = Math.max(t.a.x, t.b.x), y = t.a.y;
+    coupes.slice(1, -1).forEach((c) => { if (c > x0 && c < x1) renvois.push({ x: c, y, n: renvois.length + 1 }); });
+  });
+  const pages = [];
+  for (let i = 0; i < N; i++) {
+    const p = new Page({ emitText: false, ombre: false }), c0 = coupes[i], c1 = coupes[i + 1];
+    p.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * k, `${titre} — synoptique du réseau`, { bold: true });
+    p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 4, 11 * k, `Folio ${i + 1} / ${N}`, { align: 'right', bold: true });
+    p.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * k, PW - M, PH - M - 12 * k);
+    const gx = zx + garde, lw = (c1 - c0) * s;
+    // fenêtre : le schéma entier, décalé, découpé à la largeur du folio
+    const n0 = p.labels.length;
+    p.clip([[gx, zy], [gx + lw, zy], [gx + lw, zy + zh], [gx, zy + zh]], () => {
+      drawSynoptiqueAncre(p, data, gx - c0 * s, zy, data.largeur * s, zh, s);
+    });
+    // textes hors de la fenêtre : écrits à part (jsPDF), le découpage ne les coupe pas
+    const garder = p.labels.slice(n0).filter((l) => l.x >= gx - 1 && l.x <= gx + lw + 1);
+    p.labels.length = n0; p.labels.push(...garder);
+    const oy = zy + (zh - data.hauteur * s) / 2, Y = (y) => oy + (data.hauteur - y) * s;
+    const bord = (x, sens) => { // trait de coupe + renvois
+      p.rgb([0.55, 0.55, 0.55]).width(0.6).dash(true).line(x, zy, x, zy + zh).dash(false);
+      renvois.filter((r) => Math.abs(r.x - (sens > 0 ? c1 : c0)) < 1e-6).forEach((r) => {
+        const y = Y(r.y), cx = x + sens * 22, autre = sens > 0 ? i + 2 : i;
+        p.rgb([0.36, 0.39, 0.45]).width(1.4).line(x, y, cx - sens * 10, y);
+        p.rgb([1, 1, 1], false).rgb([0.66, 0.27, 0.04]).width(1.2).circle(cx, y, 10, 'B');
+        p.rgb([0.66, 0.27, 0.04], false).text(cx, y - 3, 8, `R${r.n}`, { align: 'center', bold: true });
+        p.rgb([0.3, 0.3, 0.3], false).text(cx, y - 20, 6.5, sens > 0 ? `→ folio ${autre}` : `folio ${autre} →`, { align: 'center' });
+      });
+    };
+    if (i < N - 1) bord(gx + lw, 1);
+    if (i > 0) bord(gx, -1);
+    p.rgb([0.45, 0.45, 0.45], false).text(M, M + 4, 7, i < N - 1 ? `Suite au folio ${i + 2} : renvois R repérés au bord droit.` : 'Fin du synoptique.', {});
+    pages.push(p);
+  }
+  return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH };
+}
+
+const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Vue3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);
