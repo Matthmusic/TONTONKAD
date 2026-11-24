@@ -78753,23 +78753,31 @@ var require_vue3d = __commonJS({
         const ex = dx * s, ey = dy * s;
         const W = m.largeur * s, H = top * s;
         p.width(0.7);
+        const n = [-Math.sin(ang), Math.cos(ang)];
+        const fourreaux = () => {
+          const order = [...m.fourreaux].sort((a2, b2) => b2.y - a2.y || b2.x - a2.x);
+          for (const fo of order) {
+            const r = fo.od / 2 * s, cx = X(fo.x), cy = Y(fo.y);
+            p.cylindre(cx, cy, cx + ex, cy + ey, r, fo.di / 2 * s, MAT.tpc);
+          }
+          for (const c of m.cables) {
+            p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), "B");
+          }
+        };
         if (m.forme === "circ") {
-          const r = m.largeur / 2 * s, cx = X(m.largeur / 2), cy = Y(m.largeur / 2), n2 = [-Math.sin(ang), Math.cos(ang)];
+          const r = m.largeur / 2 * s, cx = X(m.largeur / 2), cy = Y(m.largeur / 2);
           p.rgb([0, 0, 0]).circle(cx + ex, cy + ey, r);
-          p.line(cx + n2[0] * r, cy + n2[1] * r, cx + n2[0] * r + ex, cy + n2[1] * r + ey);
-          p.line(cx - n2[0] * r, cy - n2[1] * r, cx - n2[0] * r + ex, cy - n2[1] * r + ey);
+          p.line(cx + n[0] * r, cy + n[1] * r, cx + n[0] * r + ex, cy + n[1] * r + ey);
+          p.line(cx - n[0] * r, cy - n[1] * r, cx - n[0] * r + ex, cy - n[1] * r + ey);
+          fourreaux();
         } else {
           const M = W * MG, sol = H * SG;
           const x02 = X(0), y02 = Y(0), lit = (m.reglages.litDePose || 0) * s;
           const surf = MAT.surface[m.tranchee && m.tranchee.zone || "trottoir"] || MAT.surface.trottoir;
-          p.texture([[x02 - M, y02 + H], [x02 - M + ex, y02 + H + ey], [x02 + ex, y02 + H + ey], [x02, y02 + H]], surf, { seed: 3, contraste: 0.08 });
-          p.texture([[x02 + W, y02 + H], [x02 + W + ex, y02 + H + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + M, y02 + H]], surf, { seed: 4, contraste: 0.08 });
-          p.texture([[x02 + W, y02], [x02 + W + ex, y02 + ey], [x02 + W + ex, y02 + H + ey], [x02 + W, y02 + H]], MAT.terre.map((c) => c * 0.85), { seed: 5 });
           p.texture([[x02, y02], [x02 + ex, y02 + ey], [x02 + W + ex, y02 + ey], [x02 + W, y02]], MAT.sable, { seed: 6, taille: 0.7 });
-          if (lit > 0) p.texture([[x02 + W, y02], [x02 + W + ex, y02 + ey], [x02 + W + ex, y02 + ey + lit], [x02 + W, y02 + lit]], MAT.sable.map((c) => c * 0.92), { seed: 7, taille: 0.7 });
-          p.texture([[x02 - M, y02 - sol], [x02 + W + M, y02 - sol], [x02 + W + M, y02 + H], [x02 + W, y02 + H], [x02 + W, y02], [x02, y02], [x02, y02 + H], [x02 - M, y02 + H]], MAT.terre, { seed: 8, contour: [0.3, 0.22, 0.15] });
-          p.texture([[x02, y02], [x02 + W, y02], [x02 + W, y02 - Math.min(lit, sol)], [x02, y02 - Math.min(lit, sol)]], MAT.sable, { seed: 9, taille: 0.7 });
-          p.rgb([0.3, 0.22, 0.15]).width(0.6).line(x02 + W, y02, x02 + W + ex, y02 + ey).line(x02 + W + ex, y02 + ey, x02 + W + ex, y02 + H + ey);
+          p.texture([[x02, y02], [x02 + ex, y02 + ey], [x02 + ex, y02 + H + ey], [x02, y02 + H]], MAT.terre.map((c) => c * 0.8), { seed: 5 });
+          if (lit > 0) p.texture([[x02, y02], [x02 + ex, y02 + ey], [x02 + ex, y02 + ey + lit], [x02, y02 + lit]], MAT.sable.map((c) => c * 0.92), { seed: 7, taille: 0.7 });
+          fourreaux();
           if (m.tranchee) {
             const g = m.tranchee.grillage;
             p.rgb(GRILLAGE_RGB[g.couleur] || [0.85, 0.1, 0.1], false).rgb(GRILLAGE_RGB[g.couleur] || [0.85, 0.1, 0.1]).width(0.4);
@@ -78777,16 +78785,12 @@ var require_vue3d = __commonJS({
             p.poly([[X(10), gy], [X(10) + ex, gy + ey], [X(m.largeur - 10) + ex, gy + ey], [X(m.largeur - 10), gy]], "S");
             for (let t = 0.1; t < 1; t += 0.1) p.line(X(10) + ex * t, gy + ey * t, X(m.largeur - 10) + ex * t, gy + ey * t);
           }
-        }
-        const n = [-Math.sin(ang), Math.cos(ang)];
-        const order = [...m.fourreaux].sort((a, b) => b.y - a.y || b.x - a.x);
-        for (const fo of order) {
-          const r = fo.od / 2 * s, cx = X(fo.x), cy = Y(fo.y);
-          void n;
-          p.cylindre(cx, cy, cx + ex, cy + ey, r, fo.di / 2 * s, MAT.tpc);
-        }
-        for (const c of m.cables) {
-          p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), "B");
+          p.texture([[x02 - M, y02 + H], [x02 - M + ex, y02 + H + ey], [x02 + ex, y02 + H + ey], [x02, y02 + H]], surf, { seed: 3, contraste: 0.08 });
+          p.texture([[x02 + W, y02 - sol], [x02 + W + ex, y02 - sol + ey], [x02 + W + M + ex, y02 - sol + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + ex, y02 + H + ey], [x02 + W, y02 + H]], MAT.terre.map((c) => c * 0.85), { seed: 10 });
+          p.texture([[x02 + W, y02 + H], [x02 + W + ex, y02 + H + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + M, y02 + H]], surf, { seed: 4, contraste: 0.08 });
+          p.texture([[x02 - M, y02 - sol], [x02 + W + M, y02 - sol], [x02 + W + M, y02 + H], [x02 + W, y02 + H], [x02 + W, y02], [x02, y02], [x02, y02 + H], [x02 - M, y02 + H]], MAT.terre, { seed: 8, contour: [0.3, 0.22, 0.15] });
+          p.texture([[x02, y02], [x02 + W, y02], [x02 + W, y02 - Math.min(lit, sol)], [x02, y02 - Math.min(lit, sol)]], MAT.sable, { seed: 9, taille: 0.7 });
+          p.rgb([0.3, 0.22, 0.15]).width(0.6).line(x02 + W, y02 + H, x02 + W + ex, y02 + H + ey).line(x02, y02 + H, x02 + ex, y02 + H + ey);
         }
         p.rgb([0, 0, 0], false);
       }
@@ -78875,6 +78879,16 @@ var require_vue3d = __commonJS({
         const droite = [d[1], -d[0]], tangente = face.startsWith("pignon") ? [0, 1] : [1, 0];
         return droite[0] * tangente[0] + droite[1] * tangente[1] < 0;
       }
+      const NUMERO_COTE = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+      function regrouperFaisceaux(etude) {
+        const g = /* @__PURE__ */ new Map();
+        for (const t of etude && etude.traversees || []) {
+          const [a, b] = t.cles, cle = NUMERO_COTE[a] <= NUMERO_COTE[b] ? `${a}|${b}` : `${b}|${a}`;
+          if (!g.has(cle)) g.set(cle, { cles: cle.split("|"), type: t.type, liaisons: [] });
+          g.get(cle).liaisons.push(t.liaison);
+        }
+        return [...g.values()].sort((x, y) => y.liaisons.length - x.liaisons.length || NUMERO_COTE[x.cles[0]] - NUMERO_COTE[y.cles[0]]);
+      }
       function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
         const L = etude.L, l = etude.l, e = etude.infos && etude.infos.paroi || 0, sortie = 350;
         const ext = e + sortie + 60;
@@ -78952,9 +78966,10 @@ var require_vue3d = __commonJS({
             const m = e + sortie / 2, [lx, ly] = P(bx + g.out[0] * m, by + g.out[1] * m);
             const txt = `\xD8${Math.round(c.od)}${c.n > 1 ? ` \xD7${c.n}` : ""}`;
             const fs2 = Math.max(5, Math.min(7.5, c.od * 0.9 * s * 0.75));
-            p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs2 * 0.35, fs2, txt, { align: "center", bold: true });
+            const place = g.out[0] !== 0 ? Infinity : c.od * 0.9 * s;
+            if (txt.length * fs2 * 0.55 <= place) p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs2 * 0.35, fs2, txt, { align: "center", bold: true });
           }
-          const libelle = `${etude.faces[k].face.toUpperCase()} \xB7 ${mq.nom}`;
+          const libelle = `${etude.nom ? etude.nom + "." + NUMERO_COTE[k] : etude.faces[k].face.toUpperCase()} \xB7 ${mq.nom}`;
           const lw = libelle.length * 8 * 0.5 + 10, lh = 13;
           const coin = { pignonA: [-1, 1], longPanB: [1, 1], longPanA: [-1, -1], pignonB: [1, -1] }[k];
           let [cx2, cy2] = P(coin[0] < 0 ? -e : L + e, coin[1] > 0 ? l + e : -e);
@@ -78967,35 +78982,35 @@ var require_vue3d = __commonJS({
           const A = ancre[k] && ancre[k][nom];
           return A && A.n ? [A.x / A.n, A.y / A.n] : null;
         };
-        const dejaVu = /* @__PURE__ */ new Map();
-        etude.traversees.forEach((t, i) => {
-          const [a, b] = t.cles, A0 = pt(a, t.liaison), B0 = pt(b, t.liaison);
-          if (!A0 || !B0) return;
-          const cle = `${a}|${b}|${Math.round(A0[0])},${Math.round(A0[1])}|${Math.round(B0[0])},${Math.round(B0[1])}`;
-          const rang = dejaVu.get(cle) || 0;
-          dejaVu.set(cle, rang + 1);
-          const pas = Math.min(l, L) / 14, d = (rang % 2 ? -1 : 1) * Math.ceil(rang / 2) * pas;
-          const na = faceGeo[a].n, ta = [na[1], -na[0]];
-          const nb = faceGeo[b].n, tb = [nb[1], -nb[0]];
-          const A = [A0[0] + ta[0] * d, A0[1] + ta[1] * d], B = [B0[0] + tb[0] * d * (t.type === "droite" ? -1 : 1), B0[1] + tb[1] * d * (t.type === "droite" ? -1 : 1)];
-          const c = couleur.get(t.liaison);
-          let chemin = [A, B];
-          if (t.type === "angle") {
-            const na2 = faceGeo[a].n;
-            chemin = [A, na2[0] !== 0 ? [B[0], A[1]] : [A[0], B[1]], B];
-          }
-          p.rgb(c).width(2.2);
+        const faisceaux = regrouperFaisceaux(etude);
+        const moyenne = (k, noms) => {
+          const pts = noms.map((nom) => pt(k, nom)).filter(Boolean);
+          return pts.length ? [pts.reduce((s2, q) => s2 + q[0], 0) / pts.length, pts.reduce((s2, q) => s2 + q[1], 0) / pts.length] : null;
+        };
+        faisceaux.forEach((fx, i) => {
+          const [a, b] = fx.cles, A = moyenne(a, fx.liaisons), B = moyenne(b, fx.liaisons);
+          if (!A || !B) return;
+          const c = fx.liaisons.length === 1 ? couleur.get(fx.liaisons[0]) : [0.2, 0.32, 0.5];
+          const chemin = fx.type === "angle" ? [A, faceGeo[a].n[0] !== 0 ? [B[0], A[1]] : [A[0], B[1]], B] : [A, B];
+          p.rgb(c).width(Math.min(9, 1.8 + fx.liaisons.length * 0.45));
           for (let j = 0; j + 1 < chemin.length; j++) p.line(...P(...chemin[j]), ...P(...chemin[j + 1]));
-          const mid = chemin[Math.floor(chemin.length / 2)];
-          const [qx, qy] = P(...mid);
-          p.rgb([1, 1, 1], false).rgb(c).width(1.2).circle(qx, qy, 7.5, "B");
-          p.rgb(c, false).text(qx, qy - 3, 8.5, String(i + 1), { align: "center", bold: true });
+          const mid = chemin.length === 3 ? chemin[1] : [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+          const [qx, qy] = P(...mid), txt = fx.liaisons.length > 1 ? `${i + 1} \xD7${fx.liaisons.length}` : String(i + 1);
+          const rw = Math.max(9, txt.length * 3.1 + 5);
+          p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(qx - rw, qy - 7.5, 2 * rw, 15, "B");
+          p.rgb(c, false).text(qx, qy - 3, 8.5, txt, { align: "center", bold: true });
         });
-        etude.arrets.forEach((a) => {
-          const A = pt(a.cle, a.liaison);
+        const arretsParCote = /* @__PURE__ */ new Map();
+        etude.arrets.forEach((x) => {
+          if (!arretsParCote.has(x.cle)) arretsParCote.set(x.cle, []);
+          arretsParCote.get(x.cle).push(x.liaison);
+        });
+        arretsParCote.forEach((noms, k) => {
+          const A = moyenne(k, noms);
           if (!A) return;
-          const [qx, qy] = P(A[0] + faceGeo[a.cle].n[0] * 60, A[1] + faceGeo[a.cle].n[1] * 60);
-          p.rgb(couleur.get(a.liaison), false).rgb([1, 1, 1]).width(1).circle(qx, qy, 4.5, "B");
+          const [qx, qy] = P(A[0] + faceGeo[k].n[0] * 80, A[1] + faceGeo[k].n[1] * 80);
+          p.rgb([0.55, 0.12, 0.1], false).rgb([1, 1, 1]).width(1).circle(qx, qy, 7, "B");
+          p.rgb([1, 1, 1], false).text(qx, qy - 3, 7.5, String(noms.length), { align: "center", bold: true });
         });
         const [c1x, c1y] = P(L / 2, l);
         p.rgb([0.1, 0.1, 0.1], false).text(c1x, c1y - 14, 10, `${etude.nom ? etude.nom + " \u2014 " : ""}${etude.ref}`, { align: "center", bold: true });
@@ -79030,26 +79045,50 @@ var require_vue3d = __commonJS({
           y -= 12;
         }
         y -= 4;
-        p.rgb([0, 0, 0], false).text(x, y, 9, "Travers\xE9es", { bold: true });
+        const LIB = { longPanB: "c\xF4t\xE9 1", pignonB: "c\xF4t\xE9 2", longPanA: "c\xF4t\xE9 3", pignonA: "c\xF4t\xE9 4" };
+        const assez = () => y > MARGE + 24;
+        const parLignes = (noms, n) => {
+          const out = [];
+          for (let i = 0; i < noms.length; i += n) out.push(noms.slice(i, i + n).map(nomCourt).join(" \xB7 "));
+          return out;
+        };
+        p.rgb([0, 0, 0], false).text(x, y, 9, "Travers\xE9es (faisceaux)", { bold: true });
         y -= 12;
         if (!e.traversees.length) {
           p.text(x, y, 8, "aucune");
           y -= 11;
         }
-        e.traversees.forEach((t, i) => {
-          p.rgb(couleurs.get(t.liaison) || [0, 0, 0], false).text(x, y, 8, `${i + 1}. ${t.liaison}`.slice(0, 48), { bold: true });
+        regrouperFaisceaux(e).forEach((fx, i) => {
+          if (!assez()) return;
+          const c = fx.liaisons.length === 1 ? couleurs.get(fx.liaisons[0]) || [0, 0, 0] : [0.2, 0.32, 0.5];
+          p.rgb(c, false).text(x, y, 8, `${i + 1}. ${LIB[fx.cles[0]]} \u2192 ${LIB[fx.cles[1]]} \xB7 ${fx.liaisons.length} liaison${fx.liaisons.length > 1 ? "s" : ""} (${fx.type})`, { bold: true });
           y -= 10;
-          p.rgb([0.2, 0.2, 0.2], false).text(x + 12, y, 7, `entre ${t.entree}, sort ${t.sortie} (${t.type})${t.changementFourreau ? ", fourreau " + t.changementFourreau : ""}`);
-          y -= 11;
+          for (const l of parLignes(fx.liaisons, 3)) {
+            if (!assez()) break;
+            p.rgb([0.25, 0.25, 0.25], false).text(x + 10, y, 6.5, l.slice(0, 80));
+            y -= 8.5;
+          }
+          y -= 3;
         });
-        if (e.arrets.length) {
+        if (e.arrets.length && assez()) {
           y -= 4;
           p.rgb([0, 0, 0], false).text(x, y, 9, "Liaisons qui s'arr\xEAtent dans la chambre", { bold: true });
           y -= 12;
-          for (const a of e.arrets.slice(0, 8)) {
-            p.rgb(couleurs.get(a.liaison) || [0, 0, 0], false).text(x, y, 7, `\u2022 ${a.liaison} (${a.face})`.slice(0, 60));
+          const parCote = /* @__PURE__ */ new Map();
+          e.arrets.forEach((a) => {
+            if (!parCote.has(a.cle)) parCote.set(a.cle, []);
+            parCote.get(a.cle).push(a.liaison);
+          });
+          parCote.forEach((noms, k) => {
+            if (!assez()) return;
+            p.rgb([0.55, 0.12, 0.1], false).text(x, y, 8, `${LIB[k] || k} : ${noms.length}`, { bold: true });
             y -= 10;
-          }
+            for (const l of parLignes(noms, 3)) {
+              if (!assez()) break;
+              p.rgb([0.25, 0.25, 0.25], false).text(x + 10, y, 6.5, l.slice(0, 80));
+              y -= 8.5;
+            }
+          });
         }
         if (e.avertissements && e.avertissements.length) {
           y -= 4;
@@ -79060,7 +79099,7 @@ var require_vue3d = __commonJS({
             y -= 10;
           }
         }
-        p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, "Vue de dessus : pignon A \xE0 gauche, pignon B \xE0 droite, long-pan A en bas, long-pan B en haut. Positions des fourreaux le long de chaque face reprises des masques (centr\xE9s).");
+        p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, "Vue de dessus, c\xF4t\xE9s num\xE9rot\xE9s dans le sens horaire : 1 en haut, 2 \xE0 droite, 3 en bas, 4 \xE0 gauche (masque \xAB C7.1 \xBB = c\xF4t\xE9 1 de C7). Fourreaux plac\xE9s comme dans les masques.");
         return p;
       }
       function rejouerSurCanvas(ctx, page, hauteurPt) {
@@ -79169,6 +79208,59 @@ var require_vue3d = __commonJS({
           p.rgb(der ? [0.75, 0.32, 0.05] : [0.1, 0.1, 0.1], false).text(mx, my + h / 2 - 3 - lh * (i + 0.75), 7.5, l, { align: "center", bold: der });
         });
       }
+      const SYN = { police: 11, lh: 14, pad: 8, gouttiere: 14, carMono: 6.6, carTexte: 6.4, carSection: 6 };
+      const nomCourt = (nom) => String(nom).replace(/^TGBT\s*(\d+)\s*(→|->)\s*/i, "T$1 \u2192 ");
+      function lignesPhi(e) {
+        return (e.phi || []).map(([d, q]) => `${q} \xD7 \xD8${d}`);
+      }
+      function mesureEtiquetteSyn(e) {
+        const phi = lignesPhi(e), lia = e.liaisons || [];
+        const wPhi = Math.max(60, ...phi.map((l) => l.length * SYN.carMono));
+        const wLia = lia.length ? Math.max(...lia.map((l) => nomCourt(l.nom).length * SYN.carTexte + 10 + String(l.sections || "").length * SYN.carSection)) : 0;
+        const n = Math.max(1, phi.length, lia.length);
+        return { w: Math.round(2 * SYN.pad + wPhi + (lia.length ? SYN.gouttiere + wLia : 0)), h: Math.round(2 * SYN.pad + n * SYN.lh + SYN.lh + 2), wPhi };
+      }
+      function drawSynoptiqueAncre(p, data, zx, zy, zw, zh, echelleMax = 2) {
+        if (!data.noeuds.length) return null;
+        const s = Math.min(zw / data.largeur, zh / data.hauteur, echelleMax);
+        const ox = zx + (zw - data.largeur * s) / 2, oy = zy + (zh - data.hauteur * s) / 2;
+        const P = (x, y) => [ox + x * s, oy + (data.hauteur - y) * s];
+        p.rgb([0.36, 0.39, 0.45]).width(Math.max(0.6, 2.2 * s));
+        for (const t of data.troncons) {
+          const A = P(t.a.x, t.a.y), B = P(t.b.x, t.b.y);
+          if (Math.abs(A[0] - B[0]) < 0.5 || Math.abs(A[1] - B[1]) < 0.5) p.line(A[0], A[1], B[0], B[1]);
+          else p.line(A[0], A[1], B[0], A[1]).line(B[0], A[1], B[0], B[1]);
+        }
+        for (const t of data.troncons) {
+          const e = t.e;
+          if (!e) continue;
+          const m = mesureEtiquetteSyn(e), [x0, yHaut] = P(e.x - e.w / 2, e.y - e.h / 2), w = e.w * s, h = e.h * s;
+          const f2 = SYN.police * s, lh = SYN.lh * s, pad = SYN.pad * s;
+          p.rgb([1, 1, 1], false).rgb([0.75, 0.78, 0.83]).width(Math.max(0.3, 0.8 * s)).rect(x0, yHaut - h, w, h, "B");
+          const phi = lignesPhi(e), xs = x0 + pad + m.wPhi * s + SYN.gouttiere * s / 2;
+          if ((e.liaisons || []).length) p.rgb([0.86, 0.88, 0.91]).line(xs, yHaut - pad * 0.6, xs, yHaut - h + lh + pad * 0.4);
+          phi.forEach((l, i) => p.rgb([0.08, 0.08, 0.08], false).text(x0 + pad, yHaut - pad - lh * (i + 0.78), f2, l, { bold: true }));
+          if (!phi.length) p.rgb([0.45, 0.45, 0.45], false).text(x0 + pad, yHaut - pad - lh * 0.78, f2, "coupe vide");
+          (e.liaisons || []).forEach((l, i) => {
+            const y = yHaut - pad - lh * (i + 0.78), nom = nomCourt(l.nom);
+            p.rgb([0.16, 0.18, 0.22], false).text(xs + SYN.gouttiere * s / 2, y, f2 * 0.92, nom);
+            if (l.sections) p.rgb([0.5, 0.27, 0.08], false).text(xs + SYN.gouttiere * s / 2 + (nom.length * SYN.carTexte + 10) * s, y, f2 * 0.86, l.sections);
+          });
+          const L = e.L ? `${String(Math.round(e.L * 10) / 10).replace(".", ",")} m` : "? m";
+          p.rgb([0.66, 0.27, 0.04], false).text(x0 + w - pad, yHaut - h + pad * 0.9, f2, L, { bold: true, align: "right" });
+        }
+        for (const n of data.noeuds) {
+          const c = hexRgb(n.couleur), [cx, cy] = P(n.x, n.y), w = n.w * s, h = n.h * s;
+          p.rgb([1, 1, 1], false).rgb(c).width(Math.max(0.6, 2.4 * s));
+          if (n.type === "sortie") p.poly([[cx - w / 2, cy - h / 2], [cx + w / 2 - 12 * s, cy - h / 2], [cx + w / 2, cy], [cx + w / 2 - 12 * s, cy + h / 2], [cx - w / 2, cy + h / 2]], "B");
+          else p.rect(cx - w / 2, cy - h / 2, w, h, "B");
+          p.rgb(nuance(c, 1.85), false).rect(cx - w / 2 + 1.2 * s, cy - h / 2 + 1.2 * s, w - 2.4 * s, h - 2.4 * s, "f");
+          p.rgb([0.1, 0.1, 0.1], false).text(cx - (n.type === "sortie" ? 5 * s : 0), cy + (n.sous ? 1.5 * s : -4.5 * s), 15 * s, n.nom, { align: "center", bold: true });
+          if (n.sous) p.rgb([0.62, 0.26, 0.04], false).text(cx, cy - 13 * s, 10 * s, n.sous, { align: "center" });
+        }
+        return { s, ox, oy };
+      }
+      const FORMATS_PAGE = { a4: [842, 595], a3: [1191, 842], a2: [1684, 1191], a1: [2384, 1684], a0: [3370, 2384] };
       function drawSynoptique2D(p, data, zx, zy, zw, zh) {
         if (!data.noeuds.length) return;
         const xs = data.noeuds.map((n) => n.x), ys = data.noeuds.map((n) => n.y);
@@ -79267,7 +79359,7 @@ var require_vue3d = __commonJS({
         elements.forEach((e) => e.dessiner());
         etiquettes.forEach((f2) => f2());
       }
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, mesureEtiquetteSyn, FORMATS_PAGE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -79587,7 +79679,8 @@ var require_chambre_faces = __commonJS({
     "use strict";
     (function(root) {
       const FACES = ["pignonA", "pignonB", "longPanA", "longPanB"];
-      const LIBELLE = { pignonA: "pignon A", pignonB: "pignon B", longPanA: "long-pan A", longPanB: "long-pan B" };
+      const NUMERO = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+      const LIBELLE = { pignonA: "c\xF4t\xE9 4", pignonB: "c\xF4t\xE9 2", longPanA: "c\xF4t\xE9 3", longPanB: "c\xF4t\xE9 1" };
       const estPignon = (k) => k.startsWith("pignon");
       const opposee = { pignonA: "pignonB", pignonB: "pignonA", longPanA: "longPanB", longPanB: "longPanA" };
       const faceDe = (m, k) => ({ largeur: estPignon(k) ? m.l : m.L, hauteur: m.H });
@@ -79671,7 +79764,16 @@ var require_chambre_faces = __commonJS({
           avertissements
         };
       }
-      const api = { etudierChambre, FACES, LIBELLE };
+      function regrouperTraversees(etude) {
+        const g = /* @__PURE__ */ new Map();
+        for (const t of etude && etude.traversees || []) {
+          const [a, b] = t.cles, cle = NUMERO[a] <= NUMERO[b] ? `${a}|${b}` : `${b}|${a}`;
+          if (!g.has(cle)) g.set(cle, { cles: cle.split("|"), type: t.type, liaisons: [] });
+          g.get(cle).liaisons.push(t.liaison);
+        }
+        return [...g.values()].sort((x, y) => y.liaisons.length - x.liaisons.length || NUMERO[x.cles[0]] - NUMERO[y.cles[0]]).map((x) => ({ ...x, entree: LIBELLE[x.cles[0]], sortie: LIBELLE[x.cles[1]] }));
+      }
+      const api = { etudierChambre, regrouperTraversees, FACES, LIBELLE, NUMERO };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.ChambreFaces = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -79686,7 +79788,7 @@ var require_reseau = __commonJS({
       const FACES_CHAMBRE = ["pignonA", "pignonB", "longPanA", "longPanB"];
       const COULEURS = ["#e8661c", "#2459c9", "#16857a", "#b0302a", "#6b4fd0", "#c78a00", "#3f8f3a", "#5d6a70"];
       const TYPES = { chambre: "Chambre", coffret: "Coffret / tableau", sortie: "Sortie" };
-      const LIBELLE_FACE = { pignonA: "pignon A", pignonB: "pignon B", longPanA: "long-pan A", longPanB: "long-pan B", bas: "face du bas", sortie: "sortie" };
+      const LIBELLE_FACE = { longPanB: "c\xF4t\xE9 1", pignonB: "c\xF4t\xE9 2", longPanA: "c\xF4t\xE9 3", pignonA: "c\xF4t\xE9 4", bas: "face du bas", sortie: "sortie" };
       function creerReseau() {
         return { noeuds: [], troncons: [], seq: 1, actif: { vue: "coupe", noeud: null, troncon: null } };
       }
@@ -79868,6 +79970,225 @@ var require_reseau = __commonJS({
         const A = noeud(r, t.a.noeud), B = noeud(r, t.b.noeud);
         return `${A ? A.nom : "?"} \u2192 ${B ? B.nom : "?"}`;
       }
+      function contenuEtiquette(coupe) {
+        if (!coupe || !(coupe.fourreaux || []).length) return { phi: [], liaisons: [] };
+        const nb = /* @__PURE__ */ new Map();
+        coupe.fourreaux.forEach((f) => {
+          const d = Math.round(Number(f.od) || Number(f.code) || 0);
+          nb.set(d, (nb.get(d) || 0) + 1);
+        });
+        const lia = /* @__PURE__ */ new Map();
+        (coupe.cables || []).forEach((c) => {
+          const nom = String(c.liaison || c.label || "").trim();
+          if (!nom) return;
+          const base = nom.replace(/\s*-\s*PE$/i, ""), pe = base !== nom;
+          if (!lia.has(base)) lia.set(base, /* @__PURE__ */ new Map());
+          const k = (pe ? "PE " : "") + c.code;
+          lia.get(base).set(k, (lia.get(base).get(k) || 0) + 1);
+        });
+        const liaisons = [...lia].sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true })).map(([nom, m]) => ({
+          nom,
+          sections: [...m].sort((a, b) => a[0].startsWith("PE") - b[0].startsWith("PE") || b[1] - a[1]).map(([k, q]) => k.startsWith("PE") && q === 1 ? k : `${q}\xD7${k}`).join(" + ")
+        }));
+        return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons };
+      }
+      function dispositionAncree(r, opts) {
+        const E = opts.ecart == null ? 0.5 : opts.ecart, G = opts.marge == null ? 40 : opts.marge;
+        const tN = (id) => opts.tailleNoeud(noeud(r, id)), tE = (t) => opts.tailleEtiquette(t);
+        const adj = new Map(r.noeuds.map((n) => [n.id, []]));
+        r.troncons.forEach((t) => {
+          if (!adj.has(t.a.noeud) || !adj.has(t.b.noeud)) return;
+          adj.get(t.a.noeud).push({ v: t.b.noeud, t, face: t.a.face });
+          adj.get(t.b.noeud).push({ v: t.a.noeud, t, face: t.b.face });
+        });
+        const nomDe = (id) => (noeud(r, id) || {}).nom || "";
+        const parNom = (a, b) => nomDe(a).localeCompare(nomDe(b), "fr", { numeric: true });
+        const pos = {}, etiq = {}, place = /* @__PURE__ */ new Set(), arete = /* @__PURE__ */ new Set();
+        let decalY = 0, largeurMax = 0, rangsTotal = 0;
+        function derivation(parent, lien, sens) {
+          const items = [], dejaVus = /* @__PURE__ */ new Set([parent]);
+          let y = sens * tN(parent).h / 2, gauche = 0, droite = 0, cur = lien;
+          while (cur) {
+            const e = tE(cur.t), n2 = tN(cur.v);
+            const yL = y + sens * (e.h * E + e.h / 2);
+            items.push({ t: cur.t, dx: 0, dy: yL, w: e.w, h: e.h });
+            y = yL + sens * (e.h / 2 + e.h * E + n2.h / 2);
+            items.push({ id: cur.v, dx: 0, dy: y });
+            arete.add(cur.t.id);
+            dejaVus.add(cur.v);
+            gauche = Math.max(gauche, e.w / 2, n2.w / 2);
+            droite = Math.max(droite, e.w / 2, n2.w / 2);
+            y += sens * n2.h / 2;
+            const suite = adj.get(cur.v).filter((x) => !arete.has(x.t.id) && !place.has(x.v) && !dejaVus.has(x.v)).sort((a, b) => parNom(a.v, b.v));
+            cur = suite[0] || null;
+            suite.slice(1).forEach((x, k) => {
+              const e2 = tE(x.t), n3 = tN(x.v), dx = droite + G + Math.max(e2.w, n3.w) / 2;
+              items.push({ t: x.t, dx, dy: y + sens * (e2.h * E + e2.h / 2), w: e2.w, h: e2.h });
+              items.push({ id: x.v, dx, dy: y + sens * (e2.h * (1 + 2 * E) + n3.h / 2) });
+              arete.add(x.t.id);
+              dejaVus.add(x.v);
+              droite = dx + Math.max(e2.w, n3.w) / 2;
+              void k;
+            });
+          }
+          return { items, gauche, droite, prof: Math.abs(y), vus: dejaVus };
+        }
+        const restants = () => r.noeuds.map((n) => n.id).filter((id) => !place.has(id));
+        while (restants().length) {
+          const comp = /* @__PURE__ */ new Set(), q0 = [restants().sort(parNom)[0]];
+          while (q0.length) {
+            const u = q0.shift();
+            if (comp.has(u)) continue;
+            comp.add(u);
+            adj.get(u).forEach((x) => q0.push(x.v));
+          }
+          const chambres = [...comp].filter((id) => (noeud(r, id) || {}).type === "chambre");
+          const base = new Set(chambres.length >= 2 ? chambres : [...comp]);
+          const bfs = (s0) => {
+            const prec = /* @__PURE__ */ new Map([[s0, null]]), q = [s0];
+            let der = s0;
+            while (q.length) {
+              const u = q.shift();
+              der = u;
+              adj.get(u).filter((x) => base.has(x.v) && !prec.has(x.v)).sort((a2, b2) => parNom(a2.v, b2.v)).forEach((x) => {
+                prec.set(x.v, u);
+                q.push(x.v);
+              });
+            }
+            return { der, prec };
+          };
+          const debut = [...base].sort(parNom)[0];
+          const a = bfs(bfs(debut).der).der, b = bfs(a);
+          let chaine = [];
+          for (let u = b.der; u != null; u = b.prec.get(u)) chaine.push(u);
+          if (parNom(chaine[0], chaine[chaine.length - 1]) > 0) chaine.reverse();
+          const liens = chaine.slice(1).map((v, i) => adj.get(chaine[i]).find((x) => x.v === v));
+          liens.forEach((l) => arete.add(l.t.id));
+          chaine.forEach((id) => place.add(id));
+          const ensChaine = new Set(chaine);
+          const branches = chaine.map((id) => adj.get(id).filter((x) => !arete.has(x.t.id) && !ensChaine.has(x.v)).sort((x, y) => parNom(x.v, y.v)));
+          const calc = (k) => {
+            const n = chaine.length, coupes = [0];
+            if (k > 1) {
+              const cumul = [0];
+              for (let i = 0; i < liens.length; i++) cumul.push(cumul[i] + tE(liens[i].t).w * (1 + 2 * E));
+              for (let j = 1; j < k; j++) {
+                const cible = cumul[cumul.length - 1] * j / k;
+                let i = coupes[j - 1] + 1;
+                while (i < n - 1 && cumul[i] < cible) i++;
+                coupes.push(Math.min(i, n - 1));
+              }
+            }
+            coupes.push(n);
+            return coupes;
+          };
+          const essai = (k) => {
+            const coupes = calc(k);
+            if (new Set(coupes).size !== coupes.length) return null;
+            arete.clear();
+            r.troncons.forEach((t) => {
+              if (liens.some((l) => l.t.id === t.id)) arete.add(t.id);
+            });
+            const P = {}, L = {}, rangs = [];
+            let yRang = 0, xMax = 0, yMin = Infinity, yMax = -Infinity;
+            for (let j = 0; j < coupes.length - 1; j++) {
+              const ids = chaine.slice(coupes[j], coupes[j + 1]), dir = j % 2 ? -1 : 1;
+              const interdit = (i) => {
+                const g = coupes[j] + i;
+                if (j < coupes.length - 2 && g === coupes[j + 1] - 1) return 1;
+                if (j > 0 && g === coupes[j]) return -1;
+                return 0;
+              };
+              const der = ids.map((id, i) => {
+                const pris = /* @__PURE__ */ new Set(), res = [];
+                branches[coupes[j] + i].forEach((x) => {
+                  if (arete.has(x.t.id)) return;
+                  let s2 = x.face === "longPanB" ? -1 : x.face === "longPanA" ? 1 : pris.has(1) ? -1 : 1;
+                  if (pris.has(s2) || s2 === interdit(i)) s2 = -s2;
+                  if (s2 === interdit(i)) return;
+                  pris.add(s2);
+                  const d = derivation(ids[i], x, s2);
+                  d.sens = s2;
+                  res.push(d);
+                });
+                return res;
+              });
+              const haut = Math.max(...ids.map((id, i) => Math.max(tN(id).h / 2, ...der[i].filter((d) => d.sens < 0).map((d) => d.prof))));
+              const bas = Math.max(...ids.map((id, i) => Math.max(tN(id).h / 2, ...der[i].filter((d) => d.sens > 0).map((d) => d.prof))));
+              if (j > 0) {
+                const lienRang = liens[coupes[j] - 1], e = tE(lienRang.t);
+                const pas = Math.max(rangs[j - 1].bas + haut + G, e.h * (1 + 2 * E) + (tN(chaine[coupes[j] - 1]).h + tN(ids[0]).h) / 2);
+                yRang = rangs[j - 1].y + pas;
+              }
+              const xs = [];
+              ids.forEach((id, i) => {
+                const demi = (cote) => Math.max(tN(id).w / 2, ...der[i].map((d) => cote > 0 ? d.droite : d.gauche));
+                if (i === 0) {
+                  xs.push(j === 0 ? demi(-1) : j % 2 ? rangs[j - 1].xFin : rangs[j - 1].xFin);
+                  return;
+                }
+                const e = tE(liens[coupes[j] + i - 1].t), prec = i - 1;
+                const demiPrec = Math.max(tN(ids[prec]).w / 2, ...der[prec].map((d) => dir > 0 ? d.droite : d.gauche));
+                const pas = Math.max(e.w * (1 + 2 * E) + (tN(ids[prec]).w + tN(id).w) / 2, demiPrec + demi(-dir) + G);
+                xs.push(xs[i - 1] + dir * pas);
+              });
+              ids.forEach((id, i) => {
+                P[id] = { x: xs[i], y: yRang };
+                der[i].forEach((d) => d.items.forEach((it) => {
+                  if (it.id != null) P[it.id] = { x: xs[i] + it.dx, y: yRang + it.dy };
+                  else L[it.t.id] = { x: xs[i] + it.dx, y: yRang + it.dy, w: it.w, h: it.h, sens: "v" };
+                }));
+                if (i > 0) {
+                  const t = liens[coupes[j] + i - 1].t, e = tE(t);
+                  const a1 = xs[i - 1] + dir * tN(ids[i - 1]).w / 2, b1 = xs[i] - dir * tN(id).w / 2;
+                  L[t.id] = { x: (a1 + b1) / 2, y: yRang, w: e.w, h: e.h, sens: "h" };
+                }
+              });
+              if (j > 0) {
+                const t = liens[coupes[j] - 1].t, e = tE(t), A = P[chaine[coupes[j] - 1]], B = P[ids[0]];
+                L[t.id] = { x: A.x, y: (A.y + tN(chaine[coupes[j] - 1]).h / 2 + B.y - tN(ids[0]).h / 2) / 2, w: e.w, h: e.h, sens: "v" };
+              }
+              rangs.push({ y: yRang, bas, xFin: xs[xs.length - 1] });
+            }
+            const pts = [];
+            Object.entries(P).forEach(([id, p2]) => {
+              const z2 = tN(id);
+              pts.push([p2.x - z2.w / 2, p2.y - z2.h / 2], [p2.x + z2.w / 2, p2.y + z2.h / 2]);
+            });
+            Object.values(L).forEach((l) => pts.push([l.x - l.w / 2, l.y - l.h / 2], [l.x + l.w / 2, l.y + l.h / 2]));
+            const minX = Math.min(...pts.map((q) => q[0])), maxX2 = Math.max(...pts.map((q) => q[0]));
+            yMin = Math.min(...pts.map((q) => q[1]));
+            yMax = Math.max(...pts.map((q) => q[1]));
+            xMax = maxX2;
+            return { P, L, k, minX, largeur: xMax - minX, hauteur: yMax - yMin, yMin };
+          };
+          let meilleur = essai(1);
+          if (opts.ratio) {
+            const score = (s2) => Math.min(opts.ratio / s2.largeur, 1 / s2.hauteur);
+            for (let k = 2; k <= Math.min(8, chaine.length); k++) {
+              const s2 = essai(k);
+              if (s2 && score(s2) > score(meilleur)) meilleur = s2;
+            }
+          }
+          const fin = essai(meilleur.k);
+          Object.entries(fin.P).forEach(([id, p2]) => {
+            pos[id] = { x: p2.x - fin.minX + G, y: p2.y - fin.yMin + G + decalY };
+            place.add(id);
+          });
+          Object.entries(fin.L).forEach(([id, l]) => {
+            etiq[id] = { ...l, x: l.x - fin.minX + G, y: l.y - fin.yMin + G + decalY };
+          });
+          decalY += fin.hauteur + 2 * G;
+          largeurMax = Math.max(largeurMax, fin.largeur + 2 * G);
+          rangsTotal += fin.k;
+        }
+        r.troncons.forEach((t) => {
+          if (etiq[t.id] || !pos[t.a.noeud] || !pos[t.b.noeud]) return;
+          const e = tE(t), A = pos[t.a.noeud], B = pos[t.b.noeud];
+          etiq[t.id] = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2, w: e.w, h: e.h, sens: Math.abs(A.x - B.x) > Math.abs(A.y - B.y) ? "h" : "v" };
+        });
+        return { noeuds: pos, etiquettes: etiq, largeur: largeurMax, hauteur: decalY, rangs: rangsTotal };
+      }
       const api = {
         FACES_CHAMBRE,
         COULEURS,
@@ -79889,7 +80210,9 @@ var require_reseau = __commonJS({
         depuisAncienneChambre,
         nomTroncon,
         continuite,
-        metre
+        metre,
+        dispositionAncree,
+        contenuEtiquette
       };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Reseau = api;

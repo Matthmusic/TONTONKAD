@@ -104,3 +104,34 @@ describe('réseau : continuité et métré', () => {
     t3.longueurM = 12;
   });
 });
+
+describe('synoptique ancré', () => {
+  const r = R.creerReseau();
+  const c1 = R.ajouterNoeud(r, 'chambre'), c2 = R.ajouterNoeud(r, 'chambre'), c3 = R.ajouterNoeud(r, 'chambre');
+  const s1 = R.ajouterNoeud(r, 'sortie'), s2 = R.ajouterNoeud(r, 'sortie');
+  R.relier(r, c1.id, c2.id, { faceA: 'pignonB', faceB: 'pignonA' });
+  R.relier(r, c2.id, c3.id, { faceA: 'pignonB', faceB: 'pignonA' });
+  R.relier(r, c2.id, s1.id, { faceA: 'longPanB' }); // côté 1 (haut) → au-dessus
+  R.relier(r, c3.id, s2.id, { faceA: 'longPanA' }); // côté 3 (bas) → en dessous
+  const opts = { tailleNoeud: () => ({ w: 100, h: 50 }), tailleEtiquette: () => ({ w: 120, h: 60 }), ecart: 0.5 };
+  test('chaîne alignée, dérivations perpendiculaires du bon côté, écart d\'une demi-étiquette', () => {
+    const d = R.dispositionAncree(r, opts), P = d.noeuds;
+    expect(P[c1.id].y).toBe(P[c2.id].y); expect(P[c2.id].y).toBe(P[c3.id].y);
+    expect(P[c1.id].x).toBeLessThan(P[c2.id].x);
+    expect(P[s1.id].x).toBe(P[c2.id].x); expect(P[s1.id].y).toBeLessThan(P[c2.id].y);
+    expect(P[s2.id].y).toBeGreaterThan(P[c3.id].y);
+    // entre deux chambres : nœud/2 + ½ étiquette + étiquette + ½ étiquette + nœud/2
+    expect(P[c2.id].x - P[c1.id].x).toBeGreaterThanOrEqual(100 + 120 * 2);
+    expect(Object.keys(d.etiquettes)).toHaveLength(4);
+  });
+  test('repli en rangées pour une page étroite', () => {
+    const d = R.dispositionAncree(r, { ...opts, ratio: 0.5 });
+    expect(d.rangs).toBeGreaterThan(1);
+  });
+  test('contenu d\'étiquette : Ø du plus gros au plus petit, PE regroupé', () => {
+    const e = R.contenuEtiquette({ fourreaux: [{ od: 160 }, { od: 200 }, { od: 160 }], cables: [
+      { liaison: 'TGBT 1 → P1', code: '1x240' }, { liaison: 'TGBT 1 → P1', code: '1x240' }, { liaison: 'TGBT 1 → P1 - PE', code: '1x95' }] });
+    expect(e.phi).toEqual([[200, 1], [160, 2]]);
+    expect(e.liaisons).toEqual([{ nom: 'TGBT 1 → P1', sections: '2×1x240 + PE 1x95' }]);
+  });
+});

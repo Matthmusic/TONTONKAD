@@ -77,7 +77,7 @@ describe('chambre à plusieurs faces : choix et traversées', () => {
     const couleurs = V.drawChambreDessus(p, e, faces, 36, 60, 500, 450);
     expect(couleurs.size).toBe(3);
     expect(p.ops.join('\n')).not.toMatch(/\bBT\b/);
-    expect(p.labels.some((l) => /PIGNON A · Arrivée/.test(l.text))).toBe(true);
+    expect(p.labels.some((l) => /(CÔTÉ 4|\.4) · Arrivée/.test(l.text))).toBe(true);
   });
 });
 

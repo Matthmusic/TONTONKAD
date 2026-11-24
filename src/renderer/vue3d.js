@@ -154,27 +154,37 @@ function draw3D(p, m, x0, y0, wPt, hPt, longueurMm) {
   const W = m.largeur * s, H = top * s;
 
   p.width(0.7);
+  const n = [-Math.sin(ang), Math.cos(ang)];
+  // Ordre de peinture (du plus loin au plus proche) : fond et paroi visible de la
+  // tranchée, puis les fourreaux (qui partent en profondeur), puis ce qui est
+  // devant eux : dessus du terrain, face avant coupée, grillage.
+  const fourreaux = () => {
+    const order = [...m.fourreaux].sort((a2, b2) => (b2.y - a2.y) || (b2.x - a2.x));
+    for (const fo of order) {
+      const r = fo.od / 2 * s, cx = X(fo.x), cy = Y(fo.y);
+      p.cylindre(cx, cy, cx + ex, cy + ey, r, fo.di / 2 * s, MAT.tpc);
+    }
+    for (const c of m.cables) {
+      p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), 'B');
+    }
+  };
   if (m.forme === 'circ') {
-    const r = m.largeur / 2 * s, cx = X(m.largeur / 2), cy = Y(m.largeur / 2), n = [-Math.sin(ang), Math.cos(ang)];
+    const r = m.largeur / 2 * s, cx = X(m.largeur / 2), cy = Y(m.largeur / 2);
     p.rgb([0, 0, 0]).circle(cx + ex, cy + ey, r);
     p.line(cx + n[0] * r, cy + n[1] * r, cx + n[0] * r + ex, cy + n[1] * r + ey);
     p.line(cx - n[0] * r, cy - n[1] * r, cx - n[0] * r + ex, cy - n[1] * r + ey);
+    fourreaux();
   } else {
-    // terrain coupé : bloc de terre autour de la tranchée, vu de face et de dessus
     const M = W * MG, sol = H * SG;                    // marge de terre autour (pt)
     const x0 = X(0), y0 = Y(0), lit = (m.reglages.litDePose || 0) * s;
     const surf = MAT.surface[(m.tranchee && m.tranchee.zone) || 'trottoir'] || MAT.surface.trottoir;
-    // dessus du terrain (gauche et droite de la tranchée)
-    p.texture([[x0 - M, y0 + H], [x0 - M + ex, y0 + H + ey], [x0 + ex, y0 + H + ey], [x0, y0 + H]], surf, { seed: 3, contraste: 0.08 });
-    p.texture([[x0 + W, y0 + H], [x0 + W + ex, y0 + H + ey], [x0 + W + M + ex, y0 + H + ey], [x0 + W + M, y0 + H]], surf, { seed: 4, contraste: 0.08 });
-    // fond et paroi droite intérieurs de la tranchée (terre), lit de sable au fond
-    p.texture([[x0 + W, y0], [x0 + W + ex, y0 + ey], [x0 + W + ex, y0 + H + ey], [x0 + W, y0 + H]], MAT.terre.map((c) => c * 0.85), { seed: 5 });
+    // 1. au fond : sol de la tranchée (lit de sable) et paroi gauche, vue de l'intérieur
     p.texture([[x0, y0], [x0 + ex, y0 + ey], [x0 + W + ex, y0 + ey], [x0 + W, y0]], MAT.sable, { seed: 6, taille: 0.7 });
-    if (lit > 0) p.texture([[x0 + W, y0], [x0 + W + ex, y0 + ey], [x0 + W + ex, y0 + ey + lit], [x0 + W, y0 + lit]], MAT.sable.map((c) => c * 0.92), { seed: 7, taille: 0.7 });
-    // face avant coupée du terrain (avec le trou de la tranchée)
-    p.texture([[x0 - M, y0 - sol], [x0 + W + M, y0 - sol], [x0 + W + M, y0 + H], [x0 + W, y0 + H], [x0 + W, y0], [x0, y0], [x0, y0 + H], [x0 - M, y0 + H]], MAT.terre, { seed: 8, contour: [0.3, 0.22, 0.15] });
-    p.texture([[x0, y0], [x0 + W, y0], [x0 + W, y0 - Math.min(lit, sol)], [x0, y0 - Math.min(lit, sol)]], MAT.sable, { seed: 9, taille: 0.7 });
-    p.rgb([0.3, 0.22, 0.15]).width(0.6).line(x0 + W, y0, x0 + W + ex, y0 + ey).line(x0 + W + ex, y0 + ey, x0 + W + ex, y0 + H + ey);
+    p.texture([[x0, y0], [x0 + ex, y0 + ey], [x0 + ex, y0 + H + ey], [x0, y0 + H]], MAT.terre.map((c) => c * 0.8), { seed: 5 });
+    if (lit > 0) p.texture([[x0, y0], [x0 + ex, y0 + ey], [x0 + ex, y0 + ey + lit], [x0, y0 + lit]], MAT.sable.map((c) => c * 0.92), { seed: 7, taille: 0.7 });
+    // 2. les fourreaux
+    fourreaux();
+    // 3. devant eux : grillage (au-dessus de la nappe), dessus du terrain, face avant coupée
     if (m.tranchee) {
       const g = m.tranchee.grillage;
       p.rgb(GRILLAGE_RGB[g.couleur] || [0.85, 0.1, 0.1], false).rgb(GRILLAGE_RGB[g.couleur] || [0.85, 0.1, 0.1]).width(0.4);
@@ -182,17 +192,13 @@ function draw3D(p, m, x0, y0, wPt, hPt, longueurMm) {
       p.poly([[X(10), gy], [X(10) + ex, gy + ey], [X(m.largeur - 10) + ex, gy + ey], [X(m.largeur - 10), gy]], 'S');
       for (let t = 0.1; t < 1; t += 0.1) p.line(X(10) + ex * t, gy + ey * t, X(m.largeur - 10) + ex * t, gy + ey * t);
     }
-  }
-  // fourreaux, du fond vers l'avant-plan (les plus hauts et les plus à droite d'abord)
-  const n = [-Math.sin(ang), Math.cos(ang)];
-  const order = [...m.fourreaux].sort((a, b) => (b.y - a.y) || (b.x - a.x));
-  for (const fo of order) {
-    const r = fo.od / 2 * s, cx = X(fo.x), cy = Y(fo.y);
-    void n;
-    p.cylindre(cx, cy, cx + ex, cy + ey, r, fo.di / 2 * s, MAT.tpc);
-  }
-  for (const c of m.cables) {
-    p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), 'B');
+    p.texture([[x0 - M, y0 + H], [x0 - M + ex, y0 + H + ey], [x0 + ex, y0 + H + ey], [x0, y0 + H]], surf, { seed: 3, contraste: 0.08 });
+    // bloc de terre de droite : il cache la partie des fourreaux qui file derrière lui
+    p.texture([[x0 + W, y0 - sol], [x0 + W + ex, y0 - sol + ey], [x0 + W + M + ex, y0 - sol + ey], [x0 + W + M + ex, y0 + H + ey], [x0 + W + ex, y0 + H + ey], [x0 + W, y0 + H]], MAT.terre.map((c) => c * 0.85), { seed: 10 });
+    p.texture([[x0 + W, y0 + H], [x0 + W + ex, y0 + H + ey], [x0 + W + M + ex, y0 + H + ey], [x0 + W + M, y0 + H]], surf, { seed: 4, contraste: 0.08 });
+    p.texture([[x0 - M, y0 - sol], [x0 + W + M, y0 - sol], [x0 + W + M, y0 + H], [x0 + W, y0 + H], [x0 + W, y0], [x0, y0], [x0, y0 + H], [x0 - M, y0 + H]], MAT.terre, { seed: 8, contour: [0.3, 0.22, 0.15] });
+    p.texture([[x0, y0], [x0 + W, y0], [x0 + W, y0 - Math.min(lit, sol)], [x0, y0 - Math.min(lit, sol)]], MAT.sable, { seed: 9, taille: 0.7 });
+    p.rgb([0.3, 0.22, 0.15]).width(0.6).line(x0 + W, y0 + H, x0 + W + ex, y0 + H + ey).line(x0, y0 + H, x0 + ex, y0 + H + ey);
   }
   p.rgb([0, 0, 0], false);
 }
@@ -310,6 +316,18 @@ function coupeEnMiroir(face, sens) {
   return droite[0] * tangente[0] + droite[1] * tangente[1] < 0;
 }
 
+// Faisceaux de traversées (même règle que ChambreFaces.regrouperTraversees).
+const NUMERO_COTE = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+function regrouperFaisceaux(etude) {
+  const g = new Map();
+  for (const t of (etude && etude.traversees) || []) {
+    const [a, b] = t.cles, cle = NUMERO_COTE[a] <= NUMERO_COTE[b] ? `${a}|${b}` : `${b}|${a}`;
+    if (!g.has(cle)) g.set(cle, { cles: cle.split('|'), type: t.type, liaisons: [] });
+    g.get(cle).liaisons.push(t.liaison);
+  }
+  return [...g.values()].sort((x, y) => y.liaisons.length - x.liaisons.length || NUMERO_COTE[x.cles[0]] - NUMERO_COTE[y.cles[0]]);
+}
+
 function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
   const L = etude.L, l = etude.l, e = (etude.infos && etude.infos.paroi) || 0, sortie = 350;
   const ext = e + sortie + 60;
@@ -388,10 +406,13 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
       const m = e + sortie / 2, [lx, ly] = P(bx + g.out[0] * m, by + g.out[1] * m);
       const txt = `Ø${Math.round(c.od)}${c.n > 1 ? ` ×${c.n}` : ''}`;
       const fs = Math.max(5, Math.min(7.5, c.od * 0.9 * s * 0.75));
-      p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs * 0.35, fs, txt, { align: 'center', bold: true });
+      // sur un côté où les tubes sont vus en travers (bande étroite), le texte ne tient
+      // pas : on l'omet plutôt que de le superposer (le détail est dans la légende)
+      const place = g.out[0] !== 0 ? Infinity : c.od * 0.9 * s;
+      if (txt.length * fs * 0.55 <= place) p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs * 0.35, fs, txt, { align: 'center', bold: true });
     }
     // nom de la face et du tronçon, dans un cadre, côté extérieur
-    const libelle = `${etude.faces[k].face.toUpperCase()} · ${mq.nom}`;
+    const libelle = `${etude.nom ? etude.nom + '.' + NUMERO_COTE[k] : etude.faces[k].face.toUpperCase()} · ${mq.nom}`;
     const lw = libelle.length * 8 * 0.5 + 10, lh = 13;
     // un coin par face (les flèches et les tubes occupent le milieu des faces) :
     // pignon A en haut à gauche, long-pan B en haut à droite,
@@ -404,35 +425,35 @@ function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
     p.rgb([0.12, 0.12, 0.12], false).text(cx2, cy2 - 3, 8, libelle, { align: 'center', bold: true });
   }
   const pt = (k, nom) => { const A = ancre[k] && ancre[k][nom]; return A && A.n ? [A.x / A.n, A.y / A.n] : null; };
-  // traversées : droite ou en angle (en L), de face à face
-  const dejaVu = new Map(); // même couple de points → décalage parallèle
-  etude.traversees.forEach((t, i) => {
-    const [a, b] = t.cles, A0 = pt(a, t.liaison), B0 = pt(b, t.liaison);
-    if (!A0 || !B0) return;
-    const cle = `${a}|${b}|${Math.round(A0[0])},${Math.round(A0[1])}|${Math.round(B0[0])},${Math.round(B0[1])}`;
-    const rang = dejaVu.get(cle) || 0; dejaVu.set(cle, rang + 1);
-    const pas = Math.min(l, L) / 14, d = (rang % 2 ? -1 : 1) * Math.ceil(rang / 2) * pas;
-    const na = faceGeo[a].n, ta = [na[1], -na[0]]; // tangente à la face d'entrée
-    const nb = faceGeo[b].n, tb = [nb[1], -nb[0]];
-    const A = [A0[0] + ta[0] * d, A0[1] + ta[1] * d], B = [B0[0] + tb[0] * d * (t.type === 'droite' ? -1 : 1), B0[1] + tb[1] * d * (t.type === 'droite' ? -1 : 1)];
-    const c = couleur.get(t.liaison);
-    let chemin = [A, B];
-    if (t.type === 'angle') {
-      const na = faceGeo[a].n;
-      chemin = [A, na[0] !== 0 ? [B[0], A[1]] : [A[0], B[1]], B];
-    }
-    p.rgb(c).width(2.2);
+  // Traversées regroupées en FAISCEAUX : un trait par couple de côtés (épaisseur
+  // selon le nombre de liaisons), numéroté ; la liste détaillée est dans la légende.
+  const faisceaux = regrouperFaisceaux(etude);
+  const moyenne = (k, noms) => {
+    const pts = noms.map((nom) => pt(k, nom)).filter(Boolean);
+    return pts.length ? [pts.reduce((s2, q) => s2 + q[0], 0) / pts.length, pts.reduce((s2, q) => s2 + q[1], 0) / pts.length] : null;
+  };
+  faisceaux.forEach((fx, i) => {
+    const [a, b] = fx.cles, A = moyenne(a, fx.liaisons), B = moyenne(b, fx.liaisons);
+    if (!A || !B) return;
+    const c = fx.liaisons.length === 1 ? couleur.get(fx.liaisons[0]) : [0.2, 0.32, 0.5];
+    const chemin = fx.type === 'angle' ? [A, faceGeo[a].n[0] !== 0 ? [B[0], A[1]] : [A[0], B[1]], B] : [A, B];
+    p.rgb(c).width(Math.min(9, 1.8 + fx.liaisons.length * 0.45));
     for (let j = 0; j + 1 < chemin.length; j++) p.line(...P(...chemin[j]), ...P(...chemin[j + 1]));
-    const mid = chemin[Math.floor(chemin.length / 2)];
-    const [qx, qy] = P(...mid);
-    p.rgb([1, 1, 1], false).rgb(c).width(1.2).circle(qx, qy, 7.5, 'B');
-    p.rgb(c, false).text(qx, qy - 3, 8.5, String(i + 1), { align: 'center', bold: true });
+    const mid = chemin.length === 3 ? chemin[1] : [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+    const [qx, qy] = P(...mid), txt = fx.liaisons.length > 1 ? `${i + 1} ×${fx.liaisons.length}` : String(i + 1);
+    const rw = Math.max(9, txt.length * 3.1 + 5);
+    p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(qx - rw, qy - 7.5, 2 * rw, 15, 'B');
+    p.rgb(c, false).text(qx, qy - 3, 8.5, txt, { align: 'center', bold: true });
   });
-  etude.arrets.forEach((a) => {
-    const A = pt(a.cle, a.liaison);
+  // liaisons qui s'arrêtent : une pastille par côté, avec leur nombre
+  const arretsParCote = new Map();
+  etude.arrets.forEach((x) => { if (!arretsParCote.has(x.cle)) arretsParCote.set(x.cle, []); arretsParCote.get(x.cle).push(x.liaison); });
+  arretsParCote.forEach((noms, k) => {
+    const A = moyenne(k, noms);
     if (!A) return;
-    const [qx, qy] = P(A[0] + faceGeo[a.cle].n[0] * 60, A[1] + faceGeo[a.cle].n[1] * 60);
-    p.rgb(couleur.get(a.liaison), false).rgb([1, 1, 1]).width(1).circle(qx, qy, 4.5, 'B');
+    const [qx, qy] = P(A[0] + faceGeo[k].n[0] * 80, A[1] + faceGeo[k].n[1] * 80);
+    p.rgb([0.55, 0.12, 0.1], false).rgb([1, 1, 1]).width(1).circle(qx, qy, 7, 'B');
+    p.rgb([1, 1, 1], false).text(qx, qy - 3, 7.5, String(noms.length), { align: 'center', bold: true });
   });
   // cotes
   const [c1x, c1y] = P(L / 2, l);
@@ -462,21 +483,32 @@ function dessinerEtudeChambre(p, e, masques) {
     p.rgb([0.35, 0.35, 0.35], false).text(x + 14, y, 7, `masque ${f.largeurMasque} × ${f.hauteurMasque} dans ${f.largeurFace} × ${f.hauteurFace} mm`); y -= 12;
   }
   y -= 4;
-  p.rgb([0, 0, 0], false).text(x, y, 9, 'Traversées', { bold: true }); y -= 12;
+  const LIB = { longPanB: 'côté 1', pignonB: 'côté 2', longPanA: 'côté 3', pignonA: 'côté 4' };
+  const assez = () => y > MARGE + 24;
+  const parLignes = (noms, n) => { const out = []; for (let i = 0; i < noms.length; i += n) out.push(noms.slice(i, i + n).map(nomCourt).join(' · ')); return out; };
+  p.rgb([0, 0, 0], false).text(x, y, 9, 'Traversées (faisceaux)', { bold: true }); y -= 12;
   if (!e.traversees.length) { p.text(x, y, 8, 'aucune'); y -= 11; }
-  e.traversees.forEach((t, i) => {
-    p.rgb(couleurs.get(t.liaison) || [0, 0, 0], false).text(x, y, 8, `${i + 1}. ${t.liaison}`.slice(0, 48), { bold: true }); y -= 10;
-    p.rgb([0.2, 0.2, 0.2], false).text(x + 12, y, 7, `entre ${t.entree}, sort ${t.sortie} (${t.type})${t.changementFourreau ? ', fourreau ' + t.changementFourreau : ''}`); y -= 11;
+  regrouperFaisceaux(e).forEach((fx, i) => {
+    if (!assez()) return;
+    const c = fx.liaisons.length === 1 ? (couleurs.get(fx.liaisons[0]) || [0, 0, 0]) : [0.2, 0.32, 0.5];
+    p.rgb(c, false).text(x, y, 8, `${i + 1}. ${LIB[fx.cles[0]]} → ${LIB[fx.cles[1]]} · ${fx.liaisons.length} liaison${fx.liaisons.length > 1 ? 's' : ''} (${fx.type})`, { bold: true }); y -= 10;
+    for (const l of parLignes(fx.liaisons, 3)) { if (!assez()) break; p.rgb([0.25, 0.25, 0.25], false).text(x + 10, y, 6.5, l.slice(0, 80)); y -= 8.5; }
+    y -= 3;
   });
-  if (e.arrets.length) {
+  if (e.arrets.length && assez()) {
     y -= 4; p.rgb([0, 0, 0], false).text(x, y, 9, 'Liaisons qui s\'arrêtent dans la chambre', { bold: true }); y -= 12;
-    for (const a of e.arrets.slice(0, 8)) { p.rgb(couleurs.get(a.liaison) || [0, 0, 0], false).text(x, y, 7, `• ${a.liaison} (${a.face})`.slice(0, 60)); y -= 10; }
+    const parCote = new Map(); e.arrets.forEach((a) => { if (!parCote.has(a.cle)) parCote.set(a.cle, []); parCote.get(a.cle).push(a.liaison); });
+    parCote.forEach((noms, k) => {
+      if (!assez()) return;
+      p.rgb([0.55, 0.12, 0.1], false).text(x, y, 8, `${LIB[k] || k} : ${noms.length}`, { bold: true }); y -= 10;
+      for (const l of parLignes(noms, 3)) { if (!assez()) break; p.rgb([0.25, 0.25, 0.25], false).text(x + 10, y, 6.5, l.slice(0, 80)); y -= 8.5; }
+    });
   }
   if (e.avertissements && e.avertissements.length) {
     y -= 4; p.rgb([0, 0, 0], false).text(x, y, 9, 'À vérifier', { bold: true }); y -= 12;
     for (const a of e.avertissements.slice(0, 6)) { p.rgb([0.6, 0.2, 0.1], false).text(x, y, 7, `• ${a}`.slice(0, 62)); y -= 10; }
   }
-  p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, 'Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Positions des fourreaux le long de chaque face reprises des masques (centrés).');
+  p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, 'Vue de dessus, côtés numérotés dans le sens horaire : 1 en haut, 2 à droite, 3 en bas, 4 à gauche (masque « C7.1 » = côté 1 de C7). Fourreaux placés comme dans les masques.');
   return p;
 }
 
@@ -545,6 +577,63 @@ function cartouche(p, mx, my, label) {
     p.rgb(der ? [0.75, 0.32, 0.05] : [0.1, 0.1, 0.1], false).text(mx, my + h / 2 - 3 - lh * (i + 0.75), 7.5, l, { align: 'center', bold: der });
   });
 }
+
+// ─── Synoptique ancré (disposition calculée par Reseau.dispositionAncree) ───
+// Étiquette d'un tronçon en deux colonnes : à gauche la liste des fourreaux
+// (« 11 × Ø200 », une ligne par Ø), à droite les liaisons avec leurs
+// sections ; la longueur en bas à droite. Unités du schéma (≈ px à l'échelle 1).
+const SYN = { police: 11, lh: 14, pad: 8, gouttiere: 14, carMono: 6.6, carTexte: 6.4, carSection: 6.0 };
+const nomCourt = (nom) => String(nom).replace(/^TGBT\s*(\d+)\s*(→|->)\s*/i, 'T$1 → ');
+function lignesPhi(e) { return (e.phi || []).map(([d, q]) => `${q} × Ø${d}`); }
+function mesureEtiquetteSyn(e) {
+  const phi = lignesPhi(e), lia = e.liaisons || [];
+  const wPhi = Math.max(60, ...phi.map((l) => l.length * SYN.carMono));
+  const wLia = lia.length ? Math.max(...lia.map((l) => nomCourt(l.nom).length * SYN.carTexte + 10 + String(l.sections || '').length * SYN.carSection)) : 0;
+  const n = Math.max(1, phi.length, lia.length);
+  return { w: Math.round(2 * SYN.pad + wPhi + (lia.length ? SYN.gouttiere + wLia : 0)), h: Math.round(2 * SYN.pad + n * SYN.lh + SYN.lh + 2), wPhi };
+}
+// data = { noeuds: [{nom, type, couleur, x, y, w, h, sous}], troncons: [{a:{x,y}, b:{x,y}, e:{x,y,w,h, phi, liaisons, L}}], largeur, hauteur }
+function drawSynoptiqueAncre(p, data, zx, zy, zw, zh, echelleMax = 2) {
+  if (!data.noeuds.length) return null;
+  const s = Math.min(zw / data.largeur, zh / data.hauteur, echelleMax);
+  const ox = zx + (zw - data.largeur * s) / 2, oy = zy + (zh - data.hauteur * s) / 2;
+  const P = (x, y) => [ox + x * s, oy + (data.hauteur - y) * s]; // y vers le bas → repère PDF
+  p.rgb([0.36, 0.39, 0.45]).width(Math.max(0.6, 2.2 * s));
+  for (const t of data.troncons) {
+    const A = P(t.a.x, t.a.y), B = P(t.b.x, t.b.y);
+    if (Math.abs(A[0] - B[0]) < 0.5 || Math.abs(A[1] - B[1]) < 0.5) p.line(A[0], A[1], B[0], B[1]);
+    else p.line(A[0], A[1], B[0], A[1]).line(B[0], A[1], B[0], B[1]); // en équerre
+  }
+  for (const t of data.troncons) {
+    const e = t.e; if (!e) continue;
+    const m = mesureEtiquetteSyn(e), [x0, yHaut] = P(e.x - e.w / 2, e.y - e.h / 2), w = e.w * s, h = e.h * s;
+    const f = SYN.police * s, lh = SYN.lh * s, pad = SYN.pad * s;
+    p.rgb([1, 1, 1], false).rgb([0.75, 0.78, 0.83]).width(Math.max(0.3, 0.8 * s)).rect(x0, yHaut - h, w, h, 'B');
+    const phi = lignesPhi(e), xs = x0 + pad + m.wPhi * s + SYN.gouttiere * s / 2;
+    if ((e.liaisons || []).length) p.rgb([0.86, 0.88, 0.91]).line(xs, yHaut - pad * 0.6, xs, yHaut - h + lh + pad * 0.4);
+    phi.forEach((l, i) => p.rgb([0.08, 0.08, 0.08], false).text(x0 + pad, yHaut - pad - lh * (i + 0.78), f, l, { bold: true }));
+    if (!phi.length) p.rgb([0.45, 0.45, 0.45], false).text(x0 + pad, yHaut - pad - lh * 0.78, f, 'coupe vide');
+    (e.liaisons || []).forEach((l, i) => {
+      const y = yHaut - pad - lh * (i + 0.78), nom = nomCourt(l.nom);
+      p.rgb([0.16, 0.18, 0.22], false).text(xs + SYN.gouttiere * s / 2, y, f * 0.92, nom);
+      if (l.sections) p.rgb([0.5, 0.27, 0.08], false).text(xs + SYN.gouttiere * s / 2 + (nom.length * SYN.carTexte + 10) * s, y, f * 0.86, l.sections);
+    });
+    const L = e.L ? `${String(Math.round(e.L * 10) / 10).replace('.', ',')} m` : '? m';
+    p.rgb([0.66, 0.27, 0.04], false).text(x0 + w - pad, yHaut - h + pad * 0.9, f, L, { bold: true, align: 'right' });
+  }
+  for (const n of data.noeuds) {
+    const c = hexRgb(n.couleur), [cx, cy] = P(n.x, n.y), w = n.w * s, h = n.h * s;
+    p.rgb([1, 1, 1], false).rgb(c).width(Math.max(0.6, 2.4 * s));
+    if (n.type === 'sortie') p.poly([[cx - w / 2, cy - h / 2], [cx + w / 2 - 12 * s, cy - h / 2], [cx + w / 2, cy], [cx + w / 2 - 12 * s, cy + h / 2], [cx - w / 2, cy + h / 2]], 'B');
+    else p.rect(cx - w / 2, cy - h / 2, w, h, 'B');
+    p.rgb(nuance(c, 1.85), false).rect(cx - w / 2 + 1.2 * s, cy - h / 2 + 1.2 * s, w - 2.4 * s, h - 2.4 * s, 'f');
+    p.rgb([0.1, 0.1, 0.1], false).text(cx - (n.type === 'sortie' ? 5 * s : 0), cy + (n.sous ? 1.5 * s : -4.5 * s), 15 * s, n.nom, { align: 'center', bold: true });
+    if (n.sous) p.rgb([0.62, 0.26, 0.04], false).text(cx, cy - 13 * s, 10 * s, n.sous, { align: 'center' });
+  }
+  return { s, ox, oy };
+}
+// Formats de page (pt, paysage) pour le synoptique.
+const FORMATS_PAGE = { a4: [842, 595], a3: [1191, 842], a2: [1684, 1191], a1: [2384, 1684], a0: [3370, 2384] };
 
 function drawSynoptique2D(p, data, zx, zy, zw, zh) {
   if (!data.noeuds.length) return;
@@ -657,7 +746,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   etiquettes.forEach((f) => f());
 }
 
-const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, mesureEtiquetteSyn, FORMATS_PAGE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Vue3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);

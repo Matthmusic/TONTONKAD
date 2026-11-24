@@ -6212,3 +6212,20 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .mcp-commande-groupe { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
 .mcp-commande { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 8px 10px; border-radius: var(--radius-sm, 8px); background: var(--input-bg, rgba(0,0,0,0.04)); border: 1px solid var(--glass-border); word-break: break-all; user-select: all; }
 .mcp-section .settings-description { text-align: left; margin: 0; }
+.pdf-select-label { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; }
+.pdf-select { font: inherit; padding: 8px 10px; border-radius: var(--radius-sm, 8px); border: 1px solid var(--glass-border); background: var(--input-bg, transparent); color: var(--text-primary); }
+/* Panneau de gauche repliable */
+.wrap { position: relative; }
+.replier-panneau {
+    position: absolute; top: 50%; left: 2px; transform: translateY(-50%); z-index: 30;
+    width: 18px; height: 56px; padding: 0; display: grid; place-items: center; cursor: pointer;
+    border: 1px solid var(--glass-border); border-radius: 0 8px 8px 0;
+    background: var(--modal-bg-solid, #f8f9fa); color: var(--text-secondary);
+    box-shadow: 0 4px 12px var(--shadow-color, rgba(0,0,0,0.12));
+}
+.replier-panneau:hover { color: var(--primary-orange); border-color: var(--primary-orange); }
+.replier-panneau:focus-visible { outline: 3px solid var(--primary-orange); outline-offset: 2px; }
+.replier-panneau svg { transition: transform var(--transition-base, .2s); }
+.wrap.panneau-replie .replier-panneau svg { transform: rotate(180deg); }
+.wrap.panneau-replie > .panel { display: none; }
+.wrap.panneau-replie { padding-left: 28px; }
