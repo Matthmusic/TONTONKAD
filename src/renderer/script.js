@@ -8514,7 +8514,7 @@
     const e = r.etude, page = new V.Page({ emitText: false, ombre: false });
     const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 40, W - 32, H - 80);
     V.rejouerSurCanvas(ctx, page, H);
-    vueChambreGeo = { ...page.geoDessus, H, pastilles: page.pastillesCotes || {} };
+    vueChambreGeo = { ...page.geoDessus, H, pastilles: page.pastillesCotes || {}, libelles: page.libellesCotes || {} };
     const ligne = (txt, cls, c) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; if (c) d.style.color = c; res.appendChild(d); };
     const css = (c) => c ? `rgb(${c.map((v) => Math.round(v * 255)).join(',')})` : '';
     ligne(`Modèle ${e.ref}${nd.ref ? ' (imposé)' : ' (automatique)'} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
@@ -8568,14 +8568,17 @@
       x = cote === 'right' ? x - w : cote === 'left' ? x : x - w / 2;
       y = cote === 'top' ? y : cote === 'bottom' ? y - h : y - h / 2;
       x = Math.max(4, Math.min(W - w - 4, x)); y = Math.max(4, Math.min(H - h - 4, y));
-      // ne jamais couvrir la pastille numérotée du côté : on décale la flèche
+      // ne jamais couvrir la pastille ni l'étiquette du côté : on décale la flèche
+      const gene = [];
       const q = g.pastilles && g.pastilles[f];
-      if (q) {
-        const qx = q.x, qy = g.H - q.y, rr = q.r + 6;
-        if (qx + rr > x && qx - rr < x + w && qy + rr > y && qy - rr < y + h) {
-          if (cote === 'left' || cote === 'right') y = Math.min(H - h - 4, qy + rr + 4);
-          else x = Math.min(W - w - 4, qx + rr + 4);
-        }
+      if (q) gene.push({ x0: q.x - q.r - 6, x1: q.x + q.r + 6, y0: g.H - q.y - q.r - 6, y1: g.H - q.y + q.r + 6 });
+      const lb = g.libelles && g.libelles[f];
+      if (lb) gene.push({ x0: lb.x - lb.w / 2 - 4, x1: lb.x + lb.w / 2 + 4, y0: g.H - lb.y - lb.h / 2 - 4, y1: g.H - lb.y + lb.h / 2 + 4 });
+      for (let essai = 0; essai < 3; essai++) {
+        const r0 = gene.find((r) => r.x1 > x && r.x0 < x + w && r.y1 > y && r.y0 < y + h);
+        if (!r0) break;
+        if (cote === 'left' || cote === 'right') y = r0.y1 + 4 + h <= H - 4 ? r0.y1 + 4 : Math.max(4, r0.y0 - 4 - h);
+        else x = r0.x1 + 4 + w <= W - 4 ? r0.x1 + 4 : Math.max(4, r0.x0 - 4 - w);
       }
       const survol = g.survol === v.autre.id;
       ctx.fillStyle = survol ? v.autre.couleur : '#ffffff'; ctx.strokeStyle = v.autre.couleur; ctx.lineWidth = 2;

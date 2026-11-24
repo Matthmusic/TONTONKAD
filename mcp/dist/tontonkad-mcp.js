@@ -78891,7 +78891,7 @@ var require_vue3d = __commonJS({
       }
       function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
         const L = etude.L, l = etude.l, e = etude.infos && etude.infos.paroi || 0, sortie = 350;
-        const ext = e + sortie + 60;
+        const ext = e + sortie + 110;
         const s = fit(L + 2 * ext, l + 2 * ext, zw, zh);
         const ox = zx + (zw - (L + 2 * ext) * s) / 2 + ext * s, oy = zy + (zh - (l + 2 * ext) * s) / 2 + ext * s;
         const P = (x, y) => [ox + x * s, oy + y * s];
@@ -78973,12 +78973,17 @@ var require_vue3d = __commonJS({
           }
           const libelle = `${etude.nom ? etude.nom + "." + NUMERO_COTE[k] : etude.faces[k].face.toUpperCase()} \xB7 ${mq.nom}`;
           const lw = libelle.length * 8 * 0.5 + 10, lh = 13;
-          const coin = { pignonA: [-1, 1], longPanB: [1, 1], longPanA: [-1, -1], pignonB: [1, -1] }[k];
-          let [cx2, cy2] = P(coin[0] < 0 ? -e : L + e, coin[1] > 0 ? l + e : -e);
-          cx2 += coin[0] < 0 ? lw / 2 : -lw / 2;
-          cy2 += coin[1] > 0 ? lh / 2 + 6 : -lh / 2 - 6;
-          p.rgb([1, 1, 1], false).rgb([0.55, 0.55, 0.55]).width(0.6).rect(cx2 - lw / 2, cy2 - lh / 2, lw, lh, "B");
-          p.rgb([0.12, 0.12, 0.12], false).text(cx2, cy2 - 3, 8, libelle, { align: "center", bold: true });
+          const cols = [...colonnes.values()];
+          const tmin = Math.min(...cols.map((c) => c.t - c.od / 2)), tmax = Math.max(...cols.map((c) => c.t + c.od / 2));
+          const [ex, ey] = g.at(cols.length ? (tmin + tmax) / 2 : g.long / 2);
+          const [bx2, by2] = P(ex + g.out[0] * (e + sortie), ey + g.out[1] * (e + sortie));
+          const vert = g.out[0] !== 0, demi = (vert ? lh : lh) / 2 + 4;
+          const cx2 = bx2 + g.out[0] * demi, cy2 = by2 + g.out[1] * demi;
+          const [rw, rh] = vert ? [lh, lw] : [lw, lh];
+          p.rgb([1, 1, 1], false).rgb(nuance(couleur.get((mq.liaisons || [])[0]) || [0.45, 0.45, 0.45], 0.7)).width(0.9).rect(cx2 - rw / 2, cy2 - rh / 2, rw, rh, "B");
+          if (vert) p.rgb([0.12, 0.12, 0.12], false).text(cx2 + 3, cy2, 8, libelle, { align: "center", bold: true, vertical: true });
+          else p.rgb([0.12, 0.12, 0.12], false).text(cx2, cy2 - 3, 8, libelle, { align: "center", bold: true });
+          (p.libellesCotes || (p.libellesCotes = {}))[k] = { x: cx2, y: cy2, w: rw, h: rh };
         }
         p.pastillesCotes = {};
         for (const k of Object.keys(faceGeo)) {
