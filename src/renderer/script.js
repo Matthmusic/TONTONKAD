@@ -8388,7 +8388,7 @@
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'chambre-face' + (v && v.troncon.id === reseau.actif.troncon ? ' active' : '');
       b.innerHTML = '<strong></strong><span></span>';
-      b.querySelector('strong').textContent = LIB(f);
+      b.querySelector('strong').textContent = `Masque ${nd.nom}.${{ longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 }[f]}`;
       b.querySelector('span').textContent = v ? `→ ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''} · ${resumeFourreaux(v.troncon)}` : 'libre — relier et dessiner';
       b.addEventListener('click', () => ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, f).id));
       box.appendChild(b);
