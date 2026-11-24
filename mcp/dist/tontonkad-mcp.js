@@ -79279,9 +79279,17 @@ var require_vue3d = __commonJS({
         for (const n of data.noeuds) {
           const c = hexRgb(n.couleur), [cx, cy] = P(n.x, n.y), w = n.w * s, h = n.h * s;
           p.rgb([1, 1, 1], false).rgb(c).width(Math.max(0.6, 2.4 * s));
-          if (n.type === "sortie") p.poly([[cx - w / 2, cy - h / 2], [cx + w / 2 - 12 * s, cy - h / 2], [cx + w / 2, cy], [cx + w / 2 - 12 * s, cy + h / 2], [cx - w / 2, cy + h / 2]], "B");
+          const fleche = (i) => [
+            [cx - w / 2 + i, cy - h / 2 + i],
+            [cx + w / 2 - 12 * s - i * 0.4, cy - h / 2 + i],
+            [cx + w / 2 - i * 1.6, cy],
+            [cx + w / 2 - 12 * s - i * 0.4, cy + h / 2 - i],
+            [cx - w / 2 + i, cy + h / 2 - i]
+          ];
+          if (n.type === "sortie") p.poly(fleche(0), "B");
           else p.rect(cx - w / 2, cy - h / 2, w, h, "B");
-          p.rgb(nuance(c, 1.85), false).rect(cx - w / 2 + 1.2 * s, cy - h / 2 + 1.2 * s, w - 2.4 * s, h - 2.4 * s, "f");
+          if (n.type === "sortie") p.rgb(nuance(c, 1.85), false).poly(fleche(1.2 * s), "f");
+          else p.rgb(nuance(c, 1.85), false).rect(cx - w / 2 + 1.2 * s, cy - h / 2 + 1.2 * s, w - 2.4 * s, h - 2.4 * s, "f");
           p.rgb([0.1, 0.1, 0.1], false).text(cx - (n.type === "sortie" ? 5 * s : 0), cy + (n.sous ? 1.5 * s : -4.5 * s), 15 * s, n.nom, { align: "center", bold: true });
           if (n.sous) p.rgb([0.62, 0.26, 0.04], false).text(cx, cy - 13 * s, 10 * s, n.sous, { align: "center" });
         }
@@ -79438,34 +79446,41 @@ var require_vue3d = __commonJS({
           if (n.sous) p.rgb([0.35, 0.35, 0.35], false).text(cx, cy - 9, 7, n.sous, { align: "center" });
         }
       }
-      function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
+      function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
         if (!data.noeuds.length) return;
         const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
         const iso = (x, y, z2) => [(x - y) * C, -(x + y) * S + z2];
-        const dims = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+        const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+        const dimsDe = (n) => {
+          if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
+          if (n.type === "chambre") return [n.w * 0.8, n.h * 0.8, n.h * 0.55];
+          if (n.type === "coffret") return [n.w * 0.45, n.h * 0.55, n.h * 1.3];
+          return [n.h * 0.45, n.h * 0.45, n.h * 0.9];
+        };
+        const unite = data.noeuds.some((n) => n.w > 0) ? 1.9 : 1;
         const pts = [];
         data.noeuds.forEach((n) => {
-          const [a, b, h] = dims[n.type] || dims.sortie;
-          [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18)));
+          const [a, b, h] = dimsDe(n);
+          [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18 * unite)));
         });
         const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
         const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
         const MX = Math.min(90, zw * 0.12), MY = Math.min(40, zh * 0.08);
-        const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), 1.8);
+        const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), echelleMax);
         const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
         const P = (x, y, z2 = 0) => {
           const [u, v] = iso(x, y, z2);
           return [ox + u * s, oy + v * s];
         };
-        const LARG = 7, HAUT = 6;
+        const LARG = 7 * unite, HAUT = 6 * unite;
         const bout = (e) => {
           if (e.type !== "chambre") return { x: e.x, y: e.y, z: -HAUT };
-          const [a, b, h] = dims.chambre, z2 = -8 + h / 2;
+          const [a, b, h] = dimsDe(e), z2 = -8 * unite + h / 2;
           const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
           return { x: e.x + off[0], y: e.y + off[1], z: z2 };
         };
         const NORMALE = { pignonA: [-1, 0], pignonB: [1, 0], longPanA: [0, 1], longPanB: [0, -1] };
-        const SORTIE = 30;
+        const SORTIE = 30 * unite;
         function trace(t) {
           const A = bout(t.a), B = bout(t.b);
           const na = t.a.type === "chambre" && NORMALE[t.a.face], nb = t.b.type === "chambre" && NORMALE[t.b.face];
@@ -79545,9 +79560,9 @@ var require_vue3d = __commonJS({
           }));
         }
         function volume(n) {
-          const [a, b, h] = dims[n.type] || dims.sortie, c = hexRgb(n.couleur);
+          const [a, b, h] = dimsDe(n), c = hexRgb(n.couleur);
           const x0 = n.x - a / 2, x1 = n.x + a / 2, y0 = n.y - b / 2, y1 = n.y + b / 2;
-          const z0 = n.type === "chambre" ? -8 : 0, z1 = z0 + h;
+          const z0 = n.type === "chambre" ? -8 * unite : 0, z1 = z0 + h;
           const mat = n.type === "chambre" ? MAT.beton : c;
           p.texture([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)], nuance(mat, 0.72), { seed: 41, taille: 0.6, contour: [0.25, 0.25, 0.25] });
           p.texture([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)], nuance(mat, 0.88), { seed: 42, taille: 0.6, contour: [0.25, 0.25, 0.25] });
@@ -79565,7 +79580,7 @@ var require_vue3d = __commonJS({
         }
         const etiquettes = [];
         data.noeuds.forEach((n) => {
-          const [, , h0] = dims[n.type] || dims.sortie, z1 = (n.type === "chambre" ? -8 : 0) + h0;
+          const [, , h0] = dimsDe(n), z1 = (n.type === "chambre" ? -8 * unite : 0) + h0;
           const [tx0, ty0] = P(n.x, n.y, z1 + 14), w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h = n.sous ? 22 : 14;
           const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
           let best = null;
@@ -79593,11 +79608,13 @@ var require_vue3d = __commonJS({
         etiquettesTroncons.forEach((f2) => f2());
         etiquettes.forEach((f2) => f2());
       }
-      function synoptiqueEnFolios(data, fmt, titre, { texteMax = 10 } = {}) {
+      function decouperFolios(data, fmt, { texteMax = 10, texteMin = 7 } = {}) {
         const [PW, PH] = FORMATS_PAGE[fmt] || FORMATS_PAGE.a3, k = PW / PAGE_W, M = MARGE * k;
         const bandeTitre = 30 * k, bandePied = 18, garde = 46;
         const zx = M, zy = M + bandePied, zw = PW - 2 * M, zh = PH - 2 * M - bandeTitre - bandePied;
-        const s = Math.min(zh / data.hauteur, texteMax / SYN.police);
+        const sMax = texteMax / SYN.police, sH = zh / data.hauteur;
+        const sUne = Math.min(sMax, sH, (zw - 2 * garde) / data.largeur);
+        const s = SYN.police * sUne >= texteMin ? sUne : Math.min(sH, sMax);
         const Wu = (zw - 2 * garde) / s;
         const pris = [];
         data.noeuds.forEach((n) => pris.push([n.x - n.w / 2 - 34, n.x + n.w / 2 + 34]));
@@ -79606,7 +79623,7 @@ var require_vue3d = __commonJS({
         });
         const libre = (x) => pris.every(([a, b]) => x <= a || x >= b);
         const coupes = [0];
-        while (data.largeur - coupes[coupes.length - 1] > Wu) {
+        while (data.largeur - coupes[coupes.length - 1] > Wu + 1e-6) {
           const c = coupes[coupes.length - 1], cible = c + Wu;
           let x = null;
           for (let v = cible; v > c + Wu * 0.4; v -= 4) if (libre(v)) {
@@ -79616,6 +79633,15 @@ var require_vue3d = __commonJS({
           coupes.push(x == null ? cible : x);
         }
         coupes.push(data.largeur);
+        return { fmt, PW, PH, k, M, bandeTitre, bandePied, garde, zx, zy, zw, zh, s, Wu, coupes, folios: coupes.length - 1, texte: SYN.police * s };
+      }
+      function formatOptimalSynoptique(data, { texteMin = 7 } = {}) {
+        const ordre = ["a4", "a3", "a2", "a1", "a0"], essais = ordre.map((f2) => decouperFolios(data, f2, { texteMin }));
+        return essais.find((d) => d.folios === 1 && d.texte >= texteMin) || essais.slice(1).find((d) => d.texte >= texteMin) || essais[essais.length - 1];
+      }
+      function synoptiqueEnFolios(data, fmt, titre, opts = {}) {
+        const D = decouperFolios(data, fmt, opts);
+        const { PW, PH, k, M, garde, zx, zy, zw, zh, s, Wu, coupes } = D;
         const N = coupes.length - 1;
         const renvois = [];
         data.troncons.forEach((t) => {
@@ -79630,7 +79656,7 @@ var require_vue3d = __commonJS({
           p.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * k, `${titre} \u2014 synoptique du r\xE9seau`, { bold: true });
           p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 4, 11 * k, `Folio ${i + 1} / ${N}`, { align: "right", bold: true });
           p.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * k, PW - M, PH - M - 12 * k);
-          const gx = zx + garde, lw = (c1 - c0) * s;
+          const lw = (c1 - c0) * s, gx = zx + garde + (Wu * s - lw) / 2;
           const n0 = p.labels.length;
           p.clip([[gx, zy], [gx + lw, zy], [gx + lw, zy + zh], [gx, zy + zh]], () => {
             drawSynoptiqueAncre(p, data, gx - c0 * s, zy, data.largeur * s, zh, s);
@@ -79656,7 +79682,7 @@ var require_vue3d = __commonJS({
         }
         return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH };
       }
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -80122,9 +80148,9 @@ var require_reseau = __commonJS({
       }
       function choisirFace(r, nd, vers) {
         const libres = facesLibres(r, nd);
-        if (!libres.length) return null;
         if (nd.type !== "chambre") return libres[0];
         const ideale = faceVers(nd, vers.x, vers.y);
+        if (!libres.length) return ideale;
         if (libres.includes(ideale)) return ideale;
         const ordre = {
           pignonA: ["longPanA", "longPanB", "pignonB"],
@@ -80140,10 +80166,9 @@ var require_reseau = __commonJS({
         if (A.id === B.id) throw new Error("Impossible de relier un \xE9l\xE9ment \xE0 lui-m\xEAme");
         const faceA = opts.faceA || choisirFace(r, A, B);
         const faceB = opts.faceB || choisirFace(r, B, A);
-        if (!faceA) throw new Error(`${A.nom} n'a plus de face libre`);
-        if (!faceB) throw new Error(`${B.nom} n'a plus de face libre`);
-        if (!facesLibres(r, A).includes(faceA)) throw new Error(`${A.nom} : ${LIBELLE_FACE[faceA]} d\xE9j\xE0 occup\xE9`);
-        if (!facesLibres(r, B).includes(faceB)) throw new Error(`${B.nom} : ${LIBELLE_FACE[faceB]} d\xE9j\xE0 occup\xE9`);
+        const valide = (nd, f) => nd.type === "chambre" ? FACES_CHAMBRE.includes(f) : f === facesLibres(r, nd)[0];
+        if (!valide(A, faceA)) throw new Error(`${A.nom} : face \xAB ${faceA} \xBB inconnue`);
+        if (!valide(B, faceB)) throw new Error(`${B.nom} : face \xAB ${faceB} \xBB inconnue`);
         const t = {
           id: `t${r.seq++}`,
           a: { noeud: A.id, face: faceA },
@@ -80158,7 +80183,7 @@ var require_reseau = __commonJS({
         const t = troncon(r, tId);
         const nd = noeud(r, t[bout].noeud);
         if (t[bout].face === face) return t;
-        if (!facesLibres(r, nd).includes(face)) throw new Error(`${nd.nom} : ${LIBELLE_FACE[face]} d\xE9j\xE0 occup\xE9`);
+        if (nd.type === "chambre" && !FACES_CHAMBRE.includes(face)) throw new Error(`${nd.nom} : face \xAB ${face} \xBB inconnue`);
         t[bout].face = face;
         return t;
       }
@@ -80175,8 +80200,11 @@ var require_reseau = __commonJS({
           return { troncon: t, face: ici.face, autre: noeud(r, la.noeud), faceAutre: la.face };
         });
       }
+      function surFaceTous(r, id, face) {
+        return tronconsDe(r, id).filter((x) => x.face === face);
+      }
       function surFace(r, id, face) {
-        return tronconsDe(r, id).find((x) => x.face === face) || null;
+        return surFaceTous(r, id, face)[0] || null;
       }
       function verifierCoffret(cf, largeurNappe, hauteurNappe) {
         if (!cf || !(cf.largeur > 0) || !(cf.profondeur > 0)) return { connu: false, tient: null };
@@ -80397,16 +80425,32 @@ var require_reseau = __commonJS({
                 return 0;
               };
               const der = ids.map((id, i) => {
-                const pris = /* @__PURE__ */ new Set(), res = [];
+                const nb = { "-1": 0, 1: 0 }, res = [];
                 branches[coupes[j] + i].forEach((x) => {
                   if (arete.has(x.t.id)) return;
-                  let s2 = x.face === "longPanB" ? -1 : x.face === "longPanA" ? 1 : pris.has(1) ? -1 : 1;
-                  if (pris.has(s2) || s2 === interdit(i)) s2 = -s2;
+                  let s2 = x.face === "longPanB" ? -1 : x.face === "longPanA" ? 1 : nb[1] <= nb[-1] ? 1 : -1;
+                  if (s2 === interdit(i)) s2 = -s2;
                   if (s2 === interdit(i)) return;
-                  pris.add(s2);
+                  nb[s2] += 1;
                   const d = derivation(ids[i], x, s2);
                   d.sens = s2;
                   res.push(d);
+                });
+                [-1, 1].forEach((sg) => {
+                  const ds = res.filter((d) => d.sens === sg);
+                  if (ds.length < 2) return;
+                  const total = ds.reduce((a2, d) => a2 + d.gauche + d.droite, 0) + G * (ds.length - 1);
+                  let x0 = -total / 2;
+                  ds.forEach((d) => {
+                    const off = x0 + d.gauche;
+                    d.items.forEach((it) => {
+                      it.dx += off;
+                    });
+                    const g0 = d.gauche, d0 = d.droite;
+                    d.gauche = Math.max(0, g0 - off);
+                    d.droite = Math.max(0, d0 + off);
+                    x0 += g0 + d0 + G;
+                  });
                 });
                 return res;
               });
@@ -80501,6 +80545,7 @@ var require_reseau = __commonJS({
         troncon,
         tronconsDe,
         surFace,
+        surFaceTous,
         facesLibres,
         faceVers,
         verifierCoffret,

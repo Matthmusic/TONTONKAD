@@ -1240,25 +1240,35 @@
                   <div class="pdf-checkbox-subtitle">Ajoute la coupe en 3D du plan et la chambre de tirage compatible</div>
                 </div>
               </label>
-              <label class="pdf-select-label" for="pdfFormatSyn">
-                <span class="pdf-checkbox-title">Format des folios du synoptique</span>
-                <select id="pdfFormatSyn" class="pdf-select">
-                  <option value="auto" selected>A3 paysage, en folios (par défaut)</option>
-                  <option value="a4">A4 paysage</option>
-                  <option value="a3">A3 paysage</option>
-                  <option value="a2">A2 paysage</option>
-                  <option value="a1">A1 paysage</option>
-                  <option value="a0">A0 paysage</option>
-                </select>
-              </label>
-              <label class="pdf-select-label" for="pdfFormatCoupes">
-                <span class="pdf-checkbox-title">Format des coupes par tronçon (réseau)</span>
-                <select id="pdfFormatCoupes" class="pdf-select">
-                  <option value="a3" selected>A3 paysage</option>
-                  <option value="a2">A2 paysage</option>
-                  <option value="a1">A1 paysage</option>
-                </select>
-              </label>
+              <div id="pdfReseauOptions" class="pdf-reseau-options" hidden>
+                <div class="pdf-checkbox-title">Réseau : parties à exporter (un PDF par partie)</div>
+                <div class="pdf-reseau-groupes">
+                  <label><input type="checkbox" id="pdfGrpSyn" checked> Synoptique + métré et continuité</label>
+                  <label><input type="checkbox" id="pdfGrpChambres" checked> Chambres (une page A3 chacune)</label>
+                  <label><input type="checkbox" id="pdfGrpCoupes" checked> Coupes par tronçon</label>
+                  <label><input type="checkbox" id="pdfGrpTableaux" checked> Tableaux fourreaux et câbles</label>
+                </div>
+                <label class="pdf-select-label" for="pdfFormatSyn">
+                  <span class="pdf-checkbox-title">Format du synoptique</span>
+                  <select id="pdfFormatSyn" class="pdf-select">
+                    <option value="auto" selected>Automatique</option>
+                    <option value="a4">A4 paysage</option>
+                    <option value="a3">A3 paysage</option>
+                    <option value="a2">A2 paysage</option>
+                    <option value="a1">A1 paysage</option>
+                    <option value="a0">A0 paysage</option>
+                  </select>
+                  <span id="pdfFormatConseil" class="pdf-checkbox-subtitle"></span>
+                </label>
+                <label class="pdf-select-label" for="pdfFormatCoupes">
+                  <span class="pdf-checkbox-title">Format des coupes par tronçon</span>
+                  <select id="pdfFormatCoupes" class="pdf-select">
+                    <option value="a3" selected>A3 paysage</option>
+                    <option value="a2">A2 paysage</option>
+                    <option value="a1">A1 paysage</option>
+                  </select>
+                </label>
+              </div>
             </div>
           </div>
         </div>

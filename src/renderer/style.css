@@ -6240,3 +6240,14 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .syn-menu button { text-align: left; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer; }
 .syn-menu button:hover, .syn-menu button:focus-visible { background: var(--primary-orange); color: #ffffff; outline: none; }
 .chambre-dessin { position: relative; }
+
+/* Côté de chambre partagé : une ligne cliquable par tronçon */
+.chambre-face-multi { cursor: default; display: flex; flex-direction: column; gap: 4px; }
+.chambre-face-ligne { text-align: left; font: inherit; font-size: 0.78rem; color: var(--text-secondary); background: transparent; border: 0; border-left: 3px solid var(--glass-border); padding: 3px 8px; cursor: pointer; border-radius: 0 6px 6px 0; }
+.chambre-face-ligne:hover, .chambre-face-ligne.active { border-left-color: var(--primary-orange); color: var(--text-primary); background: var(--input-bg, rgba(0,0,0,0.04)); }
+.chambre-face-multi strong { text-transform: none; }
+
+.pdf-reseau-options { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--glass-border); }
+.pdf-reseau-options[hidden] { display: none; }
+.pdf-reseau-groupes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 13px; color: var(--text-primary); }
+.pdf-reseau-groupes label { display: flex; align-items: center; gap: 6px; cursor: pointer; }

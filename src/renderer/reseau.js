@@ -37,7 +37,9 @@
     return nd;
   }
 
-  // Faces disponibles d'un nœud (une face de chambre ne reçoit qu'un tronçon).
+  // Faces encore sans tronçon d'un nœud. Un côté de chambre peut porter PLUSIEURS
+  // tronçons (coupes accolées dans le même masque, vers des destinations
+  // différentes) : les faces libres ne servent qu'au choix automatique.
   function facesLibres(r, nd) {
     if (nd.type !== 'chambre') return [nd.type === 'coffret' ? 'bas' : 'sortie'];
     const prises = new Set(r.troncons.flatMap((t) => [t.a, t.b]).filter((e) => e.noeud === nd.id).map((e) => e.face));
@@ -53,9 +55,9 @@
   }
   function choisirFace(r, nd, vers) {
     const libres = facesLibres(r, nd);
-    if (!libres.length) return null;
     if (nd.type !== 'chambre') return libres[0];
     const ideale = faceVers(nd, vers.x, vers.y);
+    if (!libres.length) return ideale; // tous les côtés portent déjà un tronçon : on partage
     if (libres.includes(ideale)) return ideale;
     const ordre = { pignonA: ['longPanA', 'longPanB', 'pignonB'], pignonB: ['longPanB', 'longPanA', 'pignonA'],
       longPanA: ['pignonA', 'pignonB', 'longPanB'], longPanB: ['pignonB', 'pignonA', 'longPanA'] }[ideale];
@@ -68,10 +70,9 @@
     if (A.id === B.id) throw new Error('Impossible de relier un élément à lui-même');
     const faceA = opts.faceA || choisirFace(r, A, B);
     const faceB = opts.faceB || choisirFace(r, B, A);
-    if (!faceA) throw new Error(`${A.nom} n'a plus de face libre`);
-    if (!faceB) throw new Error(`${B.nom} n'a plus de face libre`);
-    if (!facesLibres(r, A).includes(faceA)) throw new Error(`${A.nom} : ${LIBELLE_FACE[faceA]} déjà occupé`);
-    if (!facesLibres(r, B).includes(faceB)) throw new Error(`${B.nom} : ${LIBELLE_FACE[faceB]} déjà occupé`);
+    const valide = (nd, f) => (nd.type === 'chambre' ? FACES_CHAMBRE.includes(f) : f === facesLibres(r, nd)[0]);
+    if (!valide(A, faceA)) throw new Error(`${A.nom} : face « ${faceA} » inconnue`);
+    if (!valide(B, faceB)) throw new Error(`${B.nom} : face « ${faceB} » inconnue`);
     const t = { id: `t${r.seq++}`, a: { noeud: A.id, face: faceA }, b: { noeud: B.id, face: faceB },
       longueurM: Number(opts.longueurM) > 0 ? Number(opts.longueurM) : null, coupe: opts.coupe || null };
     r.troncons.push(t);
@@ -83,7 +84,7 @@
     const t = troncon(r, tId);
     const nd = noeud(r, t[bout].noeud);
     if (t[bout].face === face) return t;
-    if (!facesLibres(r, nd).includes(face)) throw new Error(`${nd.nom} : ${LIBELLE_FACE[face]} déjà occupé`);
+    if (nd.type === 'chambre' && !FACES_CHAMBRE.includes(face)) throw new Error(`${nd.nom} : face « ${face} » inconnue`);
     t[bout].face = face;
     return t;
   }
@@ -101,8 +102,9 @@
       return { troncon: t, face: ici.face, autre: noeud(r, la.noeud), faceAutre: la.face };
     });
   }
-  // Tronçon arrivant sur une face donnée d'une chambre.
-  function surFace(r, id, face) { return tronconsDe(r, id).find((x) => x.face === face) || null; }
+  // Tronçon(s) arrivant sur une face donnée d'une chambre (surFace : le premier).
+  function surFaceTous(r, id, face) { return tronconsDe(r, id).filter((x) => x.face === face); }
+  function surFace(r, id, face) { return surFaceTous(r, id, face)[0] || null; }
 
   // Contrôle d'un coffret : la nappe (largeur × hauteur de la coupe) doit
   // passer dans la face du bas (largeur × profondeur), dans un sens ou l'autre.
@@ -335,15 +337,30 @@
             return 0;
           };
           const der = ids.map((id, i) => {
-            const pris = new Set(), res = [];
+            const nb = { '-1': 0, 1: 0 }, res = [];
             branches[coupes[j] + i].forEach((x) => {
               if (arete.has(x.t.id)) return; // déjà dessiné par une autre dérivation
-              let s2 = x.face === 'longPanB' ? -1 : x.face === 'longPanA' ? 1 : (pris.has(1) ? -1 : 1);
-              if (pris.has(s2) || s2 === interdit(i)) s2 = -s2;
+              // long-pan B en haut, long-pan A en bas ; pignon : le côté le moins chargé
+              let s2 = x.face === 'longPanB' ? -1 : x.face === 'longPanA' ? 1 : (nb[1] <= nb[-1] ? 1 : -1);
+              if (s2 === interdit(i)) s2 = -s2;
               if (s2 === interdit(i)) return;
-              pris.add(s2);
+              nb[s2] += 1;
               const d = derivation(ids[i], x, s2);
               d.sens = s2; res.push(d);
+            });
+            // plusieurs dérivations du même côté : en éventail, côte à côte, centrées
+            [-1, 1].forEach((sg) => {
+              const ds = res.filter((d) => d.sens === sg);
+              if (ds.length < 2) return;
+              const total = ds.reduce((a2, d) => a2 + d.gauche + d.droite, 0) + G * (ds.length - 1);
+              let x0 = -total / 2;
+              ds.forEach((d) => {
+                const off = x0 + d.gauche;
+                d.items.forEach((it) => { it.dx += off; });
+                const g0 = d.gauche, d0 = d.droite;
+                d.gauche = Math.max(0, g0 - off); d.droite = Math.max(0, d0 + off);
+                x0 += g0 + d0 + G;
+              });
             });
             return res;
           });
@@ -411,7 +428,7 @@
   const api = {
     FACES_CHAMBRE, COULEURS, TYPES, LIBELLE_FACE,
     creerReseau, ajouterNoeud, relier, changerFace, supprimerNoeud, supprimerTroncon,
-    noeud, troncon, tronconsDe, surFace, facesLibres, faceVers, verifierCoffret,
+    noeud, troncon, tronconsDe, surFace, surFaceTous, facesLibres, faceVers, verifierCoffret,
     depuisAncienneChambre, nomTroncon, continuite, metre, dispositionAncree, contenuEtiquette,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

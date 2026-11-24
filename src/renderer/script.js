@@ -7271,6 +7271,33 @@
     errorPdf('window.unhandledrejection', e.reason);
   });
 
+  // Options réseau de la modale PDF : visibles avec un réseau ; format conseillé
+  // pour le synoptique calculé d'après ses dimensions.
+  function majOptionsPdfReseau() {
+    const box = document.getElementById('pdfReseauOptions');
+    if (!box) return;
+    const actif = !!(reseau && reseau.noeuds && reseau.noeuds.length && reseau.troncons.length);
+    box.hidden = !actif;
+    if (!actif) return;
+    const D = window.Vue3D.formatOptimalSynoptique(synoptiqueAncre(1.414));
+    const txt = `${D.fmt.toUpperCase()} — ${D.folios} folio${D.folios > 1 ? 's' : ''}, texte ${D.texte.toFixed(1).replace('.', ',')} pt`;
+    const opt = document.querySelector('#pdfFormatSyn option[value="auto"]');
+    if (opt) opt.textContent = `Automatique (conseillé : ${txt})`;
+    const sel = document.getElementById('pdfFormatSyn'), conseil = document.getElementById('pdfFormatConseil');
+    const maj = () => {
+      if (!conseil || !sel) return;
+      if (sel.value === 'auto') { conseil.textContent = `Format le plus petit qui reste lisible : ${txt}.`; return; }
+      const d = window.Vue3D.decouperFolios(synoptiqueAncre(1.414), sel.value);
+      conseil.textContent = `${sel.value.toUpperCase()} : ${d.folios} folio${d.folios > 1 ? 's' : ''}, texte ${d.texte.toFixed(1).replace('.', ',')} pt${d.texte < 7 ? ' — petit, préférez un format plus grand' : ''}.`;
+    };
+    if (sel && !sel._ttk) { sel._ttk = true; sel.addEventListener('change', () => { maj(); dessinerSynoptique(false); }); }
+    maj();
+  }
+  // Format des folios affichés dans le synoptique (pointillés) = celui de l'export.
+  function formatFoliosSyn(data) {
+    const v = (document.getElementById('pdfFormatSyn') || {}).value || 'auto';
+    return v === 'auto' ? window.Vue3D.formatOptimalSynoptique(data).fmt : v;
+  }
   function openPdfExportModal() {
     const modal = document.getElementById('pdfExportModal');
     if (!modal) {
@@ -7279,6 +7306,7 @@
     }
 
     const modalContent = modal.querySelector('.pdf-export-modal-enhanced');
+    majOptionsPdfReseau();
 
     // Pré-remplir les valeurs
     const currentDate = new Date().toLocaleDateString('fr-FR');
@@ -7609,24 +7637,14 @@
     return st ? st.fourreaux.map((f) => ({ type: f.type || '', code: String(f.code || '') })) : [];
   }
   // Données du synoptique pour vue3d.js (2D / isométrique, écran et PDF).
-  function donneesSynoptique() {
-    // Isométrique : disposition ancrée calculée avec SES tailles (volumes et petites
-    // étiquettes), sinon les écarts du synoptique 2D (grosses étiquettes) écrasent tout.
-    const dis = R().dispositionAncree(reseau, {
-      tailleNoeud: (n) => (n.type === 'chambre' ? { w: 150, h: 110 } : { w: 120, h: 90 }),
-      tailleEtiquette: (t) => { const l = etiquetteIso(t); return { w: Math.max(...l.map((x) => x.length)) * 4.3 + 30, h: 80 }; },
-      ecart: 0.6, ratio: 1.6,
-    });
-    const pos = (n) => dis.noeuds[n.id] || { x: n.x, y: n.y };
-    const noeuds = reseau.noeuds.map((n) => {
-      let sous = '';
-      if (n.type === 'chambre') { const e = etudeChambre(n); sous = e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'); }
-      if (n.type === 'coffret') sous = n.coffret.genre + (n.coffret.largeur && n.coffret.profondeur ? ` ${n.coffret.largeur}×${n.coffret.profondeur}` : '');
-      return { nom: n.nom, type: n.type, couleur: n.couleur, ...pos(n), sous };
-    });
+  // Isométrique : MÊMES positions que la vue 2D (disposition ancrée + déplacements
+  // à la main), mêmes tailles d'éléments ; seule la projection change.
+  function donneesSynoptique(rapide = false) {
+    const d2 = synoptiqueAncre(1.414, rapide), parId = new Map(reseau.noeuds.map((n, i) => [n.id, d2.noeuds[i]]));
+    const noeuds = d2.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, w: n.w, h: n.h, sous: n.sous }));
     const troncons = reseau.troncons.map((t) => {
-      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud), pa = pos(A), pb = pos(B);
-      return { a: { x: pa.x, y: pa.y, face: t.a.face, type: A.type }, b: { x: pb.x, y: pb.y, face: t.b.face, type: B.type }, label: etiquetteIso(t) };
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud), pa = parId.get(A.id), pb = parId.get(B.id);
+      return { a: { x: pa.x, y: pa.y, w: pa.w, h: pa.h, face: t.a.face, type: A.type }, b: { x: pb.x, y: pb.y, w: pb.w, h: pb.h, face: t.b.face, type: B.type }, label: etiquetteIso(t) };
     });
     return { noeuds, troncons };
   }
@@ -7645,17 +7663,47 @@
     return vus;
   }
   // Étude d'une chambre (chambre-faces.js) à partir des coupes de ses tronçons.
+  // Plusieurs tronçons sur le même côté : leurs coupes sont accolées dans un seul
+  // masque, dans l'ordre de leurs destinations le long du côté, séparées de
+  // l'écart entre fourreaux. Chaque coupe est d'abord ramenée au sens « départ ».
+  function accolerMasques(face, parts) {
+    const V = window.Vue3D, pignon = face.startsWith('pignon');
+    // position de la destination le long du côté (repère chambre, y vers le haut)
+    const cle = (m) => (m._vers ? (pignon ? -m._vers.y : m._vers.x) : 0);
+    const tri = [...parts].sort((a, b) => cle(a) - cle(b));
+    const miroirDepart = V.coupeEnMiroir(face, 'depart');
+    const ordre = miroirDepart ? tri.reverse() : tri; // ordre le long de x de la coupe
+    const ecart = Math.max(FOURREAU_GAP || 0, 30);
+    let x0 = 0, n = 0;
+    const fourreaux = [], cables = [], noms = [], liaisons = [];
+    ordre.forEach((m, i) => {
+      const versDepart = m.sens === 'arrivee'; // vue de dos : on la retourne
+      const X = (x) => x0 + (versDepart ? m.largeur - x : x);
+      const ids = new Map();
+      m.fourreaux.forEach((f) => { n += 1; ids.set(f.id, `F${n}`); fourreaux.push({ ...f, id: `F${n}`, x: X(f.x) }); });
+      m.cables.forEach((c) => cables.push({ ...c, fourreau: ids.get(c.fourreau), x: X(c.x) }));
+      noms.push(m.nom); m.liaisons.forEach((l) => { if (!liaisons.includes(l)) liaisons.push(l); });
+      x0 += m.largeur + (i < ordre.length - 1 ? ecart : 0);
+    });
+    const ref = parts[0];
+    return { ...ref, nom: noms.join(' + '), sens: 'depart', largeur: Math.round(x0), hauteur: Math.max(...parts.map((m) => m.hauteur)),
+      fourreaux, cables, liaisons, longueurM: null, accoles: parts.length };
+  }
   function etudeChambre(nd) {
     if (!reseau || !nd || nd.type !== 'chambre' || !window.ChambreFaces) return null;
     const masques = {};
     R().FACES_CHAMBRE.forEach((f) => {
-      const v = R().surFace(reseau, nd.id, f);
-      const m = v && masqueTroncon(v.troncon);
-      if (!m) return;
-      // sens du tronçon sur cette face : la coupe est vue de dos à l'arrivée
-      m.sens = v.troncon.a.noeud === nd.id && v.troncon.a.face === f ? 'depart' : 'arrivee';
-      m.longueurM = v.troncon.longueurM || null;
-      masques[f] = m;
+      const parts = R().surFaceTous(reseau, nd.id, f).map((v) => {
+        const m = masqueTroncon(v.troncon);
+        if (!m) return null;
+        // sens du tronçon sur cette face : la coupe est vue de dos à l'arrivée
+        m.sens = v.troncon.a.noeud === nd.id && v.troncon.a.face === f ? 'depart' : 'arrivee';
+        m.longueurM = v.troncon.longueurM || null;
+        m._vers = v.autre;
+        return m;
+      }).filter(Boolean);
+      if (parts.length === 1) masques[f] = parts[0];
+      else if (parts.length > 1) masques[f] = accolerMasques(f, parts);
     });
     if (!Object.keys(masques).length) return null;
     const CI = window.ChambresInfos;
@@ -7919,7 +7967,7 @@
     o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
 
     o.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
-      SYN.mode = b.dataset.mode;
+      SYN.mode = b.dataset.mode; SYN.zoom = { k: 1, px: 0, py: 0 }; // chaque vue repart cadrée
       o.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('actif', x === b));
       o.querySelector('.reseau-ajouts').hidden = SYN.mode === 'iso';
       dessinerSynoptique();
@@ -7928,7 +7976,11 @@
     const pos = (ev) => { const r = cv.getBoundingClientRect(), v = SYN.vue || { k: 1, ox: 0, oy: 0 };
       return { x: (ev.clientX - r.left - v.ox) / v.k, y: (ev.clientY - r.top - v.oy) / v.k }; };
     cv.addEventListener('mousedown', (ev) => {
-      if (SYN.mode === 'iso') return; // vue de consultation
+      if (SYN.mode === 'iso') { // vue de consultation : déplacement de la vue seulement
+        SYN.pan = { x: ev.clientX, y: ev.clientY, px: (SYN.zoom || {}).px || 0, py: (SYN.zoom || {}).py || 0 };
+        if (!SYN.zoom) SYN.zoom = { k: 1, px: 0, py: 0 };
+        return;
+      }
       const p = pos(ev);
       const pg = poigneeSous(p.x, p.y);
       if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y, x0: p.x, y0: p.y, plus: true }; return; }
@@ -7982,8 +8034,7 @@
           try { const t = R().relier(reseau, de, cible.id, opts); SYN.sel = { troncon: t.id }; showToast(`Tronçon ${R().nomTroncon(reseau, t)} créé : indiquez sa longueur`); }
           catch (e) { showToast(e.message); }
         } else if (!cible) {
-          if (face && !R().facesLibres(reseau, src0).includes(face)) showToast(`${src0.nom} : ce côté est déjà occupé`);
-          else { dessinerSynoptique(); menuNouvelElement(o, de, face, ev); return; }
+          dessinerSynoptique(); menuNouvelElement(o, de, face, ev); return;
         }
         dessinerSynoptique();
       }
@@ -7994,7 +8045,6 @@
       }
     });
     cv.addEventListener('wheel', (ev) => {
-      if (SYN.mode === 'iso') return;
       ev.preventDefault();
       const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 }), r = cv.getBoundingClientRect();
       const f = Math.exp(-ev.deltaY * 0.0015), k2 = Math.max(1, Math.min(12, z.k * f)), g = k2 / z.k;
@@ -8033,7 +8083,8 @@
     if (SYN.mode === 'iso') {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height); // feuille, même rendu que le PDF
       const page = new window.Vue3D.Page({ emitText: false, ombre: false });
-      window.Vue3D.drawSynoptiqueIso(page, donneesSynoptique(), 20, 20, zone.width - 40, zone.height - 40);
+      const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 }), zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
+      window.Vue3D.drawSynoptiqueIso(page, donneesSynoptique(rapide), (zone.width - zw) / 2 + z.px, (zone.height - zh) / 2 + z.py, zw, zh, { echelleMax: Infinity });
       window.Vue3D.rejouerSurCanvas(ctx, page, zone.height);
       if (panneau) remplirEdition();
       return;
@@ -8051,6 +8102,17 @@
     // repère écran ↔ schéma (pour la souris) : x = ox + X·k ; y = oy + Y·k
     SYN.vue = { k: res.s, ox: res.ox, oy: zone.height - res.oy - data.hauteur * res.s };
     ctx.setTransform(dpr * SYN.vue.k, 0, 0, dpr * SYN.vue.k, dpr * SYN.vue.ox, dpr * SYN.vue.oy);
+    // limites des folios du PDF (format de l'export) : pointillés gris + numéros
+    {
+      const D = window.Vue3D.decouperFolios(data, formatFoliosSyn(data));
+      ctx.save();
+      ctx.strokeStyle = 'rgba(110,116,128,0.7)'; ctx.lineWidth = 1.2 / SYN.vue.k; ctx.setLineDash([7 / SYN.vue.k, 6 / SYN.vue.k]);
+      D.coupes.slice(1, -1).forEach((x) => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, data.hauteur); ctx.stroke(); });
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(90,96,110,0.85)'; ctx.font = `600 ${12 / SYN.vue.k}px 'IBM Plex Sans', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      D.coupes.slice(0, -1).forEach((x, i) => ctx.fillText(`Folio ${i + 1} / ${D.folios} · ${D.fmt.toUpperCase()}`, (x + D.coupes[i + 1]) / 2, 6 / SYN.vue.k));
+      ctx.restore();
+    }
     // sélection, tronçon en cours de tirage, poignées « + »
     const sel = SYN.sel || {};
     if (sel.troncon) {
@@ -8070,7 +8132,7 @@
         const f = faceVers(A, SYN.lien.x, SYN.lien.y), { w, h } = tailleNoeud(A);
         const d = { pignonA: [-w / 2, 0], pignonB: [w / 2, 0], longPanA: [0, h / 2], longPanB: [0, -h / 2] }[f];
         x0 = A.x + d[0]; y0 = A.y + d[1];
-        const libre = R().facesLibres(reseau, A).includes(f);
+        const libre = true; // un côté peut porter plusieurs tronçons (coupes accolées)
         ctx.strokeStyle = libre ? th.cuivre : '#b3261e'; ctx.lineWidth = 5 / SYN.vue.k;
         ctx.beginPath();
         if (d[0]) { ctx.moveTo(x0, A.y - h / 2); ctx.lineTo(x0, A.y + h / 2); } else { ctx.moveTo(A.x - w / 2, y0); ctx.lineTo(A.x + w / 2, y0); }
@@ -8464,14 +8526,29 @@
     const box = o.querySelector('#chambreFaces');
     box.innerHTML = '';
     ["longPanB", "pignonB", "longPanA", "pignonA"].forEach((f) => { // côtés 1 à 4
-      const v = R().surFace(reseau, nd.id, f);
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'chambre-face' + (v && v.troncon.id === reseau.actif.troncon ? ' active' : '');
-      b.innerHTML = '<strong></strong><span></span>';
-      b.querySelector('strong').textContent = `Masque ${nd.nom}.${{ longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 }[f]}`;
-      b.querySelector('span').textContent = v ? `→ ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''} · ${resumeFourreaux(v.troncon)}` : 'libre — relier et dessiner';
-      b.addEventListener('click', () => ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, f).id));
-      box.appendChild(b);
+      const vs = R().surFaceTous(reseau, nd.id, f), nom = `Masque ${nd.nom}.${{ longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 }[f]}`;
+      const ligne = (v) => `→ ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''} · ${resumeFourreaux(v.troncon)}`;
+      if (vs.length <= 1) {
+        const v = vs[0];
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'chambre-face' + (v && v.troncon.id === reseau.actif.troncon ? ' active' : '');
+        b.innerHTML = '<strong></strong><span></span>';
+        b.querySelector('strong').textContent = nom;
+        b.querySelector('span').textContent = v ? ligne(v) : 'libre — relier et dessiner';
+        b.addEventListener('click', () => ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, f).id));
+        box.appendChild(b);
+        return;
+      }
+      // côté partagé : une carte, une ligne cliquable par tronçon (coupes accolées)
+      const carte = document.createElement('div');
+      carte.className = 'chambre-face chambre-face-multi' + (vs.some((v) => v.troncon.id === reseau.actif.troncon) ? ' active' : '');
+      const titre = document.createElement('strong'); titre.textContent = `${nom} · ${vs.length} coupes accolées`; carte.appendChild(titre);
+      vs.forEach((v) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'chambre-face-ligne' + (v.troncon.id === reseau.actif.troncon ? ' active' : '');
+        b.textContent = ligne(v); b.addEventListener('click', () => ouvrirTroncon(v.troncon.id));
+        carte.appendChild(b);
+      });
+      box.appendChild(carte);
     });
     const cv = o.querySelector('#chambreCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
@@ -8538,9 +8615,7 @@
         ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + w / 2, by + h / 2 + 1);
       }
     });
-    R().FACES_CHAMBRE.forEach((f) => {
-      const v = R().surFace(reseau, nd.id, f);
-      if (!v) return;
+    R().FACES_CHAMBRE.forEach((f) => R().surFaceTous(reseau, nd.id, f).forEach((v, rang, tous) => {
       const dir = { pignonA: 'left', pignonB: 'right', longPanA: 'down', longPanB: 'up' }[f];
       const txt = `${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
       ctx.font = `600 13px 'IBM Plex Sans', system-ui, sans-serif`;
@@ -8548,6 +8623,9 @@
       let [x, y, cote] = ancres[f];
       x = cote === 'right' ? x - w : cote === 'left' ? x : x - w / 2;
       y = cote === 'top' ? y : cote === 'bottom' ? y - h : y - h / 2;
+      // côté partagé : flèches empilées le long du côté
+      const decal = (rang - (tous.length - 1) / 2);
+      if (cote === 'left' || cote === 'right') y += decal * (h + 6); else x += decal * (w + 8);
       x = Math.max(4, Math.min(W - w - 4, x)); y = Math.max(4, Math.min(H - h - 4, y));
       // ne jamais couvrir la pastille ni l'étiquette du côté : on décale la flèche
       const gene = [];
@@ -8555,7 +8633,8 @@
       if (q) gene.push({ x0: q.x - q.r - 6, x1: q.x + q.r + 6, y0: g.H - q.y - q.r - 6, y1: g.H - q.y + q.r + 6 });
       const lb = g.libelles && g.libelles[f];
       if (lb) gene.push({ x0: lb.x - lb.w / 2 - 4, x1: lb.x + lb.w / 2 + 4, y0: g.H - lb.y - lb.h / 2 - 4, y1: g.H - lb.y + lb.h / 2 + 4 });
-      for (let essai = 0; essai < 3; essai++) {
+      vueChambreFleches.forEach((a) => gene.push({ x0: a.x - 4, x1: a.x + a.w + 4, y0: a.y - 4, y1: a.y + a.h + 4 })); // flèches déjà posées
+      for (let essai = 0; essai < 6; essai++) {
         const r0 = gene.find((r) => r.x1 > x && r.x0 < x + w && r.y1 > y && r.y0 < y + h);
         if (!r0) break;
         if (cote === 'left' || cote === 'right') y = r0.y1 + 4 + h <= H - 4 ? r0.y1 + 4 : Math.max(4, r0.y0 - 4 - h);
@@ -8568,7 +8647,7 @@
       dessinerFleche(ctx, x + 13, y + h / 2, dir, 5);
       ctx.fillText(txt, x + 24, y + h / 2 + 1);
       vueChambreFleches.push({ x, y, w, h, vers: v.autre.id });
-    });
+    }));
   }
 
   // PDF : une page « vue de dessus » par chambre qui a des coupes.
@@ -8898,7 +8977,7 @@
     if (groupes.synoptique !== false) {
       const syn = synoptiqueAncre(1.414), choix = formData.formatSyn || 'auto';
       // en longueur, découpé en folios au format choisi (A3 par défaut)
-      const fmt = choix === 'auto' ? 'a3' : choix, f = V.synoptiqueEnFolios(syn, fmt, formData.projectName);
+      const fmt = choix === 'auto' ? V.formatOptimalSynoptique(syn).fmt : choix, f = V.synoptiqueEnFolios(syn, fmt, formData.projectName);
       const pdf = new JsPDF('landscape', 'mm', fmt);
       f.pages.forEach((pg, i) => writeVue3DPage(pdf, pg, fmt, f.PH, { nouvelle: i > 0 }));
       const fmtSyn = `${fmt.toUpperCase()}_${f.pages.length}folio${f.pages.length > 1 ? 's' : ''}`;
@@ -9007,6 +9086,12 @@
       include3D: document.getElementById('pdfInclude3D')?.checked !== false,
       formatSyn: document.getElementById('pdfFormatSyn')?.value || 'auto',
       formatCoupes: document.getElementById('pdfFormatCoupes')?.value || 'a3',
+      groupes: {
+        synoptique: document.getElementById('pdfGrpSyn')?.checked !== false,
+        chambres: document.getElementById('pdfGrpChambres')?.checked !== false,
+        coupes: document.getElementById('pdfGrpCoupes')?.checked !== false,
+        tableaux: document.getElementById('pdfGrpTableaux')?.checked !== false,
+      },
     };
 
     return exportToPDFWithData(formData);

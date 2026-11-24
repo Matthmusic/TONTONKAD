@@ -652,9 +652,14 @@ function drawSynoptiqueAncre(p, data, zx, zy, zw, zh, echelleMax = 2) {
   for (const n of data.noeuds) {
     const c = hexRgb(n.couleur), [cx, cy] = P(n.x, n.y), w = n.w * s, h = n.h * s;
     p.rgb([1, 1, 1], false).rgb(c).width(Math.max(0.6, 2.4 * s));
-    if (n.type === 'sortie') p.poly([[cx - w / 2, cy - h / 2], [cx + w / 2 - 12 * s, cy - h / 2], [cx + w / 2, cy], [cx + w / 2 - 12 * s, cy + h / 2], [cx - w / 2, cy + h / 2]], 'B');
+    // sortie : forme en flèche ; le fond teinté suit la même forme (rentrée d'un
+    // trait), il ne déborde plus de la pointe
+    const fleche = (i) => [[cx - w / 2 + i, cy - h / 2 + i], [cx + w / 2 - 12 * s - i * 0.4, cy - h / 2 + i], [cx + w / 2 - i * 1.6, cy],
+      [cx + w / 2 - 12 * s - i * 0.4, cy + h / 2 - i], [cx - w / 2 + i, cy + h / 2 - i]];
+    if (n.type === 'sortie') p.poly(fleche(0), 'B');
     else p.rect(cx - w / 2, cy - h / 2, w, h, 'B');
-    p.rgb(nuance(c, 1.85), false).rect(cx - w / 2 + 1.2 * s, cy - h / 2 + 1.2 * s, w - 2.4 * s, h - 2.4 * s, 'f');
+    if (n.type === 'sortie') p.rgb(nuance(c, 1.85), false).poly(fleche(1.2 * s), 'f');
+    else p.rgb(nuance(c, 1.85), false).rect(cx - w / 2 + 1.2 * s, cy - h / 2 + 1.2 * s, w - 2.4 * s, h - 2.4 * s, 'f');
     p.rgb([0.1, 0.1, 0.1], false).text(cx - (n.type === 'sortie' ? 5 * s : 0), cy + (n.sous ? 1.5 * s : -4.5 * s), 15 * s, n.nom, { align: 'center', bold: true });
     if (n.sous) p.rgb([0.62, 0.26, 0.04], false).text(cx, cy - 13 * s, 10 * s, n.sous, { align: 'center' });
   }
@@ -787,36 +792,45 @@ function drawSynoptique2D(p, data, zx, zy, zw, zh) {
 
 // Isométrique : sol (x, y), hauteur z. Chambres = caissons enterrés vus en
 // volume, coffrets = armoires, sorties = bornes ; tranchées = bandes de terre.
-function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
+function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
   if (!data.noeuds.length) return;
   const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
   const iso = (x, y, z) => [(x - y) * C, -(x + y) * S + z];
-  const dims = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+  // Volumes proportionnés aux éléments du synoptique 2D (w × h, mêmes positions) ;
+  // à défaut (ancien appel), tailles fixes.
+  const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+  const dimsDe = (n) => {
+    if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
+    if (n.type === 'chambre') return [n.w * 0.8, n.h * 0.8, n.h * 0.55];
+    if (n.type === 'coffret') return [n.w * 0.45, n.h * 0.55, n.h * 1.3];
+    return [n.h * 0.45, n.h * 0.45, n.h * 0.9];
+  };
+  const unite = data.noeuds.some((n) => n.w > 0) ? 1.9 : 1; // tranchées à l'échelle des volumes
   // cadrage sur l'emprise projetée
   const pts = [];
-  data.noeuds.forEach((n) => { const [a, b, h] = dims[n.type] || dims.sortie; [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z + 18))); });
+  data.noeuds.forEach((n) => { const [a, b, h] = dimsDe(n); [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z + 18 * unite))); });
   const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
   const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
   // marge pour les étiquettes (taille fixe en points, elles débordent des volumes)
   const MX = Math.min(90, zw * 0.12), MY = Math.min(40, zh * 0.08);
-  const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), 1.8);
+  const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), echelleMax);
   const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
   const P = (x, y, z = 0) => { const [u, v] = iso(x, y, z); return [ox + u * s, oy + v * s]; };
-  const LARG = 7, HAUT = 6; // demi-largeur et demi-hauteur des tranchées
+  const LARG = 7 * unite, HAUT = 6 * unite; // demi-largeur et demi-hauteur des tranchées
   // Point de raccordement d'un bout de tranchée : sur la face de la chambre
   // (pignon A/B, long-pan A/B), à mi-hauteur du caisson ; au pied sinon.
   const bout = (e) => {
     // coffret / sortie : les fourreaux remontent par le dessous → arrivée sous le
     // centre du socle, tranchée enterrée (dessus au niveau du sol)
     if (e.type !== 'chambre') return { x: e.x, y: e.y, z: -HAUT };
-    const [a, b, h] = dims.chambre, z = -8 + h / 2;
+    const [a, b, h] = dimsDe(e), z = -8 * unite + h / 2;
     const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
     return { x: e.x + off[0], y: e.y + off[1], z };
   };
   // Tracé d'une tranchée : sortie perpendiculaire au côté de la chambre, puis
   // virages à angle droit jusqu'à l'autre bout (plus de diagonale qui part du côté).
   const NORMALE = { pignonA: [-1, 0], pignonB: [1, 0], longPanA: [0, 1], longPanB: [0, -1] };
-  const SORTIE = 30; // longueur droite à la sortie d'une face
+  const SORTIE = 30 * unite; // longueur droite à la sortie d'une face
   function trace(t) {
     const A = bout(t.a), B = bout(t.b);
     const na = t.a.type === 'chambre' && NORMALE[t.a.face], nb = t.b.type === 'chambre' && NORMALE[t.b.face];
@@ -899,9 +913,9 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
     }));
   }
   function volume(n) {
-    const [a, b, h] = dims[n.type] || dims.sortie, c = hexRgb(n.couleur);
+    const [a, b, h] = dimsDe(n), c = hexRgb(n.couleur);
     const x0 = n.x - a / 2, x1 = n.x + a / 2, y0 = n.y - b / 2, y1 = n.y + b / 2;
-    const z0 = n.type === 'chambre' ? -8 : 0, z1 = z0 + h;
+    const z0 = n.type === 'chambre' ? -8 * unite : 0, z1 = z0 + h;
     const mat = n.type === 'chambre' ? MAT.beton : c;
     p.texture([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)], nuance(mat, 0.72), { seed: 41, taille: 0.6, contour: [0.25, 0.25, 0.25] });
     p.texture([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)], nuance(mat, 0.88), { seed: 42, taille: 0.6, contour: [0.25, 0.25, 0.25] });
@@ -924,7 +938,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   const etiquettes = [];
   // réserve des étiquettes d'éléments (fixes), puis placement de celles des tronçons
   data.noeuds.forEach((n) => {
-    const [, , h0] = dims[n.type] || dims.sortie, z1 = (n.type === 'chambre' ? -8 : 0) + h0;
+    const [, , h0] = dimsDe(n), z1 = (n.type === 'chambre' ? -8 * unite : 0) + h0;
     const [tx0, ty0] = P(n.x, n.y, z1 + 14), w = Math.max(n.nom.length * 5.4, (n.sous || '').length * 3.9) + 12, h = n.sous ? 22 : 14;
     const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
     let best = null; // au-dessus du volume de préférence, sinon décalé
@@ -952,18 +966,16 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
   etiquettes.forEach((f) => f());
 }
 
-
-// ─── Synoptique en longueur, découpé en folios ───────────────────────────
-// Le schéma reste sur une seule ligne (entrées et sorties dans l'ordre) ; il est
-// coupé en pages de même format, à une échelle lisible. Les coupes tombent dans
-// un espace libre (entre chambres et étiquettes) ; chaque liaison coupée porte un
-// renvoi numéroté (R1, R2…) au bord droit d'un folio et au bord gauche du suivant.
-// Retourne { pages: [Page], echelle, texte (pt) }.
-function synoptiqueEnFolios(data, fmt, titre, { texteMax = 10 } = {}) {
+// Découpage en folios (sans dessin) : échelle, coupes en unités du schéma.
+// Si tout tient sur UNE page avec un texte d'au moins texteMin, une seule page
+// (échelle ajustée) ; sinon échelle fixée par la hauteur et coupes en largeur.
+function decouperFolios(data, fmt, { texteMax = 10, texteMin = 7 } = {}) {
   const [PW, PH] = FORMATS_PAGE[fmt] || FORMATS_PAGE.a3, k = PW / PAGE_W, M = MARGE * k;
   const bandeTitre = 30 * k, bandePied = 18, garde = 46; // garde : place des renvois de chaque côté
   const zx = M, zy = M + bandePied, zw = PW - 2 * M, zh = PH - 2 * M - bandeTitre - bandePied;
-  const s = Math.min(zh / data.hauteur, texteMax / SYN.police);
+  const sMax = texteMax / SYN.police, sH = zh / data.hauteur;
+  const sUne = Math.min(sMax, sH, (zw - 2 * garde) / data.largeur);
+  const s = SYN.police * sUne >= texteMin ? sUne : Math.min(sH, sMax);
   const Wu = (zw - 2 * garde) / s; // largeur utile d'un folio, en unités du schéma
   // intervalles occupés (éléments, étiquettes) : on ne coupe pas dedans
   const pris = [];
@@ -971,13 +983,32 @@ function synoptiqueEnFolios(data, fmt, titre, { texteMax = 10 } = {}) {
   data.troncons.forEach((t) => { if (t.e) pris.push([t.e.x - t.e.w / 2 - 8, t.e.x + t.e.w / 2 + 8]); });
   const libre = (x) => pris.every(([a, b]) => x <= a || x >= b);
   const coupes = [0];
-  while (data.largeur - coupes[coupes.length - 1] > Wu) {
+  while (data.largeur - coupes[coupes.length - 1] > Wu + 1e-6) {
     const c = coupes[coupes.length - 1], cible = c + Wu;
     let x = null;
     for (let v = cible; v > c + Wu * 0.4; v -= 4) if (libre(v)) { x = v; break; }
     coupes.push(x == null ? cible : x);
   }
   coupes.push(data.largeur);
+  return { fmt, PW, PH, k, M, bandeTitre, bandePied, garde, zx, zy, zw, zh, s, Wu, coupes, folios: coupes.length - 1, texte: SYN.police * s };
+}
+// Format conseillé : le plus petit où tout tient sur une page lisible ; sinon le
+// plus petit où les folios sont lisibles (texte ≥ texteMin).
+function formatOptimalSynoptique(data, { texteMin = 7 } = {}) {
+  const ordre = ['a4', 'a3', 'a2', 'a1', 'a0'], essais = ordre.map((f) => decouperFolios(data, f, { texteMin }));
+  return essais.find((d) => d.folios === 1 && d.texte >= texteMin)
+    || essais.slice(1).find((d) => d.texte >= texteMin) || essais[essais.length - 1];
+}
+
+// ─── Synoptique en longueur, découpé en folios ───────────────────────────
+// Le schéma reste sur une seule ligne (entrées et sorties dans l'ordre) ; il est
+// coupé en pages de même format, à une échelle lisible. Les coupes tombent dans
+// un espace libre (entre chambres et étiquettes) ; chaque liaison coupée porte un
+// renvoi numéroté (R1, R2…) au bord droit d'un folio et au bord gauche du suivant.
+// Chaque morceau est centré dans son folio. Retourne { pages: [Page], echelle, texte (pt) }.
+function synoptiqueEnFolios(data, fmt, titre, opts = {}) {
+  const D = decouperFolios(data, fmt, opts);
+  const { PW, PH, k, M, garde, zx, zy, zw, zh, s, Wu, coupes } = D;
   const N = coupes.length - 1;
   // liaisons coupées : segments horizontaux du dessin (droits ou en équerre)
   const renvois = []; // { x, y, n }
@@ -991,7 +1022,7 @@ function synoptiqueEnFolios(data, fmt, titre, { texteMax = 10 } = {}) {
     p.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * k, `${titre} — synoptique du réseau`, { bold: true });
     p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 4, 11 * k, `Folio ${i + 1} / ${N}`, { align: 'right', bold: true });
     p.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * k, PW - M, PH - M - 12 * k);
-    const gx = zx + garde, lw = (c1 - c0) * s;
+    const lw = (c1 - c0) * s, gx = zx + garde + (Wu * s - lw) / 2; // morceau centré dans le folio
     // fenêtre : le schéma entier, décalé, découpé à la largeur du folio
     const n0 = p.labels.length;
     p.clip([[gx, zy], [gx + lw, zy], [gx + lw, zy + zh], [gx, zy + zh]], () => {
@@ -1019,7 +1050,7 @@ function synoptiqueEnFolios(data, fmt, titre, { texteMax = 10 } = {}) {
   return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH };
 }
 
-const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Vue3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);

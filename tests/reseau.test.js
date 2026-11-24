@@ -38,11 +38,15 @@ describe('réseau de chambres', () => {
     expect(R.nomTroncon(r, v.troncon)).toBe('C1 → C2');
   });
 
-  test('face occupée refusée ; suppression d\'un nœud supprime ses tronçons', () => {
+  test('côté partagé entre plusieurs tronçons ; suppression d\'un nœud supprime ses tronçons', () => {
     const r = R.creerReseau();
     const a = R.ajouterNoeud(r, 'chambre'), b = R.ajouterNoeud(r, 'chambre'), c = R.ajouterNoeud(r, 'chambre');
     const t = R.relier(r, a.id, b.id, { faceA: 'pignonB', faceB: 'pignonA' });
-    expect(() => R.relier(r, a.id, c.id, { faceA: 'pignonB' })).toThrow(/déjà occupé/);
+    // un même côté peut porter plusieurs tronçons (coupes accolées) ; face inconnue refusée
+    const t2 = R.relier(r, a.id, c.id, { faceA: 'pignonB' });
+    expect(R.surFaceTous(r, a.id, 'pignonB').map((v) => v.troncon.id)).toEqual([t.id, t2.id]);
+    R.supprimerNoeud(r, c.id); // retire t2
+    expect(() => R.relier(r, a.id, b.id, { faceA: 'dessus' })).toThrow(/inconnue/);
     expect(() => R.changerFace(r, t.id, 'a', 'pignonB')).not.toThrow();
     R.supprimerNoeud(r, b.id);
     expect(r.troncons).toHaveLength(0);
