@@ -6216,10 +6216,12 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .pdf-select { font: inherit; padding: 8px 10px; border-radius: var(--radius-sm, 8px); border: 1px solid var(--glass-border); background: var(--input-bg, transparent); color: var(--text-primary); }
 /* Panneau de gauche repliable */
 .wrap { position: relative; }
+/* Languette posée sur le bord DROIT du panneau (élément du flux, entre panneau et dessin) */
 .replier-panneau {
-    position: absolute; top: 50%; left: 2px; transform: translateY(-50%); z-index: 30;
+    position: relative; z-index: 30; flex: 0 0 18px; align-self: center;
+    margin-left: calc(-1 * var(--spacing-lg) - 9px); margin-right: -9px;
     width: 18px; height: 56px; padding: 0; display: grid; place-items: center; cursor: pointer;
-    border: 1px solid var(--glass-border); border-radius: 0 8px 8px 0;
+    border: 1px solid var(--glass-border); border-radius: 8px;
     background: var(--modal-bg-solid, #f8f9fa); color: var(--text-secondary);
     box-shadow: 0 4px 12px var(--shadow-color, rgba(0,0,0,0.12));
 }
@@ -6228,4 +6230,4 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .replier-panneau svg { transition: transform var(--transition-base, .2s); }
 .wrap.panneau-replie .replier-panneau svg { transform: rotate(180deg); }
 .wrap.panneau-replie > .panel { display: none; }
-.wrap.panneau-replie { padding-left: 28px; }
+.wrap.panneau-replie > .replier-panneau { margin-left: 0; margin-right: 0; }
