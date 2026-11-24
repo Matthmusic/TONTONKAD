@@ -7805,6 +7805,31 @@
     const e = d.troncons.find((t) => t.e && Math.abs(x - t.e.x) <= t.e.w / 2 && Math.abs(y - t.e.y) <= t.e.h / 2);
     return e ? R().troncon(reseau, e.id) : null;
   }
+  // Aimantation orthogonale pendant le glisser : l'élément s'aligne en X ou en Y sur
+  // les éléments qui lui sont reliés (puis sur les autres), pour des tronçons droits.
+  // Seuil : 12 px à l'écran. Alt maintenu : déplacement libre.
+  function decalageAimante(n, dx, dy, k, libre) {
+    SYN.guides = [];
+    const q = synBase && synBase.dis.noeuds[n.id], c = (synBase && synBase.cadre) || { tx: 0, ty: 0 };
+    if (!q || libre) return { dx: Math.round(dx), dy: Math.round(dy) };
+    const bx = q.x + c.tx, by = q.y + c.ty, x = bx + dx, y = by + dy, seuil = 12 / k;
+    const relies = new Set();
+    reseau.troncons.forEach((t) => { if (t.a.noeud === n.id) relies.add(t.b.noeud); if (t.b.noeud === n.id) relies.add(t.a.noeud); });
+    const autres = reseau.noeuds.filter((m) => m.id !== n.id);
+    const cherche = (axe, v) => {
+      for (const groupe of [autres.filter((m) => relies.has(m.id)), autres.filter((m) => !relies.has(m.id))]) {
+        let best = null;
+        groupe.forEach((m) => { const d = Math.abs(m[axe] - v); if (d <= seuil && (!best || d < best.d)) best = { d, v: m[axe], m }; });
+        if (best) return best;
+      }
+      return null;
+    };
+    const sx = cherche('x', x), sy = cherche('y', y);
+    const nx = sx ? sx.v : x, ny = sy ? sy.v : y;
+    if (sx) SYN.guides.push({ x1: nx, y1: Math.min(ny, sx.m.y), x2: nx, y2: Math.max(ny, sx.m.y) });
+    if (sy) SYN.guides.push({ x1: Math.min(nx, sy.m.x), y1: ny, x2: Math.max(nx, sy.m.x), y2: ny });
+    return { dx: Math.round(nx - bx), dy: Math.round(ny - by) };
+  }
   // Un seul redessin par image pendant pan / zoom / glisser, sans recalcul du réseau.
   let synImage = 0;
   function planifierSyn() {
@@ -7830,7 +7855,7 @@
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="sortie">Ajouter une sortie</button>
         </div>
         <div id="reseauEdition" class="reseau-edition"></div>
-        <p class="chambre-aide">Glissez un élément pour le déplacer (ses étiquettes suivent ; « Disposition automatique » annule). Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
+        <p class="chambre-aide">Glissez un élément pour le déplacer : il s'aligne sur les éléments reliés (Alt : libre). Ses étiquettes suivent ; « Disposition automatique » annule. Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
         <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauAuto">Disposition automatique</button><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
@@ -7878,7 +7903,7 @@
         if (!g.bouge && Math.hypot(mx, my) < 4) return;
         g.bouge = true;
         const n = R().noeud(reseau, g.id);
-        if (n) n.decal = { dx: Math.round(g.dx + mx / k), dy: Math.round(g.dy + my / k) };
+        if (n) n.decal = decalageAimante(n, g.dx + mx / k, g.dy + my / k, k, ev.altKey);
         cv.style.cursor = 'grabbing'; planifierSyn(); return;
       }
       if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; planifierSyn(); return; }
@@ -7904,7 +7929,7 @@
       }
       if (SYN.pan) { SYN.pan = null; }
       if (SYN.glisse) {
-        const bouge = SYN.glisse.bouge; SYN.glisse = null;
+        const bouge = SYN.glisse.bouge; SYN.glisse = null; SYN.guides = [];
         if (bouge && !o.hidden) { dessinerSynoptique(); }
       }
     });
@@ -7971,6 +7996,11 @@
     if (sel.troncon) {
       const t = R().troncon(reseau, sel.troncon), e = t && data.troncons.find((x) => x.id === t.id);
       if (e && e.e) { ctx.strokeStyle = th.cuivre; ctx.lineWidth = 3 / SYN.vue.k; ctx.strokeRect(e.e.x - e.e.w / 2 - 6, e.e.y - e.e.h / 2 - 6, e.e.w + 12, e.e.h + 12); }
+    }
+    if (SYN.glisse && SYN.glisse.bouge && SYN.guides && SYN.guides.length) {
+      ctx.strokeStyle = th.cuivre; ctx.setLineDash([4 / SYN.vue.k, 4 / SYN.vue.k]); ctx.lineWidth = 1.2 / SYN.vue.k;
+      SYN.guides.forEach((gd) => { ctx.beginPath(); ctx.moveTo(gd.x1, gd.y1); ctx.lineTo(gd.x2, gd.y2); ctx.stroke(); });
+      ctx.setLineDash([]);
     }
     if (SYN.lien) {
       const A = R().noeud(reseau, SYN.lien.de);
