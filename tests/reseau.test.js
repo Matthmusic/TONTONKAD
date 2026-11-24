@@ -136,6 +136,11 @@ describe('synoptique ancré', () => {
     const e = R.contenuEtiquette({ fourreaux: [{ od: 160 }, { od: 200 }, { od: 160 }], cables: [
       { liaison: 'TGBT 1 → P1', code: '1x240' }, { liaison: 'TGBT 1 → P1', code: '1x240' }, { liaison: 'TGBT 1 → P1 - PE', code: '1x95' }] });
     expect(e.phi).toEqual([[200, 1], [160, 2]]);
-    expect(e.liaisons).toEqual([{ nom: 'TGBT 1 → P1', sections: '2×1x240 + PE 1x95' }]);
+    expect(e.liaisons).toEqual([{ nom: 'TGBT 1 → P1', sections: '2×1x240 + PE 1x95', nf: 0, phi: [] }]);
+    // fourreaux utilisés par liaison (PE compris), Ø, et fourreaux de réserve
+    const e2 = R.contenuEtiquette({ fourreaux: [{ id: 1, od: 160 }, { id: 2, od: 200 }, { id: 3, od: 160 }], cables: [
+      { liaison: 'L1', code: '1x240', parent: 1 }, { liaison: 'L1', code: '1x240', parent: 2 }, { liaison: 'L1 - PE', code: '1x95', parent: 2 }] });
+    expect(e2.liaisons[0]).toMatchObject({ nom: 'L1', nf: 2, phi: [[200, 1], [160, 1]] });
+    expect(e2).toMatchObject({ total: 3, reserve: 1 });
   });
 });

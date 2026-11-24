@@ -218,21 +218,32 @@
     if (!coupe || !(coupe.fourreaux || []).length) return { phi: [], liaisons: [] };
     const nb = new Map();
     coupe.fourreaux.forEach((f) => { const d = Math.round(Number(f.od) || Number(f.code) || 0); nb.set(d, (nb.get(d) || 0) + 1); });
-    const lia = new Map();
+    const lia = new Map(), fourreauxDe = new Map();
+    const parId = new Map(coupe.fourreaux.map((f) => [f.id, f]));
     (coupe.cables || []).forEach((c) => {
       const nom = String(c.liaison || c.label || '').trim();
       if (!nom) return;
       const base = nom.replace(/\s*-\s*PE$/i, ''), pe = base !== nom;
-      if (!lia.has(base)) lia.set(base, new Map());
+      if (!lia.has(base)) { lia.set(base, new Map()); fourreauxDe.set(base, new Set()); }
       const k = (pe ? 'PE ' : '') + c.code;
       lia.get(base).set(k, (lia.get(base).get(k) || 0) + 1);
+      if (c.parent != null && parId.has(c.parent)) fourreauxDe.get(base).add(c.parent);
     });
-    const liaisons = [...lia].sort((a, b) => a[0].localeCompare(b[0], 'fr', { numeric: true })).map(([nom, m]) => ({
-      nom,
-      sections: [...m].sort((a, b) => (a[0].startsWith('PE') - b[0].startsWith('PE')) || b[1] - a[1])
-        .map(([k, q]) => (k.startsWith('PE') && q === 1 ? k : `${q}×${k}`)).join(' + '),
-    }));
-    return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons };
+    const liaisons = [...lia].sort((a, b) => a[0].localeCompare(b[0], 'fr', { numeric: true })).map(([nom, m]) => {
+      // fourreaux utilisés par la liaison (PE compris) et leurs Ø, du plus gros au plus petit
+      const parOd = new Map();
+      fourreauxDe.get(nom).forEach((id) => { const f = parId.get(id), d = Math.round(Number(f.od) || Number(f.code) || 0); parOd.set(d, (parOd.get(d) || 0) + 1); });
+      return {
+        nom,
+        sections: [...m].sort((a, b) => (a[0].startsWith('PE') - b[0].startsWith('PE')) || b[1] - a[1])
+          .map(([k, q]) => (k.startsWith('PE') && q === 1 ? k : `${q}×${k}`)).join(' + '),
+        nf: fourreauxDe.get(nom).size,
+        phi: [...parOd].sort((a, b) => b[0] - a[0]),
+      };
+    });
+    const occupes = new Set((coupe.cables || []).map((c) => c.parent).filter((x) => x != null));
+    const reserve = coupe.fourreaux.some((f) => f.id != null) ? coupe.fourreaux.filter((f) => f.id != null && !occupes.has(f.id)).length : 0;
+    return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons, total: coupe.fourreaux.length, reserve };
   }
 
   // ─── Disposition ancrée du synoptique ─────────────────────────────────────

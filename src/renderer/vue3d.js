@@ -608,12 +608,26 @@ function cartouche(p, mx, my, label) {
 const SYN = { police: 11, lh: 14, pad: 8, gouttiere: 14, carMono: 6.6, carTexte: 6.4, carSection: 6.0 };
 const nomCourt = (nom) => String(nom).replace(/^TGBT\s*(\d+)\s*(→|->)\s*/i, 'T$1 → ');
 function lignesPhi(e) { return (e.phi || []).map(([d, q]) => `${q} × Ø${d}`); }
+// Étiquette de tronçon (disposition « B » validée dans l'atelier) : une ligne par
+// liaison en 4 colonnes alignées — nom · câbles (cuivre) · nb de fourreaux ·
+// Ø utilisés — sous une ligne d'en-têtes ; puis le récapitulatif des fourreaux
+// du tronçon ; puis la longueur, à droite. Largeurs estimées (Helvetica).
+const COL_SYN = { nom: 5.6, sec: 5.2, nf: 5.8, phi: 4.8, entete: 5.0, recap: 5.8, gout: 12 };
+function phiLiaison(l) { return (l.phi || []).map(([d, q]) => `${q} Ø${d}`).join(' + '); }
+function recapSyn(e) {
+  const total = e.total != null ? e.total : (e.phi || []).reduce((a, [, q]) => a + q, 0);
+  return { txt: lignesPhi(e).join('  ·  '), fin: `= ${total} fourreau${total > 1 ? 'x' : ''}${e.reserve ? `, dont ${e.reserve} de réserve` : ''}` };
+}
 function mesureEtiquetteSyn(e) {
-  const phi = lignesPhi(e), lia = e.liaisons || [];
-  const wPhi = Math.max(60, ...phi.map((l) => l.length * SYN.carMono));
-  const wLia = lia.length ? Math.max(...lia.map((l) => nomCourt(l.nom).length * SYN.carTexte + 10 + String(l.sections || '').length * SYN.carSection)) : 0;
-  const n = Math.max(1, phi.length, lia.length);
-  return { w: Math.round(2 * SYN.pad + wPhi + (lia.length ? SYN.gouttiere + wLia : 0)), h: Math.round(2 * SYN.pad + n * SYN.lh + SYN.lh + 2), wPhi };
+  const lia = e.liaisons || [], C = COL_SYN, larg = (arr, k, min = 0) => Math.max(min, ...arr.map((t) => String(t).length * k));
+  const wNom = lia.length ? larg(lia.map((l) => nomCourt(l.nom)), C.nom, 'LIAISON'.length * C.entete) : 0;
+  const wSec = lia.length ? larg(lia.map((l) => l.sections || ''), C.sec, 'CÂBLES'.length * C.entete) : 0;
+  const wNf = lia.length ? larg(lia.map((l) => String(l.nf != null ? l.nf : '')), C.nf, 'FOURREAUX'.length * C.entete) : 0;
+  const wPhi = lia.length ? larg(lia.map(phiLiaison), C.phi, 'Ø UTILISÉS'.length * C.entete) : 0;
+  const r = recapSyn(e), wRecap = (r.txt.length * C.recap) + 8 + r.fin.length * C.phi;
+  const wTable = lia.length ? wNom + wSec + wNf + wPhi + 3 * C.gout : 0;
+  const lignes = lia.length ? 1 + lia.length : 1; // en-têtes + liaisons (ou « coupe vide »)
+  return { w: Math.round(2 * SYN.pad + Math.max(wTable, wRecap, 90)), h: Math.round(2 * SYN.pad + lignes * SYN.lh + 6 + 2 * SYN.lh), cols: { wNom, wSec, wNf, wPhi } };
 }
 // data = { noeuds: [{nom, type, couleur, x, y, w, h, sous}], troncons: [{a:{x,y}, b:{x,y}, e:{x,y,w,h, phi, liaisons, L}}], largeur, hauteur }
 function drawSynoptiqueAncre(p, data, zx, zy, zw, zh, echelleMax = 2) {
@@ -632,15 +646,31 @@ function drawSynoptiqueAncre(p, data, zx, zy, zw, zh, echelleMax = 2) {
     const m = mesureEtiquetteSyn(e), [x0, yHaut] = P(e.x - e.w / 2, e.y - e.h / 2), w = e.w * s, h = e.h * s;
     const f = SYN.police * s, lh = SYN.lh * s, pad = SYN.pad * s;
     p.rgb([1, 1, 1], false).rgb([0.75, 0.78, 0.83]).width(Math.max(0.3, 0.8 * s)).rect(x0, yHaut - h, w, h, 'B');
-    const phi = lignesPhi(e), xs = x0 + pad + m.wPhi * s + SYN.gouttiere * s / 2;
-    if ((e.liaisons || []).length) p.rgb([0.86, 0.88, 0.91]).line(xs, yHaut - pad * 0.6, xs, yHaut - h + lh + pad * 0.4);
-    phi.forEach((l, i) => p.rgb([0.08, 0.08, 0.08], false).text(x0 + pad, yHaut - pad - lh * (i + 0.78), f, l, { bold: true }));
-    if (!phi.length) p.rgb([0.45, 0.45, 0.45], false).text(x0 + pad, yHaut - pad - lh * 0.78, f, 'coupe vide');
-    (e.liaisons || []).forEach((l, i) => {
-      const y = yHaut - pad - lh * (i + 0.78), nom = nomCourt(l.nom);
-      p.rgb([0.16, 0.18, 0.22], false).text(xs + SYN.gouttiere * s / 2, y, f * 0.92, nom);
-      if (l.sections) p.rgb([0.5, 0.27, 0.08], false).text(xs + SYN.gouttiere * s / 2 + (nom.length * SYN.carTexte + 10) * s, y, f * 0.86, l.sections);
-    });
+    const lia = e.liaisons || [], { wNom, wSec, wNf } = m.cols, g = COL_SYN.gout * s;
+    const xNom = x0 + pad, xSec = xNom + wNom * s + g, xNf = xSec + wSec * s + g + wNf * s, xPhi = xNf + g;
+    let y = yHaut - pad - lh * 0.78;
+    if (lia.length) {
+      // en-têtes + filet
+      const fh = f * 0.66;
+      p.rgb([0.48, 0.51, 0.56], false).text(xNom, y, fh, 'LIAISON', { bold: true }).text(xSec, y, fh, 'CÂBLES', { bold: true })
+        .text(xNf, y, fh, 'FOURREAUX', { bold: true, align: 'right' }).text(xPhi, y, fh, 'Ø UTILISÉS', { bold: true });
+      p.rgb([0.88, 0.89, 0.91]).width(Math.max(0.3, 0.7 * s)).line(xNom, y - lh * 0.32, x0 + w - pad, y - lh * 0.32);
+      lia.forEach((l) => {
+        y -= lh;
+        p.rgb([0.16, 0.18, 0.22], false).text(xNom, y, f * 0.9, nomCourt(l.nom));
+        if (l.sections) p.rgb([0.48, 0.29, 0.12], false).text(xSec, y, f * 0.84, l.sections);
+        p.rgb([0.1, 0.11, 0.12], false).text(xNf, y, f * 0.86, String(l.nf != null ? l.nf : ''), { bold: true, align: 'right' });
+        p.rgb([0.48, 0.51, 0.56], false).text(xPhi, y, f * 0.76, phiLiaison(l));
+      });
+    } else p.rgb([0.45, 0.45, 0.45], false).text(xNom, y, f * 0.9, (e.phi || []).length ? 'fourreaux de réserve' : 'coupe vide');
+    // récapitulatif du tronçon, puis longueur
+    y -= lh + 6 * s;
+    p.rgb([0.88, 0.89, 0.91]).width(Math.max(0.3, 0.7 * s)).line(xNom, y + lh * 0.72, x0 + w - pad, y + lh * 0.72);
+    const r = recapSyn(e);
+    if (r.txt) {
+      p.rgb([0.1, 0.11, 0.12], false).text(xNom, y, f * 0.9, r.txt, { bold: true });
+      p.rgb([0.48, 0.51, 0.56], false).text(x0 + w - pad, y, f * 0.8, r.fin, { align: 'right' }); // total à droite, au-dessus de la longueur
+    }
     const L = e.L ? `${String(Math.round(e.L * 10) / 10).replace('.', ',')} m` : '? m';
     p.rgb([0.66, 0.27, 0.04], false).text(x0 + w - pad, yHaut - h + pad * 0.9, f, L, { bold: true, align: 'right' });
   }

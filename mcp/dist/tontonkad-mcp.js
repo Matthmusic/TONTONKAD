@@ -79239,12 +79239,24 @@ var require_vue3d = __commonJS({
       function lignesPhi(e) {
         return (e.phi || []).map(([d, q]) => `${q} \xD7 \xD8${d}`);
       }
+      const COL_SYN = { nom: 5.6, sec: 5.2, nf: 5.8, phi: 4.8, entete: 5, recap: 5.8, gout: 12 };
+      function phiLiaison(l) {
+        return (l.phi || []).map(([d, q]) => `${q} \xD8${d}`).join(" + ");
+      }
+      function recapSyn(e) {
+        const total = e.total != null ? e.total : (e.phi || []).reduce((a, [, q]) => a + q, 0);
+        return { txt: lignesPhi(e).join("  \xB7  "), fin: `= ${total} fourreau${total > 1 ? "x" : ""}${e.reserve ? `, dont ${e.reserve} de r\xE9serve` : ""}` };
+      }
       function mesureEtiquetteSyn(e) {
-        const phi = lignesPhi(e), lia = e.liaisons || [];
-        const wPhi = Math.max(60, ...phi.map((l) => l.length * SYN.carMono));
-        const wLia = lia.length ? Math.max(...lia.map((l) => nomCourt(l.nom).length * SYN.carTexte + 10 + String(l.sections || "").length * SYN.carSection)) : 0;
-        const n = Math.max(1, phi.length, lia.length);
-        return { w: Math.round(2 * SYN.pad + wPhi + (lia.length ? SYN.gouttiere + wLia : 0)), h: Math.round(2 * SYN.pad + n * SYN.lh + SYN.lh + 2), wPhi };
+        const lia = e.liaisons || [], C = COL_SYN, larg = (arr, k, min = 0) => Math.max(min, ...arr.map((t) => String(t).length * k));
+        const wNom = lia.length ? larg(lia.map((l) => nomCourt(l.nom)), C.nom, "LIAISON".length * C.entete) : 0;
+        const wSec = lia.length ? larg(lia.map((l) => l.sections || ""), C.sec, "C\xC2BLES".length * C.entete) : 0;
+        const wNf = lia.length ? larg(lia.map((l) => String(l.nf != null ? l.nf : "")), C.nf, "FOURREAUX".length * C.entete) : 0;
+        const wPhi = lia.length ? larg(lia.map(phiLiaison), C.phi, "\xD8 UTILIS\xC9S".length * C.entete) : 0;
+        const r = recapSyn(e), wRecap = r.txt.length * C.recap + 8 + r.fin.length * C.phi;
+        const wTable = lia.length ? wNom + wSec + wNf + wPhi + 3 * C.gout : 0;
+        const lignes = lia.length ? 1 + lia.length : 1;
+        return { w: Math.round(2 * SYN.pad + Math.max(wTable, wRecap, 90)), h: Math.round(2 * SYN.pad + lignes * SYN.lh + 6 + 2 * SYN.lh), cols: { wNom, wSec, wNf, wPhi } };
       }
       function drawSynoptiqueAncre(p, data, zx, zy, zw, zh, echelleMax = 2) {
         if (!data.noeuds.length) return null;
@@ -79263,15 +79275,28 @@ var require_vue3d = __commonJS({
           const m = mesureEtiquetteSyn(e), [x0, yHaut] = P(e.x - e.w / 2, e.y - e.h / 2), w = e.w * s, h = e.h * s;
           const f2 = SYN.police * s, lh = SYN.lh * s, pad = SYN.pad * s;
           p.rgb([1, 1, 1], false).rgb([0.75, 0.78, 0.83]).width(Math.max(0.3, 0.8 * s)).rect(x0, yHaut - h, w, h, "B");
-          const phi = lignesPhi(e), xs = x0 + pad + m.wPhi * s + SYN.gouttiere * s / 2;
-          if ((e.liaisons || []).length) p.rgb([0.86, 0.88, 0.91]).line(xs, yHaut - pad * 0.6, xs, yHaut - h + lh + pad * 0.4);
-          phi.forEach((l, i) => p.rgb([0.08, 0.08, 0.08], false).text(x0 + pad, yHaut - pad - lh * (i + 0.78), f2, l, { bold: true }));
-          if (!phi.length) p.rgb([0.45, 0.45, 0.45], false).text(x0 + pad, yHaut - pad - lh * 0.78, f2, "coupe vide");
-          (e.liaisons || []).forEach((l, i) => {
-            const y = yHaut - pad - lh * (i + 0.78), nom = nomCourt(l.nom);
-            p.rgb([0.16, 0.18, 0.22], false).text(xs + SYN.gouttiere * s / 2, y, f2 * 0.92, nom);
-            if (l.sections) p.rgb([0.5, 0.27, 0.08], false).text(xs + SYN.gouttiere * s / 2 + (nom.length * SYN.carTexte + 10) * s, y, f2 * 0.86, l.sections);
-          });
+          const lia = e.liaisons || [], { wNom, wSec, wNf } = m.cols, g = COL_SYN.gout * s;
+          const xNom = x0 + pad, xSec = xNom + wNom * s + g, xNf = xSec + wSec * s + g + wNf * s, xPhi = xNf + g;
+          let y = yHaut - pad - lh * 0.78;
+          if (lia.length) {
+            const fh = f2 * 0.66;
+            p.rgb([0.48, 0.51, 0.56], false).text(xNom, y, fh, "LIAISON", { bold: true }).text(xSec, y, fh, "C\xC2BLES", { bold: true }).text(xNf, y, fh, "FOURREAUX", { bold: true, align: "right" }).text(xPhi, y, fh, "\xD8 UTILIS\xC9S", { bold: true });
+            p.rgb([0.88, 0.89, 0.91]).width(Math.max(0.3, 0.7 * s)).line(xNom, y - lh * 0.32, x0 + w - pad, y - lh * 0.32);
+            lia.forEach((l) => {
+              y -= lh;
+              p.rgb([0.16, 0.18, 0.22], false).text(xNom, y, f2 * 0.9, nomCourt(l.nom));
+              if (l.sections) p.rgb([0.48, 0.29, 0.12], false).text(xSec, y, f2 * 0.84, l.sections);
+              p.rgb([0.1, 0.11, 0.12], false).text(xNf, y, f2 * 0.86, String(l.nf != null ? l.nf : ""), { bold: true, align: "right" });
+              p.rgb([0.48, 0.51, 0.56], false).text(xPhi, y, f2 * 0.76, phiLiaison(l));
+            });
+          } else p.rgb([0.45, 0.45, 0.45], false).text(xNom, y, f2 * 0.9, (e.phi || []).length ? "fourreaux de r\xE9serve" : "coupe vide");
+          y -= lh + 6 * s;
+          p.rgb([0.88, 0.89, 0.91]).width(Math.max(0.3, 0.7 * s)).line(xNom, y + lh * 0.72, x0 + w - pad, y + lh * 0.72);
+          const r = recapSyn(e);
+          if (r.txt) {
+            p.rgb([0.1, 0.11, 0.12], false).text(xNom, y, f2 * 0.9, r.txt, { bold: true });
+            p.rgb([0.48, 0.51, 0.56], false).text(x0 + w - pad, y, f2 * 0.8, r.fin, { align: "right" });
+          }
           const L = e.L ? `${String(Math.round(e.L * 10) / 10).replace(".", ",")} m` : "? m";
           p.rgb([0.66, 0.27, 0.04], false).text(x0 + w - pad, yHaut - h + pad * 0.9, f2, L, { bold: true, align: "right" });
         }
@@ -80302,20 +80327,36 @@ var require_reseau = __commonJS({
           const d = Math.round(Number(f.od) || Number(f.code) || 0);
           nb.set(d, (nb.get(d) || 0) + 1);
         });
-        const lia = /* @__PURE__ */ new Map();
+        const lia = /* @__PURE__ */ new Map(), fourreauxDe = /* @__PURE__ */ new Map();
+        const parId = new Map(coupe.fourreaux.map((f) => [f.id, f]));
         (coupe.cables || []).forEach((c) => {
           const nom = String(c.liaison || c.label || "").trim();
           if (!nom) return;
           const base = nom.replace(/\s*-\s*PE$/i, ""), pe = base !== nom;
-          if (!lia.has(base)) lia.set(base, /* @__PURE__ */ new Map());
+          if (!lia.has(base)) {
+            lia.set(base, /* @__PURE__ */ new Map());
+            fourreauxDe.set(base, /* @__PURE__ */ new Set());
+          }
           const k = (pe ? "PE " : "") + c.code;
           lia.get(base).set(k, (lia.get(base).get(k) || 0) + 1);
+          if (c.parent != null && parId.has(c.parent)) fourreauxDe.get(base).add(c.parent);
         });
-        const liaisons = [...lia].sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true })).map(([nom, m]) => ({
-          nom,
-          sections: [...m].sort((a, b) => a[0].startsWith("PE") - b[0].startsWith("PE") || b[1] - a[1]).map(([k, q]) => k.startsWith("PE") && q === 1 ? k : `${q}\xD7${k}`).join(" + ")
-        }));
-        return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons };
+        const liaisons = [...lia].sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true })).map(([nom, m]) => {
+          const parOd = /* @__PURE__ */ new Map();
+          fourreauxDe.get(nom).forEach((id) => {
+            const f = parId.get(id), d = Math.round(Number(f.od) || Number(f.code) || 0);
+            parOd.set(d, (parOd.get(d) || 0) + 1);
+          });
+          return {
+            nom,
+            sections: [...m].sort((a, b) => a[0].startsWith("PE") - b[0].startsWith("PE") || b[1] - a[1]).map(([k, q]) => k.startsWith("PE") && q === 1 ? k : `${q}\xD7${k}`).join(" + "),
+            nf: fourreauxDe.get(nom).size,
+            phi: [...parOd].sort((a, b) => b[0] - a[0])
+          };
+        });
+        const occupes = new Set((coupe.cables || []).map((c) => c.parent).filter((x) => x != null));
+        const reserve = coupe.fourreaux.some((f) => f.id != null) ? coupe.fourreaux.filter((f) => f.id != null && !occupes.has(f.id)).length : 0;
+        return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons, total: coupe.fourreaux.length, reserve };
       }
       function dispositionAncree(r, opts) {
         const E = opts.ecart == null ? 0.5 : opts.ecart, G = opts.marge == null ? 40 : opts.marge;
