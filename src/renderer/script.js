@@ -3791,24 +3791,13 @@
       ctx.font = `bold ${getScaledLineWidth(14)}px Arial`;
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      // Positionner au-dessus du cercle
+      ctx.lineJoin = 'round';
+      // Positionner au-dessus du cercle (contour d'abord, blanc par-dessus)
       ctx.strokeText(String(numero), x, y - ro - getScaledLineWidth(5));
       ctx.fillText(String(numero), x, y - ro - getScaledLineWidth(5));
     }
 
-    // Afficher le libellé si présent et si showInfo est activé
-    if (showInfo && f.label && f.label.trim()) {
-      ctx.fillStyle = "#fff";
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = getScaledLineWidth(3);
-      ctx.lineJoin = 'round';
-      ctx.font = `600 ${getScaledLineWidth(12)}px "IBM Plex Sans", system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
-      // Contour noir pour meilleure lisibilité
-      ctx.strokeText(f.label, x, y + ro + getScaledLineWidth(18));
-      ctx.fillText(f.label, x, y + ro + getScaledLineWidth(18));
-    }
+    // Nom de liaison : pas affiché sur la coupe (il est dans les tableaux et le PDF).
 
     ctx.restore();
   }
