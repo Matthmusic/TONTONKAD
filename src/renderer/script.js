@@ -7199,8 +7199,10 @@
   }
 
   function tick() {
-    stepPhysics();
-    redraw();
+    // Coupe masquée par une vue réseau (synoptique, chambre) : simulation en pause,
+    // pour que ces vues restent fluides. Elle reprend au retour sur la coupe.
+    const coupeCachee = reseau && reseau.actif && reseau.actif.vue && reseau.actif.vue !== 'coupe';
+    if (!coupeCachee) { stepPhysics(); redraw(); }
     requestAnimationFrame(tick);
   }
 
@@ -7797,6 +7799,18 @@
     }) || null;
   }
 
+  // Étiquette de tronçon sous le pointeur (repère du schéma).
+  function etiquetteSous(x, y) {
+    const d = SYN.data; if (!d) return null;
+    const e = d.troncons.find((t) => t.e && Math.abs(x - t.e.x) <= t.e.w / 2 && Math.abs(y - t.e.y) <= t.e.h / 2);
+    return e ? R().troncon(reseau, e.id) : null;
+  }
+  // Un seul redessin par image pendant pan / zoom / glisser, sans recalcul du réseau.
+  let synImage = 0;
+  function planifierSyn() {
+    if (synImage) return;
+    synImage = requestAnimationFrame(() => { synImage = 0; dessinerSynoptique(false, true); });
+  }
   function construireSynoptique() {
     let o = document.getElementById('reseauOverlay');
     if (o) return o;
@@ -7816,10 +7830,15 @@
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="sortie">Ajouter une sortie</button>
         </div>
         <div id="reseauEdition" class="reseau-edition"></div>
-        <p class="chambre-aide">Glissez un élément pour le déplacer. Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
-        <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
+        <p class="chambre-aide">Glissez un élément pour le déplacer (ses étiquettes suivent ; « Disposition automatique » annule). Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
+        <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauAuto">Disposition automatique</button><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
+    o.querySelector('#reseauAuto').addEventListener('click', () => {
+      reseau.noeuds.forEach((n) => { delete n.decal; });
+      SYN.zoom = { k: 1, px: 0, py: 0 }; dessinerSynoptique();
+      showToast('Disposition automatique rétablie');
+    });
     o.querySelectorAll('[data-ajout]').forEach((b) => b.addEventListener('click', () => {
       const n = R().ajouterNoeud(reseau, b.dataset.ajout);
       SYN.sel = { noeud: n.id }; dessinerSynoptique();
@@ -7840,18 +7859,31 @@
       const pg = poigneeSous(p.x, p.y);
       if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y, x0: p.x, y0: p.y }; return; }
       const n = noeudSous(p.x, p.y);
-      if (n) { SYN.sel = { noeud: n.id }; dessinerSynoptique(); return; }
-      const t = tronconSous(p.x, p.y);
+      if (n) {
+        SYN.sel = { noeud: n.id };
+        const d = n.decal || { dx: 0, dy: 0 };
+        SYN.glisse = { id: n.id, x: ev.clientX, y: ev.clientY, dx: d.dx || 0, dy: d.dy || 0, bouge: false };
+        dessinerSynoptique(); return;
+      }
+      const t = tronconSous(p.x, p.y) || etiquetteSous(p.x, p.y);
       SYN.sel = t ? { troncon: t.id } : null;
       if (!t) SYN.pan = { x: ev.clientX, y: ev.clientY, px: (SYN.zoom || {}).px || 0, py: (SYN.zoom || {}).py || 0 };
       dessinerSynoptique();
     });
     cv.addEventListener('mousemove', (ev) => {
       const p = pos(ev);
-      if (SYN.pan) { SYN.zoom.px = SYN.pan.px + (ev.clientX - SYN.pan.x); SYN.zoom.py = SYN.pan.py - (ev.clientY - SYN.pan.y); dessinerSynoptique(false); return; }
-      if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; dessinerSynoptique(false); return; }
+      if (SYN.pan) { SYN.zoom.px = SYN.pan.px + (ev.clientX - SYN.pan.x); SYN.zoom.py = SYN.pan.py - (ev.clientY - SYN.pan.y); planifierSyn(); return; }
+      if (SYN.glisse) {
+        const g = SYN.glisse, k = (SYN.vue && SYN.vue.k) || 1, mx = ev.clientX - g.x, my = ev.clientY - g.y;
+        if (!g.bouge && Math.hypot(mx, my) < 4) return;
+        g.bouge = true;
+        const n = R().noeud(reseau, g.id);
+        if (n) n.decal = { dx: Math.round(g.dx + mx / k), dy: Math.round(g.dy + my / k) };
+        cv.style.cursor = 'grabbing'; planifierSyn(); return;
+      }
+      if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; planifierSyn(); return; }
       const surPlus = !!poigneeSous(p.x, p.y);
-      cv.style.cursor = surPlus ? 'crosshair' : (noeudSous(p.x, p.y) || tronconSous(p.x, p.y)) ? 'pointer' : 'default';
+      cv.style.cursor = surPlus ? 'crosshair' : noeudSous(p.x, p.y) ? 'grab' : (tronconSous(p.x, p.y) || etiquetteSous(p.x, p.y)) ? 'pointer' : 'default';
       cv.title = surPlus ? 'Tirer vers un élément pour le relier · Clic : ajouter une chambre reliée' : '';
     });
     window.addEventListener('mouseup', (ev) => {
@@ -7871,6 +7903,10 @@
         dessinerSynoptique();
       }
       if (SYN.pan) { SYN.pan = null; }
+      if (SYN.glisse) {
+        const bouge = SYN.glisse.bouge; SYN.glisse = null;
+        if (bouge && !o.hidden) { dessinerSynoptique(); }
+      }
     });
     cv.addEventListener('wheel', (ev) => {
       if (SYN.mode === 'iso') return;
@@ -7882,7 +7918,7 @@
       const cyp = -cy; // décalage vertical compté vers le haut (repère du dessin)
       z.px = cx - (cx - z.px) * g; z.py = cyp - (cyp - z.py) * g; z.k = k2;
       if (k2 === 1) { z.px = 0; z.py = 0; }
-      dessinerSynoptique(false);
+      planifierSyn();
     }, { passive: false });
     cv.addEventListener('dblclick', (ev) => {
       if (SYN.mode === 'iso') return;
@@ -7900,7 +7936,7 @@
     return o;
   }
 
-  function dessinerSynoptique(panneau = true) {
+  function dessinerSynoptique(panneau = true, rapide = false) {
     const o = document.getElementById('reseauOverlay');
     if (!o || o.hidden || !reseau) return;
     const cv = o.querySelector('#reseauCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
@@ -7919,7 +7955,8 @@
     }
     // Synoptique ancré : disposition calculée (pas de placement libre), même dessin que le PDF.
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height);
-    const data = synoptiqueAncre(zone.width / Math.max(1, zone.height));
+    const data = synoptiqueAncre(zone.width / Math.max(1, zone.height), rapide);
+    SYN.data = data;
     const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 });
     const zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
     const page = new window.Vue3D.Page({ emitText: false, ombre: false });
@@ -7961,14 +7998,46 @@
     if (n.type === 'coffret') return n.coffret.genre + (n.coffret.largeur && n.coffret.profondeur ? ` ${n.coffret.largeur}×${n.coffret.profondeur}` : '');
     return '';
   }
-  function synoptiqueAncre(ratio) {
-    const V = window.Vue3D, contenus = new Map(reseau.troncons.map((t) => [t.id, contenuTroncon(t)]));
-    const dis = R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
-    reseau.noeuds.forEach((n) => { const q = dis.noeuds[n.id]; if (q) { n.x = Math.round(q.x); n.y = Math.round(q.y); } });
+  // Disposition ancrée + décalages manuels (n.decal, glisser dans le synoptique).
+  // rapide = true : réutilise le dernier calcul (pan, zoom, glisser) et garde le
+  // cadrage figé ; sinon tout est recalculé puis recadré.
+  let synBase = null;
+  function synoptiqueAncre(ratio, rapide = false) {
+    const V = window.Vue3D;
+    if (!rapide || !synBase || synBase.ratio !== ratio) {
+      const contenus = new Map(reseau.troncons.map((t) => [t.id, contenuTroncon(t)]));
+      const dis = R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
+      synBase = { ratio, dis, contenus, sous: new Map(reseau.noeuds.map((n) => [n.id, sousNoeud(n)])) };
+    }
+    const { dis, contenus, sous } = synBase;
+    const dec = (id) => { const n = R().noeud(reseau, id), d = n && n.decal; return d ? [d.dx || 0, d.dy || 0] : [0, 0]; };
+    const P = {}, Lb = {};
+    reseau.noeuds.forEach((n) => { const q = dis.noeuds[n.id] || { x: n.x || 0, y: n.y || 0 }, [dx, dy] = dec(n.id); P[n.id] = { x: q.x + dx, y: q.y + dy }; });
+    reseau.troncons.forEach((t) => {
+      const l = dis.etiquettes[t.id]; if (!l) return;
+      const a = dec(t.a.noeud), b = dec(t.b.noeud);
+      Lb[t.id] = { ...l, x: l.x + (a[0] + b[0]) / 2, y: l.y + (a[1] + b[1]) / 2 };
+    });
+    let largeur = dis.largeur, hauteur = dis.hauteur;
+    let tx = 0, ty = 0;
+    if (!rapide) { // recadrage : tout reste dans le cadre même après un déplacement
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const bord = (x, y, w, h) => { x0 = Math.min(x0, x - w / 2); x1 = Math.max(x1, x + w / 2); y0 = Math.min(y0, y - h / 2); y1 = Math.max(y1, y + h / 2); };
+      reseau.noeuds.forEach((n) => { const s2 = tailleNoeud(n); bord(P[n.id].x, P[n.id].y, s2.w + 60, s2.h); });
+      Object.values(Lb).forEach((l) => bord(l.x, l.y, l.w, l.h));
+      if (Number.isFinite(x0)) {
+        const G = 40; tx = G - x0; ty = G - y0;
+        largeur = Math.max(1, x1 - x0 + 2 * G); hauteur = Math.max(1, y1 - y0 + 2 * G);
+      }
+      synBase.cadre = { largeur, hauteur, tx, ty };
+    } else if (synBase.cadre) ({ largeur, hauteur, tx, ty } = synBase.cadre);
+    Object.values(P).forEach((q) => { q.x += tx; q.y += ty; });
+    Object.values(Lb).forEach((l) => { l.x += tx; l.y += ty; });
+    reseau.noeuds.forEach((n) => { n.x = Math.round(P[n.id].x); n.y = Math.round(P[n.id].y); });
     return {
-      largeur: dis.largeur, hauteur: dis.hauteur, rangs: dis.rangs,
-      noeuds: reseau.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, ...tailleNoeud(n), sous: sousNoeud(n) })),
-      troncons: reseau.troncons.map((t) => ({ id: t.id, a: R().noeud(reseau, t.a.noeud), b: R().noeud(reseau, t.b.noeud), e: dis.etiquettes[t.id] && { ...dis.etiquettes[t.id], ...contenus.get(t.id) } })),
+      largeur, hauteur, rangs: dis.rangs,
+      noeuds: reseau.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, ...tailleNoeud(n), sous: sous.has(n.id) ? sous.get(n.id) : sousNoeud(n) })),
+      troncons: reseau.troncons.map((t) => ({ id: t.id, a: R().noeud(reseau, t.a.noeud), b: R().noeud(reseau, t.b.noeud), e: Lb[t.id] && { ...Lb[t.id], ...contenus.get(t.id) } })),
     };
   }
 
