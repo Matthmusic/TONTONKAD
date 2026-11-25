@@ -141,7 +141,7 @@ function drawCoupe(p, m, x0, y0, wPt, hPt) {
     }
   }
   for (const fo of m.fourreaux) {
-    p.rgb([1, 1, 1], false).rgb([0.85, 0.4, 0.05]).width(1).circle(X(fo.x), Y(fo.y), fo.od / 2 * s, 'B');
+    p.rgb([1, 1, 1], false).rgb(fo.teinte === 'vert' ? [0.16, 0.56, 0.24] : [0.85, 0.4, 0.05]).width(1).circle(X(fo.x), Y(fo.y), fo.od / 2 * s, 'B'); // fourreau vert (option)
     p.width(0.5).circle(X(fo.x), Y(fo.y), fo.di / 2 * s);
   }
   for (const c of m.cables) {
