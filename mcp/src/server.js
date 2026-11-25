@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// Serveur MCP TONTONKAD (stdio) — génère les masques de liaisons à partir
+// Serveur MCP nodial (stdio) — génère les masques de liaisons à partir
 // d'une note de calcul Caneco, avec les moteurs de l'application.
 // Les géométries rendues (mm, Y vers le haut) sont faites pour être dessinées
 // par un autre MCP de CAO (ex. MultiCAD) ; l'export DXF sert de repli.
@@ -98,7 +98,7 @@ const placementSchema = z.record(z.string(), z.object({
   x: z.number(), y: z.number(), rotation: z.number().optional().describe('Degrés, sens trigonométrique'), echelle: z.number().optional(),
 })).optional().describe('Placement de chaque dessin sur le plan, par nom de dessin (« Coupe <masque> », « Chambre <nom> ») : point de base en unités du plan (mm), rotation en degrés. Sans placement, le dessin est à l\'origine.');
 
-const INSTRUCTIONS = `TONTONKAD produit les masques de liaisons électriques (coupes de tranchée ou de conduit) à partir des notes de calcul Caneco.
+const INSTRUCTIONS = `nodial produit les masques de liaisons électriques (coupes de tranchée ou de conduit) à partir des notes de calcul Caneco.
 Avant toute génération, réunis dans le chat : la ou les notes de calcul (NDC), les tronçons voulus, le rendu souhaité (AutoCAD, ZWCAD, MultiCAD sur le plan DWG, Revit, PDF avec vue 3D), le plan si les masques doivent y être posés, et la zone (chaussée, trottoir…).
 Appelle preparer_etude avec ce que tu sais ; s'il manque quelque chose, pose TOUTES ses questions à l'utilisateur en un seul message, puis rappelle-le avec les réponses. Ne devine jamais un fichier ou une liaison.
 Si plusieurs masques arrivent dans une même chambre de tirage, demande quelle face reçoit quel masque (pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut, vu de dessus) et passe-les dans le paramètre chambres de generer_masques : la chambre est choisie pour recevoir toutes les faces et les traversées sont déduites. Demande aussi si la chambre est préfabriquée ou MAÇONNÉE ; si maçonnée, demande l'épaisseur des parois, le tampon (ouverture et classe) et la zone (paramètre maconnee), sinon les valeurs par défaut sont prises et doivent être signalées comme à valider.
@@ -106,7 +106,7 @@ Pour un RÉSEAU (plusieurs chambres, coffrets, sorties reliés par des tronçons
 Dessin sur un plan DWG avec le MCP multiCAD (AutoCAD, ZWCAD, GstarCAD, BricsCAD) : passe cad=true. Demande à l'utilisateur le point d'insertion (x, y en mm) et l'orientation de chaque chambre et de chaque coupe (ou lis-les sur le plan si multiCAD te le permet), et passe-les dans placements. Puis, côté multiCAD : manage_layers avec le texte « calques » de la réponse, puis draw_entities avec les « commandes » de chaque bloc (une commande par ligne ; découpe en paquets si c'est long). Si un calque est ignoré, regroupe ensuite par manage_entities set_layer. Sans multiCAD, propose le DXF (sortieDxf) à insérer à la main.
 Quand preparer_etude répond pret=true : montre les liaisons retenues par tronçon, fais-les valider, puis appelle generer_masques (ou etudier_reseau). Relaie toujours les avertissements et les contrôles de conformité, en rappelant que les règles normatives sont à valider.`;
 
-const server = new McpServer({ name: 'tontonkad', version: '0.3.0' }, { instructions: INSTRUCTIONS });
+const server = new McpServer({ name: 'nodial', version: '0.4.0' }, { instructions: INSTRUCTIONS });
 
 server.registerTool('preparer_etude', {
   title: 'Préparer une étude de masques',
@@ -132,7 +132,7 @@ server.registerPrompt('etude_masques', {
   argsSchema: { demande: z.string().optional().describe('Ce que tu veux, en une phrase (facultatif)') },
 }, ({ demande }) => ({
   messages: [{ role: 'user', content: { type: 'text', text:
-`Je veux préparer des masques de liaisons avec TONTONKAD.${demande ? `\nMa demande : ${demande}` : ''}
+`Je veux préparer des masques de liaisons avec nodial.${demande ? `\nMa demande : ${demande}` : ''}
 
 Mène l'étude ainsi :
 1. Appelle preparer_etude avec ce que tu sais déjà de ma demande.

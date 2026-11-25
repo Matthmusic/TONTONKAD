@@ -1,7 +1,7 @@
 {
-  "name": "TontonKAD v2 - Organisateur de Fourreaux & Câbles",
-  "short_name": "TontonKAD v2",
-  "description": "Application web pour organiser et visualiser des fourreaux et câbles électriques dans différents types de boîtiers - Nouvelle interface CEA.",
+  "name": "nodial — fourreaux, chambres et réseaux",
+  "short_name": "nodial",
+  "description": "Fourreaux, chambres de tirage et réseaux VRD : coupes, synoptique, études de chambres et dossiers PDF.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8f9fa",
@@ -12,7 +12,7 @@
   "categories": ["productivity", "utilities"],
   "icons": [
     {
-      "src": "TONTONKAD.svg",
+      "src": "assets/brand/nodial/nodial_v6_icone_clair.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
@@ -24,14 +24,14 @@
       "short_name": "Nouveau",
       "description": "Démarrer un nouveau projet",
       "url": "/?action=new",
-      "icons": [{ "src": "TONTONKAD.svg", "sizes": "96x96" }]
+      "icons": [{ "src": "assets/brand/nodial/nodial_v6_icone_clair.svg", "sizes": "96x96" }]
     },
     {
       "name": "Export DXF",
       "short_name": "Export",
       "description": "Exporter en DXF",
       "url": "/?action=export",
-      "icons": [{ "src": "TONTONKAD.svg", "sizes": "96x96" }]
+      "icons": [{ "src": "assets/brand/nodial/nodial_v6_icone_clair.svg", "sizes": "96x96" }]
     }
   ]
 }

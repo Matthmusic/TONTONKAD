@@ -78050,13 +78050,13 @@ var require_chambres_infos = __commonJS({
         L1T: { ...SERIE_T, tampons: 1 },
         L2T: { ...SERIE_T, tampons: 2 },
         L3T: { ...SERIE_T, tampons: 3 },
-        L4T: { ...SERIE_T, tampons: 4, aVerifier: "longueur 1670 mm dans TONTONKAD, 1870 mm dans les sources publiques" },
+        L4T: { ...SERIE_T, tampons: 4, aVerifier: "longueur 1670 mm dans le catalogue nodial, 1870 mm dans les sources publiques" },
         "1/2 L4T": { ...SERIE_T, tampons: null },
         L5T: { ...SERIE_T, tampons: 3 },
         L6T: { ...SERIE_T, tampons: 4 },
         L1C: { ...SERIE_C, tampons: null },
         L2C: { ...SERIE_C, tampons: null },
-        L3C: { ...SERIE_C, tampons: null, aVerifier: "largeur 520 mm dans TONTONKAD, 380 mm dans les sources publiques" },
+        L3C: { ...SERIE_C, tampons: null, aVerifier: "largeur 520 mm dans le catalogue nodial, 380 mm dans les sources publiques" },
         K1C: { ...SERIE_K, tampons: null },
         K2C: { ...SERIE_K, tampons: null },
         K3C: { ...SERIE_K, tampons: null }
@@ -78083,7 +78083,7 @@ var require_chambres_infos = __commonJS({
             marge: { largeur: face.largeur - W, hauteur: face.hauteur - H },
             tient: face.largeur >= W && face.hauteur >= H,
             infos: infosChambre2(m.ref),
-            source: "Cotes int\xE9rieures du catalogue TONTONKAD (chambres Stradal)."
+            source: "Cotes int\xE9rieures du catalogue nodial (chambres Stradal)."
           };
         };
         if (refImposee) {
@@ -79376,15 +79376,16 @@ var require_vue3d = __commonJS({
       }
       const CARTOUCHE_DEFAUT = [
         { libelle: "Projet", valeur: "{projet}", large: true },
+        { libelle: "Ma\xEEtre d\u2019ouvrage", valeur: "{client}", large: true },
         { libelle: "Objet", valeur: "\xC9tude de chambre {chambre}", large: true },
         { libelle: "Chambre", valeur: "{modele}", large: true },
         { libelle: "Int\xE9rieur", valeur: "{interieur}" },
         { libelle: "Tampons", valeur: "{tampons}" },
-        { libelle: "Phase", valeur: "" },
-        { libelle: "N\xB0 plan", valeur: "" },
+        { libelle: "Phase", valeur: "{phase}" },
+        { libelle: "N\xB0 plan", valeur: "{plan}" },
         { libelle: "Indice", valeur: "{indice}" },
         { libelle: "Date", valeur: "{date}" },
-        { libelle: "Dessin\xE9", valeur: "" },
+        { libelle: "Dessin\xE9", valeur: "{auteur}" },
         { libelle: "V\xE9rifi\xE9", valeur: "" },
         { libelle: "\xC9chelle", valeur: "sans" },
         { libelle: "Format", valeur: "{format}" },
@@ -79394,7 +79395,7 @@ var require_vue3d = __commonJS({
         return (Array.isArray(champs) && champs.length ? champs : CARTOUCHE_DEFAUT).map((c) => ({
           libelle: String(c.libelle || ""),
           large: !!c.large,
-          valeur: String(c.valeur == null ? "" : c.valeur).replace(/\{(\w+)\}/g, (t, k) => valeurs[k] != null ? String(valeurs[k]) : t)
+          valeur: String(c.valeur == null ? "" : c.valeur).replace(/\{(\w+)\}/g, (t, k) => valeurs[k] != null ? String(valeurs[k]) : "").trim()
         }));
       }
       function drawSituation(p, sit, nomChambre, z2) {
@@ -79553,6 +79554,10 @@ var require_vue3d = __commonJS({
           date: opts.date || "",
           indice: opts.indice || "A",
           format: "A3",
+          client: opts.client || "",
+          auteur: opts.auteur || "",
+          phase: opts.phase || "",
+          plan: opts.plan || "",
           interieur: ok2 ? `${e.L} \xD7 ${e.l} \xD7 ${e.H} mm` : "\u2014",
           tampons: ok2 && e.infos && e.infos.tampon && e.infos.tampons ? `${e.infos.tampons} \xD7 ${e.infos.tampon.L}\xD7${e.infos.tampon.l} ${e.infos.tampon.classe}` : "\u2014",
           folio: opts.folio ? `${opts.folio.i} / ${opts.folio.n}` : "1 / 1"
@@ -80047,7 +80052,7 @@ var require_vue3d = __commonJS({
       }
       const ICONE_NODIAL_PNG = "data:image/png;base64,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";
       const MENTION_NODIAL = "R\xE9alis\xE9 avec nodial";
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, ICONE_NODIAL_PNG, MENTION_NODIAL, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, dessinerCartouche, valeursCartouche, ICONE_NODIAL_PNG, MENTION_NODIAL, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -81542,14 +81547,14 @@ var placementSchema = z.record(z.string(), z.object({
   rotation: z.number().optional().describe("Degr\xE9s, sens trigonom\xE9trique"),
   echelle: z.number().optional()
 })).optional().describe("Placement de chaque dessin sur le plan, par nom de dessin (\xAB Coupe <masque> \xBB, \xAB Chambre <nom> \xBB) : point de base en unit\xE9s du plan (mm), rotation en degr\xE9s. Sans placement, le dessin est \xE0 l'origine.");
-var INSTRUCTIONS = `TONTONKAD produit les masques de liaisons \xE9lectriques (coupes de tranch\xE9e ou de conduit) \xE0 partir des notes de calcul Caneco.
+var INSTRUCTIONS = `nodial produit les masques de liaisons \xE9lectriques (coupes de tranch\xE9e ou de conduit) \xE0 partir des notes de calcul Caneco.
 Avant toute g\xE9n\xE9ration, r\xE9unis dans le chat : la ou les notes de calcul (NDC), les tron\xE7ons voulus, le rendu souhait\xE9 (AutoCAD, ZWCAD, MultiCAD sur le plan DWG, Revit, PDF avec vue 3D), le plan si les masques doivent y \xEAtre pos\xE9s, et la zone (chauss\xE9e, trottoir\u2026).
 Appelle preparer_etude avec ce que tu sais ; s'il manque quelque chose, pose TOUTES ses questions \xE0 l'utilisateur en un seul message, puis rappelle-le avec les r\xE9ponses. Ne devine jamais un fichier ou une liaison.
 Si plusieurs masques arrivent dans une m\xEAme chambre de tirage, demande quelle face re\xE7oit quel masque (pignon A \xE0 gauche, pignon B \xE0 droite, long-pan A en bas, long-pan B en haut, vu de dessus) et passe-les dans le param\xE8tre chambres de generer_masques : la chambre est choisie pour recevoir toutes les faces et les travers\xE9es sont d\xE9duites. Demande aussi si la chambre est pr\xE9fabriqu\xE9e ou MA\xC7ONN\xC9E ; si ma\xE7onn\xE9e, demande l'\xE9paisseur des parois, le tampon (ouverture et classe) et la zone (param\xE8tre maconnee), sinon les valeurs par d\xE9faut sont prises et doivent \xEAtre signal\xE9es comme \xE0 valider.
 Pour un R\xC9SEAU (plusieurs chambres, coffrets, sorties reli\xE9s par des tron\xE7ons), utilise etudier_reseau : un appel donne les coupes de chaque tron\xE7on, l'\xE9tude de chaque chambre, le contr\xF4le des coffrets, la continuit\xE9 des liaisons et le m\xE9tr\xE9.
 Dessin sur un plan DWG avec le MCP multiCAD (AutoCAD, ZWCAD, GstarCAD, BricsCAD) : passe cad=true. Demande \xE0 l'utilisateur le point d'insertion (x, y en mm) et l'orientation de chaque chambre et de chaque coupe (ou lis-les sur le plan si multiCAD te le permet), et passe-les dans placements. Puis, c\xF4t\xE9 multiCAD : manage_layers avec le texte \xAB calques \xBB de la r\xE9ponse, puis draw_entities avec les \xAB commandes \xBB de chaque bloc (une commande par ligne ; d\xE9coupe en paquets si c'est long). Si un calque est ignor\xE9, regroupe ensuite par manage_entities set_layer. Sans multiCAD, propose le DXF (sortieDxf) \xE0 ins\xE9rer \xE0 la main.
 Quand preparer_etude r\xE9pond pret=true : montre les liaisons retenues par tron\xE7on, fais-les valider, puis appelle generer_masques (ou etudier_reseau). Relaie toujours les avertissements et les contr\xF4les de conformit\xE9, en rappelant que les r\xE8gles normatives sont \xE0 valider.`;
-var server = new McpServer({ name: "tontonkad", version: "0.3.0" }, { instructions: INSTRUCTIONS });
+var server = new McpServer({ name: "nodial", version: "0.4.0" }, { instructions: INSTRUCTIONS });
 server.registerTool("preparer_etude", {
   title: "Pr\xE9parer une \xE9tude de masques",
   description: "\xC0 appeler EN PREMIER. V\xE9rifie ce que l'utilisateur a fourni (notes de calcul, plans, tron\xE7ons, rendus, zone) et renvoie la liste des questions \xE0 lui poser pour ce qui manque, ainsi que les liaisons trouv\xE9es pour chaque tron\xE7on. Rappeler apr\xE8s chaque r\xE9ponse jusqu'\xE0 pret=true.",
@@ -81579,7 +81584,7 @@ server.registerPrompt("etude_masques", {
   description: "Lance une \xE9tude : Claude demande les notes de calcul, les plans, les tron\xE7ons et le rendu souhait\xE9, puis g\xE9n\xE8re les masques.",
   argsSchema: { demande: z.string().optional().describe("Ce que tu veux, en une phrase (facultatif)") }
 }, ({ demande }) => ({
-  messages: [{ role: "user", content: { type: "text", text: `Je veux pr\xE9parer des masques de liaisons avec TONTONKAD.${demande ? `
+  messages: [{ role: "user", content: { type: "text", text: `Je veux pr\xE9parer des masques de liaisons avec nodial.${demande ? `
 Ma demande : ${demande}` : ""}
 
 M\xE8ne l'\xE9tude ainsi :

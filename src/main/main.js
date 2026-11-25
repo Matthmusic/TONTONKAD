@@ -344,9 +344,9 @@ function createMenu() {
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: 'info',
-              title: 'À propos de TONTONKAD',
-              message: `TONTONKAD v${app.getVersion()}`,
-              detail: 'Application de dimensionnement de chemins de câbles et fourreaux\n\n© 2025 TONTONKAD Team',
+              title: 'À propos de nodial',
+              message: `nodial v${app.getVersion()}`,
+              detail: 'Fourreaux, chambres de tirage et réseaux VRD\n\n© 2026 nodial',
               buttons: ['OK']
             });
           }
@@ -421,7 +421,7 @@ async function openProject() {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Ouvrir un projet',
     filters: [
-      { name: 'Projets TONTONKAD', extensions: ['json'] },
+      { name: 'Projets nodial', extensions: ['nodial', 'json', 'tontonkad'] },
       { name: 'Tous les fichiers', extensions: ['*'] }
     ],
     properties: ['openFile']
@@ -458,9 +458,9 @@ ipcMain.handle('save-project', async (event, data) => {
 async function saveProjectAs(content = null) {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Sauvegarder le projet',
-    defaultPath: 'projet-tontonkad.json',
+    defaultPath: 'projet.nodial',
     filters: [
-      { name: 'Projets TONTONKAD', extensions: ['json'] },
+      { name: 'Projets nodial', extensions: ['nodial', 'json', 'tontonkad'] },
       { name: 'Tous les fichiers', extensions: ['*'] }
     ]
   });
@@ -489,7 +489,7 @@ ipcMain.handle('export-file', async (event, { type, content, defaultName }) => {
 
   const result = await dialog.showSaveDialog(mainWindow, {
     title: `Exporter en ${type.toUpperCase()}`,
-    defaultPath: defaultName || `export-tontonkad.${type}`,
+    defaultPath: defaultName || `export-nodial.${type}`,
     filters
   });
 

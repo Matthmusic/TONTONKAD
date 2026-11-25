@@ -27,13 +27,13 @@ const INFOS = {
   L1T: { ...SERIE_T, tampons: 1 },
   L2T: { ...SERIE_T, tampons: 2 },
   L3T: { ...SERIE_T, tampons: 3 },
-  L4T: { ...SERIE_T, tampons: 4, aVerifier: 'longueur 1670 mm dans TONTONKAD, 1870 mm dans les sources publiques' },
+  L4T: { ...SERIE_T, tampons: 4, aVerifier: 'longueur 1670 mm dans le catalogue nodial, 1870 mm dans les sources publiques' },
   '1/2 L4T': { ...SERIE_T, tampons: null },
   L5T: { ...SERIE_T, tampons: 3 },
   L6T: { ...SERIE_T, tampons: 4 },
   L1C: { ...SERIE_C, tampons: null },
   L2C: { ...SERIE_C, tampons: null },
-  L3C: { ...SERIE_C, tampons: null, aVerifier: 'largeur 520 mm dans TONTONKAD, 380 mm dans les sources publiques' },
+  L3C: { ...SERIE_C, tampons: null, aVerifier: 'largeur 520 mm dans le catalogue nodial, 380 mm dans les sources publiques' },
   K1C: { ...SERIE_K, tampons: null },
   K2C: { ...SERIE_K, tampons: null },
   K3C: { ...SERIE_K, tampons: null },
@@ -61,7 +61,7 @@ function chambrePourNappe(W, H, chambresRows, compat, refImposee) {
       marge: { largeur: face.largeur - W, hauteur: face.hauteur - H },
       tient: face.largeur >= W && face.hauteur >= H,
       infos: infosChambre(m.ref),
-      source: 'Cotes intérieures du catalogue TONTONKAD (chambres Stradal).',
+      source: 'Cotes intérieures du catalogue nodial (chambres Stradal).',
     };
   };
   if (refImposee) {

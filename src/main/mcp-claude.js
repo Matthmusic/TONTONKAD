@@ -1,12 +1,13 @@
 'use strict';
-// Branchement du serveur MCP TONTONKAD dans Claude — PUR (aucun accès disque ici).
+// Branchement du serveur MCP nodial dans Claude — PUR (aucun accès disque ici).
 // Le serveur est livré avec l'application (resources/mcp) et tourne avec le
-// moteur Node intégré à TONTONKAD.exe (ELECTRON_RUN_AS_NODE=1) : rien à
+// moteur Node intégré à l'exécutable de l'app (ELECTRON_RUN_AS_NODE=1) : rien à
 // installer sur le poste. main.js lit/écrit les fichiers.
 
 const path = require('path');
 
-const NOM = 'tontonkad';
+const NOM = 'nodial';
+const ANCIENS = ['tontonkad']; // ancien nom du serveur : retiré au branchement (plus de doublon)
 
 /** Fichier de configuration de l'application de bureau Claude. */
 function cheminConfigClaude(platform, env, home) {
@@ -20,7 +21,7 @@ function cheminConfigClaudeCode(platform, home) {
   return (platform === 'win32' ? path.win32 : path.posix).join(home, '.claude.json');
 }
 
-/** Entrée mcpServers.tontonkad : l'exécutable de l'app en mode Node. */
+/** Entrée mcpServers.nodial : l'exécutable de l'app en mode Node. */
 function entreeServeur({ execPath, serveur, dataDir }) {
   const env = { ELECTRON_RUN_AS_NODE: '1' };
   if (dataDir) env.TONTONKAD_DATA = dataDir; // mêmes catalogues que l'application
@@ -34,7 +35,7 @@ const memeEntree = (a, b) => !!a && !!b && a.command === b.command && (a.type ||
   && JSON.stringify(a.env || {}) === JSON.stringify(b.env || {});
 
 /**
- * Ajoute (ou met à jour) TONTONKAD dans la configuration existante, sans
+ * Ajoute (ou met à jour) nodial dans la configuration existante, sans
  * toucher aux autres serveurs ni aux autres réglages.
  * @param {string|null} texte contenu actuel du fichier (null = absent)
  * @returns {{ texte: string, etat: 'ajoute'|'mis_a_jour'|'deja_a_jour' }}
@@ -51,13 +52,17 @@ function fusionnerConfig(texte, entree, { nettoyerProjets = false } = {}) {
   const serveurs = cfg.mcpServers && typeof cfg.mcpServers === 'object' ? cfg.mcpServers : {};
   const avant = serveurs[NOM];
   let etat = !avant ? 'ajoute' : memeEntree(avant, entree) ? 'deja_a_jour' : 'mis_a_jour';
-  cfg.mcpServers = { ...serveurs, [NOM]: entree };
+  const anciens = ANCIENS.filter((k) => serveurs[k]);
+  const garder = Object.fromEntries(Object.entries(serveurs).filter(([k]) => !ANCIENS.includes(k)));
+  cfg.mcpServers = { ...garder, [NOM]: entree };
+  if (anciens.length && etat === 'deja_a_jour') etat = 'mis_a_jour';
   // Claude Code : une inscription « locale » (un seul dossier, ~/.claude.json
   // projects[…].mcpServers) masque celle de l'utilisateur → on la retire.
   const nettoyes = [];
   if (nettoyerProjets && cfg.projects && typeof cfg.projects === 'object') {
     for (const [dossier, pr] of Object.entries(cfg.projects)) {
-      if (pr && pr.mcpServers && pr.mcpServers[NOM]) { delete pr.mcpServers[NOM]; nettoyes.push(dossier); }
+      const cles = pr && pr.mcpServers ? [NOM, ...ANCIENS].filter((k) => pr.mcpServers[k]) : [];
+      if (cles.length) { cles.forEach((k) => delete pr.mcpServers[k]); nettoyes.push(dossier); }
     }
     if (nettoyes.length && etat === 'deja_a_jour') etat = 'mis_a_jour';
   }
@@ -69,8 +74,10 @@ function etatBranchement(texte, entree) {
   if (texte == null) return 'absent';
   try {
     const cfg = JSON.parse(texte), s = (cfg.mcpServers || {})[NOM];
-    const masque = Object.values(cfg.projects || {}).some((p) => p && p.mcpServers && p.mcpServers[NOM]);
-    return !s ? 'non_branche' : memeEntree(s, entree) && !masque ? 'branche' : 'a_mettre_a_jour';
+    const masque = Object.values(cfg.projects || {}).some((p) => p && p.mcpServers && [NOM, ...ANCIENS].some((k) => p.mcpServers[k]));
+    const ancien = ANCIENS.some((k) => (cfg.mcpServers || {})[k]);
+    if (!s) return ancien ? 'a_mettre_a_jour' : 'non_branche';
+    return memeEntree(s, entree) && !masque && !ancien ? 'branche' : 'a_mettre_a_jour';
   } catch (_) { return 'illisible'; }
 }
 

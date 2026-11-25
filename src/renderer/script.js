@@ -4741,7 +4741,7 @@
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
-    const fileName = `tontonkad_autocad_${wM}x${hM}m_${date}_${time}.dxf`;
+    const fileName = `nodial_autocad_${wM}x${hM}m_${date}_${time}.dxf`;
 
     // Mode Electron : utiliser l'API exportFile avec dialogue de sauvegarde
     if (window.electronAPI && window.electronAPI.exportFile) {
@@ -4784,7 +4784,7 @@
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
-    const fileName = `tontonkad_zwcad_${wM}x${hM}m_${date}_${time}.dxf`;
+    const fileName = `nodial_zwcad_${wM}x${hM}m_${date}_${time}.dxf`;
 
     // Mode Electron : utiliser l'API exportFile avec dialogue de sauvegarde
     if (window.electronAPI && window.electronAPI.exportFile) {
@@ -7283,8 +7283,9 @@
     const feuille = document.querySelector('#pdfExportModal .pdf-a4-sheet'), resume = document.getElementById('pdfReseauResume');
     if (feuille) feuille.hidden = actif;
     if (resume) resume.hidden = !actif;
-    if (!actif) { const go = document.getElementById('confirmPdfExport'); if (go) go.disabled = false; return; }
+    const simple = document.getElementById('pdfOptionsSimple'); if (simple) simple.hidden = actif; // l'export réseau a ses propres parties
     editeurCartouche();
+    if (!actif) { const go = document.getElementById('confirmPdfExport'); if (go) go.disabled = false; return; }
     // Aperçu réseau : liste des fichiers qui seront produits (selon les cases)
     const listeFichiers = () => {
       const ol = document.getElementById('pdfReseauFichiers'); if (!ol) return;
@@ -7311,7 +7312,7 @@
     const D = decoupageSyn(synoptiqueAncre(1.414), 'auto');
     const txt = resumeDecoupage(D);
     const opt = document.querySelector('#pdfFormatSyn option[value="auto"]');
-    if (opt) opt.textContent = `Automatique (conseillé : ${txt})`;
+    if (opt) opt.textContent = `Automatique (${D.fmt.toUpperCase()})`; // le détail est sous la liste
     const sel = document.getElementById('pdfFormatSyn'), conseil = document.getElementById('pdfFormatConseil');
     const maj = () => {
       if (!conseil || !sel) return;
@@ -7324,64 +7325,114 @@
     if (mep && !mep._ttk) { mep._ttk = true; mep.addEventListener('change', () => { majOptionsPdfReseau(); dessinerSynoptique(false); }); }
     maj();
   }
-  // Éditeur du cartouche (fenêtre d'export, mode réseau) : modifie reseau.cartouche.
+  // ── Fenêtre d'export PDF : informations du projet, cartouche, aperçu ──────
+  // Cartouche et informations : avec le réseau (enregistrés avec le projet) ;
+  // sans réseau, gardés pour la session (et le défaut mémorisé du poste).
+  let cartoucheHorsReseau = null, infosPdfHorsReseau = null;
+  function cartoucheCourant() {
+    if (reseau) return reseau.cartouche || (reseau.cartouche = cartoucheProjet());
+    return cartoucheHorsReseau || (cartoucheHorsReseau = cartoucheProjet());
+  }
+  const CHAMPS_INFOS_PDF = { pdfProjectName: 'projet', pdfClient: 'client', pdfAuthor: 'auteur', pdfPhase: 'phase', pdfIndice: 'indice', pdfNumPlan: 'plan', pdfViewName: 'vue', pdfDescription: 'description' };
+  function infosPdf() {
+    const o = {}; Object.entries(CHAMPS_INFOS_PDF).forEach(([id, k]) => { const el = document.getElementById(id); if (el) o[k] = el.value.trim(); });
+    return o;
+  }
+  function restaurerInfosPdf() {
+    let src = (reseau && reseau.pdfInfos) || infosPdfHorsReseau;
+    if (!src) { try { src = JSON.parse(localStorage.getItem('nodial-pdf-infos') || 'null'); } catch (e) { src = null; } }
+    if (!src) return;
+    Object.entries(CHAMPS_INFOS_PDF).forEach(([id, k]) => { const el = document.getElementById(id); if (el && src[k] != null && !el.value) el.value = src[k]; });
+    const cpt = document.getElementById('pdfDescriptionCounter'), d = document.getElementById('pdfDescription'); if (cpt && d) cpt.textContent = d.value.length;
+  }
+  function memoriserInfosPdf() {
+    const o = infosPdf();
+    if (reseau) reseau.pdfInfos = o; else infosPdfHorsReseau = o;
+    try { localStorage.setItem('nodial-pdf-infos', JSON.stringify({ ...o, description: '' })); } catch (e) { /* stockage plein : sans gravité */ }
+  }
+  // Aperçu du cartouche, dessiné par le même code que le PDF (+ logos).
+  function apercuCartouche() {
+    const cv = document.getElementById('pdfCartoucheApercu'); if (!cv || !window.Vue3D) return;
+    const V = window.Vue3D, W = 300, H = 220, dpr = window.devicePixelRatio || 1, ctx = cv.getContext('2d');
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+    const infos = infosPdf(), et = reseau ? etudesChambresReseau()[0] : null, e = et ? et.etude : { ok: false, nom: 'C1' };
+    const p = new V.Page({ emitText: false, ombre: false }), z = { x: 6, y: 6, w: W - 12, h: H - 12 };
+    const opts = { projet: infos.projet || 'Nom du projet', client: infos.client, auteur: infos.auteur, phase: infos.phase, indice: infos.indice || 'A', plan: infos.plan, date: new Date().toLocaleDateString('fr-FR') };
+    V.dessinerCartouche(p, z, cartoucheCourant(), V.valeursCartouche(e, opts));
+    V.rejouerSurCanvas(ctx, p, H);
+    (p.images || []).forEach((im) => { const img = new Image(); img.onload = () => ctx.drawImage(img, im.x, H - im.y - im.h, im.w, im.h); img.src = im.src; });
+  }
   function editeurCartouche() {
-    if (!reseau) return;
     const box = document.getElementById('pdfCartouche'); if (!box) return;
-    const c = reseau.cartouche || (reseau.cartouche = cartoucheProjet());
+    const c = cartoucheCourant();
     const corps = document.getElementById('pdfCartoucheChamps');
     const rendreChamps = () => {
       corps.textContent = '';
       c.champs.forEach((ch, i) => {
         const tr = document.createElement('tr');
         const lib = document.createElement('input'); lib.type = 'text'; lib.value = ch.libelle; lib.setAttribute('aria-label', `Libellé du champ ${i + 1}`);
-        lib.addEventListener('input', () => { ch.libelle = lib.value; });
-        const val = document.createElement('input'); val.type = 'text'; val.value = ch.valeur; val.setAttribute('aria-label', `Valeur du champ ${lib.value || i + 1}`);
-        val.addEventListener('input', () => { ch.valeur = val.value; });
-        const lg = document.createElement('input'); lg.type = 'checkbox'; lg.checked = !!ch.large; lg.setAttribute('aria-label', 'Pleine largeur');
-        lg.addEventListener('change', () => { ch.large = lg.checked; });
+        lib.addEventListener('input', () => { ch.libelle = lib.value; apercuCartouche(); });
+        const val = document.createElement('input'); val.type = 'text'; val.value = ch.valeur; val.setAttribute('aria-label', `Valeur du champ ${ch.libelle || i + 1}`);
+        val.addEventListener('input', () => { ch.valeur = val.value; apercuCartouche(); });
+        const lg = document.createElement('input'); lg.type = 'checkbox'; lg.checked = !!ch.large; lg.setAttribute('aria-label', `${ch.libelle} sur toute la largeur`);
+        lg.addEventListener('change', () => { ch.large = lg.checked; apercuCartouche(); });
         const act = document.createElement('td');
-        [['↑', 'Monter', -1], ['↓', 'Descendre', 1]].forEach(([t, l, d]) => { const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'pdf-mini-btn'; b2.textContent = t; b2.setAttribute('aria-label', l); b2.disabled = !c.champs[i + d];
-          b2.addEventListener('click', () => { [c.champs[i], c.champs[i + d]] = [c.champs[i + d], c.champs[i]]; rendreChamps(); }); act.appendChild(b2); });
-        const del = document.createElement('button'); del.type = 'button'; del.className = 'pdf-mini-btn'; del.textContent = '×'; del.setAttribute('aria-label', 'Supprimer le champ');
-        del.addEventListener('click', () => { c.champs.splice(i, 1); rendreChamps(); }); act.appendChild(del);
+        [['↑', 'Monter', -1], ['↓', 'Descendre', 1]].forEach(([t, l, d]) => { const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'pdf-mini-btn'; b2.textContent = t; b2.setAttribute('aria-label', `${l} « ${ch.libelle} »`); b2.disabled = !c.champs[i + d];
+          b2.addEventListener('click', () => { [c.champs[i], c.champs[i + d]] = [c.champs[i + d], c.champs[i]]; rendreChamps(); apercuCartouche(); }); act.appendChild(b2); });
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'pdf-mini-btn'; del.textContent = '×'; del.setAttribute('aria-label', `Supprimer « ${ch.libelle} »`);
+        del.addEventListener('click', () => { c.champs.splice(i, 1); rendreChamps(); apercuCartouche(); }); act.appendChild(del);
         [lib, val, lg].forEach((x) => { const td = document.createElement('td'); td.appendChild(x); tr.appendChild(td); });
         tr.appendChild(act); corps.appendChild(tr);
       });
     };
     const rendreLogos = () => box.querySelectorAll('.pdf-logo').forEach((z) => {
-      const k = z.dataset.logo, ap = z.querySelector('.pdf-logo-apercu'), lg = c[k];
+      const lg = cartoucheCourant()[z.dataset.logo], ap = z.querySelector('.pdf-logo-apercu');
       ap.classList.toggle('plein', !!(lg && lg.src)); ap.style.backgroundImage = lg && lg.src ? `url("${lg.src}")` : '';
+      z.querySelector('[data-retirer]').disabled = !(lg && lg.src);
     });
+    const chargerLogo = (k, fichier) => {
+      if (!fichier || !/^image\/(png|jpe?g)$/i.test(fichier.type)) { showToast('Choisissez une image PNG ou JPEG', 'error'); return; }
+      const lecteur = new FileReader();
+      lecteur.onload = () => { // réduit à 400 px au plus (taille du PDF et du projet)
+        const img = new Image();
+        img.onload = () => {
+          const k2 = Math.min(1, 400 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+          cv.width = Math.max(1, Math.round(img.width * k2)); cv.height = Math.max(1, Math.round(img.height * k2));
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          cartoucheCourant()[k] = { src: cv.toDataURL('image/png'), format: 'PNG' }; rendreLogos(); apercuCartouche();
+        };
+        img.src = lecteur.result;
+      };
+      lecteur.readAsDataURL(fichier);
+    };
     if (!box._ttk) {
       box._ttk = true;
       box.querySelectorAll('.pdf-logo').forEach((z) => {
-        const k = z.dataset.logo;
-        z.querySelector('input[type=file]').addEventListener('change', (ev) => {
-          const f = ev.target.files && ev.target.files[0]; if (!f) return;
-          const lecteur = new FileReader();
-          lecteur.onload = () => { // réduit à 400 px au plus (taille du PDF et du projet)
-            const img = new Image();
-            img.onload = () => {
-              const k2 = Math.min(1, 400 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
-              cv.width = Math.max(1, Math.round(img.width * k2)); cv.height = Math.max(1, Math.round(img.height * k2));
-              cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-              (reseau.cartouche || c)[k] = { src: cv.toDataURL('image/png'), format: 'PNG' }; rendreLogos();
-            };
-            img.src = lecteur.result;
-          };
-          lecteur.readAsDataURL(f); ev.target.value = '';
-        });
-        z.querySelector('[data-retirer]').addEventListener('click', () => { (reseau.cartouche || c)[k] = null; rendreLogos(); });
+        const k = z.dataset.logo, zone = z.querySelector('.pdf-logo-zone');
+        z.querySelector('input[type=file]').addEventListener('change', (ev) => { chargerLogo(k, ev.target.files && ev.target.files[0]); ev.target.value = ''; });
+        ['dragenter', 'dragover'].forEach((t) => zone.addEventListener(t, (ev) => { ev.preventDefault(); zone.classList.add('survol'); }));
+        ['dragleave', 'drop'].forEach((t) => zone.addEventListener(t, () => zone.classList.remove('survol')));
+        zone.addEventListener('drop', (ev) => { ev.preventDefault(); chargerLogo(k, ev.dataTransfer.files && ev.dataTransfer.files[0]); });
+        z.querySelector('[data-retirer]').addEventListener('click', () => { cartoucheCourant()[k] = null; rendreLogos(); apercuCartouche(); });
       });
-      document.getElementById('pdfCartoucheAjout').addEventListener('click', () => { reseau.cartouche.champs.push({ libelle: 'Nouveau champ', valeur: '' }); editeurCartouche(); });
-      document.getElementById('pdfCartoucheRaz').addEventListener('click', () => { reseau.cartouche.champs = window.Vue3D.CARTOUCHE_DEFAUT.map((x) => ({ ...x })); editeurCartouche(); });
+      document.getElementById('pdfCartoucheAjout').addEventListener('click', () => { cartoucheCourant().champs.push({ libelle: 'Nouveau champ', valeur: '' }); editeurCartouche(); });
+      document.getElementById('pdfCartoucheRaz').addEventListener('click', () => { cartoucheCourant().champs = window.Vue3D.CARTOUCHE_DEFAUT.map((x) => ({ ...x })); editeurCartouche(); });
       document.getElementById('pdfCartoucheDefaut').addEventListener('click', () => {
-        try { localStorage.setItem('ttk-cartouche-defaut', JSON.stringify(reseau.cartouche)); showToast('Cartouche mémorisé : il servira pour les nouveaux projets de ce poste', 'success'); }
+        try { localStorage.setItem('ttk-cartouche-defaut', JSON.stringify(cartoucheCourant())); showToast('Cartouche mémorisé : il servira pour les nouveaux projets de ce poste', 'success'); }
         catch (e) { showToast('Impossible de mémoriser le cartouche (logos trop lourds ?)', 'error'); }
       });
+      // informations du projet : mémorisées et reportées dans l'aperçu à la frappe
+      Object.keys(CHAMPS_INFOS_PDF).forEach((id) => document.getElementById(id)?.addEventListener('input', () => { memoriserInfosPdf(); apercuCartouche(); }));
+      // onglets (clic, flèches gauche/droite)
+      const tabs = [...document.querySelectorAll('#pdfExportModal .pdf-onglet')];
+      const choisir = (t) => { tabs.forEach((x) => { const on = x === t; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; document.getElementById(x.getAttribute('aria-controls')).hidden = !on; }); t.focus(); };
+      tabs.forEach((t, i) => {
+        t.addEventListener('click', () => choisir(t));
+        t.addEventListener('keydown', (ev) => { const d = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0; if (d) { ev.preventDefault(); choisir(tabs[(i + d + tabs.length) % tabs.length]); } });
+      });
     }
-    rendreChamps(); rendreLogos();
+    rendreChamps(); rendreLogos(); apercuCartouche();
   }
   // Découpage du synoptique tel que l'export le fera (mise en page + format
   // choisis dans la fenêtre PDF) : sert aux pointillés de l'app et au conseil.
@@ -7404,6 +7455,7 @@
     }
 
     const modalContent = modal.querySelector('.pdf-export-modal-enhanced');
+    restaurerInfosPdf();
     majOptionsPdfReseau();
 
     // Pré-remplir les valeurs
@@ -9120,12 +9172,12 @@
     return pages;
   }
   // Cartouche des pages chambre : propre au projet (enregistré avec lui), sinon
-  // le cartouche par défaut mémorisé sur le poste, sinon celui de TONTONKAD.
+  // le cartouche par défaut mémorisé sur le poste, sinon celui de nodial.
   function cartoucheDefautPoste() {
     try { const c = JSON.parse(localStorage.getItem('ttk-cartouche-defaut') || 'null'); return c && Array.isArray(c.champs) ? c : null; } catch (e) { return null; }
   }
   function cartoucheProjet() {
-    const c = (reseau && reseau.cartouche) || cartoucheDefautPoste() || {};
+    const c = (reseau && reseau.cartouche) || cartoucheHorsReseau || cartoucheDefautPoste() || {};
     return { champs: c.champs && c.champs.length ? c.champs : window.Vue3D.CARTOUCHE_DEFAUT.map((x) => ({ ...x })), logoMOA: c.logoMOA || null, logoMOE: c.logoMOE || null };
   }
   // « Réalisé avec nodial » + icône, discret, en pied à droite de chaque page.
@@ -9165,7 +9217,8 @@
       // situation : le synoptique en bandes (comme la sortie A0)
       const synS = synoptiqueAncre(1.414), bandesS = V.decouperBandes(synS, 'a0');
       const situation = { noeuds: synS.noeuds, troncons: synS.troncons, coupes: bandesS.coupes, ys: bandesS.ys };
-      const opts = { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR'), situation, cartouche: cartoucheProjet() };
+      const opts = { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR'), situation, cartouche: cartoucheCourant(),
+        client: formData.client, auteur: document.getElementById('pdfAuthor')?.value || '', phase: formData.phase, indice: formData.indice || 'A', plan: formData.plan };
       let premiere = true;
       const ecrire = (pc) => { writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: !premiere }); premiere = false; };
       // une chambre = sa page, puis des pages de suite si le tableau déborde (même cartouche, folios numérotés)
@@ -9261,6 +9314,9 @@
       description: document.getElementById('pdfDescription')?.value || '',
       includeStats: document.getElementById('pdfIncludeStats')?.checked || true,
       include3D: document.getElementById('pdfInclude3D')?.checked !== false,
+      phase: document.getElementById('pdfPhase')?.value || '',
+      indice: document.getElementById('pdfIndice')?.value || '',
+      plan: document.getElementById('pdfNumPlan')?.value || '',
       formatSyn: document.getElementById('pdfFormatSyn')?.value || 'auto',
       miseEnPageSyn: document.getElementById('pdfMiseEnPageSyn')?.value || 'bandes',
       formatCoupes: document.getElementById('pdfFormatCoupes')?.value || 'a3',
@@ -9336,6 +9392,8 @@
       }
 
       logPdf('jsPDFClass résolue');
+      // logo du maître d'ouvrage (cartouche) : aussi en en-tête de l'export simple
+      { const lm = cartoucheCourant().logoMOA; selectedImageBase64 = (lm && lm.src) || null; }
 
       // Réseau : dossier en plusieurs PDF (synoptique, chambres A3, coupes, tableaux), sans vue principale.
       if (reseau && reseau.noeuds && reseau.noeuds.length && reseau.troncons.length) {
@@ -9444,7 +9502,7 @@
         const clientImageY = margin + (availableHeight - clientImageHeight) / 2;
 
         try {
-          pdf.addImage(selectedImageBase64, 'JPEG', clientImageX, clientImageY, clientImageWidth, clientImageHeight);
+          pdf.addImage(selectedImageBase64, /^data:image\/png/i.test(selectedImageBase64) ? 'PNG' : 'JPEG', clientImageX, clientImageY, clientImageWidth, clientImageHeight);
           logPdf('client image added', { clientImageWidth, clientImageHeight, clientImageX, clientImageY });
         } catch (err) {
           errorPdf('addImage client failed', err);
@@ -11598,10 +11656,10 @@
           if (projectName) {
             const projects = this.getAllProjects();
             data = projects[projectName];
-            filename = `${projectName.replace(/[^a-z0-9]/gi, '_')}.tontonkad`;
+            filename = `${projectName.replace(/[^a-z0-9]/gi, '_')}.nodial`;
           } else {
             data = this.captureCurrentState();
-            filename = `projet_${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.tontonkad`;
+            filename = `projet_${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.nodial`;
           }
 
           const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -11859,20 +11917,20 @@
 
     if (brandLogo) {
       brandLogo.src = isDark
-        ? '../../assets/icons/ico/TONTONKADB.png'
-        : '../../assets/icons/ico/TONTONKADN.png';
+        ? '../../assets/icons/ico/nodial-sombre.png'
+        : '../../assets/icons/ico/nodial-clair.png';
     }
 
     if (titlebarLogo) {
       titlebarLogo.src = isDark
-        ? '../../assets/icons/ico/TONTONKADB.png'
-        : '../../assets/icons/ico/TONTONKADN.png';
+        ? '../../assets/icons/ico/nodial-sombre.png'
+        : '../../assets/icons/ico/nodial-clair.png';
     }
 
     if (favicon) {
       favicon.href = isDark
-        ? '../../assets/icons/ico/TONTONKADB.ico'
-        : '../../assets/icons/ico/TONTONKADN.ico';
+        ? '../../assets/icons/ico/nodial-sombre.ico'
+        : '../../assets/icons/ico/nodial-clair.ico';
     }
   }
   function initThemeSwitcher() {
@@ -12100,7 +12158,7 @@
             this.refreshUI();
           } catch (error) {
             console.error('Erreur import:', error);
-            showToast('Erreur lors de l\'import — vérifiez que le fichier est un projet TontonKAD valide');
+            showToast('Erreur lors de l\'import — vérifiez que le fichier est un projet nodial valide');
           }
           e.target.value = ''; // Reset input
         }
@@ -12819,7 +12877,7 @@
       }
 
       const fullName = folderName ? `${folderName}_${projectName}` : projectName;
-      const filename = `${fullName.replace(/[^a-z0-9]/gi, '_')}.tontonkad`;
+      const filename = `${fullName.replace(/[^a-z0-9]/gi, '_')}.nodial`;
 
       const blob = new Blob([JSON.stringify(project, null, 2)], {
         type: 'application/json'

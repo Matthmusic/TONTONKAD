@@ -72,7 +72,7 @@
       if (!mcpEtatEl) return;
       const api = window.electronAPI;
       if (!api || !api.mcpEtat) {
-        mcpEtatEl.textContent = 'Disponible dans l\'application de bureau TONTONKAD.';
+        mcpEtatEl.textContent = 'Disponible dans l\'application de bureau nodial.';
         mcpBtn.disabled = true; mcpCopier.disabled = true; return;
       }
       const r = await api.mcpEtat();
@@ -89,15 +89,15 @@
       const api = window.electronAPI;
       if (!api || !api.mcpBrancherClaude) return;
       const ok = typeof window.customConfirm === 'function'
-        ? await window.customConfirm('TONTONKAD va s\'ajouter à Claude (application de bureau, et Claude Code pour toutes vos sessions s\'il est installé). Les autres serveurs ne sont pas modifiés et une copie de sauvegarde est faite. Fermez Claude Code avant de continuer.', 'Brancher à Claude', 'Brancher', 'Annuler')
-        : window.confirm('Ajouter TONTONKAD à la configuration de Claude ?');
+        ? await window.customConfirm('nodial va s\'ajouter à Claude (application de bureau, et Claude Code pour toutes vos sessions s\'il est installé). Les autres serveurs ne sont pas modifiés et une copie de sauvegarde est faite. Fermez Claude Code avant de continuer.', 'Brancher à Claude', 'Brancher', 'Annuler')
+        : window.confirm('Ajouter nodial à la configuration de Claude ?');
       if (!ok) return;
       mcpBtn.disabled = true;
       const r = await api.mcpBrancherClaude();
       mcpBtn.disabled = false;
       if (!r.success) { window.showToast && window.showToast(`Branchement impossible : ${r.error}`, 'error', 7000); return; }
       const faits = (r.resultats || []).filter((x) => ['ajoute', 'mis_a_jour', 'deja_a_jour'].includes(x.etat)).map((x) => x.nom);
-      const msg = `TONTONKAD est branché à : ${faits.join(', ')}. Fermez puis rouvrez Claude pour l'utiliser.`;
+      const msg = `nodial est branché à : ${faits.join(', ')}. Fermez puis rouvrez Claude pour l'utiliser.`;
       window.showToast && window.showToast(msg, 'success', 6000);
       majMcp();
     });

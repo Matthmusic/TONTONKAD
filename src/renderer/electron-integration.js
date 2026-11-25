@@ -1,4 +1,4 @@
-// Integration Electron pour TONTONKAD
+// Intégration Electron pour nodial
 // Ce fichier gère la communication avec le process principal Electron
 
 (function() {
@@ -52,7 +52,7 @@
     const baseName = currentProjectPath
       ? currentProjectPath.split(/[\\/]/).pop()
       : 'Nouveau projet';
-    document.title = `${baseName}${projectModified ? ' *' : ''} - TONTONKAD`;
+    document.title = `${baseName}${projectModified ? ' *' : ''} — nodial`;
   }
 
   // Override des fonctions de sauvegarde/chargement du LocalStorage

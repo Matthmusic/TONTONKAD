@@ -6354,3 +6354,38 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .pdf-cartouche-champs td:nth-child(3) { text-align: center; }
 .pdf-cartouche-champs .pdf-mini-btn { padding: 2px 6px; }
 .pdf-cartouche-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+/* ── Export PDF : trois onglets simples + aperçu du cartouche ──────────────── */
+.pdf-onglets { display: flex; gap: 4px; padding: 4px; margin-bottom: 16px; border-radius: 12px; background: var(--input-bg, rgba(0,0,0,0.04)); border: 1px solid var(--glass-border); }
+.pdf-onglet { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.pdf-onglet:hover { color: var(--text-primary); }
+.pdf-onglet[aria-selected="true"] { background: var(--primary-orange); color: #fff; }
+.pdf-onglet:focus-visible { outline: 2px solid var(--primary-orange); outline-offset: 2px; }
+.pdf-onglet-n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; background: rgba(255,255,255,0.25); }
+.pdf-onglet[aria-selected="false"] .pdf-onglet-n { background: var(--glass-border); color: var(--text-primary); }
+.pdf-pane[hidden] { display: none; }
+.pdf-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 14px; }
+.pdf-champ { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+.pdf-champ small { font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+.pdf-champ.pdf-large { grid-column: 1 / -1; }
+.pdf-champ .pdf-input, .pdf-champ .pdf-textarea, .pdf-champ .pdf-select { font-weight: 400; }
+.pdf-aide { margin: 12px 0 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.pdf-aide code { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 1px 4px; border-radius: 4px; background: var(--input-bg, rgba(0,0,0,0.05)); }
+.pdf-cartouche { border: 0; padding: 0; background: none; }
+.pdf-cartouche-logos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.pdf-logo { display: flex; gap: 12px; align-items: center; }
+.pdf-logo-zone { flex: 0 0 auto; cursor: pointer; border-radius: 10px; }
+.pdf-logo-zone:focus-within { outline: 2px solid var(--primary-orange); outline-offset: 2px; }
+.pdf-logo-zone.survol .pdf-logo-apercu { border-color: var(--primary-orange); background-color: rgba(255,145,77,0.08); }
+.pdf-logo .pdf-logo-apercu { width: 84px; height: 84px; flex-basis: 84px; display: grid; place-items: center; text-align: center; font-size: 11px; line-height: 1.3; border: 1.5px dashed var(--glass-border); border-radius: 10px; background: #fff center / contain no-repeat; color: var(--text-muted); }
+.pdf-logo .pdf-logo-apercu.plein { border-style: solid; }
+.pdf-logo .pdf-logo-apercu.plein span { display: none; }
+.pdf-logo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.pdf-logo-actions b { color: var(--text-primary); font-size: 13px; }
+.pdf-cartouche-entete { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; font-size: 13px; }
+.pdf-cartouche-entete .pdf-aide { margin: 0; }
+.pdf-preview-sidebar .pdf-section-title { margin: 0 0 8px; font-size: 13px; }
+.pdf-cartouche-apercu { width: 100%; max-width: 300px; aspect-ratio: 300 / 220; height: auto; border-radius: 8px; border: 1px solid var(--glass-border); background: #fff; margin-bottom: 14px; }
+#pdfOptionsSimple[hidden] { display: none; }
+.pdf-onglets .pdf-onglet[aria-selected="true"], .pdf-onglets .pdf-onglet[aria-selected="true"]:hover, .pdf-onglets .pdf-onglet[aria-selected="true"]:focus { background: var(--primary-orange); color: #fff; }
+.pdf-onglets .pdf-onglet[aria-selected="false"]:hover { background: var(--glass-border); }

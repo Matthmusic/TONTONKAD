@@ -1,4 +1,4 @@
-// Manuel d'Utilisation TontonKAD v2
+// Manuel d'utilisation nodial
 // Structure moderne et professionnelle
 
 (function() {
@@ -68,7 +68,7 @@
         title: '📘 Présentation Générale',
         content: `
           <p>
-            <strong>TontonKAD</strong> est une application d'ingénierie assistée par ordinateur (CAO/DAO) spécialisée dans l'organisation de fourreaux et câbles électriques.
+            <strong>nodial</strong> est une application d'ingénierie assistée par ordinateur (CAO/DAO) spécialisée dans l'organisation de fourreaux et câbles électriques.
           </p>
           <p>
             L'application permet de :
