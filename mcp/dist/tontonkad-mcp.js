@@ -79806,7 +79806,15 @@ var require_vue3d = __commonJS({
           });
         }
         const CIBLE = O.cible ? data.noeuds.find((n) => n.nom === O.cible) : null;
+        const TR = Array.isArray(O.troncon) ? (() => {
+          const A = data.noeuds.find((n) => n.nom === O.troncon[0]), B = data.noeuds.find((n) => n.nom === O.troncon[1]);
+          return A && B ? data.troncons.find((t) => [[A, B], [B, A]].some(([u, v]) => t.a.x === u.x && t.a.y === u.y && t.b.x === v.x && t.b.y === v.y)) || null : null;
+        })() : null;
         let cadres = data.noeuds;
+        if (TR) {
+          const mx = (TR.a.x + TR.b.x) / 2, my = (TR.a.y + TR.b.y) / 2, R = Math.max(80, Math.hypot(TR.b.x - TR.a.x, TR.b.y - TR.a.y) * 0.75);
+          cadres = data.noeuds.filter((n) => Math.hypot(n.x - mx, n.y - my) <= R);
+        }
         if (CIBLE) {
           const dV = data.troncons.filter((t) => t.a.x === CIBLE.x && t.a.y === CIBLE.y || t.b.x === CIBLE.x && t.b.y === CIBLE.y).map((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y));
           const R = Math.max(80, ...dV) * 1.05;
@@ -79999,7 +80007,8 @@ var require_vue3d = __commonJS({
         });
         if (O.etiquettesTroncons) data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
         const nLabels0 = p.labels.length;
-        if (CIBLE) p.ops.push("q", `${zx.toFixed(2)} ${zy.toFixed(2)} ${zw.toFixed(2)} ${zh.toFixed(2)} re W n`);
+        const DECOUPE = CIBLE || TR;
+        if (DECOUPE) p.ops.push("q", `${zx.toFixed(2)} ${zy.toFixed(2)} ${zw.toFixed(2)} ${zh.toFixed(2)} re W n`);
         if (SOL) {
           const T = O.trait;
           const largeur = (t) => T.selonFourreaux ? Math.max(1.4, Math.min(7, 1.2 + 0.9 * Math.sqrt(t.nf || 1))) : T.epaisseur;
@@ -80009,8 +80018,9 @@ var require_vue3d = __commonJS({
           };
           if (T.liser\u00E9) tous.forEach(({ t, pts: pts2 }) => dessiner(pts2, largeur(t) + 2.4, [1, 1, 1]));
           tous.forEach(({ t, pts: pts2 }) => {
-            dessiner(pts2, largeur(t), T.couleur);
-            pts2.slice(1, -1).forEach(([x, y]) => p.rgb(T.couleur, false).circle(x, y, largeur(t) / 2, "f"));
+            const coul = t === TR ? [0.85, 0.11, 0.11] : T.couleur, w = t === TR ? largeur(t) + 1.6 : largeur(t);
+            dessiner(pts2, w, coul);
+            pts2.slice(1, -1).forEach(([x, y]) => p.rgb(coul, false).circle(x, y, w / 2, "f"));
           });
           p.width(0.6);
         }
@@ -80038,6 +80048,12 @@ var require_vue3d = __commonJS({
         elements.forEach((e) => e.dessiner());
         etiquettesTroncons.forEach((f2) => f2());
         etiquettes.forEach((f2) => f2());
+        if (DECOUPE && !CIBLE) {
+          p.ops.push("Q");
+          const garder = p.labels.slice(nLabels0).filter((l) => l.x >= zx - 1 && l.x <= zx + zw + 1 && l.y >= zy - 1 && l.y <= zy + zh + 1);
+          p.labels.length = nLabels0;
+          p.labels.push(...garder);
+        }
         if (CIBLE) {
           const { rx, ry } = anneau;
           [[1, 0, -ry], [2, rx, 0], [3, 0, ry], [4, -rx, 0]].forEach(([k, ex, ey]) => {

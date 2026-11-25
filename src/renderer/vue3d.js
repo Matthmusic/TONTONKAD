@@ -1072,6 +1072,7 @@ function drawSynoptique2D(p, data, zx, zy, zw, zh) {
 //   etiquettesTroncons : étiquettes « n fourreaux / longueur » sur les liaisons
 //   trait      : { couleur [r,g,b], epaisseur (pt), selonFourreaux, liseré }
 //   cible      : nom d'une chambre → vue centrée, cercle rouge et côtés 1 à 4
+//   troncon    : [nomA, nomB] → tronçon en rouge, vue centrée dessus (page de coupe)
 const ISO_DEFAUT = { projection: 'iso', liaisons: 'sol', etiquettesTroncons: false, trait: { couleur: [0.086, 0.098, 0.114], epaisseur: 3.2, selonFourreaux: false, liseré: true } };
 function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est pas modifié (copie)
   if (!data.noeuds.length) return;
@@ -1158,7 +1159,16 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
   // Vue centrée sur une chambre (page chambre du PDF) : cadrage sur elle et ses
   // voisins directs, cercle rouge au sol et côtés 1 à 4, le reste est découpé.
   const CIBLE = O.cible ? data.noeuds.find((n) => n.nom === O.cible) : null;
+  // Tronçon ciblé (page de coupe) : tracé en rouge, cadrage sur ses deux bouts et leurs voisins
+  const TR = Array.isArray(O.troncon) ? (() => {
+    const A = data.noeuds.find((n) => n.nom === O.troncon[0]), B = data.noeuds.find((n) => n.nom === O.troncon[1]);
+    return A && B ? data.troncons.find((t) => [[A, B], [B, A]].some(([u, v]) => t.a.x === u.x && t.a.y === u.y && t.b.x === v.x && t.b.y === v.y)) || null : null;
+  })() : null;
   let cadres = data.noeuds;
+  if (TR) {
+    const mx = (TR.a.x + TR.b.x) / 2, my = (TR.a.y + TR.b.y) / 2, R = Math.max(80, Math.hypot(TR.b.x - TR.a.x, TR.b.y - TR.a.y) * 0.75);
+    cadres = data.noeuds.filter((n) => Math.hypot(n.x - mx, n.y - my) <= R);
+  }
   if (CIBLE) {
     const dV = data.troncons.filter((t) => (t.a.x === CIBLE.x && t.a.y === CIBLE.y) || (t.b.x === CIBLE.x && t.b.y === CIBLE.y))
       .map((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y));
@@ -1360,7 +1370,8 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
   // Liaisons au sol : traits épais à z = 0, dessinés avant tous les volumes
   // (ils passent dessous) ; liseré blanc pour les croisements.
   const nLabels0 = p.labels.length;
-  if (CIBLE) p.ops.push('q', `${zx.toFixed(2)} ${zy.toFixed(2)} ${zw.toFixed(2)} ${zh.toFixed(2)} re W n`);
+  const DECOUPE = CIBLE || TR;
+  if (DECOUPE) p.ops.push('q', `${zx.toFixed(2)} ${zy.toFixed(2)} ${zw.toFixed(2)} ${zh.toFixed(2)} re W n`);
   if (SOL) {
     const T = O.trait;
     const largeur = (t) => (T.selonFourreaux ? Math.max(1.4, Math.min(7, 1.2 + 0.9 * Math.sqrt(t.nf || 1))) : T.epaisseur);
@@ -1368,8 +1379,9 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
     const dessiner = (pts, w, rgb) => { for (let k = 1; k < pts.length; k++) p.rgb(rgb).width(w).line(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); };
     if (T.liseré) tous.forEach(({ t, pts }) => dessiner(pts, largeur(t) + 2.4, [1, 1, 1]));
     tous.forEach(({ t, pts }) => {
-      dessiner(pts, largeur(t), T.couleur);
-      pts.slice(1, -1).forEach(([x, y]) => p.rgb(T.couleur, false).circle(x, y, largeur(t) / 2, 'f')); // coudes arrondis
+      const coul = t === TR ? [0.85, 0.11, 0.11] : T.couleur, w = t === TR ? largeur(t) + 1.6 : largeur(t);
+      dessiner(pts, w, coul);
+      pts.slice(1, -1).forEach(([x, y]) => p.rgb(coul, false).circle(x, y, w / 2, 'f')); // coudes arrondis
     });
     p.width(0.6); // l'épaisseur courante sert aussi aux contours des volumes
   }
@@ -1395,6 +1407,11 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
   elements.forEach((e) => e.dessiner());
   etiquettesTroncons.forEach((f) => f());
   etiquettes.forEach((f) => f());
+  if (DECOUPE && !CIBLE) {
+    p.ops.push('Q');
+    const garder = p.labels.slice(nLabels0).filter((l) => l.x >= zx - 1 && l.x <= zx + zw + 1 && l.y >= zy - 1 && l.y <= zy + zh + 1);
+    p.labels.length = nLabels0; p.labels.push(...garder);
+  }
   if (CIBLE) {
     // côtés : 1 = haut du synoptique (nord), 2 = droite, 3 = bas, 4 = gauche (y du synoptique vers le bas)
     const { rx, ry } = anneau;
