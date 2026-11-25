@@ -1,0 +1,38 @@
+:root {
+  --brand-primary: #FF6505;
+  --brand-hover: #FF7317;
+  --brand-soft: #FFB38A;
+  --brand-deep: #C74900;
+  --brand-shadow: #A83B00;
+  --bg-app: #F1F3F5;
+  --bg-panel: #FFFFFF;
+  --bg-input: #F7F8FA;
+  --border: #DDE1E6;
+  --text-primary: #16191D;
+  --text-secondary: #626C78;
+  --text-accent: #A83B00;
+  --canvas-grid: #EFF0F2;
+  --success: #22C55E;
+  --warning: #EAB308;
+  --error: #EF4444;
+  --info: #3B82F6;
+  --font-heading: "Manrope", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-technical: "JetBrains Mono", monospace;
+  --spacing-unit: 4px;
+  --radius-input: 6px;
+  --radius-button: 8px;
+  --radius-panel: 12px;
+  --transition: 180ms ease;
+}
+
+[data-theme="dark"] {
+  --bg-app: #16191D;
+  --bg-panel: #22262C;
+  --bg-input: #191C21;
+  --border: #363C44;
+  --text-primary: #F7F8FA;
+  --text-secondary: #A1A8B0;
+  --text-accent: #FF7317;
+  --canvas-grid: #30353C;
+}

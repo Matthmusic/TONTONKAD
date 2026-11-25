@@ -1889,7 +1889,7 @@
 
     const circles = (layout.placements || []).map(p => {
       const r = radiusById.get(p.id) || 10;
-      return `<circle cx="${toX(p.x)}" cy="${toY(p.y)}" r="${toR(r)}" fill="var(--accent-primary,#ff914d)" fill-opacity="0.7" stroke="var(--accent-primary,#e07030)" stroke-width="0.8"/>`;
+      return `<circle cx="${toX(p.x)}" cy="${toY(p.y)}" r="${toR(r)}" fill="var(--accent-primary,#FF6505)" fill-opacity="0.7" stroke="var(--accent-primary,#e07030)" stroke-width="0.8"/>`;
     }).join('');
 
     return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
@@ -3580,11 +3580,11 @@
     // Afficher les cellules de grille si disponibles (après placement automatique)
     if (lastGridCells && lastGridCells.length > 0) {
       ctx.fillStyle = theme === 'dark'
-        ? 'rgba(255, 145, 77, 0.08)'
-        : 'rgba(255, 145, 77, 0.05)';
+        ? 'rgba(255, 101, 5, 0.08)'
+        : 'rgba(255, 101, 5, 0.05)';
       ctx.strokeStyle = theme === 'dark'
-        ? 'rgba(255, 145, 77, 0.25)'
-        : 'rgba(255, 145, 77, 0.2)';
+        ? 'rgba(255, 101, 5, 0.25)'
+        : 'rgba(255, 101, 5, 0.2)';
       ctx.lineWidth = 1;
 
       lastGridCells.forEach(cell => {
@@ -4183,7 +4183,7 @@
 
     // Couleur : dorée pour OSNAP, orange pour snap-grille
     const isOsnap = osnapType === 'center' || osnapType === 'quadrant';
-    const baseRgb = isOsnap ? '255, 200, 0' : (theme === 'dark' ? '255, 145, 77' : '255, 120, 50');
+    const baseRgb = isOsnap ? '255, 200, 0' : (theme === 'dark' ? '255, 101, 5' : '255, 120, 50');
 
     ctx.save();
 
@@ -6667,8 +6667,8 @@
     const gap = Math.max(bandH * 0.2, 6);
     const topY = -gap - bandH;
     ctx.save();
-    ctx.strokeStyle = '#ff914d';
-    ctx.fillStyle = 'rgba(255,145,77,0.18)';
+    ctx.strokeStyle = '#FF6505';
+    ctx.fillStyle = 'rgba(255,101,5,0.18)';
     ctx.lineWidth = getScaledLineWidth(1.5);
     for (let i = 0; i < sel.N; i++) {
       ctx.beginPath();
@@ -6676,7 +6676,7 @@
       ctx.fill();
       ctx.stroke();
     }
-    ctx.fillStyle = '#ff914d';
+    ctx.fillStyle = '#FF6505';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `${getScaledLineWidth(12)}px 'JetBrains Mono', monospace`;
@@ -6713,12 +6713,12 @@
     } else {
       ctx.rect(cx - bw / 2, cy - bh / 2, bw, bh);
     }
-    ctx.fillStyle = 'rgba(255,145,77,0.15)';
-    ctx.strokeStyle = '#ff914d';
+    ctx.fillStyle = 'rgba(255,101,5,0.15)';
+    ctx.strokeStyle = '#FF6505';
     ctx.lineWidth = getScaledLineWidth(1.2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#ff914d';
+    ctx.fillStyle = '#FF6505';
     ctx.fillText(text, cx, cy);
     ctx.restore();
   }
@@ -7969,7 +7969,7 @@
   function themeCanvas() {
     const cs = getComputedStyle(document.documentElement), v = (n, d) => (cs.getPropertyValue(n).trim() || d);
     return { fond: v('--modal-bg-solid', '#f8f9fa'), encre: v('--text-primary', '#1a1d1f'), ardoise: v('--text-secondary', '#4a5568'),
-      estompe: v('--text-muted', '#718096'), hairline: v('--glass-border', 'rgba(45,52,54,0.1)'), cuivre: v('--primary-orange', '#ff914d'),
+      estompe: v('--text-muted', '#718096'), hairline: v('--glass-border', 'rgba(45,52,54,0.1)'), cuivre: v('--primary-orange', '#FF6505'),
       surface: v('--bg-card', '#ffffff'), sans: "'IBM Plex Sans', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" };
   }
   // Flèche dessinée (pas de glyphe) : pointe vers dir ∈ left|right|up|down.
@@ -11833,7 +11833,7 @@
 
       // Couleur selon la classe du bouton
       let color = 'rgba(30, 30, 30, 0.95)'; // Défaut
-      if (btn.classList.contains('btn-load')) color = '#ff914d';
+      if (btn.classList.contains('btn-load')) color = '#FF6505';
       else if (btn.classList.contains('btn-save')) color = '#f59e0b';
       else if (btn.classList.contains('btn-rename') || btn.classList.contains('btn-rename-folder')) color = '#8b5cf6';
       else if (btn.classList.contains('btn-export')) color = '#059669';
@@ -11948,8 +11948,8 @@
 
     if (titlebarLogo) {
       titlebarLogo.src = isDark
-        ? '../../assets/icons/ico/nodial-sombre.png'
-        : '../../assets/icons/ico/nodial-clair.png';
+        ? '../../assets/brand/nodial/kit/nodial_logo_sombre.svg'
+        : '../../assets/brand/nodial/kit/nodial_logo_clair.svg';
     }
 
     if (favicon) {

@@ -24,8 +24,8 @@
 
     if (titlebarLogo) {
       titlebarLogo.src = theme === 'dark'
-        ? '../../assets/icons/ico/nodial-sombre.png'
-        : '../../assets/icons/ico/nodial-clair.png';
+        ? '../../assets/brand/nodial/kit/nodial_logo_sombre.svg'
+        : '../../assets/brand/nodial/kit/nodial_logo_clair.svg';
     }
   }
 

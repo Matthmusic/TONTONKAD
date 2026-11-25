@@ -165,7 +165,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, '../preload/preload.js')
     },
-    backgroundColor: '#f0f2f5', // Light par défaut
+    backgroundColor: '#F1F3F5', // Light par défaut (charte nodial)
     show: false
   });
 
@@ -183,7 +183,7 @@ function createWindow() {
     mainWindow.webContents.executeJavaScript(`
       localStorage.getItem('tontonkad-theme') || 'light'
     `).then(theme => {
-      const backgroundColor = theme === 'dark' ? '#12121c' : '#f0f2f5';
+      const backgroundColor = theme === 'dark' ? '#16191D' : '#F1F3F5';
       mainWindow.setBackgroundColor(backgroundColor);
     });
 
@@ -674,7 +674,7 @@ ipcMain.handle('get-app-version', () => {
 // Gérer le changement de thème
 ipcMain.on('set-theme', (event, theme) => {
   if (mainWindow && mainWindow.webContents) {
-    const backgroundColor = theme === 'dark' ? '#12121c' : '#f0f2f5';
+    const backgroundColor = theme === 'dark' ? '#16191D' : '#F1F3F5';
 
     // Méthode 1: Changer le backgroundColor de la fenêtre
     mainWindow.setBackgroundColor(backgroundColor);
