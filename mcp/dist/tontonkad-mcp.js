@@ -78008,7 +78008,7 @@ var require_compat_chambres = __commonJS({
         const bx = ox + (chW - bxW) / 2, by = oy + (chH - bxH) / 2;
         const w = Math.max(chW + pad * 2 + 96, 210);
         const h = chH + pad * 2;
-        return `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" role="img"><rect x="${ox}" y="${oy}" width="${chW.toFixed(1)}" height="${chH.toFixed(1)}" rx="2" fill="rgba(255,145,77,0.10)" stroke="#ff914d" stroke-width="1.5"/><rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bxW.toFixed(1)}" height="${bxH.toFixed(1)}" fill="rgba(130,130,130,0.20)" stroke="currentColor" stroke-width="1.2"/><text x="${(ox + chW + 8).toFixed(1)}" y="${oy + 12}" font-size="10" fill="#ff914d" font-family="monospace">${s.ref ? s.ref + " " : ""}${s.l}\xD7${s.H}</text><text x="${(ox + chW + 8).toFixed(1)}" y="${oy + 26}" font-size="10" fill="currentColor" font-family="monospace">bo\xEEte ${W}\xD7${H}</text></svg>`;
+        return `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" role="img"><rect x="${ox}" y="${oy}" width="${chW.toFixed(1)}" height="${chH.toFixed(1)}" rx="2" fill="rgba(255,101,5,0.10)" stroke="#FF6505" stroke-width="1.5"/><rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bxW.toFixed(1)}" height="${bxH.toFixed(1)}" fill="rgba(130,130,130,0.20)" stroke="currentColor" stroke-width="1.2"/><text x="${(ox + chW + 8).toFixed(1)}" y="${oy + 12}" font-size="10" fill="#FF6505" font-family="monospace">${s.ref ? s.ref + " " : ""}${s.l}\xD7${s.H}</text><text x="${(ox + chW + 8).toFixed(1)}" y="${oy + 26}" font-size="10" fill="currentColor" font-family="monospace">bo\xEEte ${W}\xD7${H}</text></svg>`;
       }
       function buildTileSchema(W, s) {
         if (!s) return "";
@@ -78023,7 +78023,7 @@ var require_compat_chambres = __commonJS({
         for (let i = 0; i < s.N; i++) {
           const x = pad + i * s.l * scale;
           const tw = s.l * scale;
-          tampons += `<rect x="${x.toFixed(1)}" y="${rowY}" width="${Math.max(1, tw - 2).toFixed(1)}" height="${rowH}" rx="3" fill="rgba(255,145,77,0.18)" stroke="#ff914d" stroke-width="1.5"/><text x="${(x + tw / 2).toFixed(1)}" y="${rowY + rowH / 2 + 4}" font-size="10" fill="#ff914d" text-anchor="middle" font-family="monospace">${s.l}</text>`;
+          tampons += `<rect x="${x.toFixed(1)}" y="${rowY}" width="${Math.max(1, tw - 2).toFixed(1)}" height="${rowH}" rx="3" fill="rgba(255,101,5,0.18)" stroke="#FF6505" stroke-width="1.5"/><text x="${(x + tw / 2).toFixed(1)}" y="${rowY + rowH / 2 + 4}" font-size="10" fill="#FF6505" text-anchor="middle" font-family="monospace">${s.l}</text>`;
         }
         const boxBar = `<line x1="${pad}" y1="${barY}" x2="${(pad + bw).toFixed(1)}" y2="${barY}" stroke="currentColor" stroke-width="1.5"/><line x1="${pad}" y1="${barY - 4}" x2="${pad}" y2="${barY + 4}" stroke="currentColor" stroke-width="1.5"/><line x1="${(pad + bw).toFixed(1)}" y1="${barY - 4}" x2="${(pad + bw).toFixed(1)}" y2="${barY + 4}" stroke="currentColor" stroke-width="1.5"/><text x="${pad}" y="${barY + labelH + 1}" font-size="10" fill="currentColor" font-family="monospace">bo\xEEte ${W} mm</text>`;
         return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img">${tampons}${boxBar}</svg>`;
@@ -78630,6 +78630,13 @@ var require_vue3d = __commonJS({
         }
         rect(x, y, w, h, mode = "S") {
           this.ops.push(`${f(x)} ${f(y)} ${f(w)} ${f(h)} re ${mode}`);
+          return this;
+        }
+        // Rectangle à coins arrondis (rayon r), courbes de Bézier : PDF, canvas et jsPDF.
+        rrect(x, y, w, h, r, mode = "S") {
+          r = Math.max(0, Math.min(r, w / 2, h / 2));
+          const k = r * (1 - K), x1 = x + w, y1 = y + h;
+          this.ops.push(`${f(x + r)} ${f(y)} m ${f(x1 - r)} ${f(y)} l ${f(x1 - k)} ${f(y)} ${f(x1)} ${f(y + k)} ${f(x1)} ${f(y + r)} c ${f(x1)} ${f(y1 - r)} l ${f(x1)} ${f(y1 - k)} ${f(x1 - k)} ${f(y1)} ${f(x1 - r)} ${f(y1)} c ${f(x + r)} ${f(y1)} l ${f(x + k)} ${f(y1)} ${f(x)} ${f(y1 - k)} ${f(x)} ${f(y1 - r)} c ${f(x)} ${f(y + r)} l ${f(x)} ${f(y + k)} ${f(x + k)} ${f(y)} ${f(x + r)} ${f(y)} c h ${mode}`);
           return this;
         }
         poly(pts, mode = "S") {
@@ -79453,6 +79460,7 @@ var require_vue3d = __commonJS({
         p.rgb([0.29, 0.33, 0.41], false).text(ox + FW * s / 2, oy + (FH + ep) * s + 2.5, 6, `${cote % 2 ? "Long-pan" : "Pignon"} \xB7 ${FW} \xD7 ${FH} mm int\xE9rieur`, { align: "center", bold: true });
         const nx = (FW - mq.largeur) / 2, nyHaut = Math.min(FH, Math.max(mq.hauteur, FH - 250)), ny = nyHaut - mq.hauteur;
         const X = (x) => ox + (nx + x) * s, Y = (y) => oy + (ny + y) * s;
+        const Xf = mq.sens === "arrivee" ? (x) => X(mq.largeur - x) : X;
         p.rgb([0.69, 0.19, 0.16], false);
         if (nx > 40) p.text(ox + nx * s / 2, Y(mq.hauteur / 2) - 2, 5.5, String(Math.round(nx)), { align: "center" });
         if (FH - nyHaut > 40) p.text(X(mq.largeur / 2), oy + (nyHaut + (FH - nyHaut) / 2) * s - 2, 5.5, String(Math.round(FH - nyHaut)), { align: "center" });
@@ -79466,14 +79474,14 @@ var require_vue3d = __commonJS({
         const fs2 = Math.max(4.5, Math.min(8, Math.max(mq.largeur, mq.hauteur) * s / 22));
         mq.fourreaux.forEach((f2) => {
           const c = coulF(f2), ro = f2.od / 2 * s, ri = (f2.di || f2.od * 0.8) / 2 * s;
-          p.rgb(nuance(c, 1.82), false).rgb(c).width(Math.max(0.5, 1.1 * s * 10)).circle(X(f2.x), Y(f2.y), ro, "B");
-          p.rgb([1, 1, 1], false).width(Math.max(0.3, 0.6 * s * 10)).circle(X(f2.x), Y(f2.y), ri, "B");
-          p.rgb([0.1, 0.11, 0.12], false).text(X(f2.x), Y(f2.y) + ro + 1.2, fs2, String(f2.id).replace(/^F/, ""), { align: "center", bold: true });
+          p.rgb(nuance(c, 1.82), false).rgb(c).width(Math.max(0.5, 1.1 * s * 10)).circle(Xf(f2.x), Y(f2.y), ro, "B");
+          p.rgb([1, 1, 1], false).width(Math.max(0.3, 0.6 * s * 10)).circle(Xf(f2.x), Y(f2.y), ri, "B");
+          p.rgb([0.1, 0.11, 0.12], false).text(Xf(f2.x), Y(f2.y) + ro + 1.2, fs2, String(f2.id).replace(/^F/, ""), { align: "center", bold: true });
         });
         (mq.cables || []).forEach((c) => {
           const rgb = cssRgb(c.couleur), ph = c.phase || phaseDeCouleur(rgb), col = rgb || PHASE_RGB[ph] || [0.5, 0.5, 0.5], r = c.od / 2 * s;
-          p.rgb(col, false).rgb([0.04, 0.06, 0.08]).width(0.3).circle(X(c.x), Y(c.y), r, "B");
-          if (ph && r >= 2.6) p.rgb([1, 1, 1], false).text(X(c.x), Y(c.y) - r * 0.32, Math.min(r * 0.9, 5), ph, { align: "center", bold: true });
+          p.rgb(col, false).rgb([0.04, 0.06, 0.08]).width(0.3).circle(Xf(c.x), Y(c.y), r, "B");
+          if (ph && r >= 2.6) p.rgb([1, 1, 1], false).text(Xf(c.x), Y(c.y) - r * 0.32, Math.min(r * 0.9, 5), ph, { align: "center", bold: true });
         });
         const nb = /* @__PURE__ */ new Map();
         mq.fourreaux.forEach((f2) => {
@@ -79529,7 +79537,8 @@ var require_vue3d = __commonJS({
           const z2 = zone(b);
           if (b.type === "situation") {
             const zi = cadre(z2, "Situation dans le r\xE9seau");
-            drawSituation(p, opts.situation, e.nom, zi);
+            if (opts.iso && opts.iso.noeuds && opts.iso.noeuds.some((n) => n.nom === e.nom)) drawSynoptiqueIso(p, opts.iso, zi.x, zi.y, zi.w, zi.h, { cible: e.nom, echelleMax: Infinity });
+            else drawSituation(p, opts.situation, e.nom, zi);
           } else if (b.type === "masque") {
             const mq = masquesM[FACE_DU_COTE[b.cote]];
             const L = mq && mq.longueurM ? ` \xB7 ${String(mq.longueurM).replace(".", ",")} m` : "";
@@ -79714,11 +79723,22 @@ var require_vue3d = __commonJS({
           if (n.sous) p.rgb([0.35, 0.35, 0.35], false).text(cx, cy - 9, 7, n.sous, { align: "center" });
         }
       }
-      function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
+      const ISO_DEFAUT = { projection: "iso", liaisons: "sol", etiquettesTroncons: false, trait: { couleur: [0.086, 0.098, 0.114], epaisseur: 3.2, selonFourreaux: false, liser\u00E9: true } };
+      function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) {
         if (!data.noeuds.length) return;
-        const KX = 0.34, KY = 0.62;
-        const iso = (x, y, z2) => [x - z2 * KX, -y + z2 * KY];
-        const profondeur = (x, y) => x * KX + y * KY;
+        const { echelleMax = 1.8 } = opts;
+        const O = { ...ISO_DEFAUT, ...opts, trait: { ...ISO_DEFAUT.trait, ...opts.trait || {} } };
+        const SOL = O.liaisons === "sol";
+        let iso, profondeur;
+        if (O.projection === "plano") {
+          const KX = 0.34, KY = 0.62;
+          iso = (x, y, z2) => [x - z2 * KX, -y + z2 * KY];
+          profondeur = (x, y) => x * KX + y * KY;
+        } else {
+          const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
+          iso = (x, y, z2) => [(x - y) * C, -(x + y) * S + z2];
+          profondeur = (x, y) => x + y;
+        }
         const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
         const G = (() => {
           const ch = data.noeuds.filter((n) => n.type === "chambre" && n.w > 0);
@@ -79731,7 +79751,25 @@ var require_vue3d = __commonJS({
           }));
           return Math.max(1, Math.min(3, 0.4 * L / wMax, 0.6 * dmin / wMax));
         })();
+        const avecDims = data.noeuds.filter((n) => n.type === "chambre" && n.dims && n.dims.L > 0 && n.dims.l > 0);
+        const KMM = (() => {
+          if (!avecDims.length) return 0;
+          const ref = Math.max(...data.noeuds.filter((n) => n.type === "chambre" && n.w > 0).map((n) => n.w * 0.8 * G), 64);
+          return ref / Math.max(...avecDims.map((n) => Math.max(n.dims.L, n.dims.l)));
+        })();
+        const MED_CH = (() => {
+          const v = avecDims.map((n) => Math.max(n.dims.L, n.dims.l) * KMM).sort((a, b) => a - b);
+          return v.length ? v[v.length >> 1] : 0;
+        })();
         const dimsDe = (n) => {
+          if (n.type === "chambre" && KMM && n.dims && n.dims.L > 0 && n.dims.l > 0) {
+            const H = n.dims.H > 0 ? n.dims.H : Math.min(n.dims.L, n.dims.l);
+            return [n.dims.L * KMM, n.dims.l * KMM, Math.max(14, H * KMM * 0.45)];
+          }
+          if (KMM && n.type !== "chambre") {
+            const m = MED_CH;
+            return n.type === "coffret" ? [m * 0.32, m * 0.26, m * 0.62] : [m * 0.16, m * 0.16, m * 0.42];
+          }
           if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
           if (n.type === "chambre") return [n.w * 0.8 * G, n.h * 0.8 * G, n.h * 0.55 * G];
           if (n.type === "coffret") return [n.w * 0.45 * G, n.h * 0.55 * G, n.h * 0.9 * G];
@@ -79767,8 +79805,15 @@ var require_vue3d = __commonJS({
             });
           });
         }
+        const CIBLE = O.cible ? data.noeuds.find((n) => n.nom === O.cible) : null;
+        let cadres = data.noeuds;
+        if (CIBLE) {
+          const dV = data.troncons.filter((t) => t.a.x === CIBLE.x && t.a.y === CIBLE.y || t.b.x === CIBLE.x && t.b.y === CIBLE.y).map((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y));
+          const R = Math.max(80, ...dV) * 1.05;
+          cadres = data.noeuds.filter((n) => Math.hypot(n.x - CIBLE.x, n.y - CIBLE.y) <= R);
+        }
         const pts = [];
-        data.noeuds.forEach((n) => {
+        cadres.forEach((n) => {
           const [a, b, h] = dimsDe(n);
           [[-a, -b, 0], [a, -b, 0], [a, b, 0], [-a, b, 0], [-a, -b, h], [a, -b, h], [a, b, h], [-a, b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18 * unite)));
         });
@@ -79783,8 +79828,9 @@ var require_vue3d = __commonJS({
         };
         const LARG = 7 * unite, HAUT = 6 * unite;
         const bout = (e) => {
-          if (e.type !== "chambre") return { x: e.x, y: e.y, z: -HAUT };
-          const [a, b, h] = dimsDe(e), z2 = -8 * unite + h / 2;
+          if (e.type !== "chambre") return { x: e.x, y: e.y, z: SOL ? 0 : -HAUT };
+          const nd = data.noeuds.find((n) => n.x === e.x && n.y === e.y) || e;
+          const [a, b, h] = dimsDe(nd), z2 = SOL ? 0 : -8 * unite + h / 2;
           const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
           return { x: e.x + off[0], y: e.y + off[1], z: z2 };
         };
@@ -79879,12 +79925,17 @@ var require_vue3d = __commonJS({
           if (n.type === "chambre") {
             p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6).poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], "B");
           }
-          const [tx, ty] = n._etiq || P(n.x, n.y, z1 + 14);
+          const et = n._etiq;
           etiquettes.push(() => {
-            const w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h2 = n.sous ? 22 : 14;
-            p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(tx - w / 2, ty - h2 + 10, w, h2, "B");
-            p.rgb([0.08, 0.08, 0.08], false).text(tx, ty, 8.5, n.nom, { align: "center", bold: true });
-            if (n.sous) p.rgb([0.3, 0.3, 0.3], false).text(tx, ty - 9, 6.5, n.sous, { align: "center" });
+            if (!et) return;
+            const w = ETQ.w(n.nom), h2 = ETQ.h, x02 = et.bx - w / 2, y02 = et.by - h2 / 2;
+            if (et.d > 6) {
+              const [vx, vy] = P(n.x, n.y, z1), ax = Math.max(x02, Math.min(x02 + w, vx)), ay = Math.max(y02, Math.min(y02 + h2, vy));
+              p.rgb([0.45, 0.47, 0.5]).width(0.6).line(ax, ay, vx, vy);
+              p.rgb([0.45, 0.47, 0.5], false).circle(vx, vy, 1.5, "f");
+            }
+            p.rgb([1, 1, 1], false).rgb(c).width(1.1).rrect(x02, y02, w, h2, 4.5, "B");
+            p.rgb([0.08, 0.08, 0.08], false).text(et.bx, et.by - ETQ.taille * 0.35, ETQ.taille, n.nom, { align: "center", bold: true });
           });
         }
         const etiquettes = [];
@@ -79900,7 +79951,16 @@ var require_vue3d = __commonJS({
         data.troncons.forEach((t) => {
           const q = trace(t);
           q.slice(1).forEach((b, k) => {
-            const a = q[k], c = [];
+            const a = q[k];
+            if (SOL) {
+              const [ax, ay] = P(a.x, a.y, 0), [bx, by] = P(b.x, b.y, 0), L = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(L / 8)), r = 4;
+              for (let i = 0; i <= n; i++) {
+                const x = ax + (bx - ax) * i / n, y = ay + (by - ay) * i / n;
+                occupes.push({ x0: x - r, x1: x + r, y0: y - r, y1: y + r });
+              }
+              return;
+            }
+            const c = [];
             [-1, 1].forEach((sg) => [-HAUT, HAUT].forEach((dz) => [a, b].forEach((E) => {
               const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / L * LARG, ny = (b.x - a.x) / L * LARG;
               c.push(P(E.x + sg * nx, E.y + sg * ny, E.z + dz));
@@ -79908,32 +79968,54 @@ var require_vue3d = __commonJS({
             occupes.push({ x0: Math.min(...c.map((v) => v[0])), x1: Math.max(...c.map((v) => v[0])), y0: Math.min(...c.map((v) => v[1])), y1: Math.max(...c.map((v) => v[1])) });
           });
         });
-        [...data.noeuds].sort((a, b) => (a.type === "chambre" ? 0 : 1) - (b.type === "chambre" ? 0 : 1)).forEach((n) => {
-          const e = n._emprise, w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h = n.sous ? 22 : 14;
-          const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
-          const cx = (e.x0 + e.x1) / 2, cy = (e.y0 + e.y1) / 2;
-          const essais = [
-            [cx, e.y1 + h - 4],
-            [cx, e.y1 + 2 * h],
-            [e.x1 + w / 2 + 6, cy + h / 2 - 4],
-            [e.x0 - w / 2 - 6, cy + h / 2 - 4],
-            [cx, e.y0 - 14],
-            [e.x1 + w / 2 + 6, e.y1 + h],
-            [e.x0 - w / 2 - 6, e.y1 + h],
-            [cx, e.y1 + 3 * h]
-          ];
-          let best = null;
-          for (const [tx, ty] of essais) {
-            const c = chevauche(rect(tx, ty));
-            if (!best || c < best.c) best = { c, tx, ty };
-            if (c === 0) break;
+        const ETQ = { taille: 8.5, h: 15, w: (nom) => String(nom).length * 5.3 + 14 };
+        const DIRS = [[0, 1, 0], [1, 1, 2], [-1, 1, 2], [1, 0, 3], [-1, 0, 3], [1, -1, 5], [-1, -1, 5], [0, -1, 6]];
+        if (CIBLE) {
+          const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), rx = a / 2 + m, ry = b / 2 + m;
+          for (let i = 0; i < 48; i++) {
+            const t = i / 48 * 2 * Math.PI, [x, y] = P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0);
+            occupes.push({ x0: x - 3, x1: x + 3, y0: y - 3, y1: y + 3 });
           }
-          n._etiq = [best.tx, best.ty];
-          occupes.push(rect(best.tx, best.ty));
+          [[0, -ry], [rx, 0], [0, ry], [-rx, 0]].forEach(([ex, ey]) => {
+            const [x, y] = P(CIBLE.x + ex, CIBLE.y + ey, 0);
+            occupes.push({ x0: x - 7, x1: x + 7, y0: y - 7, y1: y + 7 });
+          });
+        }
+        const ordreEtq = [...data.noeuds].sort((a, b) => (a.type === "chambre" ? 0 : 1) - (b.type === "chambre" ? 0 : 1));
+        ordreEtq.forEach((n) => {
+          const e = n._emprise, w = ETQ.w(n.nom), h = ETQ.h, cx = (e.x0 + e.x1) / 2, cy = (e.y0 + e.y1) / 2, ew = e.x1 - e.x0, eh = e.y1 - e.y0;
+          let best = null;
+          for (const d of [3, 12, 24, 40, 62]) {
+            for (const [dx, dy, pen] of DIRS) {
+              const bx = cx + dx * (ew / 2 + w / 2 + d), by = cy + dy * (eh / 2 + h / 2 + d);
+              const r = { x0: bx - w / 2 - 2, x1: bx + w / 2 + 2, y0: by - h / 2 - 2, y1: by + h / 2 + 2 };
+              const score = chevauche(r) * 40 + d * 1.2 + pen * 4;
+              if (!best || score < best.score) best = { score, bx, by, r, d };
+            }
+            if (best && best.score < 70) break;
+          }
+          n._etiq = best;
+          occupes.push(best.r);
         });
-        data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
+        if (O.etiquettesTroncons) data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
+        const nLabels0 = p.labels.length;
+        if (CIBLE) p.ops.push("q", `${zx.toFixed(2)} ${zy.toFixed(2)} ${zw.toFixed(2)} ${zh.toFixed(2)} re W n`);
+        if (SOL) {
+          const T = O.trait;
+          const largeur = (t) => T.selonFourreaux ? Math.max(1.4, Math.min(7, 1.2 + 0.9 * Math.sqrt(t.nf || 1))) : T.epaisseur;
+          const tous = data.troncons.map((t) => ({ t, pts: trace(t).map((q) => P(q.x, q.y, 0)) }));
+          const dessiner = (pts2, w, rgb) => {
+            for (let k = 1; k < pts2.length; k++) p.rgb(rgb).width(w).line(pts2[k - 1][0], pts2[k - 1][1], pts2[k][0], pts2[k][1]);
+          };
+          if (T.liser\u00E9) tous.forEach(({ t, pts: pts2 }) => dessiner(pts2, largeur(t) + 2.4, [1, 1, 1]));
+          tous.forEach(({ t, pts: pts2 }) => {
+            dessiner(pts2, largeur(t), T.couleur);
+            pts2.slice(1, -1).forEach(([x, y]) => p.rgb(T.couleur, false).circle(x, y, largeur(t) / 2, "f"));
+          });
+          p.width(0.6);
+        }
         const elements = [
-          ...data.troncons.flatMap((t) => tranchee(t)),
+          ...SOL ? [] : data.troncons.flatMap((t) => tranchee(t)),
           ...data.noeuds.map((n) => {
             let cle = profondeur(n.x, n.y);
             if (n.type !== "chambre") data.troncons.forEach((t) => {
@@ -79943,9 +80025,31 @@ var require_vue3d = __commonJS({
             return { cle, dessiner: () => volume(n) };
           })
         ].sort((u, v) => u.cle - v.cle);
+        let anneau = null;
+        if (CIBLE) {
+          const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), rx = a / 2 + m, ry = b / 2 + m;
+          anneau = { rx, ry };
+          const poly = Array.from({ length: 64 }, (_, i) => {
+            const t = i / 64 * 2 * Math.PI;
+            return P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0);
+          });
+          p.rgb([0.85, 0.11, 0.11]).width(1.8).poly(poly, "S").width(0.6);
+        }
         elements.forEach((e) => e.dessiner());
         etiquettesTroncons.forEach((f2) => f2());
         etiquettes.forEach((f2) => f2());
+        if (CIBLE) {
+          const { rx, ry } = anneau;
+          [[1, 0, -ry], [2, rx, 0], [3, 0, ry], [4, -rx, 0]].forEach(([k, ex, ey]) => {
+            const [qx, qy] = P(CIBLE.x + ex, CIBLE.y + ey, 0);
+            p.rgb([0.1, 0.11, 0.12], false).rgb([1, 1, 1]).width(0.9).circle(qx, qy, 5.4, "B");
+            p.rgb([1, 1, 1], false).text(qx, qy - 2.3, 6.6, String(k), { align: "center", bold: true });
+          });
+          p.ops.push("Q");
+          const garder = p.labels.slice(nLabels0).filter((l) => l.x >= zx - 1 && l.x <= zx + zw + 1 && l.y >= zy - 1 && l.y <= zy + zh + 1);
+          p.labels.length = nLabels0;
+          p.labels.push(...garder);
+        }
         return { noeuds: data.noeuds.map((n) => P(n.x, n.y, 0)) };
       }
       function couperEnLargeur(data, Wu) {
@@ -80124,7 +80228,7 @@ var require_vue3d = __commonJS({
       }
       const ICONE_NODIAL_PNG = "data:image/png;base64,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";
       const MENTION_NODIAL = "R\xE9alis\xE9 avec nodial";
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, dessinerCartouche, valeursCartouche, ICONE_NODIAL_PNG, MENTION_NODIAL, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const api = { ISO_DEFAUT, Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, dessinerCartouche, valeursCartouche, ICONE_NODIAL_PNG, MENTION_NODIAL, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, NORMALE_FACE, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -81901,6 +82005,8 @@ server.registerTool("etudier_reseau", {
           couleur: n.couleur,
           x: n.x,
           y: n.y,
+          dims: et && et.ok ? { L: et.L, l: et.l, H: et.H } : null,
+          // isométrique : chambre à ses proportions réelles
           sous: n.type === "chambre" ? et && et.ok ? et.ref : "\xE0 \xE9tudier" : n.type === "coffret" ? n.coffret.genre : ""
         };
       }),
@@ -81909,7 +82015,8 @@ server.registerTool("etudier_reseau", {
         return {
           a: { x: A.x, y: A.y, face: rt.a.face, type: A.type },
           b: { x: B.x, y: B.y, face: rt.b.face, type: B.type },
-          label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : "? m"]
+          label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : "? m"],
+          nf: masques[i] && masques[i].ok ? masques[i].fourreaux.length : 0
         };
       })
     };
@@ -81922,7 +82029,7 @@ server.registerTool("etudier_reseau", {
     };
     const cart = { champs: cartouche && cartouche.champs, logoMOA: lireLogo(cartouche && cartouche.logoMOA), logoMOE: lireLogo(cartouche && cartouche.logoMOE) };
     const [A3W, A3H] = Vue3D.FORMATS_PAGE.a3;
-    const optsPage = { projet: titreDossier, date: (/* @__PURE__ */ new Date()).toLocaleDateString("fr-FR"), indice: cartouche && cartouche.indice || "A", situation, cartouche: cart };
+    const optsPage = { projet: titreDossier, date: (/* @__PURE__ */ new Date()).toLocaleDateString("fr-FR"), indice: cartouche && cartouche.indice || "A", situation, iso: synoptique, cartouche: cart };
     const pagesChambres = etudes.filter((e) => e.ok).flatMap((e) => Vue3D.pagesChambreA3(e, e._masques, optsPage, () => new Vue3D.Page({ ombre: false }))).map((pg) => ({ contenu: pg.toString(), largeur: A3W, hauteur: A3H, images: (pg.images || []).map((im) => ({ octets: im.src, x: im.x, y: im.y, w: im.w, h: im.h })) }));
     const pdf = sortiePdf ? ecrireNeuf(sortiePdf, "pdf", masquesToPdf(masques, { pagesChambres, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
     const dessins = cad || sortieDxf ? dessinsCao(masques, etudes) : [];

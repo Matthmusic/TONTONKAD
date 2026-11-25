@@ -26,6 +26,15 @@ class Page {
   dash(on) { this.ops.push(on ? '[3 2] 0 d' : '[] 0 d'); return this; }
   line(x1, y1, x2, y2) { this.ops.push(`${f(x1)} ${f(y1)} m ${f(x2)} ${f(y2)} l S`); return this; }
   rect(x, y, w, h, mode = 'S') { this.ops.push(`${f(x)} ${f(y)} ${f(w)} ${f(h)} re ${mode}`); return this; }
+  // Rectangle à coins arrondis (rayon r), courbes de Bézier : PDF, canvas et jsPDF.
+  rrect(x, y, w, h, r, mode = 'S') {
+    r = Math.max(0, Math.min(r, w / 2, h / 2)); const k = r * (1 - K), x1 = x + w, y1 = y + h;
+    this.ops.push(`${f(x + r)} ${f(y)} m ${f(x1 - r)} ${f(y)} l ${f(x1 - k)} ${f(y)} ${f(x1)} ${f(y + k)} ${f(x1)} ${f(y + r)} c `
+      + `${f(x1)} ${f(y1 - r)} l ${f(x1)} ${f(y1 - k)} ${f(x1 - k)} ${f(y1)} ${f(x1 - r)} ${f(y1)} c `
+      + `${f(x + r)} ${f(y1)} l ${f(x + k)} ${f(y1)} ${f(x)} ${f(y1 - k)} ${f(x)} ${f(y1 - r)} c `
+      + `${f(x)} ${f(y + r)} l ${f(x)} ${f(y + k)} ${f(x + k)} ${f(y)} ${f(x + r)} ${f(y)} c h ${mode}`);
+    return this;
+  }
   poly(pts, mode = 'S') { this.ops.push(pts.map(([x, y], i) => `${f(x)} ${f(y)} ${i ? 'l' : 'm'}`).join(' ') + ` h ${mode}`); return this; }
   circle(cx, cy, r, mode = 'S') {
     const k = r * K;
@@ -820,6 +829,11 @@ function drawMasqueFace(p, mq, cote, e, z) {
   p.rgb([0.29, 0.33, 0.41], false).text(ox + FW * s / 2, oy + (FH + ep) * s + 2.5, 6, `${cote % 2 ? 'Long-pan' : 'Pignon'} · ${FW} × ${FH} mm intérieur`, { align: 'center', bold: true });
   const nx = (FW - mq.largeur) / 2, nyHaut = Math.min(FH, Math.max(mq.hauteur, FH - 250)), ny = nyHaut - mq.hauteur; // bas de la nappe depuis le bas de la face
   const X = (x) => ox + (nx + x) * s, Y = (y) => oy + (ny + y) * s;
+  // Face vue DEPUIS L'INTÉRIEUR de la chambre : au départ la coupe se lit telle
+  // quelle (x à droite du sens de marche = à droite de qui regarde la paroi) ; à
+  // l'arrivée elle est retournée. Les deux bouts d'un tronçon (ex. 4.2 et 5.4) sont
+  // ainsi symétriques : le fourreau de droite de l'un est à gauche de l'autre.
+  const Xf = mq.sens === 'arrivee' ? (x) => X(mq.largeur - x) : X;
   p.rgb([0.69, 0.19, 0.16], false);
   if (nx > 40) p.text(ox + nx * s / 2, Y(mq.hauteur / 2) - 2, 5.5, String(Math.round(nx)), { align: 'center' });
   if (FH - nyHaut > 40) p.text(X(mq.largeur / 2), oy + (nyHaut + (FH - nyHaut) / 2) * s - 2, 5.5, String(Math.round(FH - nyHaut)), { align: 'center' });
@@ -830,14 +844,14 @@ function drawMasqueFace(p, mq, cote, e, z) {
   const fs = Math.max(4.5, Math.min(8, Math.max(mq.largeur, mq.hauteur) * s / 22));
   mq.fourreaux.forEach((f) => {
     const c = coulF(f), ro = f.od / 2 * s, ri = (f.di || f.od * 0.8) / 2 * s;
-    p.rgb(nuance(c, 1.82), false).rgb(c).width(Math.max(0.5, 1.1 * s * 10)).circle(X(f.x), Y(f.y), ro, 'B');
-    p.rgb([1, 1, 1], false).width(Math.max(0.3, 0.6 * s * 10)).circle(X(f.x), Y(f.y), ri, 'B');
-    p.rgb([0.1, 0.11, 0.12], false).text(X(f.x), Y(f.y) + ro + 1.2, fs, String(f.id).replace(/^F/, ''), { align: 'center', bold: true });
+    p.rgb(nuance(c, 1.82), false).rgb(c).width(Math.max(0.5, 1.1 * s * 10)).circle(Xf(f.x), Y(f.y), ro, 'B');
+    p.rgb([1, 1, 1], false).width(Math.max(0.3, 0.6 * s * 10)).circle(Xf(f.x), Y(f.y), ri, 'B');
+    p.rgb([0.1, 0.11, 0.12], false).text(Xf(f.x), Y(f.y) + ro + 1.2, fs, String(f.id).replace(/^F/, ''), { align: 'center', bold: true });
   });
   (mq.cables || []).forEach((c) => {
     const rgb = cssRgb(c.couleur), ph = c.phase || phaseDeCouleur(rgb), col = rgb || PHASE_RGB[ph] || [0.5, 0.5, 0.5], r = c.od / 2 * s;
-    p.rgb(col, false).rgb([0.04, 0.06, 0.08]).width(0.3).circle(X(c.x), Y(c.y), r, 'B');
-    if (ph && r >= 2.6) p.rgb([1, 1, 1], false).text(X(c.x), Y(c.y) - r * 0.32, Math.min(r * 0.9, 5), ph, { align: 'center', bold: true });
+    p.rgb(col, false).rgb([0.04, 0.06, 0.08]).width(0.3).circle(Xf(c.x), Y(c.y), r, 'B');
+    if (ph && r >= 2.6) p.rgb([1, 1, 1], false).text(Xf(c.x), Y(c.y) - r * 0.32, Math.min(r * 0.9, 5), ph, { align: 'center', bold: true });
   });
   // pied : récapitulatif et nappe
   const nb = new Map(); mq.fourreaux.forEach((f) => { const d = Math.round(f.od); nb.set(d, (nb.get(d) || 0) + 1); });
@@ -887,7 +901,10 @@ function dessinerPageChambreA3(p, e, masques, opts = {}) {
     const z = zone(b);
     if (b.type === 'situation') {
       const zi = cadre(z, 'Situation dans le réseau');
-      drawSituation(p, opts.situation, e.nom, zi);
+      // vue isométrique centrée sur la chambre (cercle rouge, côtés 1 à 4) ;
+      // à défaut, l'ancienne situation en bandes du synoptique
+      if (opts.iso && opts.iso.noeuds && opts.iso.noeuds.some((n) => n.nom === e.nom)) drawSynoptiqueIso(p, opts.iso, zi.x, zi.y, zi.w, zi.h, { cible: e.nom, echelleMax: Infinity });
+      else drawSituation(p, opts.situation, e.nom, zi);
     } else if (b.type === 'masque') {
       const mq = masquesM[FACE_DU_COTE[b.cote]];
       const L = mq && mq.longueurM ? ` · ${String(mq.longueurM).replace('.', ',')} m` : '';
@@ -1048,15 +1065,31 @@ function drawSynoptique2D(p, data, zx, zy, zw, zh) {
 
 // Isométrique : sol (x, y), hauteur z. Chambres = caissons enterrés vus en
 // volume, coffrets = armoires, sorties = bornes ; tranchées = bandes de terre.
-function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) { // data n'est pas modifié (copie)
+// Options de style :
+//   projection : 'iso' (isométrie vraie, axes du synoptique à 30°) ou 'plano'
+//                (plan du synoptique tel quel, hauteurs en oblique)
+//   liaisons   : 'sol' (trait épais posé au sol) ou 'tranchee' (prisme de terre)
+//   etiquettesTroncons : étiquettes « n fourreaux / longueur » sur les liaisons
+//   trait      : { couleur [r,g,b], epaisseur (pt), selonFourreaux, liseré }
+//   cible      : nom d'une chambre → vue centrée, cercle rouge et côtés 1 à 4
+const ISO_DEFAUT = { projection: 'iso', liaisons: 'sol', etiquettesTroncons: false, trait: { couleur: [0.086, 0.098, 0.114], epaisseur: 3.2, selonFourreaux: false, liseré: true } };
+function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est pas modifié (copie)
   if (!data.noeuds.length) return;
-  // Vue planométrique : le plan est CELUI DU SYNOPTIQUE (côté 2 → 4 à l'horizontale,
-  // côté 1 → 3 à la verticale, mêmes positions) et les hauteurs montent en oblique
-  // vers le haut-gauche ; on voit le dessus et les faces droite (2) et basse (3).
-  // Représentation graphique, pas à l'échelle. (y du synoptique vers le bas.)
-  const KX = 0.34, KY = 0.62;
-  const iso = (x, y, z) => [x - z * KX, -y + z * KY];
-  const profondeur = (x, y) => x * KX + y * KY; // grand = devant (bas-droite)
+  const { echelleMax = 1.8 } = opts;
+  const O = { ...ISO_DEFAUT, ...opts, trait: { ...ISO_DEFAUT.trait, ...(opts.trait || {}) } };
+  const SOL = O.liaisons === 'sol';
+  // Les axes suivent le synoptique : côté 2 → 4 le long de x, côté 1 → 3 le long de y
+  // (y du synoptique vers le bas). Représentation graphique, pas à l'échelle.
+  let iso, profondeur; // profondeur : grand = devant ; faces +x et +y visibles
+  if (O.projection === 'plano') {
+    const KX = 0.34, KY = 0.62; // hauteurs en oblique vers le haut-gauche
+    iso = (x, y, z) => [x - z * KX, -y + z * KY];
+    profondeur = (x, y) => x * KX + y * KY;
+  } else {
+    const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
+    iso = (x, y, z) => [(x - y) * C, -(x + y) * S + z];
+    profondeur = (x, y) => x + y;
+  }
   // Volumes proportionnés aux éléments du synoptique 2D (w × h, mêmes positions) ;
   // à défaut (ancien appel), tailles fixes.
   const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
@@ -1074,7 +1107,25 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
     ch.forEach((a, i) => ch.forEach((b, j) => { if (j > i) dmin = Math.min(dmin, Math.hypot(a.x - b.x, a.y - b.y)); }));
     return Math.max(1, Math.min(3, (0.4 * L) / wMax, (0.6 * dmin) / wMax));
   })();
+  // Chambres à leurs proportions réelles quand on les connaît (L le long de x,
+  // côtés 1/3 ; l le long de y, côtés 2/4) : une maçonnée paraît plus grosse
+  // qu'une K1C. Échelle commune : la plus grande garde la taille d'affichage.
+  const avecDims = data.noeuds.filter((n) => n.type === 'chambre' && n.dims && n.dims.L > 0 && n.dims.l > 0);
+  const KMM = (() => {
+    if (!avecDims.length) return 0;
+    const ref = Math.max(...data.noeuds.filter((n) => n.type === 'chambre' && n.w > 0).map((n) => n.w * 0.8 * G), 64);
+    return ref / Math.max(...avecDims.map((n) => Math.max(n.dims.L, n.dims.l)));
+  })();
+  const MED_CH = (() => { const v = avecDims.map((n) => Math.max(n.dims.L, n.dims.l) * KMM).sort((a, b) => a - b); return v.length ? v[v.length >> 1] : 0; })();
   const dimsDe = (n) => {
+    if (n.type === 'chambre' && KMM && n.dims && n.dims.L > 0 && n.dims.l > 0) {
+      const H = n.dims.H > 0 ? n.dims.H : Math.min(n.dims.L, n.dims.l);
+      return [n.dims.L * KMM, n.dims.l * KMM, Math.max(14, H * KMM * 0.45)];
+    }
+    if (KMM && n.type !== 'chambre') { // coffrets et sorties à l'échelle des chambres réelles
+      const m = MED_CH;
+      return n.type === 'coffret' ? [m * 0.32, m * 0.26, m * 0.62] : [m * 0.16, m * 0.16, m * 0.42];
+    }
     if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
     if (n.type === 'chambre') return [n.w * 0.8 * G, n.h * 0.8 * G, n.h * 0.55 * G];
     if (n.type === 'coffret') return [n.w * 0.45 * G, n.h * 0.55 * G, n.h * 0.9 * G];
@@ -1104,9 +1155,19 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
       });
     });
   }
+  // Vue centrée sur une chambre (page chambre du PDF) : cadrage sur elle et ses
+  // voisins directs, cercle rouge au sol et côtés 1 à 4, le reste est découpé.
+  const CIBLE = O.cible ? data.noeuds.find((n) => n.nom === O.cible) : null;
+  let cadres = data.noeuds;
+  if (CIBLE) {
+    const dV = data.troncons.filter((t) => (t.a.x === CIBLE.x && t.a.y === CIBLE.y) || (t.b.x === CIBLE.x && t.b.y === CIBLE.y))
+      .map((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y));
+    const R = Math.max(80, ...dV) * 1.05;
+    cadres = data.noeuds.filter((n) => Math.hypot(n.x - CIBLE.x, n.y - CIBLE.y) <= R);
+  }
   // cadrage sur l'emprise projetée
   const pts = [];
-  data.noeuds.forEach((n) => { const [a, b, h] = dimsDe(n); [[-a, -b, 0], [a, -b, 0], [a, b, 0], [-a, b, 0], [-a, -b, h], [a, -b, h], [a, b, h], [-a, b, h]].forEach(([dx, dy, z]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z + 18 * unite))); });
+  cadres.forEach((n) => { const [a, b, h] = dimsDe(n); [[-a, -b, 0], [a, -b, 0], [a, b, 0], [-a, b, 0], [-a, -b, h], [a, -b, h], [a, b, h], [-a, b, h]].forEach(([dx, dy, z]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z + 18 * unite))); });
   const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
   const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
   // marge pour les étiquettes (taille fixe en points, elles débordent des volumes)
@@ -1120,8 +1181,9 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
   const bout = (e) => {
     // coffret / sortie : les fourreaux remontent par le dessous → arrivée sous le
     // centre du socle, tranchée enterrée (dessus au niveau du sol)
-    if (e.type !== 'chambre') return { x: e.x, y: e.y, z: -HAUT };
-    const [a, b, h] = dimsDe(e), z = -8 * unite + h / 2;
+    if (e.type !== 'chambre') return { x: e.x, y: e.y, z: SOL ? 0 : -HAUT };
+    const nd = data.noeuds.find((n) => n.x === e.x && n.y === e.y) || e; // dimensions réelles portées par l'élément
+    const [a, b, h] = dimsDe(nd), z = SOL ? 0 : -8 * unite + h / 2;
     const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
     return { x: e.x + off[0], y: e.y + off[1], z };
   };
@@ -1225,13 +1287,19 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
       p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6)
         .poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], 'B');
     }
-    const [tx, ty] = n._etiq || P(n.x, n.y, z1 + 14);
+    const et = n._etiq;
     etiquettes.push(() => {
-      // cadre à fond blanc bordé de la couleur de l'élément : lisible sur les volumes
-      const w = Math.max(n.nom.length * 5.4, (n.sous || '').length * 3.9) + 12, h = n.sous ? 22 : 14;
-      p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(tx - w / 2, ty - h + 10, w, h, 'B');
-      p.rgb([0.08, 0.08, 0.08], false).text(tx, ty, 8.5, n.nom, { align: 'center', bold: true });
-      if (n.sous) p.rgb([0.3, 0.3, 0.3], false).text(tx, ty - 9, 6.5, n.sous, { align: 'center' });
+      if (!et) return;
+      // cadre arrondi à fond blanc bordé de la couleur de l'élément ; nom seul
+      // (le type de chambre est au synoptique) ; trait de rappel si décollé
+      const w = ETQ.w(n.nom), h = ETQ.h, x0 = et.bx - w / 2, y0 = et.by - h / 2;
+      if (et.d > 6) {
+        const [vx, vy] = P(n.x, n.y, z1), ax = Math.max(x0, Math.min(x0 + w, vx)), ay = Math.max(y0, Math.min(y0 + h, vy));
+        p.rgb([0.45, 0.47, 0.5]).width(0.6).line(ax, ay, vx, vy);
+        p.rgb([0.45, 0.47, 0.5], false).circle(vx, vy, 1.5, 'f');
+      }
+      p.rgb([1, 1, 1], false).rgb(c).width(1.1).rrect(x0, y0, w, h, 4.5, 'B');
+      p.rgb([0.08, 0.08, 0.08], false).text(et.bx, et.by - ETQ.taille * 0.35, ETQ.taille, n.nom, { align: 'center', bold: true });
     });
   }
   // Ordre de profondeur commun (peintre) : du fond (x + y petit) vers l'avant ;
@@ -1249,7 +1317,13 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
   data.troncons.forEach((t) => {
     const q = trace(t);
     q.slice(1).forEach((b, k) => {
-      const a = q[k], c = [];
+      const a = q[k];
+      if (SOL) { // trait au sol : chapelet de petites boîtes le long du trait projeté
+        const [ax, ay] = P(a.x, a.y, 0), [bx, by] = P(b.x, b.y, 0), L = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(L / 8)), r = 4;
+        for (let i = 0; i <= n; i++) { const x = ax + (bx - ax) * i / n, y = ay + (by - ay) * i / n; occupes.push({ x0: x - r, x1: x + r, y0: y - r, y1: y + r }); }
+        return;
+      }
+      const c = [];
       [-1, 1].forEach((sg) => [-HAUT, HAUT].forEach((dz) => [a, b].forEach((E) => {
         const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / L * LARG, ny = (b.x - a.x) / L * LARG;
         c.push(P(E.x + sg * nx, E.y + sg * ny, E.z + dz));
@@ -1257,27 +1331,50 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
       occupes.push({ x0: Math.min(...c.map((v) => v[0])), x1: Math.max(...c.map((v) => v[0])), y0: Math.min(...c.map((v) => v[1])), y1: Math.max(...c.map((v) => v[1])) });
     });
   });
-  // Étiquette d'élément : posée AU-DESSUS du volume (écart fixe en points, quel que soit
-  // le zoom), sinon à côté ; jamais sur un volume ni sur une autre étiquette.
-  [...data.noeuds].sort((a, b) => (a.type === 'chambre' ? 0 : 1) - (b.type === 'chambre' ? 0 : 1)).forEach((n) => {
-    const e = n._emprise, w = Math.max(n.nom.length * 5.4, (n.sous || '').length * 3.9) + 12, h = n.sous ? 22 : 14;
-    const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
-    const cx = (e.x0 + e.x1) / 2, cy = (e.y0 + e.y1) / 2;
-    const essais = [
-      [cx, e.y1 + h - 4], [cx, e.y1 + 2 * h], [e.x1 + w / 2 + 6, cy + h / 2 - 4], [e.x0 - w / 2 - 6, cy + h / 2 - 4],
-      [cx, e.y0 - 14], [e.x1 + w / 2 + 6, e.y1 + h], [e.x0 - w / 2 - 6, e.y1 + h], [cx, e.y1 + 3 * h],
-    ];
+  // Étiquette d'élément : cherchée tout autour du volume (8 directions, de plus en
+  // plus loin), en évitant volumes, liaisons et autres étiquettes ; au-dessus de
+  // préférence. Trait de rappel quand elle est décollée de son volume.
+  const ETQ = { taille: 8.5, h: 15, w: (nom) => String(nom).length * 5.3 + 14 };
+  const DIRS = [[0, 1, 0], [1, 1, 2], [-1, 1, 2], [1, 0, 3], [-1, 0, 3], [1, -1, 5], [-1, -1, 5], [0, -1, 6]]; // [dx, dy (haut), pénalité]
+  if (CIBLE) { // cercle rouge et pastilles des côtés : réservés avant les étiquettes
+    const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), rx = a / 2 + m, ry = b / 2 + m;
+    for (let i = 0; i < 48; i++) { const t = (i / 48) * 2 * Math.PI, [x, y] = P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0); occupes.push({ x0: x - 3, x1: x + 3, y0: y - 3, y1: y + 3 }); }
+    [[0, -ry], [rx, 0], [0, ry], [-rx, 0]].forEach(([ex, ey]) => { const [x, y] = P(CIBLE.x + ex, CIBLE.y + ey, 0); occupes.push({ x0: x - 7, x1: x + 7, y0: y - 7, y1: y + 7 }); });
+  }
+  const ordreEtq = [...data.noeuds].sort((a, b) => (a.type === 'chambre' ? 0 : 1) - (b.type === 'chambre' ? 0 : 1));
+  ordreEtq.forEach((n) => {
+    const e = n._emprise, w = ETQ.w(n.nom), h = ETQ.h, cx = (e.x0 + e.x1) / 2, cy = (e.y0 + e.y1) / 2, ew = e.x1 - e.x0, eh = e.y1 - e.y0;
     let best = null;
-    for (const [tx, ty] of essais) {
-      const c = chevauche(rect(tx, ty));
-      if (!best || c < best.c) best = { c, tx, ty };
-      if (c === 0) break;
+    for (const d of [3, 12, 24, 40, 62]) {
+      for (const [dx, dy, pen] of DIRS) {
+        const bx = cx + dx * (ew / 2 + w / 2 + d), by = cy + dy * (eh / 2 + h / 2 + d);
+        const r = { x0: bx - w / 2 - 2, x1: bx + w / 2 + 2, y0: by - h / 2 - 2, y1: by + h / 2 + 2 };
+        const score = chevauche(r) * 40 + d * 1.2 + pen * 4;
+        if (!best || score < best.score) best = { score, bx, by, r, d };
+      }
+      if (best && best.score < 70) break; // place nette trouvée à cette distance
     }
-    n._etiq = [best.tx, best.ty]; occupes.push(rect(best.tx, best.ty));
+    n._etiq = best; occupes.push(best.r);
   });
-  data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
+  if (O.etiquettesTroncons) data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
+  // Liaisons au sol : traits épais à z = 0, dessinés avant tous les volumes
+  // (ils passent dessous) ; liseré blanc pour les croisements.
+  const nLabels0 = p.labels.length;
+  if (CIBLE) p.ops.push('q', `${zx.toFixed(2)} ${zy.toFixed(2)} ${zw.toFixed(2)} ${zh.toFixed(2)} re W n`);
+  if (SOL) {
+    const T = O.trait;
+    const largeur = (t) => (T.selonFourreaux ? Math.max(1.4, Math.min(7, 1.2 + 0.9 * Math.sqrt(t.nf || 1))) : T.epaisseur);
+    const tous = data.troncons.map((t) => ({ t, pts: trace(t).map((q) => P(q.x, q.y, 0)) }));
+    const dessiner = (pts, w, rgb) => { for (let k = 1; k < pts.length; k++) p.rgb(rgb).width(w).line(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); };
+    if (T.liseré) tous.forEach(({ t, pts }) => dessiner(pts, largeur(t) + 2.4, [1, 1, 1]));
+    tous.forEach(({ t, pts }) => {
+      dessiner(pts, largeur(t), T.couleur);
+      pts.slice(1, -1).forEach(([x, y]) => p.rgb(T.couleur, false).circle(x, y, largeur(t) / 2, 'f')); // coudes arrondis
+    });
+    p.width(0.6); // l'épaisseur courante sert aussi aux contours des volumes
+  }
   const elements = [
-    ...data.troncons.flatMap((t) => tranchee(t)),
+    ...(SOL ? [] : data.troncons.flatMap((t) => tranchee(t))),
     ...data.noeuds.map((n) => {
       let cle = profondeur(n.x, n.y);
       if (n.type !== 'chambre') data.troncons.forEach((t) => {
@@ -1287,9 +1384,29 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
       return { cle, dessiner: () => volume(n) };
     }),
   ].sort((u, v) => u.cle - v.cle);
+  // cercle rouge au sol autour de la chambre ciblée (dessiné avant les volumes : posé au sol)
+  let anneau = null;
+  if (CIBLE) {
+    const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), rx = a / 2 + m, ry = b / 2 + m;
+    anneau = { rx, ry };
+    const poly = Array.from({ length: 64 }, (_, i) => { const t = (i / 64) * 2 * Math.PI; return P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0); });
+    p.rgb([0.85, 0.11, 0.11]).width(1.8).poly(poly, 'S').width(0.6);
+  }
   elements.forEach((e) => e.dessiner());
   etiquettesTroncons.forEach((f) => f());
   etiquettes.forEach((f) => f());
+  if (CIBLE) {
+    // côtés : 1 = haut du synoptique (nord), 2 = droite, 3 = bas, 4 = gauche (y du synoptique vers le bas)
+    const { rx, ry } = anneau;
+    [[1, 0, -ry], [2, rx, 0], [3, 0, ry], [4, -rx, 0]].forEach(([k, ex, ey]) => {
+      const [qx, qy] = P(CIBLE.x + ex, CIBLE.y + ey, 0);
+      p.rgb([0.1, 0.11, 0.12], false).rgb([1, 1, 1]).width(0.9).circle(qx, qy, 5.4, 'B');
+      p.rgb([1, 1, 1], false).text(qx, qy - 2.3, 6.6, String(k), { align: 'center', bold: true });
+    });
+    p.ops.push('Q');
+    const garder = p.labels.slice(nLabels0).filter((l) => l.x >= zx - 1 && l.x <= zx + zw + 1 && l.y >= zy - 1 && l.y <= zy + zh + 1);
+    p.labels.length = nLabels0; p.labels.push(...garder);
+  }
   return { noeuds: data.noeuds.map((n) => P(n.x, n.y, 0)) }; // positions (repère de la page) pour le cadrage
 }
 
@@ -1473,7 +1590,7 @@ function synoptiqueEnFolios(data, fmt, titre, opts = {}) {
 const ICONE_NODIAL_PNG = 'data:image/png;base64,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';
 const MENTION_NODIAL = 'Réalisé avec nodial';
 
-const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, dessinerCartouche, valeursCartouche, ICONE_NODIAL_PNG, MENTION_NODIAL, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+const api = { ISO_DEFAUT, Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, dessinerCartouche, valeursCartouche, ICONE_NODIAL_PNG, MENTION_NODIAL, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, NORMALE_FACE, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Vue3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);

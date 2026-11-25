@@ -366,12 +366,13 @@ server.registerTool('etudier_reseau', {
       noeuds: r.noeuds.map((n) => {
         const et = etudes.find((x) => x.nom === n.nom);
         return { nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y,
+          dims: et && et.ok ? { L: et.L, l: et.l, H: et.H } : null, // isométrique : chambre à ses proportions réelles
           sous: n.type === 'chambre' ? (et && et.ok ? et.ref : 'à étudier') : n.type === 'coffret' ? n.coffret.genre : '' };
       }),
       troncons: tr.map(({ rt }, i) => {
         const A = Reseau.noeud(r, rt.a.noeud), B = Reseau.noeud(r, rt.b.noeud);
         return { a: { x: A.x, y: A.y, face: rt.a.face, type: A.type }, b: { x: B.x, y: B.y, face: rt.b.face, type: B.type },
-          label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : '? m'] };
+          label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : '? m'], nf: masques[i] && masques[i].ok ? masques[i].fourreaux.length : 0 };
       }),
     };
     const titreDossier = titre || 'Réseau nodial';
@@ -379,7 +380,7 @@ server.registerTool('etudier_reseau', {
     const lireLogo = (chemin) => { if (!chemin) return null; const abs = path.resolve(chemin); if (!fs.existsSync(abs)) throw new Error(`Logo introuvable : ${abs}`); return { src: fs.readFileSync(abs) }; };
     const cart = { champs: cartouche && cartouche.champs, logoMOA: lireLogo(cartouche && cartouche.logoMOA), logoMOE: lireLogo(cartouche && cartouche.logoMOE) };
     const [A3W, A3H] = Vue3D.FORMATS_PAGE.a3;
-    const optsPage = { projet: titreDossier, date: new Date().toLocaleDateString('fr-FR'), indice: (cartouche && cartouche.indice) || 'A', situation, cartouche: cart };
+    const optsPage = { projet: titreDossier, date: new Date().toLocaleDateString('fr-FR'), indice: (cartouche && cartouche.indice) || 'A', situation, iso: synoptique, cartouche: cart };
     const pagesChambres = etudes.filter((e) => e.ok).flatMap((e) => Vue3D.pagesChambreA3(e, e._masques, optsPage, () => new Vue3D.Page({ ombre: false })))
       .map((pg) => ({ contenu: pg.toString(), largeur: A3W, hauteur: A3H, images: (pg.images || []).map((im) => ({ octets: im.src, x: im.x, y: im.y, w: im.w, h: im.h })) }));
     const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(masques, { pagesChambres, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;

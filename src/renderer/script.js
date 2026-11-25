@@ -7792,10 +7792,12 @@
   // à la main), mêmes tailles d'éléments ; seule la projection change.
   function donneesSynoptique(rapide = false) {
     const d2 = synoptiqueAncre(1.414, rapide), parId = new Map(reseau.noeuds.map((n, i) => [n.id, d2.noeuds[i]]));
-    const noeuds = d2.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, w: n.w, h: n.h, sous: n.sous }));
+    // chambres : dimensions intérieures réelles (L le long des côtés 1/3, l le long des 2/4)
+    const dimsReelles = (nd) => { if (!nd || nd.type !== 'chambre') return null; const e = etudeChambre(nd); return e && e.etude && e.etude.ok ? { L: e.etude.L, l: e.etude.l, H: e.etude.H } : null; };
+    const noeuds = d2.noeuds.map((n, i) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, w: n.w, h: n.h, sous: n.sous, dims: dimsReelles(reseau.noeuds[i]) }));
     const troncons = reseau.troncons.map((t) => {
       const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud), pa = parId.get(A.id), pb = parId.get(B.id);
-      return { a: { x: pa.x, y: pa.y, w: pa.w, h: pa.h, face: t.a.face, type: A.type }, b: { x: pb.x, y: pb.y, w: pb.w, h: pb.h, face: t.b.face, type: B.type }, label: etiquetteIso(t) };
+      return { a: { x: pa.x, y: pa.y, w: pa.w, h: pa.h, face: t.a.face, type: A.type }, b: { x: pb.x, y: pb.y, w: pb.w, h: pb.h, face: t.b.face, type: B.type }, label: etiquetteIso(t), nf: (etatTroncon(t) || { fourreaux: [] }).fourreaux.length };
     });
     return { noeuds, troncons };
   }
@@ -7818,12 +7820,14 @@
   // masque, dans l'ordre de leurs destinations le long du côté, séparées de
   // l'écart entre fourreaux. Chaque coupe est d'abord ramenée au sens « départ ».
   function accolerMasques(face, parts) {
-    const V = window.Vue3D, pignon = face.startsWith('pignon');
-    // position de la destination le long du côté (repère chambre, y vers le haut)
-    const cle = (m) => (m._vers ? (pignon ? -m._vers.y : m._vers.x) : 0);
-    const tri = [...parts].sort((a, b) => cle(a) - cle(b));
-    const miroirDepart = V.coupeEnMiroir(face, 'depart');
-    const ordre = miroirDepart ? tri.reverse() : tri; // ordre le long de x de la coupe
+    const V = window.Vue3D;
+    // Le masque accolé est au sens « départ » : x vers la droite de qui, dans la
+    // chambre, regarde la paroi. Les coupes sont rangées de gauche à droite selon la
+    // position de leur destination le long de cet axe. NORMALE_FACE : y vers le
+    // haut ; _vers est un élément du synoptique (y vers le bas) → -y.
+    const nf = V.NORMALE_FACE[face] || [1, 0], droite = [nf[1], -nf[0]];
+    const cle = (m) => (m._vers ? m._vers.x * droite[0] - m._vers.y * droite[1] : 0);
+    const ordre = [...parts].sort((a, b) => cle(a) - cle(b)); // ordre le long de x de la coupe
     const ecart = Math.max(FOURREAU_GAP || 0, 30);
     let x0 = 0, n = 0;
     const fourreaux = [], cables = [], noms = [], liaisons = [];
@@ -8878,6 +8882,7 @@
 
   window.reseauTontonkad = {
     activer: activerReseau, vue: afficherVue, ouvrirTroncon, etat: () => reseau, etudeChambre: (id) => etudeChambre(R().noeud(reseau, id)),
+    donneesIso: () => donneesSynoptique(), // atelier : rendus de variantes de l'isométrique
     faceAt: (x, y) => faceSousPoint(x, y), fleches: () => vueChambreFleches, cadrage: () => ({ ...SYN.vue }),
     selectionner: (sel) => { SYN.sel = sel; dessinerSynoptique(false); remplirEdition(); },
   };
@@ -9242,7 +9247,7 @@
       // situation : le synoptique en bandes (comme la sortie A0)
       const synS = synoptiqueAncre(1.414), bandesS = V.decouperBandes(synS, 'a0');
       const situation = { noeuds: synS.noeuds, troncons: synS.troncons, coupes: bandesS.coupes, ys: bandesS.ys };
-      const opts = { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR'), situation, cartouche: cartoucheCourant(),
+      const opts = { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR'), situation, iso: donneesSynoptique(), cartouche: cartoucheCourant(),
         client: formData.client, auteur: document.getElementById('pdfAuthor')?.value || '', phase: formData.phase, indice: formData.indice || 'A', plan: formData.plan };
       let premiere = true;
       const ecrire = (pc) => { writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: !premiere }); premiere = false; };
