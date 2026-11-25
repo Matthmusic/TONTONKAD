@@ -3,6 +3,7 @@
 // (coupe, vue 3D, légende, conformité) + une page chambre de tirage.
 // Le dessin est dans src/renderer/vue3d.js, partagé avec l'application ;
 // ici seulement la mise en page et l'écriture du fichier PDF.
+const { ICONE_NODIAL_PNG, MENTION_NODIAL } = require('../../src/renderer/vue3d.js');
 const { Page, fit, drawCoupe, draw3D, drawChambre3D, dessinerEtudeChambre, drawSynoptique2D, drawSynoptiqueIso, PAGE_W, PAGE_H, MARGE } = require('../../src/renderer/vue3d.js');
 void fit;
 
@@ -179,8 +180,14 @@ function masquesToPdf(masques, opts = {}) {
   // page : texte du flux (A4 paysage), ou { contenu, largeur, hauteur, images: [{ octets, x, y, w, h }] }
   const addPage = (pg) => {
     const o = typeof pg === 'string' ? { contenu: pg } : pg;
-    let texte = o.contenu, xo = '';
-    (o.images || []).forEach((im, k) => {
+    const W = o.largeur || PAGE_W;
+    // pied de page : « Réalisé avec nodial » + icône, en bas à droite
+    const pied = new Page({ ombre: false });
+    pied.rgb([0.55, 0.57, 0.61], false).text(W - 17, 10.2, 6.5, MENTION_NODIAL, { align: 'right' });
+    const largTexte = MENTION_NODIAL.length * 6.5 * 0.5;
+    let texte = o.contenu + '\n' + pied.toString(), xo = '';
+    const images = [...(o.images || []), { octets: ICONE_NODIAL_PNG, x: W - 17 - largTexte - 12, y: 8.5, w: 9, h: 9 }];
+    images.forEach((im, k) => {
       try {
         const img = imageVersPdf(im.octets);
         const sm = img.smask ? flux(img.smask.dict, img.smask.data) : null;

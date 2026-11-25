@@ -78153,15 +78153,15 @@ var require_chambres_infos = __commonJS({
         const larg = (ks) => Math.max(0, ...ks.filter((k) => b[k]).map((k) => b[k].largeur));
         const haut = Math.max(0, ...Object.values(b).filter(Boolean).map((x) => x.hauteur));
         const tMin = Math.min(o.tampon.L, o.tampon.l), tMax = Math.max(o.tampon.L, o.tampon.l);
-        let l = up(Math.max(larg(["pignonA", "pignonB"]) + 2 * o.degagementLateral, tMin));
-        let L = up(Math.max(larg(["longPanA", "longPanB"]) + 2 * o.degagementLateral, o.longueurMin, tMax));
-        if (l > L) [L, l] = [l, L];
+        const l = up(Math.max(larg(["pignonA", "pignonB"]) + 2 * o.degagementLateral, tMin));
+        const L = up(Math.max(larg(["longPanA", "longPanB"]) + 2 * o.degagementLateral, o.longueurMin, tMax));
         const H = up(Math.max(haut + o.degagementHaut, 400));
-        const tampons = Math.max(1, Math.ceil(L / o.ouvertureParTampon));
+        const grand = Math.max(L, l);
+        const tampons = Math.max(1, Math.ceil(grand / o.ouvertureParTampon));
         const controles = [];
         const c = controleTampon(o.tampon.classe, o.zone);
         if (!c.ok) controles.push(c.message);
-        if (tampons * tMax > L) controles.push(`${tampons} tampon(s) de ${tMax} mm ne tiennent pas sur ${L} mm : r\xE9duire le nombre ou la taille`);
+        if (tampons * tMax > grand) controles.push(`${tampons} tampon(s) de ${tMax} mm ne tiennent pas sur ${grand} mm : r\xE9duire le nombre ou la taille`);
         return {
           ref: `Ma\xE7onn\xE9e ${L}\xD7${l}`,
           L,
@@ -80045,7 +80045,9 @@ var require_vue3d = __commonJS({
         }
         return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH };
       }
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const ICONE_NODIAL_PNG = "data:image/png;base64,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";
+      const MENTION_NODIAL = "R\xE9alis\xE9 avec nodial";
+      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, ICONE_NODIAL_PNG, MENTION_NODIAL, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -80056,6 +80058,7 @@ var require_vue3d = __commonJS({
 var require_pdf = __commonJS({
   "mcp/src/pdf.js"(exports2, module2) {
     "use strict";
+    var { ICONE_NODIAL_PNG, MENTION_NODIAL } = require_vue3d();
     var { Page, fit, drawCoupe, draw3D, drawChambre3D, dessinerEtudeChambre, drawSynoptique2D, drawSynoptiqueIso, PAGE_W, PAGE_H, MARGE } = require_vue3d();
     function pageMasque(m, i, total, opts) {
       const p = new Page();
@@ -80277,8 +80280,13 @@ stream
 `, "latin1"), data, Buffer.from("\nendstream", "latin1")]));
       const addPage = (pg) => {
         const o = typeof pg === "string" ? { contenu: pg } : pg;
-        let texte = o.contenu, xo = "";
-        (o.images || []).forEach((im, k) => {
+        const W = o.largeur || PAGE_W;
+        const pied = new Page({ ombre: false });
+        pied.rgb([0.55, 0.57, 0.61], false).text(W - 17, 10.2, 6.5, MENTION_NODIAL, { align: "right" });
+        const largTexte = MENTION_NODIAL.length * 6.5 * 0.5;
+        let texte = o.contenu + "\n" + pied.toString(), xo = "";
+        const images = [...o.images || [], { octets: ICONE_NODIAL_PNG, x: W - 17 - largTexte - 12, y: 8.5, w: 9, h: 9 }];
+        images.forEach((im, k) => {
           try {
             const img = imageVersPdf(im.octets);
             const sm = img.smask ? flux(img.smask.dict, img.smask.data) : null;

@@ -9128,6 +9128,18 @@
     const c = (reseau && reseau.cartouche) || cartoucheDefautPoste() || {};
     return { champs: c.champs && c.champs.length ? c.champs : window.Vue3D.CARTOUCHE_DEFAUT.map((x) => ({ ...x })), logoMOA: c.logoMOA || null, logoMOE: c.logoMOE || null };
   }
+  // « Réalisé avec nodial » + icône, discret, en pied à droite de chaque page.
+  function piedNodial(pdf) {
+    const V = window.Vue3D, n = pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= n; i++) {
+      pdf.setPage(i);
+      const w = pdf.internal.pageSize.getWidth(), h = pdf.internal.pageSize.getHeight(), c = 3.2;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(140, 146, 156);
+      pdf.text(V.MENTION_NODIAL, w - 6, h - 3.6, { align: 'right' });
+      try { pdf.addImage(V.ICONE_NODIAL_PNG, 'PNG', w - 6 - pdf.getTextWidth(V.MENTION_NODIAL) - c - 1.2, h - 3.6 - c + 0.6, c, c); } catch (e) { /* icône facultative */ }
+    }
+    pdf.setTextColor(0, 0, 0);
+  }
   async function exporterDossierReseau(formData, JsPDF) {
     const V = window.Vue3D, base = `${(formData.projectName || 'projet').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}`;
     const groupes = formData.groupes || {}, fichiers = [];
@@ -9179,7 +9191,7 @@
       const gr = reseau.troncons.map((t) => { const st = etatTroncon(t); return st && st.fourreaux.length ? { nom: R().nomTroncon(reseau, t), fourreaux: st.fourreaux, cables: st.cables } : null; }).filter(Boolean);
       if (gr.length) { ajouterTableauxPdf(pdf, gr, true); fichiers.push([pdf, `${base}_tableaux.pdf`]); }
     }
-    for (const [pdf, nom] of fichiers) { pdf.save(nom); await new Promise((r) => setTimeout(r, 400)); }
+    for (const [pdf, nom] of fichiers) { piedNodial(pdf); pdf.save(nom); await new Promise((r) => setTimeout(r, 400)); }
     showToast(`Dossier PDF : ${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''} enregistré${fichiers.length > 1 ? 's' : ''}`, 'success', 6000);
     return fichiers.map((f) => f[1]);
   }
@@ -9729,6 +9741,7 @@
       const fileName = `${formData.projectName.replace(/[^a-z0-9]/gi, '_')}_${dateStr}_${timeStr}.pdf`;
       logPdf('saving file', fileName);
       try {
+        piedNodial(pdf);
         pdf.save(fileName);
       } catch (err) {
         errorPdf('pdf.save failed', err);

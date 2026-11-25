@@ -124,16 +124,18 @@ function chambreMaconnee(besoins, options) {
   const larg = (ks) => Math.max(0, ...ks.filter((k) => b[k]).map((k) => b[k].largeur));
   const haut = Math.max(0, ...Object.values(b).filter(Boolean).map((x) => x.hauteur));
   const tMin = Math.min(o.tampon.L, o.tampon.l), tMax = Math.max(o.tampon.L, o.tampon.l);
-  // pignons = petite largeur l, long-pans = grande longueur L
-  let l = up(Math.max(larg(['pignonA', 'pignonB']) + 2 * o.degagementLateral, tMin));
-  let L = up(Math.max(larg(['longPanA', 'longPanB']) + 2 * o.degagementLateral, o.longueurMin, tMax));
-  if (l > L) [L, l] = [l, L];
+  // Côtés fixes (nord = côté 1) : long-pans (côtés 1 et 3) → L, pignons (côtés 2
+  // et 4) → l. Pas d'échange : si les pignons portent les plus grosses nappes,
+  // la chambre est simplement plus profonde que large (l > L).
+  const l = up(Math.max(larg(['pignonA', 'pignonB']) + 2 * o.degagementLateral, tMin));
+  const L = up(Math.max(larg(['longPanA', 'longPanB']) + 2 * o.degagementLateral, o.longueurMin, tMax));
   const H = up(Math.max(haut + o.degagementHaut, 400));
-  const tampons = Math.max(1, Math.ceil(L / o.ouvertureParTampon));
+  const grand = Math.max(L, l); // les tampons se répartissent sur la plus grande dimension
+  const tampons = Math.max(1, Math.ceil(grand / o.ouvertureParTampon));
   const controles = [];
   const c = controleTampon(o.tampon.classe, o.zone);
   if (!c.ok) controles.push(c.message);
-  if (tampons * tMax > L) controles.push(`${tampons} tampon(s) de ${tMax} mm ne tiennent pas sur ${L} mm : réduire le nombre ou la taille`);
+  if (tampons * tMax > grand) controles.push(`${tampons} tampon(s) de ${tMax} mm ne tiennent pas sur ${grand} mm : réduire le nombre ou la taille`);
   return {
     ref: `Maçonnée ${L}×${l}`, L, l, H, maconnee: true, controles,
     infos: { paroi: o.paroi, reserveHauteur: 0, tampons, tampon: o.tampon, zone: o.zone, maconnee: true, source: SOURCE_MACONNEE },
