@@ -923,8 +923,19 @@ function dessinerPageChambreA3(p, e, masques, opts = {}) {
       const zi = cadre(z, 'Situation dans le réseau');
       // vue isométrique centrée sur la chambre (cercle rouge, côtés 1 à 4) ;
       // à défaut, l'ancienne situation en bandes du synoptique
-      if (opts.iso && opts.iso.noeuds && opts.iso.noeuds.some((n) => n.nom === e.nom)) drawSynoptiqueIso(p, opts.iso, zi.x, zi.y, zi.w, zi.h, { cible: e.nom, echelleMax: Infinity });
-      else drawSituation(p, opts.situation, e.nom, zi);
+      if (opts.iso && opts.iso.noeuds && opts.iso.noeuds.some((n) => n.nom === e.nom)) {
+        // vue isométrique complète (chambre entourée en rouge) + encart zoomé en bas à
+        // gauche (le réseau descend vers la droite : ce coin est le plus libre)
+        const enc = { w: zi.w * 0.44, h: zi.h * 0.48 }; enc.x = zi.x; enc.y = zi.y;
+        const res = drawSynoptiqueIso(p, opts.iso, zi.x, zi.y, zi.w, zi.h, { repere: e.nom, reserve: enc, echelleMax: Infinity }) || {};
+        if (res.repere) { // trait de rappel du repère vers l'encart
+          const r = res.repere;
+          p.rgb([0.85, 0.11, 0.11]).width(0.7).dash(true).line(r.x0, (r.y0 + r.y1) / 2, enc.x + enc.w, enc.y + enc.h * 0.6).dash(false);
+        }
+        p.rgb([1, 1, 1], false).rgb([0.45, 0.48, 0.53]).width(0.9).rect(enc.x, enc.y, enc.w, enc.h, 'B');
+        drawSynoptiqueIso(p, opts.iso, enc.x + 2, enc.y + 2, enc.w - 4, enc.h - 4, { cible: e.nom, echelleMax: Infinity });
+        p.rgb([0.45, 0.48, 0.53]).width(0.9).rect(enc.x, enc.y, enc.w, enc.h, 'S');
+      } else drawSituation(p, opts.situation, e.nom, zi);
     } else if (b.type === 'masque') {
       const mq = masquesM[FACE_DU_COTE[b.cote]];
       const L = mq && mq.longueurM ? ` · ${String(mq.longueurM).replace('.', ',')} m` : '';
@@ -1197,6 +1208,8 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
   // Vue centrée sur une chambre (page chambre du PDF) : cadrage sur elle et ses
   // voisins directs, cercle rouge au sol et côtés 1 à 4, le reste est découpé.
   const CIBLE = O.cible ? data.noeuds.find((n) => n.nom === O.cible) : null;
+  // Repère : vue complète, la chambre simplement entourée en rouge (encart zoomé à côté)
+  const REPERE = !CIBLE && O.repere ? data.noeuds.find((n) => n.nom === O.repere) : null;
   // Tronçon ciblé (page de coupe) : tracé en rouge, cadrage sur ses deux bouts et leurs voisins
   const TR = Array.isArray(O.troncon) ? (() => {
     const A = data.noeuds.find((n) => n.nom === O.troncon[0]), B = data.noeuds.find((n) => n.nom === O.troncon[1]);
@@ -1385,16 +1398,18 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
   const ETQ = { taille: 8.5, h: 15, w: (nom) => String(nom).length * 5.3 + 14 };
   const DIRS = [[0, 1, 0], [1, 1, 2], [-1, 1, 2], [1, 0, 3], [-1, 0, 3], [1, -1, 5], [-1, -1, 5], [0, -1, 6]]; // [dx, dy (haut), pénalité]
   // Cercle rouge autour de la chambre ciblée : marge autour du volume, et au moins
-  // ~28 pt de rayon à l'écran pour que les pastilles 1 à 4 ne se tassent pas (K1C).
+  // ~40 pt de rayon à l'écran pour que les pastilles 1 à 4 ne se tassent pas (K1C).
   function anneauCible() {
-    const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), mini = 28 / (s * 0.8);
+    const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), mini = 40 / (s * 0.8);
     return { rx: Math.max(a / 2 + m, mini), ry: Math.max(b / 2 + m, mini) };
   }
   if (CIBLE) { // cercle rouge et pastilles des côtés : réservés avant les étiquettes
     const { rx, ry } = anneauCible();
     for (let i = 0; i < 48; i++) { const t = (i / 48) * 2 * Math.PI, [x, y] = P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0); occupes.push({ x0: x - 3, x1: x + 3, y0: y - 3, y1: y + 3 }); }
-    [[0, -ry], [rx, 0], [0, ry], [-rx, 0]].forEach(([ex, ey]) => { const [x, y] = P(CIBLE.x + ex, CIBLE.y + ey, 0); occupes.push({ x0: x - 7, x1: x + 7, y0: y - 7, y1: y + 7 }); });
+    [[0, -ry], [rx, 0], [0, ry], [-rx, 0]].forEach(([ex, ey]) => { const [x, y] = P(CIBLE.x + ex, CIBLE.y + ey, 0); occupes.push({ x0: x - 13, x1: x + 13, y0: y - 13, y1: y + 13 }); });
   }
+  const RES = O.reserve ? { x0: O.reserve.x, x1: O.reserve.x + O.reserve.w, y0: O.reserve.y, y1: O.reserve.y + O.reserve.h } : null;
+  if (RES) occupes.push(RES, RES, RES); // poids fort : une étiquette n'y va qu'en dernier recours
   const ordreEtq = [...data.noeuds].sort((a, b) => (a.type === 'chambre' ? 0 : 1) - (b.type === 'chambre' ? 0 : 1));
   ordreEtq.forEach((n) => {
     const e = n._emprise, w = ETQ.w(n.nom), h = ETQ.h, cx = (e.x0 + e.x1) / 2, cy = (e.y0 + e.y1) / 2, ew = e.x1 - e.x0, eh = e.y1 - e.y0;
@@ -1461,14 +1476,26 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
     const { rx, ry } = anneau;
     [[1, 0, -ry], [2, rx, 0], [3, 0, ry], [4, -rx, 0]].forEach(([k, ex, ey]) => {
       const [qx, qy] = P(CIBLE.x + ex, CIBLE.y + ey, 0);
-      p.rgb([0.1, 0.11, 0.12], false).rgb([1, 1, 1]).width(0.9).circle(qx, qy, 5.4, 'B');
-      p.rgb([1, 1, 1], false).text(qx, qy - 2.3, 6.6, String(k), { align: 'center', bold: true });
+      p.rgb([0.1, 0.11, 0.12], false).rgb([1, 1, 1]).width(1.2).circle(qx, qy, 10.8, 'B');
+      p.rgb([1, 1, 1], false).text(qx, qy - 4.6, 13.2, String(k), { align: 'center', bold: true });
     });
     p.ops.push('Q');
     const garder = p.labels.slice(nLabels0).filter((l) => l.x >= zx - 1 && l.x <= zx + zw + 1 && l.y >= zy - 1 && l.y <= zy + zh + 1);
     p.labels.length = nLabels0; p.labels.push(...garder);
   }
-  return { noeuds: data.noeuds.map((n) => P(n.x, n.y, 0)) }; // positions (repère de la page) pour le cadrage
+  if (RES) { // textes tombés dans la zone réservée : retirés (l'encart les cache)
+    const dedans = (l) => l.x >= RES.x0 && l.x <= RES.x1 && l.y >= RES.y0 && l.y <= RES.y1;
+    const garder = p.labels.slice(nLabels0).filter((l) => !dedans(l)); p.labels.length = nLabels0; p.labels.push(...garder);
+  }
+  let repere = null;
+  if (REPERE) { // par-dessus tout : il doit se voir sur la vue d'ensemble
+    const [a, b] = dimsDe(REPERE), mini = 9 / (s * 0.8), rx = Math.max(a * 0.9, mini), ry = Math.max(b * 0.9, mini);
+    const poly = Array.from({ length: 48 }, (_, i) => { const t = (i / 48) * 2 * Math.PI; return P(REPERE.x + rx * Math.cos(t), REPERE.y + ry * Math.sin(t), 0); });
+    p.rgb([0.85, 0.11, 0.11]).width(1.6).poly(poly, 'S').width(0.6);
+    const xs = poly.map((q) => q[0]), ys = poly.map((q) => q[1]);
+    repere = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  }
+  return { noeuds: data.noeuds.map((n) => P(n.x, n.y, 0)), repere }; // positions (repère de la page) pour le cadrage
 }
 
 // Coupes en largeur (unités du schéma) tous les Wu au plus, dans un espace libre
