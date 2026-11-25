@@ -4,7 +4,7 @@
   "app": {
     "id": "tontonkad",
     "name": "TONTONKAD",
-    "version": "2.8.3",
+    "version": "2.8.4",
     "description": {
       "short": "Dimensionnement de chemins de câbles et fourreaux électriques",
       "long": "TONTONKAD est une application de bureau professionnelle pour concevoir et dimensionner chemins de câbles, fourreaux et boîtes électriques avec un rendu 2D interactif. Elle offre des calculs automatiques des taux d'occupation, des contrôles de diamètres et sections, des alertes visuelles, et permet l'export en PDF, DXF (AutoCAD) et JSON. Idéale pour les ingénieurs en génie électrique et les bureaux d'études techniques."
@@ -67,9 +67,22 @@
   },
   "installation": {
     "type": "installer",
-    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.8.3.exe"
+    "downloadUrl": "https://github.com/Matthmusic/TONTONKAD/releases/latest/download/TONTONKAD-Setup-2.8.4.exe"
   },
   "changelog": {
+    "2.8.4": {
+      "date": "2026-11-25",
+      "changes": [
+        "Réseau : le PDF devient un dossier de plusieurs fichiers à cocher (synoptique + métré, une page A3 par chambre, coupes par tronçon, tableaux) ; format conseillé selon la taille du synoptique",
+        "Synoptique en longueur : sortie sur une grande feuille en bandes empilées (« … » et renvois R1, R2…) ou en folios séparés ; limites visibles en pointillés dans l'app",
+        "Synoptique : déplacement des éléments avec aimantation orthogonale, rendu fluide, liaison tirée depuis le bord d'une chambre (menu chambre / coffret / sortie)",
+        "Étiquettes de tronçon : une ligne par liaison (câbles alignés, nombre et Ø des fourreaux), récapitulatif puis longueur",
+        "Chambres : côtés numérotés 1 à 4 (pastilles cliquables pour ouvrir la coupe), plusieurs tronçons sur un même côté (coupes accolées), vue de dessus sans chevauchement",
+        "Coupes : câbles tassés au fond des fourreaux comme dans l'app, cotes regroupées, noms de liaison retirés de la coupe, numéros lisibles en clair et en sombre",
+        "Isométrique fidèle à la vue 2D, avec zoom",
+        "Interface : barre d'outils qui se compacte sans déborder, bouton Réseau dans la barre de droite, panneau de gauche repliable, polish général"
+      ]
+    },
     "2.8.3": {
       "date": "2026-11-23",
       "changes": [
