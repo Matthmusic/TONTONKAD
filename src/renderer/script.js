@@ -7333,7 +7333,9 @@
     if (reseau) return reseau.cartouche || (reseau.cartouche = cartoucheProjet());
     return cartoucheHorsReseau || (cartoucheHorsReseau = cartoucheProjet());
   }
-  const CHAMPS_INFOS_PDF = { pdfProjectName: 'projet', pdfClient: 'client', pdfAuthor: 'auteur', pdfPhase: 'phase', pdfIndice: 'indice', pdfNumPlan: 'plan', pdfViewName: 'vue', pdfDescription: 'description' };
+  const CHAMPS_INFOS_PDF = { pdfProjectName: 'projet', pdfClient: 'client', pdfAuthor: 'auteur', pdfPhase: 'phase', pdfIndice: 'indice', pdfNumPlan: 'plan', pdfViewName: 'vue', pdfDescription: 'description', pdfTeinte3D: 'teinte3D' };
+  // Couleur des fourreaux dans les vues 3D du PDF (rouge par défaut, vert en option)
+  function teinteFourreaux3D() { const el = document.getElementById('pdfTeinte3D'); return el && el.value === 'vert' ? 'vert' : 'rouge'; }
   function infosPdf() {
     const o = {}; Object.entries(CHAMPS_INFOS_PDF).forEach(([id, k]) => { const el = document.getElementById(id); if (el) o[k] = el.value.trim(); });
     return o;
@@ -7342,7 +7344,7 @@
     let src = (reseau && reseau.pdfInfos) || infosPdfHorsReseau;
     if (!src) { try { src = JSON.parse(localStorage.getItem('nodial-pdf-infos') || 'null'); } catch (e) { src = null; } }
     if (!src) return;
-    Object.entries(CHAMPS_INFOS_PDF).forEach(([id, k]) => { const el = document.getElementById(id); if (el && src[k] != null && !el.value) el.value = src[k]; });
+    Object.entries(CHAMPS_INFOS_PDF).forEach(([id, k]) => { const el = document.getElementById(id); if (el && src[k] != null && (!el.value || el.tagName === 'SELECT')) el.value = src[k]; });
     const cpt = document.getElementById('pdfDescriptionCounter'), d = document.getElementById('pdfDescription'); if (cpt && d) cpt.textContent = d.value.length;
   }
   function memoriserInfosPdf() {
@@ -9158,7 +9160,7 @@
     p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
     V.drawCoupe(p, m, MARGE + 60, zoneY, 290, zoneH - 10);
     p.text(440, zoneY + zoneH + 10, 9, 'Vue 3D (tronçon de 1,5 m)', { bold: true });
-    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500);
+    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500, { teinte: teinteFourreaux3D() });
     let y = 140;
     p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
     p.text(MARGE, y, 9, 'Fourreaux', { bold: true }); y -= 13;
@@ -9294,7 +9296,7 @@
     p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
     V.drawCoupe(p, m, MARGE + 50, zoneY, 300, zoneH - 10);
     p.text(440, zoneY + zoneH + 10, 9, 'Vue 3D (tronçon de 1.5 m, perspective cavalière)', { bold: true });
-    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500);
+    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500, { teinte: teinteFourreaux3D() });
     let y = 140;
     p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
     p.text(MARGE, y, 9, 'Fourreaux', { bold: true }); y -= 13;

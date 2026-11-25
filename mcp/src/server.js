@@ -207,13 +207,14 @@ server.registerTool('generer_masques', {
     })).optional().describe('Chambres de tirage à étudier (plusieurs faces, traversées) — ajoute une vue de dessus au PDF'),
     sortieDxf: z.string().optional().describe('Chemin du fichier .dxf à écrire (jamais un plan existant : un nouveau fichier)'),
     sortiePdf: z.string().optional().describe('Chemin du fichier .pdf à écrire : une page par masque, coupe + vue 3D + conformité'),
+    teinteFourreaux: z.enum(['rouge', 'vert']).optional().describe('Couleur des fourreaux dans la vue 3D du PDF : rouge (défaut) ou vert'),
     longueur3dMm: z.number().optional().describe('Longueur du tronçon montré dans la vue 3D du PDF (défaut 1500 mm)'),
     unite: z.enum(['mm', 'm']).optional().describe('Unité du DXF (défaut mm)'),
     origine: z.object({ x: z.number(), y: z.number() }).optional().describe('Point d\'insertion du premier masque dans le DXF, dans son unité'),
     cad: z.boolean().optional().describe('Renvoie aussi les commandes de dessin pour le MCP multiCAD (calques + draw_entities), coupes et vues de dessus des chambres'),
     placements: placementSchema,
   },
-}, async ({ noteCalcul, masques, chambres, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine, cad, placements }) => {
+}, async ({ noteCalcul, masques, chambres, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine, cad, placements, teinteFourreaux }) => {
   try {
     const all = noteCalcul ? getNote(noteCalcul) : null;
     const out = masques.map((m) => construireMasque(all, m, options));
@@ -230,7 +231,7 @@ server.registerTool('generer_masques', {
       return e;
     });
     const dxf = sortieDxf ? ecrireNeuf(sortieDxf, 'dxf', masquesToDxf(out, { unite, origine }), 'latin1') : null;
-    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(out, { longueur3dMm, etudesChambres: etudes })) : null;
+    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(out, { longueur3dMm, etudesChambres: etudes, teinteFourreaux })) : null;
     const caoMulti = cad ? versMultiCAD(dessinsCao(out, etudes), placements || {}) : undefined;
     return ok({ dxf, pdf, masques: out, chambres: etudes.map(({ _masques, ...e }) => e), ...(caoMulti ? { multicad: caoMulti } : {}) });
   } catch (e) { return fail(String(e.message || e)); }
@@ -297,11 +298,12 @@ server.registerTool('etudier_reseau', {
       indice: z.string().optional().describe('Indice du plan (défaut A)'),
     }).optional().describe('Cartouche des pages chambre (PDF), comme dans l\'application'),
     sortiePdf: z.string().optional().describe('Nouveau fichier .pdf : synoptique, isométrique, métré, puis coupes et chambres'),
+    teinteFourreaux: z.enum(['rouge', 'vert']).optional().describe('Couleur des fourreaux dans la vue 3D du PDF : rouge (défaut) ou vert'),
     sortieDxf: z.string().optional().describe('Nouveau fichier .dxf : coupes et vues de dessus des chambres (côte à côte, ou aux placements donnés)'),
     cad: z.boolean().optional().describe('Renvoie les commandes de dessin pour le MCP multiCAD'),
     placements: placementSchema,
   },
-}, async ({ noteCalcul, elements, troncons, options, titre, cartouche, sortiePdf, sortieDxf, cad, placements }) => {
+}, async ({ noteCalcul, elements, troncons, options, titre, cartouche, sortiePdf, sortieDxf, cad, placements, teinteFourreaux }) => {
   try {
     const noms = new Set();
     for (const e of elements) { if (noms.has(e.nom)) throw new Error(`Élément en double : ${e.nom}`); noms.add(e.nom); }
@@ -383,7 +385,7 @@ server.registerTool('etudier_reseau', {
     const optsPage = { projet: titreDossier, date: new Date().toLocaleDateString('fr-FR'), indice: (cartouche && cartouche.indice) || 'A', situation, iso: synoptique, cartouche: cart };
     const pagesChambres = etudes.filter((e) => e.ok).flatMap((e) => Vue3D.pagesChambreA3(e, e._masques, optsPage, () => new Vue3D.Page({ ombre: false })))
       .map((pg) => ({ contenu: pg.toString(), largeur: A3W, hauteur: A3H, images: (pg.images || []).map((im) => ({ octets: im.src, x: im.x, y: im.y, w: im.w, h: im.h })) }));
-    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(masques, { pagesChambres, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
+    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(masques, { teinteFourreaux, pagesChambres, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
     const dessins = (cad || sortieDxf) ? dessinsCao(masques, etudes) : [];
     const dxf = sortieDxf ? ecrireNeuf(sortieDxf, 'dxf', versDxf(dessins, placements || {}), 'latin1') : null;
 

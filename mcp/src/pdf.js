@@ -19,7 +19,7 @@ function pageMasque(m, i, total, opts) {
   p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
   drawCoupe(p, m, MARGE + 50, zoneY, 300, zoneH - 10);
   p.text(440, zoneY + zoneH + 10, 9, `Vue 3D (tronçon de ${L / 1000} m, perspective cavalière)`, { bold: true });
-  draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, L);
+  draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, L, { teinte: opts.teinteFourreaux });
 
   // bas de page : légende, tranchée, conformité, avertissements
   let y = 185;
