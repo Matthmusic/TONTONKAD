@@ -9,7 +9,7 @@ qui cohabitent durablement.
 | Version | Dépôt | Rôle |
 |---|---|---|
 | **TONTONKAD 2.9.0** | `Matthmusic/TONTONKAD` | Dernière vraie version de TONTONKAD : interface déjà aux couleurs de nodial, code de reprise des données embarqué (sans effet sous TONTONKAD). |
-| **TONTONKAD 3.0.0** | `Matthmusic/TONTONKAD` | **Version de bascule.** Arrive par la mise à jour automatique habituelle ; son seul travail est d'installer nodial 0.0.1. |
+| **TONTONKAD 3.0.0** | `Matthmusic/TONTONKAD` | **Version de bascule**, publiée le jour de la sortie de nodial 0.0.1. Arrive par la mise à jour automatique ; affiche « TONTONKAD devient nodial. Merci d'avoir utilisé TONTONKAD ! » et un lien de téléchargement de nodial. |
 | **nodial 0.0.1** | nouveau dépôt nodial | Application nodial : `appId`, nom, dossier de données, mises à jour et fiche CEA App Store qui lui sont propres. |
 
 Pourquoi une bascule : la mise à jour automatique (electron-updater) n'installe jamais une version
@@ -21,11 +21,11 @@ l'ancien dépôt, qui fait le pont.
 | Réglage | TONTONKAD | nodial |
 |---|---|---|
 | `package.json` `name` / `build.productName` | `tontonkad` / `TONTONKAD` | `nodial` / `nodial` |
-| `build.appId` | `com.tontonkad.app` | **nouveau** (ex. `fr.cea.nodial`) — nodial s'installe à côté, puis TONTONKAD est retiré |
+| `build.appId` | `com.tontonkad.app` | **`nodial`** — nodial s'installe à côté de TONTONKAD (pas de mise à jour en place) |
 | Dossier de données | `%APPDATA%\TONTONKAD` | `%APPDATA%\nodial` (repris au 1er lancement, voir plus bas) |
 | Exécutable | `C:\Program Files\TONTONKAD\TONTONKAD.exe` | `C:\Program Files\nodial\nodial.exe` |
 | Installeur | `TONTONKAD-Setup-x.exe` | `nodial-Setup-x.exe` |
-| `build.publish` | `Matthmusic/TONTONKAD` | dépôt de diffusion nodial (voir « Dépôt privé ») |
+| `build.publish` | `Matthmusic/TONTONKAD` | `Matthmusic/nodial-releases` (public) |
 | Serveur MCP | `tontonkad` | `nodial` — l'ancienne inscription est retirée au branchement (déjà en place) |
 | Fichiers projet | `.tontonkad` | `.nodial`, et `.tontonkad` toujours ouvert (déjà en place) |
 
@@ -65,18 +65,31 @@ Les projets eux-mêmes sont des fichiers choisis par l'utilisateur : ils ne boug
 
 ## Déroulé de la bascule (TONTONKAD 3.0.0)
 
-1. Le poste reçoit la 3.0.0 par la mise à jour habituelle.
-2. Au démarrage, une fenêtre annonce « TONTONKAD devient nodial » et propose **Installer nodial** :
-   - l'app télécharge `nodial-Setup-0.0.1.exe` depuis `nodial-releases` ;
-   - elle contrôle l'empreinte sha512 annoncée par `latest.yml` ;
-   - elle lance l'installeur, puis se ferme.
-3. nodial démarre : il reprend les données, puis branche le MCP (ce qui retire « tontonkad »).
-4. nodial propose **Désinstaller TONTONKAD**. L'app lance le désinstalleur d'origine, et Windows
-   demande la validation administrateur, car l'installation est « pour tous les utilisateurs ».
-   L'utilisateur peut refuser : les deux apps coexistent alors sans conflit (dossiers et
-   `appId` distincts).
-5. Si l'utilisateur ferme la fenêtre de la 3.0.0, TONTONKAD continue de fonctionner, et la
-   fenêtre réapparaît au lancement suivant. Il ne faut pas bloquer quelqu'un en plein rendu.
+1. Le jour J, on publie nodial 0.0.1 dans `nodial-releases`, puis TONTONKAD 3.0.0 dans `TONTONKAD`.
+2. Les postes reçoivent la 3.0.0 par la mise à jour habituelle.
+3. Au lancement, la 3.0.0 affiche « **TONTONKAD devient nodial.** Merci d'avoir utilisé TONTONKAD ! »
+   et un bouton qui ouvre la page de téléchargement :
+   `https://github.com/Matthmusic/nodial-releases/releases/latest`.
+   On peut aussi pointer vers la fiche nodial du CEA App Store.
+4. L'utilisateur installe nodial, qui reprend ses réglages et catalogues au premier lancement. Le
+   branchement MCP retire l'ancienne inscription « tontonkad ».
+5. TONTONKAD peut ensuite être désinstallé depuis Windows ou depuis le store. Tant qu'il ne l'est
+   pas, les deux applications coexistent sans conflit : dossiers et `appId` distincts.
+
+## Workflow : build privé, release publique
+
+Le workflow actuel (`.github/workflows/build.yml`) publie dans le dépôt où il tourne, avec
+`GITHUB_TOKEN`. Ce jeton n'a aucun droit sur un autre dépôt. Le modèle
+`docs/nodial/build.yml`, à copier dans le dépôt nodial, change trois choses :
+
+- `electron-builder --publish never` : le build ne publie rien lui-même, mais l'app embarque
+  quand même l'adresse de `nodial-releases` pour ses mises à jour ;
+- la release est créée dans `Matthmusic/nodial-releases` avec un secret `RELEASES_TOKEN`. C'est
+  un jeton *fine-grained* limité à ce seul dépôt, avec la permission Contents en lecture-écriture ;
+- `cea-app.json` et l'icône sont recopiés sur `main` de `nodial-releases`, où le store les lit.
+  Les notes de release sont tirées du changelog de `cea-app.json`.
+
+On continue à pousser un tag `v0.0.1` sur le dépôt de build, exactement comme aujourd'hui.
 
 ## CEA App Store
 
@@ -92,10 +105,10 @@ Les projets eux-mêmes sont des fichiers choisis par l'utilisateur : ils ne boug
 
 1. **Maintenant** : publier TONTONKAD 2.9.0, puis créer `nodial` (privé) et `nodial-releases`
    (public) à partir de la branche actuelle.
-2. **nodial 0.0.1** : nouvel `appId`, nom, icônes du kit, charte, `publish` vers
-   `nodial-releases`, écran « Désinstaller TONTONKAD ». Faire le test « poste neuf » et le test
+2. **nodial 0.0.1** : `appId` `nodial`, nom, icônes du kit, charte, `publish` vers
+   `nodial-releases`, workflow `docs/nodial/build.yml`. Faire le test « poste neuf » et le test
    « poste avec TONTONKAD 2.9.0 ».
 3. **Pilote** : quelques postes installent nodial à la main depuis le store et vérifient la reprise.
-4. **TONTONKAD 3.0.0** : publier la bascule ; le parc passe à nodial au fil des démarrages.
+4. **Jour J** : nodial 0.0.1 puis TONTONKAD 3.0.0 (écran « TONTONKAD devient nodial » + lien).
 5. **Après quelques semaines** : retirer la fiche TONTONKAD du store, archiver le dépôt TONTONKAD.
    Ne pas le supprimer : les postes restés en 2.x y cherchent leurs mises à jour.
