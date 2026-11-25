@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron')
 const path = require('path');
 const fs = require('fs').promises;
 const McpClaude = require('./mcp-claude.js');
+const Transition = require('./transition-nodial.js');
 
 let mainWindow;
 let autoUpdater = null; // Chargé de façon lazy après que l'app soit prête
@@ -722,6 +723,17 @@ app.whenReady().then(async () => {
   userDataPath = app.getPath('userData');
   configPath = path.join(userDataPath, 'config.json');
 
+  // nodial : reprise des réglages de TONTONKAD au premier lancement (sans effet sous TONTONKAD)
+  let reprise = null;
+  if (!isDev) {
+    try {
+      reprise = await Transition.reprendreDonnees({ userData: userDataPath, fs });
+      if (reprise.action !== 'rien') console.log('[OK] Reprise TONTONKAD:', reprise.copies.map(c => c.de));
+    } catch (error) {
+      console.error('[ERROR] Reprise des donnees TONTONKAD:', error);
+    }
+  }
+
   // En mode dev, utiliser directement le dossier data du projet
   // En production, utiliser APPDATA
   if (isDev) {
@@ -745,6 +757,9 @@ app.whenReady().then(async () => {
 
   console.log(`[INFO] Dossier de donnees actif: ${activeDataFolder}`);
   createWindow();
+  if (reprise && reprise.action === 'copier') {
+    mainWindow.webContents.once('did-finish-load', () => mainWindow.webContents.send('reprise-tontonkad', { elements: reprise.copies.length }));
+  }
 });
 
 app.on('window-all-closed', () => {

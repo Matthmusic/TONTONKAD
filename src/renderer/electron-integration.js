@@ -223,6 +223,15 @@
   // Stocker les infos de mise à jour
   let updateInfo = null;
 
+  // nodial : les réglages de TONTONKAD ont été repris au premier lancement
+  if (window.electronAPI.onRepriseTontonkad) {
+    window.electronAPI.onRepriseTontonkad(() => {
+      if (typeof window.showToast === 'function') {
+        window.showToast('Vos réglages et catalogues TONTONKAD ont été repris dans nodial.', 'success', 7000);
+      }
+    });
+  }
+
   // Listener pour l'événement update-available depuis le main process
   window.electronAPI.onUpdateAvailable((info) => {
     console.log('Mise à jour disponible:', info);
