@@ -1050,15 +1050,13 @@ function drawSynoptique2D(p, data, zx, zy, zw, zh) {
 // volume, coffrets = armoires, sorties = bornes ; tranchées = bandes de terre.
 function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) { // data n'est pas modifié (copie)
   if (!data.noeuds.length) return;
-  const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
-  // Scène tournée autour de la verticale (isométrie vraie, vue depuis un autre angle) :
-  // le grand axe du réseau court presque à l'horizontale au lieu d'une fine diagonale
-  // qui laissait la feuille vide. Reste sous 45° : on voit toujours les faces +x et +y.
-  const ext = (k) => Math.max(...data.noeuds.map((n) => n[k])) - Math.min(...data.noeuds.map((n) => n[k]));
-  const th = (ext('x') >= ext('y') ? 27 : -27) * Math.PI / 180, cr = Math.cos(th), sr = Math.sin(th);
-  const tourne = (x, y) => [x * cr + y * sr, -x * sr + y * cr];
-  const iso = (x, y, z) => { const [a, b] = tourne(x, y); return [(a - b) * C, -(a + b) * S + z]; };
-  const profondeur = (x, y) => { const [a, b] = tourne(x, y); return a + b; }; // grand = devant
+  // Vue planométrique : le plan est CELUI DU SYNOPTIQUE (côté 2 → 4 à l'horizontale,
+  // côté 1 → 3 à la verticale, mêmes positions) et les hauteurs montent en oblique
+  // vers le haut-gauche ; on voit le dessus et les faces droite (2) et basse (3).
+  // Représentation graphique, pas à l'échelle. (y du synoptique vers le bas.)
+  const KX = 0.34, KY = 0.62;
+  const iso = (x, y, z) => [x - z * KX, -y + z * KY];
+  const profondeur = (x, y) => x * KX + y * KY; // grand = devant (bas-droite)
   // Volumes proportionnés aux éléments du synoptique 2D (w × h, mêmes positions) ;
   // à défaut (ancien appel), tailles fixes.
   const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
@@ -1079,7 +1077,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
   const dimsDe = (n) => {
     if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
     if (n.type === 'chambre') return [n.w * 0.8 * G, n.h * 0.8 * G, n.h * 0.55 * G];
-    if (n.type === 'coffret') return [n.w * 0.45 * G, n.h * 0.55 * G, n.h * 1.3 * G];
+    if (n.type === 'coffret') return [n.w * 0.45 * G, n.h * 0.55 * G, n.h * 0.9 * G];
     return [n.h * 0.45 * G, n.h * 0.45 * G, n.h * 0.9 * G];
   };
   const unite = (data.noeuds.some((n) => n.w > 0) ? 1.9 : 1) * G; // tranchées à l'échelle des volumes
@@ -1247,6 +1245,18 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
     return { x0: Math.min(...q.map((v) => v[0])), x1: Math.max(...q.map((v) => v[0])), y0: Math.min(...q.map((v) => v[1])), y1: Math.max(...q.map((v) => v[1])) };
   };
   data.noeuds.forEach((n) => { n._emprise = empriseVolume(n); occupes.push(n._emprise); });
+  // tranchées aussi (tracés orthogonaux : emprise de chaque segment assez juste)
+  data.troncons.forEach((t) => {
+    const q = trace(t);
+    q.slice(1).forEach((b, k) => {
+      const a = q[k], c = [];
+      [-1, 1].forEach((sg) => [-HAUT, HAUT].forEach((dz) => [a, b].forEach((E) => {
+        const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / L * LARG, ny = (b.x - a.x) / L * LARG;
+        c.push(P(E.x + sg * nx, E.y + sg * ny, E.z + dz));
+      })));
+      occupes.push({ x0: Math.min(...c.map((v) => v[0])), x1: Math.max(...c.map((v) => v[0])), y0: Math.min(...c.map((v) => v[1])), y1: Math.max(...c.map((v) => v[1])) });
+    });
+  });
   // Étiquette d'élément : posée AU-DESSUS du volume (écart fixe en points, quel que soit
   // le zoom), sinon à côté ; jamais sur un volume ni sur une autre étiquette.
   [...data.noeuds].sort((a, b) => (a.type === 'chambre' ? 0 : 1) - (b.type === 'chambre' ? 0 : 1)).forEach((n) => {

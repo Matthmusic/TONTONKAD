@@ -79716,18 +79716,9 @@ var require_vue3d = __commonJS({
       }
       function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
         if (!data.noeuds.length) return;
-        const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
-        const ext = (k) => Math.max(...data.noeuds.map((n) => n[k])) - Math.min(...data.noeuds.map((n) => n[k]));
-        const th = (ext("x") >= ext("y") ? 27 : -27) * Math.PI / 180, cr = Math.cos(th), sr = Math.sin(th);
-        const tourne = (x, y) => [x * cr + y * sr, -x * sr + y * cr];
-        const iso = (x, y, z2) => {
-          const [a, b] = tourne(x, y);
-          return [(a - b) * C, -(a + b) * S + z2];
-        };
-        const profondeur = (x, y) => {
-          const [a, b] = tourne(x, y);
-          return a + b;
-        };
+        const KX = 0.34, KY = 0.62;
+        const iso = (x, y, z2) => [x - z2 * KX, -y + z2 * KY];
+        const profondeur = (x, y) => x * KX + y * KY;
         const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
         const G = (() => {
           const ch = data.noeuds.filter((n) => n.type === "chambre" && n.w > 0);
@@ -79743,7 +79734,7 @@ var require_vue3d = __commonJS({
         const dimsDe = (n) => {
           if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
           if (n.type === "chambre") return [n.w * 0.8 * G, n.h * 0.8 * G, n.h * 0.55 * G];
-          if (n.type === "coffret") return [n.w * 0.45 * G, n.h * 0.55 * G, n.h * 1.3 * G];
+          if (n.type === "coffret") return [n.w * 0.45 * G, n.h * 0.55 * G, n.h * 0.9 * G];
           return [n.h * 0.45 * G, n.h * 0.45 * G, n.h * 0.9 * G];
         };
         const unite = (data.noeuds.some((n) => n.w > 0) ? 1.9 : 1) * G;
@@ -79905,6 +79896,17 @@ var require_vue3d = __commonJS({
         data.noeuds.forEach((n) => {
           n._emprise = empriseVolume(n);
           occupes.push(n._emprise);
+        });
+        data.troncons.forEach((t) => {
+          const q = trace(t);
+          q.slice(1).forEach((b, k) => {
+            const a = q[k], c = [];
+            [-1, 1].forEach((sg) => [-HAUT, HAUT].forEach((dz) => [a, b].forEach((E) => {
+              const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / L * LARG, ny = (b.x - a.x) / L * LARG;
+              c.push(P(E.x + sg * nx, E.y + sg * ny, E.z + dz));
+            })));
+            occupes.push({ x0: Math.min(...c.map((v) => v[0])), x1: Math.max(...c.map((v) => v[0])), y0: Math.min(...c.map((v) => v[1])), y1: Math.max(...c.map((v) => v[1])) });
+          });
         });
         [...data.noeuds].sort((a, b) => (a.type === "chambre" ? 0 : 1) - (b.type === "chambre" ? 0 : 1)).forEach((n) => {
           const e = n._emprise, w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h = n.sous ? 22 : 14;
