@@ -927,11 +927,14 @@ function dessinerPageChambreA3(p, e, masques, opts = {}) {
         // vue isométrique complète (chambre entourée en rouge) + encart zoomé en bas à
         // gauche (le réseau descend vers la droite : ce coin est le plus libre)
         const enc = { w: zi.w * 0.44, h: zi.h * 0.48 }; enc.x = zi.x; enc.y = zi.y;
-        const res = drawSynoptiqueIso(p, opts.iso, zi.x, zi.y, zi.w, zi.h, { repere: e.nom, reserve: enc, echelleMax: Infinity }) || {};
-        if (res.repere) { // trait de rappel du repère vers l'encart
-          const r = res.repere;
+        const oIso = { repere: e.nom, reserve: enc, echelleMax: Infinity };
+        // trait de rappel du repère vers l'encart, tracé AVANT la vue (sous les étiquettes)
+        const essai = drawSynoptiqueIso(new Page({ emitText: false, ombre: false }), opts.iso, zi.x, zi.y, zi.w, zi.h, oIso) || {};
+        if (essai.repere) {
+          const r = essai.repere;
           p.rgb([0.85, 0.11, 0.11]).width(0.7).dash(true).line(r.x0, (r.y0 + r.y1) / 2, enc.x + enc.w, enc.y + enc.h * 0.6).dash(false);
         }
+        drawSynoptiqueIso(p, opts.iso, zi.x, zi.y, zi.w, zi.h, oIso);
         p.rgb([1, 1, 1], false).rgb([0.45, 0.48, 0.53]).width(0.9).rect(enc.x, enc.y, enc.w, enc.h, 'B');
         drawSynoptiqueIso(p, opts.iso, enc.x + 2, enc.y + 2, enc.w - 4, enc.h - 4, { cible: e.nom, echelleMax: Infinity });
         p.rgb([0.45, 0.48, 0.53]).width(0.9).rect(enc.x, enc.y, enc.w, enc.h, 'S');
@@ -1122,6 +1125,9 @@ function drawSynoptique2D(p, data, zx, zy, zw, zh) {
 //   trait      : { couleur [r,g,b], epaisseur (pt), selonFourreaux, liseré }
 //   cible      : nom d'une chambre → vue centrée, cercle rouge et côtés 1 à 4
 //   troncon    : [nomA, nomB] → tronçon en rouge, vue centrée dessus (page de coupe)
+// Cercle rouge de la vue centrée : marge autour du volume (× sa plus grande dimension)
+// et rayon minimal à l'écran (pt).
+const ANNEAU = { marge: 0.18, mini: 26 };
 const ISO_DEFAUT = { projection: 'iso', liaisons: 'sol', etiquettesTroncons: false, trait: { couleur: [0.086, 0.098, 0.114], epaisseur: 3.2, selonFourreaux: true, liseré: true } }; // variante C retenue (atelier)
 function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est pas modifié (copie)
   if (!data.noeuds.length) return;
@@ -1220,21 +1226,38 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
     const mx = (TR.a.x + TR.b.x) / 2, my = (TR.a.y + TR.b.y) / 2, R = Math.max(80, Math.hypot(TR.b.x - TR.a.x, TR.b.y - TR.a.y) * 0.75);
     cadres = data.noeuds.filter((n) => Math.hypot(n.x - mx, n.y - my) <= R);
   }
-  if (CIBLE) {
+  if (CIBLE) { // zoom serré : la chambre et ses abords (pas jusqu'aux chambres voisines)
     const dV = data.troncons.filter((t) => (t.a.x === CIBLE.x && t.a.y === CIBLE.y) || (t.b.x === CIBLE.x && t.b.y === CIBLE.y))
       .map((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y));
-    const R = Math.max(80, ...dV) * 1.05;
-    cadres = data.noeuds.filter((n) => Math.hypot(n.x - CIBLE.x, n.y - CIBLE.y) <= R);
+    void dV;
+    // la chambre et ses voisins directs (reliés par un tronçon) : on voit les chambres
+    // adjacentes, sans aller au-delà
+    const relie = (n) => data.troncons.some((t) => {
+      const ici = (e) => e.x === CIBLE.x && e.y === CIBLE.y, la = (e) => e.x === n.x && e.y === n.y;
+      return (ici(t.a) && la(t.b)) || (ici(t.b) && la(t.a));
+    });
+    cadres = data.noeuds.filter((n) => n === CIBLE || relie(n));
   }
   // cadrage sur l'emprise projetée
   const pts = [];
   cadres.forEach((n) => { const [a, b, h] = dimsDe(n); [[-a, -b, 0], [a, -b, 0], [a, b, 0], [-a, b, 0], [-a, -b, h], [a, -b, h], [a, b, h], [-a, b, h]].forEach(([dx, dy, z]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z + 18 * unite))); });
-  const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
-  const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
+
+  const PADU = CIBLE ? 6 : 20;
+  const X0 = Math.min(...pts.map((q) => q[0])) - PADU, X1 = Math.max(...pts.map((q) => q[0])) + PADU;
+  const Y0 = Math.min(...pts.map((q) => q[1])) - PADU, Y1 = Math.max(...pts.map((q) => q[1])) + PADU;
   // marge pour les étiquettes (taille fixe en points, elles débordent des volumes)
-  const MX = Math.min(90, zw * 0.12), MY = Math.min(40, zh * 0.08);
+  const MX = CIBLE ? Math.min(30, zw * 0.06) : Math.min(90, zw * 0.12), MY = CIBLE ? Math.min(18, zh * 0.05) : Math.min(40, zh * 0.08);
   const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), echelleMax);
-  const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
+  let ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
+  if (CIBLE) { // chambre en bout de réseau : on décale pour garder le cercle et ses 4 numéros entiers
+    // même cercle que anneauCible, projeté exactement
+    const [a0, b0] = dimsDe(CIBLE), m0 = ANNEAU.marge * Math.max(a0, b0), mini0 = ANNEAU.mini / (s * 0.8);
+    const rx0 = Math.max(a0 / 2 + m0, mini0), ry0 = Math.max(b0 / 2 + m0, mini0), PAS = 14; // + pastille
+    const q = Array.from({ length: 36 }, (_, i) => { const t = i / 36 * 2 * Math.PI, [u, v] = iso(CIBLE.x + rx0 * Math.cos(t), CIBLE.y + ry0 * Math.sin(t), 0); return [ox + u * s, oy + v * s]; });
+    const x0 = Math.min(...q.map((k) => k[0])) - PAS, x1 = Math.max(...q.map((k) => k[0])) + PAS, y0 = Math.min(...q.map((k) => k[1])) - PAS, y1 = Math.max(...q.map((k) => k[1])) + PAS;
+    if (x0 < zx) ox += zx - x0; else if (x1 > zx + zw) ox -= x1 - (zx + zw);
+    if (y0 < zy) oy += zy - y0; else if (y1 > zy + zh) oy -= y1 - (zy + zh);
+  }
   const P = (x, y, z = 0) => { const [u, v] = iso(x, y, z); return [ox + u * s, oy + v * s]; };
   const LARG = 7 * unite, HAUT = 6 * unite; // demi-largeur et demi-hauteur des tranchées
   // Point de raccordement d'un bout de tranchée : sur la face de la chambre
@@ -1400,29 +1423,38 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
   // Cercle rouge autour de la chambre ciblée : marge autour du volume, et au moins
   // ~40 pt de rayon à l'écran pour que les pastilles 1 à 4 ne se tassent pas (K1C).
   function anneauCible() {
-    const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), mini = 40 / (s * 0.8);
+    const [a, b] = dimsDe(CIBLE), m = ANNEAU.marge * Math.max(a, b), mini = ANNEAU.mini / (s * 0.8);
     return { rx: Math.max(a / 2 + m, mini), ry: Math.max(b / 2 + m, mini) };
   }
   if (CIBLE) { // cercle rouge et pastilles des côtés : réservés avant les étiquettes
     const { rx, ry } = anneauCible();
     for (let i = 0; i < 48; i++) { const t = (i / 48) * 2 * Math.PI, [x, y] = P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0); occupes.push({ x0: x - 3, x1: x + 3, y0: y - 3, y1: y + 3 }); }
-    [[0, -ry], [rx, 0], [0, ry], [-rx, 0]].forEach(([ex, ey]) => { const [x, y] = P(CIBLE.x + ex, CIBLE.y + ey, 0); occupes.push({ x0: x - 13, x1: x + 13, y0: y - 13, y1: y + 13 }); });
+    [[0, -ry], [rx, 0], [0, ry], [-rx, 0]].forEach(([ex, ey]) => { const [x, y] = P(CIBLE.x + ex, CIBLE.y + ey, 0); occupes.push({ x0: x - 12, x1: x + 12, y0: y - 12, y1: y + 12 }); });
   }
   const RES = O.reserve ? { x0: O.reserve.x, x1: O.reserve.x + O.reserve.w, y0: O.reserve.y, y1: O.reserve.y + O.reserve.h } : null;
   if (RES) occupes.push(RES, RES, RES); // poids fort : une étiquette n'y va qu'en dernier recours
   const ordreEtq = [...data.noeuds].sort((a, b) => (a.type === 'chambre' ? 0 : 1) - (b.type === 'chambre' ? 0 : 1));
+  // Les étiquettes restent DANS le cadre (zx, zy, zw, zh) : une position qui en sort
+  // est très pénalisée, et celle retenue est ramenée à l'intérieur au besoin.
+  const CADRE = { x0: zx + 3, x1: zx + zw - 3, y0: zy + 3, y1: zy + zh - 3 };
+  const horsCadre = (r) => Math.max(0, CADRE.x0 - r.x0) + Math.max(0, r.x1 - CADRE.x1) + Math.max(0, CADRE.y0 - r.y0) + Math.max(0, r.y1 - CADRE.y1);
   ordreEtq.forEach((n) => {
     const e = n._emprise, w = ETQ.w(n.nom), h = ETQ.h, cx = (e.x0 + e.x1) / 2, cy = (e.y0 + e.y1) / 2, ew = e.x1 - e.x0, eh = e.y1 - e.y0;
+    const [nx0, ny0] = P(n.x, n.y, 0);
+    if (nx0 < zx || nx0 > zx + zw || ny0 < zy || ny0 > zy + zh) { n._etiq = null; return; } // élément hors du cadre (coupé) : pas d'étiquette
     let best = null;
     for (const d of [3, 12, 24, 40, 62]) {
       for (const [dx, dy, pen] of DIRS) {
         const bx = cx + dx * (ew / 2 + w / 2 + d), by = cy + dy * (eh / 2 + h / 2 + d);
         const r = { x0: bx - w / 2 - 2, x1: bx + w / 2 + 2, y0: by - h / 2 - 2, y1: by + h / 2 + 2 };
-        const score = chevauche(r) * 40 + d * 1.2 + pen * 4;
+        const score = chevauche(r) * 40 + horsCadre(r) * 400 + d * 1.2 + pen * 4;
         if (!best || score < best.score) best = { score, bx, by, r, d };
       }
       if (best && best.score < 70) break; // place nette trouvée à cette distance
     }
+    // ramenée dans le cadre si elle déborde encore (trait de rappel vers le volume)
+    const bx = Math.min(CADRE.x1 - w / 2, Math.max(CADRE.x0 + w / 2, best.bx)), by = Math.min(CADRE.y1 - h / 2, Math.max(CADRE.y0 + h / 2, best.by));
+    if (bx !== best.bx || by !== best.by) best = { ...best, bx, by, d: Math.max(best.d, 12), r: { x0: bx - w / 2 - 2, x1: bx + w / 2 + 2, y0: by - h / 2 - 2, y1: by + h / 2 + 2 } };
     n._etiq = best; occupes.push(best.r);
   });
   if (O.etiquettesTroncons) data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
