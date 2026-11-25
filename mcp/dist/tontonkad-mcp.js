@@ -79717,19 +79717,69 @@ var require_vue3d = __commonJS({
       function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
         if (!data.noeuds.length) return;
         const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
-        const iso = (x, y, z2) => [(x - y) * C, -(x + y) * S + z2];
+        const ext = (k) => Math.max(...data.noeuds.map((n) => n[k])) - Math.min(...data.noeuds.map((n) => n[k]));
+        const th = (ext("x") >= ext("y") ? 27 : -27) * Math.PI / 180, cr = Math.cos(th), sr = Math.sin(th);
+        const tourne = (x, y) => [x * cr + y * sr, -x * sr + y * cr];
+        const iso = (x, y, z2) => {
+          const [a, b] = tourne(x, y);
+          return [(a - b) * C, -(a + b) * S + z2];
+        };
+        const profondeur = (x, y) => {
+          const [a, b] = tourne(x, y);
+          return a + b;
+        };
         const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+        const G = (() => {
+          const ch = data.noeuds.filter((n) => n.type === "chambre" && n.w > 0);
+          if (!ch.length || !data.troncons.length) return 1;
+          const lg = data.troncons.map((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y)).sort((u, v) => u - v), L = lg[Math.floor(lg.length * 0.75)];
+          const wMax = Math.max(...ch.map((n) => n.w * 0.8));
+          let dmin = Infinity;
+          ch.forEach((a, i) => ch.forEach((b, j) => {
+            if (j > i) dmin = Math.min(dmin, Math.hypot(a.x - b.x, a.y - b.y));
+          }));
+          return Math.max(1, Math.min(3, 0.4 * L / wMax, 0.6 * dmin / wMax));
+        })();
         const dimsDe = (n) => {
           if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
-          if (n.type === "chambre") return [n.w * 0.8, n.h * 0.8, n.h * 0.55];
-          if (n.type === "coffret") return [n.w * 0.45, n.h * 0.55, n.h * 1.3];
-          return [n.h * 0.45, n.h * 0.45, n.h * 0.9];
+          if (n.type === "chambre") return [n.w * 0.8 * G, n.h * 0.8 * G, n.h * 0.55 * G];
+          if (n.type === "coffret") return [n.w * 0.45 * G, n.h * 0.55 * G, n.h * 1.3 * G];
+          return [n.h * 0.45 * G, n.h * 0.45 * G, n.h * 0.9 * G];
         };
-        const unite = data.noeuds.some((n) => n.w > 0) ? 1.9 : 1;
+        const unite = (data.noeuds.some((n) => n.w > 0) ? 1.9 : 1) * G;
+        data = { ...data, noeuds: data.noeuds.map((n) => ({ ...n })), troncons: data.troncons.map((t) => ({ ...t, a: { ...t.a }, b: { ...t.b } })) };
+        {
+          const NORM = { pignonA: [-1, 0], pignonB: [1, 0], longPanA: [0, 1], longPanB: [0, -1] };
+          const parPos = (x, y) => data.noeuds.find((n) => n.x === x && n.y === y);
+          data.troncons.forEach((t) => {
+            [[t.a, t.b], [t.b, t.a]].forEach(([c, o]) => {
+              if (c.type !== "chambre" || o.type === "chambre") return;
+              const ch = parPos(c.x, c.y), autre = parPos(o.x, o.y);
+              if (!ch || !autre) return;
+              let [ux, uy] = NORM[c.face] || [o.x - c.x, o.y - c.y];
+              const l = Math.hypot(ux, uy) || 1;
+              ux /= l;
+              uy /= l;
+              const [a, b] = dimsDe(ch), [a2, b2] = dimsDe(autre);
+              const besoin = Math.abs(ux) * (a + a2) / 2 + Math.abs(uy) * (b + b2) / 2 + 28 * unite;
+              const dn = (o.x - c.x) * ux + (o.y - c.y) * uy;
+              if (dn >= besoin) return;
+              const ox2 = o.x, oy2 = o.y, nx = o.x + ux * (besoin - dn), ny = o.y + uy * (besoin - dn);
+              autre.x = nx;
+              autre.y = ny;
+              data.troncons.forEach((t2) => [t2.a, t2.b].forEach((e) => {
+                if (e.x === ox2 && e.y === oy2) {
+                  e.x = nx;
+                  e.y = ny;
+                }
+              }));
+            });
+          });
+        }
         const pts = [];
         data.noeuds.forEach((n) => {
           const [a, b, h] = dimsDe(n);
-          [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18 * unite)));
+          [[-a, -b, 0], [a, -b, 0], [a, b, 0], [-a, b, 0], [-a, -b, h], [a, -b, h], [a, b, h], [-a, b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18 * unite)));
         });
         const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
         const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
@@ -79762,7 +79812,7 @@ var require_vue3d = __commonJS({
           const cum = net.map((q, k) => k ? L += Math.hypot(q.x - net[k - 1].x, q.y - net[k - 1].y) : 0);
           return net.map((q, k) => ({ ...q, z: A.z + (B.z - A.z) * (L ? cum[k] / L : 0) }));
         }
-        const vue = (vx, vy) => vx + vy;
+        const vue = profondeur;
         function segment(A0, B0, extA, extB, finA, finB) {
           const dx0 = B0.x - A0.x, dy0 = B0.y - A0.y, L0 = Math.hypot(dx0, dy0) || 1, ux = dx0 / L0, uy = dy0 / L0;
           const A = { ...A0, x: A0.x - (extA ? ux * LARG : 0), y: A0.y - (extA ? uy * LARG : 0) };
@@ -79808,7 +79858,7 @@ var require_vue3d = __commonJS({
             }
             if (best && best.c === 0) break;
           }
-          if (best) {
+          if (best && best.c <= 0.15 * (best.r.x1 - best.r.x0) * (best.r.y1 - best.r.y0)) {
             occupes.push(best.r);
             etiquettesTroncons.push(() => {
               if (best.decale) {
@@ -79823,7 +79873,7 @@ var require_vue3d = __commonJS({
         function tranchee(t) {
           const pts2 = trace(t);
           return pts2.slice(1).map((q, k) => ({
-            cle: (pts2[k].x + pts2[k].y + q.x + q.y) / 2,
+            cle: profondeur((pts2[k].x + q.x) / 2, (pts2[k].y + q.y) / 2),
             dessiner: () => segment(pts2[k], q, k > 0, k < pts2.length - 2, k === 0 && t.a.type !== "chambre", k === pts2.length - 2 && t.b.type !== "chambre")
           }));
         }
@@ -79847,13 +79897,32 @@ var require_vue3d = __commonJS({
           });
         }
         const etiquettes = [];
+        const empriseVolume = (n) => {
+          const [a, b, h] = dimsDe(n), z0 = n.type === "chambre" ? -8 * unite : 0, q = [];
+          [-1, 1].forEach((i) => [-1, 1].forEach((j) => [z0, z0 + h].forEach((z2) => q.push(P(n.x + i * a / 2, n.y + j * b / 2, z2)))));
+          return { x0: Math.min(...q.map((v) => v[0])), x1: Math.max(...q.map((v) => v[0])), y0: Math.min(...q.map((v) => v[1])), y1: Math.max(...q.map((v) => v[1])) };
+        };
         data.noeuds.forEach((n) => {
-          const [, , h0] = dimsDe(n), z1 = (n.type === "chambre" ? -8 * unite : 0) + h0;
-          const [tx0, ty0] = P(n.x, n.y, z1 + 14), w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h = n.sous ? 22 : 14;
+          n._emprise = empriseVolume(n);
+          occupes.push(n._emprise);
+        });
+        [...data.noeuds].sort((a, b) => (a.type === "chambre" ? 0 : 1) - (b.type === "chambre" ? 0 : 1)).forEach((n) => {
+          const e = n._emprise, w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h = n.sous ? 22 : 14;
           const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
+          const cx = (e.x0 + e.x1) / 2, cy = (e.y0 + e.y1) / 2;
+          const essais = [
+            [cx, e.y1 + h - 4],
+            [cx, e.y1 + 2 * h],
+            [e.x1 + w / 2 + 6, cy + h / 2 - 4],
+            [e.x0 - w / 2 - 6, cy + h / 2 - 4],
+            [cx, e.y0 - 14],
+            [e.x1 + w / 2 + 6, e.y1 + h],
+            [e.x0 - w / 2 - 6, e.y1 + h],
+            [cx, e.y1 + 3 * h]
+          ];
           let best = null;
-          for (const [dx, dy] of [[0, 0], [0, 1], [0, 2], [1, 0], [-1, 0], [1, 1], [-1, 1], [0, -2]]) {
-            const tx = tx0 + dx * (w / 2 + 10), ty = ty0 + dy * (h + 6), c = chevauche(rect(tx, ty));
+          for (const [tx, ty] of essais) {
+            const c = chevauche(rect(tx, ty));
             if (!best || c < best.c) best = { c, tx, ty };
             if (c === 0) break;
           }
@@ -79864,10 +79933,10 @@ var require_vue3d = __commonJS({
         const elements = [
           ...data.troncons.flatMap((t) => tranchee(t)),
           ...data.noeuds.map((n) => {
-            let cle = n.x + n.y;
+            let cle = profondeur(n.x, n.y);
             if (n.type !== "chambre") data.troncons.forEach((t) => {
               const ici = t.a.x === n.x && t.a.y === n.y || t.b.x === n.x && t.b.y === n.y;
-              if (ici) cle = Math.max(cle, (t.a.x + t.a.y + t.b.x + t.b.y) / 2 + 0.01);
+              if (ici) cle = Math.max(cle, profondeur((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2) + 0.01);
             });
             return { cle, dessiner: () => volume(n) };
           })
@@ -79875,6 +79944,7 @@ var require_vue3d = __commonJS({
         elements.forEach((e) => e.dessiner());
         etiquettesTroncons.forEach((f2) => f2());
         etiquettes.forEach((f2) => f2());
+        return { noeuds: data.noeuds.map((n) => P(n.x, n.y, 0)) };
       }
       function couperEnLargeur(data, Wu) {
         const pris = [];

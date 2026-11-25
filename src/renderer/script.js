@@ -8158,7 +8158,7 @@
     });
     cv.addEventListener('mousemove', (ev) => {
       const p = pos(ev);
-      if (SYN.pan) { SYN.zoom.px = SYN.pan.px + (ev.clientX - SYN.pan.x); SYN.zoom.py = SYN.pan.py - (ev.clientY - SYN.pan.y); planifierSyn(); return; }
+      if (SYN.pan) { const e = echelleSyn(); SYN.zoom.px = SYN.pan.px + (ev.clientX - SYN.pan.x) / e; SYN.zoom.py = SYN.pan.py - (ev.clientY - SYN.pan.y) / e; planifierSyn(); return; }
       if (SYN.glisse) {
         const g = SYN.glisse, k = (SYN.vue && SYN.vue.k) || 1, mx = ev.clientX - g.x, my = ev.clientY - g.y;
         if (!g.bouge && Math.hypot(mx, my) < 4) return;
@@ -8207,7 +8207,7 @@
       const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 }), r = cv.getBoundingClientRect();
       const f = Math.exp(-ev.deltaY * 0.0015), k2 = Math.max(1, Math.min(12, z.k * f)), g = k2 / z.k;
       // zoom autour du curseur
-      const cx = ev.clientX - r.left - r.width / 2, cy = ev.clientY - r.top - r.height / 2;
+      const e = echelleSyn(), cx = (ev.clientX - r.left - r.width / 2) / e, cy = (ev.clientY - r.top - r.height / 2) / e;
       const cyp = -cy; // décalage vertical compté vers le haut (repère du dessin)
       z.px = cx - (cx - z.px) * g; z.py = cyp - (cyp - z.py) * g; z.k = k2;
       if (k2 === 1) { z.px = 0; z.py = 0; }
@@ -8229,10 +8229,12 @@
     return o;
   }
 
+  const TAU_ISO = 1.4; // agrandissement écran de la vue isométrique (texte lisible)
+  const echelleSyn = () => (SYN.mode === 'iso' ? TAU_ISO : 1); // px écran par unité de page
   function dessinerSynoptique(panneau = true, rapide = false) {
     const o = document.getElementById('reseauOverlay');
     if (!o || o.hidden || !reseau) return;
-    const cv = o.querySelector('#reseauCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const cv = o.querySelector('#reseauCanvas'); let zone = cv.parentElement.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
     cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
     cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
     const ctx = cv.getContext('2d');
@@ -8240,9 +8242,32 @@
     const th = themeCanvas();
     if (SYN.mode === 'iso') {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height); // feuille, même rendu que le PDF
-      const page = new window.Vue3D.Page({ emitText: false, ombre: false });
-      const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 }), zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
-      window.Vue3D.drawSynoptiqueIso(page, donneesSynoptique(rapide), (zone.width - zw) / 2 + z.px, (zone.height - zh) / 2 + z.py, zw, zh, { echelleMax: Infinity });
+      // Écran : étiquettes en points comme le PDF, donc trop petites ; page dessinée
+      // τ fois plus petite puis agrandie de τ (texte et volumes ensemble).
+      const TAU = TAU_ISO, zoneEcran = zone;
+      zone = { width: zoneEcran.width / TAU, height: zoneEcran.height / TAU };
+      ctx.setTransform(dpr * TAU, 0, 0, dpr * TAU, 0, 0);
+      const page = new window.Vue3D.Page({ emitText: false, ombre: false }), dataIso = donneesSynoptique(rapide);
+      const dessinerIso = (pg, z) => {
+        const zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
+        return window.Vue3D.drawSynoptiqueIso(pg, dataIso, (zone.width - zw) / 2 + z.px, (zone.height - zh) / 2 + z.py, zw, zh, { echelleMax: Infinity });
+      };
+      if (!SYN.zoom) { // cadrage initial lisible : éléments voisins espacés d'~120 px, début du réseau à gauche
+        const brouillon = (z) => (dessinerIso(new window.Vue3D.Page({ emitText: false, ombre: false }), z) || {}).noeuds || [];
+        const p1 = brouillon({ k: 1, px: 0, py: 0 }), ici = new Map(dataIso.noeuds.map((n, i) => [`${n.x},${n.y}`, p1[i]]));
+        const lg = dataIso.troncons.map((t) => { const a = ici.get(`${t.a.x},${t.a.y}`), b = ici.get(`${t.b.x},${t.b.y}`); return a && b ? Math.hypot(a[0] - b[0], a[1] - b[1]) : 0; }).filter((v) => v > 0).sort((a, b) => a - b);
+        const k = lg.length ? Math.max(1, Math.min(8, 150 / lg[Math.floor(lg.length * 0.75)])) : 1; // tronçons principaux (les postes collés à leur chambre ne comptent pas)
+        SYN.zoom = { k, px: 0, py: 0 };
+        if (k > 1) {
+          const pos = brouillon(SYN.zoom);
+          if (pos.length) {
+            const x0 = Math.min(...pos.map((q) => q[0])), vis = pos.filter((q) => q[0] <= x0 + zone.width * 0.75).map((q) => q[1]).sort((a, b) => a - b);
+            SYN.zoom.px = zone.width * 0.2 - x0;
+            SYN.zoom.py = zone.height / 2 - vis[vis.length >> 1];
+          }
+        }
+      }
+      dessinerIso(page, SYN.zoom);
       window.Vue3D.rejouerSurCanvas(ctx, page, zone.height);
       if (panneau) remplirEdition();
       return;
