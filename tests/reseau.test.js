@@ -38,11 +38,15 @@ describe('réseau de chambres', () => {
     expect(R.nomTroncon(r, v.troncon)).toBe('C1 → C2');
   });
 
-  test('face occupée refusée ; suppression d\'un nœud supprime ses tronçons', () => {
+  test('côté partagé entre plusieurs tronçons ; suppression d\'un nœud supprime ses tronçons', () => {
     const r = R.creerReseau();
     const a = R.ajouterNoeud(r, 'chambre'), b = R.ajouterNoeud(r, 'chambre'), c = R.ajouterNoeud(r, 'chambre');
     const t = R.relier(r, a.id, b.id, { faceA: 'pignonB', faceB: 'pignonA' });
-    expect(() => R.relier(r, a.id, c.id, { faceA: 'pignonB' })).toThrow(/déjà occupé/);
+    // un même côté peut porter plusieurs tronçons (coupes accolées) ; face inconnue refusée
+    const t2 = R.relier(r, a.id, c.id, { faceA: 'pignonB' });
+    expect(R.surFaceTous(r, a.id, 'pignonB').map((v) => v.troncon.id)).toEqual([t.id, t2.id]);
+    R.supprimerNoeud(r, c.id); // retire t2
+    expect(() => R.relier(r, a.id, b.id, { faceA: 'dessus' })).toThrow(/inconnue/);
     expect(() => R.changerFace(r, t.id, 'a', 'pignonB')).not.toThrow();
     R.supprimerNoeud(r, b.id);
     expect(r.troncons).toHaveLength(0);
@@ -102,5 +106,41 @@ describe('réseau : continuité et métré', () => {
     expect(m.sansLongueur).toEqual(['C2 → CF2']);
     expect(R.continuite(r, (t) => L[t.id]).liaisons.find((l) => l.nom === 'X').longueurIncomplete).toBe(true);
     t3.longueurM = 12;
+  });
+});
+
+describe('synoptique ancré', () => {
+  const r = R.creerReseau();
+  const c1 = R.ajouterNoeud(r, 'chambre'), c2 = R.ajouterNoeud(r, 'chambre'), c3 = R.ajouterNoeud(r, 'chambre');
+  const s1 = R.ajouterNoeud(r, 'sortie'), s2 = R.ajouterNoeud(r, 'sortie');
+  R.relier(r, c1.id, c2.id, { faceA: 'pignonB', faceB: 'pignonA' });
+  R.relier(r, c2.id, c3.id, { faceA: 'pignonB', faceB: 'pignonA' });
+  R.relier(r, c2.id, s1.id, { faceA: 'longPanB' }); // côté 1 (haut) → au-dessus
+  R.relier(r, c3.id, s2.id, { faceA: 'longPanA' }); // côté 3 (bas) → en dessous
+  const opts = { tailleNoeud: () => ({ w: 100, h: 50 }), tailleEtiquette: () => ({ w: 120, h: 60 }), ecart: 0.5 };
+  test('chaîne alignée, dérivations perpendiculaires du bon côté, écart d\'une demi-étiquette', () => {
+    const d = R.dispositionAncree(r, opts), P = d.noeuds;
+    expect(P[c1.id].y).toBe(P[c2.id].y); expect(P[c2.id].y).toBe(P[c3.id].y);
+    expect(P[c1.id].x).toBeLessThan(P[c2.id].x);
+    expect(P[s1.id].x).toBe(P[c2.id].x); expect(P[s1.id].y).toBeLessThan(P[c2.id].y);
+    expect(P[s2.id].y).toBeGreaterThan(P[c3.id].y);
+    // entre deux chambres : nœud/2 + ½ étiquette + étiquette + ½ étiquette + nœud/2
+    expect(P[c2.id].x - P[c1.id].x).toBeGreaterThanOrEqual(100 + 120 * 2);
+    expect(Object.keys(d.etiquettes)).toHaveLength(4);
+  });
+  test('repli en rangées pour une page étroite', () => {
+    const d = R.dispositionAncree(r, { ...opts, ratio: 0.5 });
+    expect(d.rangs).toBeGreaterThan(1);
+  });
+  test('contenu d\'étiquette : Ø du plus gros au plus petit, PE regroupé', () => {
+    const e = R.contenuEtiquette({ fourreaux: [{ od: 160 }, { od: 200 }, { od: 160 }], cables: [
+      { liaison: 'TGBT 1 → P1', code: '1x240' }, { liaison: 'TGBT 1 → P1', code: '1x240' }, { liaison: 'TGBT 1 → P1 - PE', code: '1x95' }] });
+    expect(e.phi).toEqual([[200, 1], [160, 2]]);
+    expect(e.liaisons).toEqual([{ nom: 'TGBT 1 → P1', sections: '2×1x240 + PE 1x95', nf: 0, phi: [] }]);
+    // fourreaux utilisés par liaison (PE compris), Ø, et fourreaux de réserve
+    const e2 = R.contenuEtiquette({ fourreaux: [{ id: 1, od: 160 }, { id: 2, od: 200 }, { id: 3, od: 160 }], cables: [
+      { liaison: 'L1', code: '1x240', parent: 1 }, { liaison: 'L1', code: '1x240', parent: 2 }, { liaison: 'L1 - PE', code: '1x95', parent: 2 }] });
+    expect(e2.liaisons[0]).toMatchObject({ nom: 'L1', nf: 2, phi: [[200, 1], [160, 1]] });
+    expect(e2).toMatchObject({ total: 3, reserve: 1 });
   });
 });

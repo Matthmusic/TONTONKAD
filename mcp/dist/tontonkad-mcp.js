@@ -78641,12 +78641,14 @@ var require_vue3d = __commonJS({
           this.ops.push(`${f(cx + r)} ${f(cy)} m ${f(cx + r)} ${f(cy + k)} ${f(cx + k)} ${f(cy + r)} ${f(cx)} ${f(cy + r)} c ${f(cx - k)} ${f(cy + r)} ${f(cx - r)} ${f(cy + k)} ${f(cx - r)} ${f(cy)} c ${f(cx - r)} ${f(cy - k)} ${f(cx - k)} ${f(cy - r)} ${f(cx)} ${f(cy - r)} c ${f(cx + k)} ${f(cy - r)} ${f(cx + r)} ${f(cy - k)} ${f(cx + r)} ${f(cy)} c ${mode}`);
           return this;
         }
-        text(x, y, size, s, { bold = false, align = "left" } = {}) {
-          this.labels.push({ x, y, size, text: String(s), bold, align, rgb: this.fill });
+        // vertical = true : texte tourné de 90° (se lit de bas en haut), (x, y) = point d'ancrage.
+        text(x, y, size, s, { bold = false, align = "left", vertical = false } = {}) {
+          this.labels.push({ x, y, size, text: String(s), bold, align, rgb: this.fill, vertical });
           if (!this.emitText) return this;
           const w = String(s).length * size * 0.5;
           const dx = align === "center" ? -w / 2 : align === "right" ? -w : 0;
-          this.ops.push(`BT /${bold ? "F2" : "F1"} ${f(size)} Tf ${f(x + dx)} ${f(y)} Td ${pdfStr(s)} Tj ET`);
+          if (vertical) this.ops.push(`BT /${bold ? "F2" : "F1"} ${f(size)} Tf 0 1 -1 0 ${f(x)} ${f(y + dx)} Tm ${pdfStr(s)} Tj ET`);
+          else this.ops.push(`BT /${bold ? "F2" : "F1"} ${f(size)} Tf ${f(x + dx)} ${f(y)} Td ${pdfStr(s)} Tj ET`);
           return this;
         }
         // Dessine fn() à l'intérieur du polygone seulement.
@@ -78731,14 +78733,12 @@ var require_vue3d = __commonJS({
         for (const fo of m.fourreaux) {
           p.rgb([1, 1, 1], false).rgb([0.85, 0.4, 0.05]).width(1).circle(X(fo.x), Y(fo.y), fo.od / 2 * s, "B");
           p.width(0.5).circle(X(fo.x), Y(fo.y), fo.di / 2 * s);
-          p.rgb([0, 0, 0], false).text(X(fo.x), Y(fo.y + fo.od / 2) + 2, 7, fo.id, { align: "center", bold: true });
         }
         for (const c of m.cables) {
           p.rgb(PHASE_RGB[c.phase] || [0.2, 0.2, 0.2]).width(0.6).circle(X(c.x), Y(c.y), c.od / 2 * s);
         }
         p.rgb([0.8, 0, 0], false);
-        p.text(X(m.largeur / 2), oy - 12, 8, m.forme === "circ" ? `\xD8 ${m.largeur} mm` : `L = ${m.largeur} mm`, { align: "center" });
-        if (m.forme !== "circ") p.text(X(0) - 4, Y(top / 2), 8, `P = ${top} mm`, { align: "right" });
+        p.text(X(m.largeur / 2), oy - 12, 8, m.forme === "circ" ? `\xD8 ${m.largeur} mm` : `L = ${m.largeur} mm \xD7 P = ${top} mm`, { align: "center" });
         p.rgb([0, 0, 0], false);
         return s;
       }
@@ -78753,23 +78753,31 @@ var require_vue3d = __commonJS({
         const ex = dx * s, ey = dy * s;
         const W = m.largeur * s, H = top * s;
         p.width(0.7);
+        const n = [-Math.sin(ang), Math.cos(ang)];
+        const fourreaux = () => {
+          const order = [...m.fourreaux].sort((a2, b2) => b2.y - a2.y || b2.x - a2.x);
+          for (const fo of order) {
+            const r = fo.od / 2 * s, cx = X(fo.x), cy = Y(fo.y);
+            p.cylindre(cx, cy, cx + ex, cy + ey, r, fo.di / 2 * s, MAT.tpc);
+          }
+          for (const c of m.cables) {
+            p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), "B");
+          }
+        };
         if (m.forme === "circ") {
-          const r = m.largeur / 2 * s, cx = X(m.largeur / 2), cy = Y(m.largeur / 2), n2 = [-Math.sin(ang), Math.cos(ang)];
+          const r = m.largeur / 2 * s, cx = X(m.largeur / 2), cy = Y(m.largeur / 2);
           p.rgb([0, 0, 0]).circle(cx + ex, cy + ey, r);
-          p.line(cx + n2[0] * r, cy + n2[1] * r, cx + n2[0] * r + ex, cy + n2[1] * r + ey);
-          p.line(cx - n2[0] * r, cy - n2[1] * r, cx - n2[0] * r + ex, cy - n2[1] * r + ey);
+          p.line(cx + n[0] * r, cy + n[1] * r, cx + n[0] * r + ex, cy + n[1] * r + ey);
+          p.line(cx - n[0] * r, cy - n[1] * r, cx - n[0] * r + ex, cy - n[1] * r + ey);
+          fourreaux();
         } else {
           const M = W * MG, sol = H * SG;
           const x02 = X(0), y02 = Y(0), lit = (m.reglages.litDePose || 0) * s;
           const surf = MAT.surface[m.tranchee && m.tranchee.zone || "trottoir"] || MAT.surface.trottoir;
-          p.texture([[x02 - M, y02 + H], [x02 - M + ex, y02 + H + ey], [x02 + ex, y02 + H + ey], [x02, y02 + H]], surf, { seed: 3, contraste: 0.08 });
-          p.texture([[x02 + W, y02 + H], [x02 + W + ex, y02 + H + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + M, y02 + H]], surf, { seed: 4, contraste: 0.08 });
-          p.texture([[x02 + W, y02], [x02 + W + ex, y02 + ey], [x02 + W + ex, y02 + H + ey], [x02 + W, y02 + H]], MAT.terre.map((c) => c * 0.85), { seed: 5 });
           p.texture([[x02, y02], [x02 + ex, y02 + ey], [x02 + W + ex, y02 + ey], [x02 + W, y02]], MAT.sable, { seed: 6, taille: 0.7 });
-          if (lit > 0) p.texture([[x02 + W, y02], [x02 + W + ex, y02 + ey], [x02 + W + ex, y02 + ey + lit], [x02 + W, y02 + lit]], MAT.sable.map((c) => c * 0.92), { seed: 7, taille: 0.7 });
-          p.texture([[x02 - M, y02 - sol], [x02 + W + M, y02 - sol], [x02 + W + M, y02 + H], [x02 + W, y02 + H], [x02 + W, y02], [x02, y02], [x02, y02 + H], [x02 - M, y02 + H]], MAT.terre, { seed: 8, contour: [0.3, 0.22, 0.15] });
-          p.texture([[x02, y02], [x02 + W, y02], [x02 + W, y02 - Math.min(lit, sol)], [x02, y02 - Math.min(lit, sol)]], MAT.sable, { seed: 9, taille: 0.7 });
-          p.rgb([0.3, 0.22, 0.15]).width(0.6).line(x02 + W, y02, x02 + W + ex, y02 + ey).line(x02 + W + ex, y02 + ey, x02 + W + ex, y02 + H + ey);
+          p.texture([[x02, y02], [x02 + ex, y02 + ey], [x02 + ex, y02 + H + ey], [x02, y02 + H]], MAT.terre.map((c) => c * 0.8), { seed: 5 });
+          if (lit > 0) p.texture([[x02, y02], [x02 + ex, y02 + ey], [x02 + ex, y02 + ey + lit], [x02, y02 + lit]], MAT.sable.map((c) => c * 0.92), { seed: 7, taille: 0.7 });
+          fourreaux();
           if (m.tranchee) {
             const g = m.tranchee.grillage;
             p.rgb(GRILLAGE_RGB[g.couleur] || [0.85, 0.1, 0.1], false).rgb(GRILLAGE_RGB[g.couleur] || [0.85, 0.1, 0.1]).width(0.4);
@@ -78777,16 +78785,12 @@ var require_vue3d = __commonJS({
             p.poly([[X(10), gy], [X(10) + ex, gy + ey], [X(m.largeur - 10) + ex, gy + ey], [X(m.largeur - 10), gy]], "S");
             for (let t = 0.1; t < 1; t += 0.1) p.line(X(10) + ex * t, gy + ey * t, X(m.largeur - 10) + ex * t, gy + ey * t);
           }
-        }
-        const n = [-Math.sin(ang), Math.cos(ang)];
-        const order = [...m.fourreaux].sort((a, b) => b.y - a.y || b.x - a.x);
-        for (const fo of order) {
-          const r = fo.od / 2 * s, cx = X(fo.x), cy = Y(fo.y);
-          void n;
-          p.cylindre(cx, cy, cx + ex, cy + ey, r, fo.di / 2 * s, MAT.tpc);
-        }
-        for (const c of m.cables) {
-          p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), "B");
+          p.texture([[x02 - M, y02 + H], [x02 - M + ex, y02 + H + ey], [x02 + ex, y02 + H + ey], [x02, y02 + H]], surf, { seed: 3, contraste: 0.08 });
+          p.texture([[x02 + W, y02 - sol], [x02 + W + ex, y02 - sol + ey], [x02 + W + M + ex, y02 - sol + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + ex, y02 + H + ey], [x02 + W, y02 + H]], MAT.terre.map((c) => c * 0.85), { seed: 10 });
+          p.texture([[x02 + W, y02 + H], [x02 + W + ex, y02 + H + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + M, y02 + H]], surf, { seed: 4, contraste: 0.08 });
+          p.texture([[x02 - M, y02 - sol], [x02 + W + M, y02 - sol], [x02 + W + M, y02 + H], [x02 + W, y02 + H], [x02 + W, y02], [x02, y02], [x02, y02 + H], [x02 - M, y02 + H]], MAT.terre, { seed: 8, contour: [0.3, 0.22, 0.15] });
+          p.texture([[x02, y02], [x02 + W, y02], [x02 + W, y02 - Math.min(lit, sol)], [x02, y02 - Math.min(lit, sol)]], MAT.sable, { seed: 9, taille: 0.7 });
+          p.rgb([0.3, 0.22, 0.15]).width(0.6).line(x02 + W, y02 + H, x02 + W + ex, y02 + H + ey).line(x02, y02 + H, x02 + ex, y02 + H + ey);
         }
         p.rgb([0, 0, 0], false);
       }
@@ -78875,10 +78879,20 @@ var require_vue3d = __commonJS({
         const droite = [d[1], -d[0]], tangente = face.startsWith("pignon") ? [0, 1] : [1, 0];
         return droite[0] * tangente[0] + droite[1] * tangente[1] < 0;
       }
+      const NUMERO_COTE = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+      function regrouperFaisceaux(etude) {
+        const g = /* @__PURE__ */ new Map();
+        for (const t of etude && etude.traversees || []) {
+          const [a, b] = t.cles, cle = NUMERO_COTE[a] <= NUMERO_COTE[b] ? `${a}|${b}` : `${b}|${a}`;
+          if (!g.has(cle)) g.set(cle, { cles: cle.split("|"), type: t.type, liaisons: [] });
+          g.get(cle).liaisons.push(t.liaison);
+        }
+        return [...g.values()].sort((x, y) => y.liaisons.length - x.liaisons.length || NUMERO_COTE[x.cles[0]] - NUMERO_COTE[y.cles[0]]);
+      }
       function drawChambreDessus(p, etude, masques, zx, zy, zw, zh) {
         const L = etude.L, l = etude.l, e = etude.infos && etude.infos.paroi || 0, sortie = 350;
-        const ext = e + sortie + 60;
-        const s = fit(L + 2 * ext, l + 2 * ext, zw, zh);
+        const ext = e + sortie + 110;
+        const MPT = 30, s = fit(L + 2 * ext, l + 2 * ext, Math.max(10, zw - 2 * MPT), Math.max(10, zh - 2 * MPT));
         const ox = zx + (zw - (L + 2 * ext) * s) / 2 + ext * s, oy = zy + (zh - (l + 2 * ext) * s) / 2 + ext * s;
         const P = (x, y) => [ox + x * s, oy + y * s];
         p.geoDessus = { ox, oy, s, L, l, e };
@@ -78894,7 +78908,6 @@ var require_vue3d = __commonJS({
             p.poly([P(cx - a / 2, (l - b) / 2), P(cx + a / 2, (l - b) / 2), P(cx + a / 2, (l + b) / 2), P(cx - a / 2, (l + b) / 2)], "S");
           }
           p.dash(false);
-          p.rgb([0.35, 0.35, 0.35], false).text(...P(L / 2, l).map((v, i) => i ? v - 35 : v), 7, `${nt} tampon(s) ${tp.L}\xD7${tp.l} ${tp.classe} \u2014 paroi ${e} mm (\xE0 valider)`, { align: "center" });
         } else if (nt > 1) {
           p.rgb([0.6, 0.6, 0.6]).width(0.4).dash(true);
           for (let k = 1; k < nt; k++) p.line(...P(L * k / nt, 0), ...P(L * k / nt, l));
@@ -78952,54 +78965,79 @@ var require_vue3d = __commonJS({
             const m = e + sortie / 2, [lx, ly] = P(bx + g.out[0] * m, by + g.out[1] * m);
             const txt = `\xD8${Math.round(c.od)}${c.n > 1 ? ` \xD7${c.n}` : ""}`;
             const fs2 = Math.max(5, Math.min(7.5, c.od * 0.9 * s * 0.75));
-            p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs2 * 0.35, fs2, txt, { align: "center", bold: true });
+            const vertical = g.out[0] === 0;
+            if (vertical) {
+              if (fs2 <= c.od * 0.9 * s && txt.length * fs2 * 0.55 <= sortie * s) p.rgb([0.08, 0.08, 0.08], false).text(lx + fs2 * 0.35, ly, fs2, txt, { align: "center", bold: true, vertical: true });
+            } else p.rgb([0.08, 0.08, 0.08], false).text(lx, ly - fs2 * 0.35, fs2, txt, { align: "center", bold: true });
           }
-          const libelle = `${etude.faces[k].face.toUpperCase()} \xB7 ${mq.nom}`;
+          const libelle = `${etude.nom ? etude.nom + "." + NUMERO_COTE[k] : etude.faces[k].face.toUpperCase()} \xB7 ${mq.nom}`;
           const lw = libelle.length * 8 * 0.5 + 10, lh = 13;
-          const coin = { pignonA: [-1, 1], longPanB: [1, 1], longPanA: [-1, -1], pignonB: [1, -1] }[k];
-          let [cx2, cy2] = P(coin[0] < 0 ? -e : L + e, coin[1] > 0 ? l + e : -e);
-          cx2 += coin[0] < 0 ? lw / 2 : -lw / 2;
-          cy2 += coin[1] > 0 ? lh / 2 + 6 : -lh / 2 - 6;
-          p.rgb([1, 1, 1], false).rgb([0.55, 0.55, 0.55]).width(0.6).rect(cx2 - lw / 2, cy2 - lh / 2, lw, lh, "B");
-          p.rgb([0.12, 0.12, 0.12], false).text(cx2, cy2 - 3, 8, libelle, { align: "center", bold: true });
+          const cols = [...colonnes.values()];
+          const tmin = Math.min(...cols.map((c) => c.t - c.od / 2)), tmax = Math.max(...cols.map((c) => c.t + c.od / 2));
+          const [ex, ey] = g.at(cols.length ? (tmin + tmax) / 2 : g.long / 2);
+          const [bx2, by2] = P(ex + g.out[0] * (e + sortie), ey + g.out[1] * (e + sortie));
+          const vert = g.out[0] !== 0, demi = (vert ? lh : lh) / 2 + 4;
+          const cx2 = bx2 + g.out[0] * demi, cy2 = by2 + g.out[1] * demi;
+          const [rw, rh] = vert ? [lh, lw] : [lw, lh];
+          p.rgb([1, 1, 1], false).rgb(nuance(couleur.get((mq.liaisons || [])[0]) || [0.45, 0.45, 0.45], 0.7)).width(0.9).rect(cx2 - rw / 2, cy2 - rh / 2, rw, rh, "B");
+          if (vert) p.rgb([0.12, 0.12, 0.12], false).text(cx2 + 3, cy2, 8, libelle, { align: "center", bold: true, vertical: true });
+          else p.rgb([0.12, 0.12, 0.12], false).text(cx2, cy2 - 3, 8, libelle, { align: "center", bold: true });
+          (p.libellesCotes || (p.libellesCotes = {}))[k] = { x: cx2, y: cy2, w: rw, h: rh };
+        }
+        p.pastillesCotes = {};
+        for (const k of Object.keys(faceGeo)) {
+          const g = faceGeo[k], rp = 10, lb = p.libellesCotes && p.libellesCotes[k];
+          let qx, qy;
+          if (lb) {
+            if (g.out[0] !== 0) {
+              qx = lb.x + g.out[0] * (rp + 4 - lb.w / 2);
+              qy = lb.y + lb.h / 2 + rp + 5;
+            } else {
+              qx = lb.x - lb.w / 2 - rp - 5;
+              qy = lb.y + g.out[1] * (rp + 4 - lb.h / 2);
+            }
+          } else {
+            const [bx, by] = g.at(g.long / 2);
+            [qx, qy] = P(bx + g.out[0] * (e + 120), by + g.out[1] * (e + 120));
+          }
+          p.rgb([0.1, 0.12, 0.16], false).rgb([1, 1, 1]).width(1.5).circle(qx, qy, rp, "B");
+          p.rgb([1, 1, 1], false).text(qx, qy - 4, 11, String(NUMERO_COTE[k]), { align: "center", bold: true });
+          p.pastillesCotes[k] = { x: qx, y: qy, r: rp };
         }
         const pt = (k, nom) => {
           const A = ancre[k] && ancre[k][nom];
           return A && A.n ? [A.x / A.n, A.y / A.n] : null;
         };
-        const dejaVu = /* @__PURE__ */ new Map();
-        etude.traversees.forEach((t, i) => {
-          const [a, b] = t.cles, A0 = pt(a, t.liaison), B0 = pt(b, t.liaison);
-          if (!A0 || !B0) return;
-          const cle = `${a}|${b}|${Math.round(A0[0])},${Math.round(A0[1])}|${Math.round(B0[0])},${Math.round(B0[1])}`;
-          const rang = dejaVu.get(cle) || 0;
-          dejaVu.set(cle, rang + 1);
-          const pas = Math.min(l, L) / 14, d = (rang % 2 ? -1 : 1) * Math.ceil(rang / 2) * pas;
-          const na = faceGeo[a].n, ta = [na[1], -na[0]];
-          const nb = faceGeo[b].n, tb = [nb[1], -nb[0]];
-          const A = [A0[0] + ta[0] * d, A0[1] + ta[1] * d], B = [B0[0] + tb[0] * d * (t.type === "droite" ? -1 : 1), B0[1] + tb[1] * d * (t.type === "droite" ? -1 : 1)];
-          const c = couleur.get(t.liaison);
-          let chemin = [A, B];
-          if (t.type === "angle") {
-            const na2 = faceGeo[a].n;
-            chemin = [A, na2[0] !== 0 ? [B[0], A[1]] : [A[0], B[1]], B];
-          }
-          p.rgb(c).width(2.2);
+        const faisceaux = regrouperFaisceaux(etude);
+        const moyenne = (k, noms) => {
+          const pts = noms.map((nom) => pt(k, nom)).filter(Boolean);
+          return pts.length ? [pts.reduce((s2, q) => s2 + q[0], 0) / pts.length, pts.reduce((s2, q) => s2 + q[1], 0) / pts.length] : null;
+        };
+        faisceaux.forEach((fx, i) => {
+          const [a, b] = fx.cles, A = moyenne(a, fx.liaisons), B = moyenne(b, fx.liaisons);
+          if (!A || !B) return;
+          const c = fx.liaisons.length === 1 ? couleur.get(fx.liaisons[0]) : [0.2, 0.32, 0.5];
+          const chemin = fx.type === "angle" ? [A, faceGeo[a].n[0] !== 0 ? [B[0], A[1]] : [A[0], B[1]], B] : [A, B];
+          p.rgb(c).width(Math.min(9, 1.8 + fx.liaisons.length * 0.45));
           for (let j = 0; j + 1 < chemin.length; j++) p.line(...P(...chemin[j]), ...P(...chemin[j + 1]));
-          const mid = chemin[Math.floor(chemin.length / 2)];
-          const [qx, qy] = P(...mid);
-          p.rgb([1, 1, 1], false).rgb(c).width(1.2).circle(qx, qy, 7.5, "B");
-          p.rgb(c, false).text(qx, qy - 3, 8.5, String(i + 1), { align: "center", bold: true });
+          const mid = chemin.length === 3 ? chemin[1] : [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+          const [qx, qy] = P(...mid), txt = fx.liaisons.length > 1 ? `${i + 1} \xD7${fx.liaisons.length}` : String(i + 1);
+          const rw = Math.max(9, txt.length * 3.1 + 5);
+          p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(qx - rw, qy - 7.5, 2 * rw, 15, "B");
+          p.rgb(c, false).text(qx, qy - 3, 8.5, txt, { align: "center", bold: true });
         });
-        etude.arrets.forEach((a) => {
-          const A = pt(a.cle, a.liaison);
+        const arretsParCote = /* @__PURE__ */ new Map();
+        etude.arrets.forEach((x) => {
+          if (!arretsParCote.has(x.cle)) arretsParCote.set(x.cle, []);
+          arretsParCote.get(x.cle).push(x.liaison);
+        });
+        arretsParCote.forEach((noms, k) => {
+          const A = moyenne(k, noms);
           if (!A) return;
-          const [qx, qy] = P(A[0] + faceGeo[a.cle].n[0] * 60, A[1] + faceGeo[a.cle].n[1] * 60);
-          p.rgb(couleur.get(a.liaison), false).rgb([1, 1, 1]).width(1).circle(qx, qy, 4.5, "B");
+          const [qx, qy] = P(A[0] + faceGeo[k].n[0] * 80, A[1] + faceGeo[k].n[1] * 80);
+          p.rgb([0.55, 0.12, 0.1], false).rgb([1, 1, 1]).width(1).circle(qx, qy, 7, "B");
+          p.rgb([1, 1, 1], false).text(qx, qy - 3, 7.5, String(noms.length), { align: "center", bold: true });
         });
-        const [c1x, c1y] = P(L / 2, l);
-        p.rgb([0.1, 0.1, 0.1], false).text(c1x, c1y - 14, 10, `${etude.nom ? etude.nom + " \u2014 " : ""}${etude.ref}`, { align: "center", bold: true });
-        p.rgb([0.35, 0.35, 0.35], false).text(c1x, c1y - 25, 7, `${L} \xD7 ${l} mm int\xE9rieur`, { align: "center" });
         p.rgb([0, 0, 0], false);
         return couleur;
       }
@@ -79030,26 +79068,50 @@ var require_vue3d = __commonJS({
           y -= 12;
         }
         y -= 4;
-        p.rgb([0, 0, 0], false).text(x, y, 9, "Travers\xE9es", { bold: true });
+        const LIB = { longPanB: "c\xF4t\xE9 1", pignonB: "c\xF4t\xE9 2", longPanA: "c\xF4t\xE9 3", pignonA: "c\xF4t\xE9 4" };
+        const assez = () => y > MARGE + 24;
+        const parLignes = (noms, n) => {
+          const out = [];
+          for (let i = 0; i < noms.length; i += n) out.push(noms.slice(i, i + n).map(nomCourt).join(" \xB7 "));
+          return out;
+        };
+        p.rgb([0, 0, 0], false).text(x, y, 9, "Travers\xE9es (faisceaux)", { bold: true });
         y -= 12;
         if (!e.traversees.length) {
           p.text(x, y, 8, "aucune");
           y -= 11;
         }
-        e.traversees.forEach((t, i) => {
-          p.rgb(couleurs.get(t.liaison) || [0, 0, 0], false).text(x, y, 8, `${i + 1}. ${t.liaison}`.slice(0, 48), { bold: true });
+        regrouperFaisceaux(e).forEach((fx, i) => {
+          if (!assez()) return;
+          const c = fx.liaisons.length === 1 ? couleurs.get(fx.liaisons[0]) || [0, 0, 0] : [0.2, 0.32, 0.5];
+          p.rgb(c, false).text(x, y, 8, `${i + 1}. ${LIB[fx.cles[0]]} \u2192 ${LIB[fx.cles[1]]} \xB7 ${fx.liaisons.length} liaison${fx.liaisons.length > 1 ? "s" : ""} (${fx.type})`, { bold: true });
           y -= 10;
-          p.rgb([0.2, 0.2, 0.2], false).text(x + 12, y, 7, `entre ${t.entree}, sort ${t.sortie} (${t.type})${t.changementFourreau ? ", fourreau " + t.changementFourreau : ""}`);
-          y -= 11;
+          for (const l of parLignes(fx.liaisons, 3)) {
+            if (!assez()) break;
+            p.rgb([0.25, 0.25, 0.25], false).text(x + 10, y, 6.5, l.slice(0, 80));
+            y -= 8.5;
+          }
+          y -= 3;
         });
-        if (e.arrets.length) {
+        if (e.arrets.length && assez()) {
           y -= 4;
           p.rgb([0, 0, 0], false).text(x, y, 9, "Liaisons qui s'arr\xEAtent dans la chambre", { bold: true });
           y -= 12;
-          for (const a of e.arrets.slice(0, 8)) {
-            p.rgb(couleurs.get(a.liaison) || [0, 0, 0], false).text(x, y, 7, `\u2022 ${a.liaison} (${a.face})`.slice(0, 60));
+          const parCote = /* @__PURE__ */ new Map();
+          e.arrets.forEach((a) => {
+            if (!parCote.has(a.cle)) parCote.set(a.cle, []);
+            parCote.get(a.cle).push(a.liaison);
+          });
+          parCote.forEach((noms, k) => {
+            if (!assez()) return;
+            p.rgb([0.55, 0.12, 0.1], false).text(x, y, 8, `${LIB[k] || k} : ${noms.length}`, { bold: true });
             y -= 10;
-          }
+            for (const l of parLignes(noms, 3)) {
+              if (!assez()) break;
+              p.rgb([0.25, 0.25, 0.25], false).text(x + 10, y, 6.5, l.slice(0, 80));
+              y -= 8.5;
+            }
+          });
         }
         if (e.avertissements && e.avertissements.length) {
           y -= 4;
@@ -79060,7 +79122,6 @@ var require_vue3d = __commonJS({
             y -= 10;
           }
         }
-        p.rgb([0.4, 0.4, 0.4], false).text(MARGE, MARGE - 14, 7, "Vue de dessus : pignon A \xE0 gauche, pignon B \xE0 droite, long-pan A en bas, long-pan B en haut. Positions des fourreaux le long de chaque face reprises des masques (centr\xE9s).");
         return p;
       }
       function rejouerSurCanvas(ctx, page, hauteurPt) {
@@ -79150,7 +79211,11 @@ var require_vue3d = __commonJS({
           ctx.fillStyle = rgb(l.rgb);
           ctx.font = `${l.bold ? "bold " : ""}${l.size}px Helvetica, Arial, sans-serif`;
           ctx.textAlign = l.align === "center" ? "center" : l.align === "right" ? "right" : "left";
-          ctx.fillText(l.text, l.x, hauteurPt - l.y);
+          if (l.vertical) {
+            ctx.translate(l.x, hauteurPt - l.y);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(l.text, 0, 0);
+          } else ctx.fillText(l.text, l.x, hauteurPt - l.y);
           ctx.restore();
         }
       }
@@ -79168,6 +79233,221 @@ var require_vue3d = __commonJS({
           const der = i === lignes.length - 1 && lignes.length > 1;
           p.rgb(der ? [0.75, 0.32, 0.05] : [0.1, 0.1, 0.1], false).text(mx, my + h / 2 - 3 - lh * (i + 0.75), 7.5, l, { align: "center", bold: der });
         });
+      }
+      const SYN = { police: 11, lh: 14, pad: 8, gouttiere: 14, carMono: 6.6, carTexte: 6.4, carSection: 6 };
+      const nomCourt = (nom) => String(nom).replace(/^TGBT\s*(\d+)\s*(→|->)\s*/i, "T$1 \u2192 ");
+      function lignesPhi(e) {
+        return (e.phi || []).map(([d, q]) => `${q} \xD7 \xD8${d}`);
+      }
+      const COL_SYN = { nom: 5.6, sec: 5.2, nf: 5.8, phi: 4.8, entete: 5, recap: 5.8, gout: 12 };
+      function phiLiaison(l) {
+        return (l.phi || []).map(([d, q]) => `${q} \xD8${d}`).join(" + ");
+      }
+      function recapSyn(e) {
+        const total = e.total != null ? e.total : (e.phi || []).reduce((a, [, q]) => a + q, 0);
+        return { txt: lignesPhi(e).join("  \xB7  "), fin: `= ${total} fourreau${total > 1 ? "x" : ""}${e.reserve ? `, dont ${e.reserve} de r\xE9serve` : ""}` };
+      }
+      function mesureEtiquetteSyn(e) {
+        const lia = e.liaisons || [], C = COL_SYN, larg = (arr, k, min = 0) => Math.max(min, ...arr.map((t) => String(t).length * k));
+        const wNom = lia.length ? larg(lia.map((l) => nomCourt(l.nom)), C.nom, "LIAISON".length * C.entete) : 0;
+        const wSec = lia.length ? larg(lia.map((l) => l.sections || ""), C.sec, "C\xC2BLES".length * C.entete) : 0;
+        const wNf = lia.length ? larg(lia.map((l) => String(l.nf != null ? l.nf : "")), C.nf, "FOURREAUX".length * C.entete) : 0;
+        const wPhi = lia.length ? larg(lia.map(phiLiaison), C.phi, "\xD8 UTILIS\xC9S".length * C.entete) : 0;
+        const r = recapSyn(e), wRecap = r.txt.length * C.recap + 8 + r.fin.length * C.phi;
+        const wTable = lia.length ? wNom + wSec + wNf + wPhi + 3 * C.gout : 0;
+        const lignes = lia.length ? 1 + lia.length : 1;
+        return { w: Math.round(2 * SYN.pad + Math.max(wTable, wRecap, 90)), h: Math.round(2 * SYN.pad + lignes * SYN.lh + 6 + 2 * SYN.lh), cols: { wNom, wSec, wNf, wPhi } };
+      }
+      function drawSynoptiqueAncre(p, data, zx, zy, zw, zh, echelleMax = 2) {
+        if (!data.noeuds.length) return null;
+        const s = Math.min(zw / data.largeur, zh / data.hauteur, echelleMax);
+        const ox = zx + (zw - data.largeur * s) / 2, oy = zy + (zh - data.hauteur * s) / 2;
+        const P = (x, y) => [ox + x * s, oy + (data.hauteur - y) * s];
+        p.rgb([0.36, 0.39, 0.45]).width(Math.max(0.6, 2.2 * s));
+        for (const t of data.troncons) {
+          const A = P(t.a.x, t.a.y), B = P(t.b.x, t.b.y);
+          if (Math.abs(A[0] - B[0]) < 0.5 || Math.abs(A[1] - B[1]) < 0.5) p.line(A[0], A[1], B[0], B[1]);
+          else p.line(A[0], A[1], B[0], A[1]).line(B[0], A[1], B[0], B[1]);
+        }
+        for (const t of data.troncons) {
+          const e = t.e;
+          if (!e) continue;
+          const m = mesureEtiquetteSyn(e), [x0, yHaut] = P(e.x - e.w / 2, e.y - e.h / 2), w = e.w * s, h = e.h * s;
+          const f2 = SYN.police * s, lh = SYN.lh * s, pad = SYN.pad * s;
+          p.rgb([1, 1, 1], false).rgb([0.75, 0.78, 0.83]).width(Math.max(0.3, 0.8 * s)).rect(x0, yHaut - h, w, h, "B");
+          const lia = e.liaisons || [], { wNom, wSec, wNf } = m.cols, g = COL_SYN.gout * s;
+          const xNom = x0 + pad, xSec = xNom + wNom * s + g, xNf = xSec + wSec * s + g + wNf * s, xPhi = xNf + g;
+          let y = yHaut - pad - lh * 0.78;
+          if (lia.length) {
+            const fh = f2 * 0.66;
+            p.rgb([0.48, 0.51, 0.56], false).text(xNom, y, fh, "LIAISON", { bold: true }).text(xSec, y, fh, "C\xC2BLES", { bold: true }).text(xNf, y, fh, "FOURREAUX", { bold: true, align: "right" }).text(xPhi, y, fh, "\xD8 UTILIS\xC9S", { bold: true });
+            p.rgb([0.88, 0.89, 0.91]).width(Math.max(0.3, 0.7 * s)).line(xNom, y - lh * 0.32, x0 + w - pad, y - lh * 0.32);
+            lia.forEach((l) => {
+              y -= lh;
+              p.rgb([0.16, 0.18, 0.22], false).text(xNom, y, f2 * 0.9, nomCourt(l.nom));
+              if (l.sections) p.rgb([0.48, 0.29, 0.12], false).text(xSec, y, f2 * 0.84, l.sections);
+              p.rgb([0.1, 0.11, 0.12], false).text(xNf, y, f2 * 0.86, String(l.nf != null ? l.nf : ""), { bold: true, align: "right" });
+              p.rgb([0.48, 0.51, 0.56], false).text(xPhi, y, f2 * 0.76, phiLiaison(l));
+            });
+          } else p.rgb([0.45, 0.45, 0.45], false).text(xNom, y, f2 * 0.9, (e.phi || []).length ? "fourreaux de r\xE9serve" : "coupe vide");
+          y -= lh + 6 * s;
+          p.rgb([0.88, 0.89, 0.91]).width(Math.max(0.3, 0.7 * s)).line(xNom, y + lh * 0.72, x0 + w - pad, y + lh * 0.72);
+          const r = recapSyn(e);
+          if (r.txt) {
+            p.rgb([0.1, 0.11, 0.12], false).text(xNom, y, f2 * 0.9, r.txt, { bold: true });
+            p.rgb([0.48, 0.51, 0.56], false).text(x0 + w - pad, y, f2 * 0.8, r.fin, { align: "right" });
+          }
+          const L = e.L ? `${String(Math.round(e.L * 10) / 10).replace(".", ",")} m` : "? m";
+          p.rgb([0.66, 0.27, 0.04], false).text(x0 + w - pad, yHaut - h + pad * 0.9, f2, L, { bold: true, align: "right" });
+        }
+        for (const n of data.noeuds) {
+          const c = hexRgb(n.couleur), [cx, cy] = P(n.x, n.y), w = n.w * s, h = n.h * s;
+          p.rgb([1, 1, 1], false).rgb(c).width(Math.max(0.6, 2.4 * s));
+          const fleche = (i) => [
+            [cx - w / 2 + i, cy - h / 2 + i],
+            [cx + w / 2 - 12 * s - i * 0.4, cy - h / 2 + i],
+            [cx + w / 2 - i * 1.6, cy],
+            [cx + w / 2 - 12 * s - i * 0.4, cy + h / 2 - i],
+            [cx - w / 2 + i, cy + h / 2 - i]
+          ];
+          if (n.type === "sortie") p.poly(fleche(0), "B");
+          else p.rect(cx - w / 2, cy - h / 2, w, h, "B");
+          if (n.type === "sortie") p.rgb(nuance(c, 1.85), false).poly(fleche(1.2 * s), "f");
+          else p.rgb(nuance(c, 1.85), false).rect(cx - w / 2 + 1.2 * s, cy - h / 2 + 1.2 * s, w - 2.4 * s, h - 2.4 * s, "f");
+          p.rgb([0.1, 0.1, 0.1], false).text(cx - (n.type === "sortie" ? 5 * s : 0), cy + (n.sous ? 1.5 * s : -4.5 * s), 15 * s, n.nom, { align: "center", bold: true });
+          if (n.sous) p.rgb([0.62, 0.26, 0.04], false).text(cx, cy - 13 * s, 10 * s, n.sous, { align: "center" });
+        }
+        return { s, ox, oy };
+      }
+      const FORMATS_PAGE = { a4: [842, 595], a3: [1191, 842], a2: [1684, 1191], a1: [2384, 1684], a0: [3370, 2384] };
+      const MISE_EN_PAGE_CHAMBRE = [
+        { type: "vuedessus", x: 0, y: 0, w: 5, h: 5 },
+        { type: "masque", cote: 1, x: 5, y: 0, w: 3.5, h: 3 },
+        { type: "masque", cote: 2, x: 8.5, y: 0, w: 3.5, h: 3 },
+        { type: "masque", cote: 3, x: 5, y: 3, w: 3.5, h: 3 },
+        { type: "masque", cote: 4, x: 8.5, y: 3, w: 3.5, h: 3 },
+        { type: "fourreaux", x: 0, y: 5, w: 5, h: 3 },
+        { type: "cables", x: 5, y: 6, w: 4, h: 2 },
+        { type: "cartouche", x: 9, y: 6, w: 3, h: 2 }
+      ];
+      const FACE_DU_COTE = { 1: "longPanB", 2: "pignonB", 3: "longPanA", 4: "pignonA" };
+      const couper = (t, taille, largeur) => {
+        t = String(t);
+        const n = Math.max(3, Math.floor(largeur / (taille * 0.5)));
+        return t.length > n ? t.slice(0, n - 1) + "\u2026" : t;
+      };
+      function dessinerPageChambreA3(p, e, masques, opts = {}) {
+        const [PW, PH] = FORMATS_PAGE.a3, M = 28, ENT = 34;
+        const gx = M, gy = M, gw = PW - 2 * M, gh = PH - 2 * M - ENT, CW = gw / 12, CH = gh / 8, G = 5;
+        const zone = (b) => ({ x: gx + b.x * CW + G / 2, y: gy + (8 - b.y - b.h) * CH + G / 2, w: b.w * CW - G, h: b.h * CH - G });
+        const masquesM = masques || {};
+        p.rgb([0.1, 0.1, 0.1], false).text(M, PH - M - 16, 18, `${e.nom || "Chambre"} \u2014 ${e.ok ? e.ref : "aucune chambre"}`, { bold: true });
+        p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 16, 9, `${opts.projet || ""} \xB7 TONTONKAD \u2014 \xE9tude de chambre`, { align: "right" });
+        p.rgb([0.66, 0.27, 0.04]).width(1.2).line(M, PH - M - 24, PW - M, PH - M - 24);
+        const cadre = (z2, titre) => {
+          p.rgb([0.995, 0.995, 0.99], false).rgb([0.78, 0.8, 0.84]).width(0.7).rect(z2.x, z2.y, z2.w, z2.h, "B");
+          if (titre) {
+            p.rgb([0.93, 0.94, 0.96], false).rect(z2.x, z2.y + z2.h - 15, z2.w, 15, "f");
+            p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 6, z2.y + z2.h - 11, 8.5, couper(titre, 8.5, z2.w - 12), { bold: true });
+          }
+        };
+        const etudeOk = e && e.ok;
+        for (const b of MISE_EN_PAGE_CHAMBRE) {
+          const z2 = zone(b);
+          if (b.type === "vuedessus") {
+            cadre(z2, "Vue de dessus");
+            if (etudeOk) drawChambreDessus(p, e, masquesM, z2.x + 4, z2.y + 4, z2.w - 8, z2.h - 24);
+          } else if (b.type === "masque") {
+            const k = FACE_DU_COTE[b.cote], mq = masquesM[k];
+            const L = mq && mq.longueurM ? ` \xB7 ${String(mq.longueurM).replace(".", ",")} m` : "";
+            cadre(z2, `${e.nom || "C"}.${b.cote} \xB7 ${mq ? mq.nom + L : "c\xF4t\xE9 libre"}`);
+            if (mq) {
+              drawCoupe(p, mq, z2.x + 40, z2.y + 34, z2.w - 80, z2.h - 64);
+              const nb = /* @__PURE__ */ new Map();
+              mq.fourreaux.forEach((f2) => {
+                const d = Math.round(f2.od);
+                nb.set(d, (nb.get(d) || 0) + 1);
+              });
+              p.rgb([0.25, 0.25, 0.25], false).text(z2.x + 6, z2.y + 6, 7, couper([...nb].sort((a, c) => c[0] - a[0]).map(([d, q]) => `${q} \xD7 \xD8${d}`).join("   ") + `   \xB7   nappe ${Math.round(mq.largeur)} \xD7 ${Math.round(mq.hauteur)} mm`, 7, z2.w - 12));
+            }
+          } else if (b.type === "fourreaux") {
+            cadre(z2, "Contenu des fourreaux, par c\xF4t\xE9 et par liaison");
+            const lignes = [];
+            for (let c = 1; c <= 4; c++) {
+              const mq = masquesM[FACE_DU_COTE[c]];
+              if (!mq) continue;
+              const parLiaison = /* @__PURE__ */ new Map();
+              mq.fourreaux.forEach((f2) => {
+                const nom = String(f2.liaisons && f2.liaisons[0] || f2.libelle || "r\xE9serve").replace(/\s*-\s*PE$/i, "");
+                if (!parLiaison.has(nom)) parLiaison.set(nom, { f: /* @__PURE__ */ new Map(), c: /* @__PURE__ */ new Map() });
+                const g = parLiaison.get(nom), d = Math.round(f2.od);
+                g.f.set(d, (g.f.get(d) || 0) + 1);
+                (mq.cables || []).filter((x) => x.fourreau === f2.id).forEach((x) => {
+                  const k2 = x.code || `\xD8${x.od}`;
+                  g.c.set(k2, (g.c.get(k2) || 0) + 1);
+                });
+              });
+              [...parLiaison].sort((a, c2) => a[0].localeCompare(c2[0], "fr", { numeric: true })).forEach(([nom, g]) => lignes.push([
+                `${e.nom}.${c}`,
+                nomCourt(nom),
+                [...g.f].sort((a, c2) => c2[0] - a[0]).map(([d, q]) => `${q}\xD7\xD8${d}`).join(" "),
+                [...g.c].map(([k2, q]) => `${q}\xD7${k2}`).join(" + ") || "\u2014"
+              ]));
+            }
+            tableauPdf(p, z2, ["Masque", "Liaison", "Fourreaux", "C\xE2bles"], [0.11, 0.42, 0.17, 0.3], lignes);
+          } else if (b.type === "cables") {
+            cadre(z2, "Travers\xE9es de la chambre (faisceaux)");
+            const LIB = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+            const lignes = [];
+            regrouperFaisceaux(e).forEach((fx, i) => [...new Set(fx.liaisons.map((x) => String(x).replace(/\s*-\s*PE$/i, "")))].forEach((l, j) => lignes.push([j ? "" : `${i + 1}`, j ? "" : `${e.nom}.${LIB[fx.cles[0]]} \u2192 ${e.nom}.${LIB[fx.cles[1]]}`, nomCourt(l)])));
+            const arr = /* @__PURE__ */ new Map();
+            (e.arrets || []).forEach((a) => {
+              if (!arr.has(a.cle)) arr.set(a.cle, []);
+              arr.get(a.cle).push(a.liaison);
+            });
+            arr.forEach((noms, k) => [...new Set(noms.map((x) => String(x).replace(/\s*-\s*PE$/i, "")))].forEach((l, j) => lignes.push([j ? "" : "\u25A0", j ? "" : `s'arr\xEAte en ${e.nom}.${LIB[k]}`, nomCourt(l)])));
+            tableauPdf(p, z2, ["N\xB0", "C\xF4t\xE9s", "Liaison"], [0.08, 0.3, 0.62], lignes);
+          } else if (b.type === "cartouche") {
+            cadre(z2, "Cartouche");
+            const L2 = [
+              ["Projet", opts.projet || "\u2014"],
+              ["Chambre", `${e.nom || "\u2014"} \xB7 ${etudeOk ? e.ref : "\u2014"}`],
+              ["Int\xE9rieur", etudeOk ? `${e.L} \xD7 ${e.l} \xD7 ${e.H} mm` : "\u2014"],
+              ...etudeOk && e.infos && e.infos.tampon && e.infos.tampons ? [["Tampons", `${e.infos.tampons} \xD7 ${e.infos.tampon.L}\xD7${e.infos.tampon.l} ${e.infos.tampon.classe} (\xE0 valider)`]] : [],
+              ["Date", opts.date || ""],
+              ["Indice", opts.indice || "A"],
+              ["\xC9tabli par", "CEA \u2014 TONTONKAD"]
+            ];
+            L2.forEach(([k, v], i) => {
+              const y = z2.y + z2.h - 30 - i * 13;
+              p.rgb([0.4, 0.4, 0.4], false).text(z2.x + 8, y, 7.5, k);
+              p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 70, y, 8, couper(v, 8, z2.w - 78), { bold: true });
+            });
+          }
+        }
+        return p;
+      }
+      function tableauPdf(p, z2, entetes, parts, lignes) {
+        const f2 = 6.6, lh = 8.6, x0 = z2.x + 4, w = z2.w - 8;
+        let y = z2.y + z2.h - 15 - 11;
+        const xs = [];
+        let acc = x0;
+        parts.forEach((q) => {
+          xs.push(acc);
+          acc += q * w;
+        });
+        p.rgb([0.25, 0.27, 0.32], false);
+        entetes.forEach((t, i) => p.text(xs[i] + 2, y, f2, t, { bold: true }));
+        p.rgb([0.8, 0.82, 0.86]).width(0.4).line(x0, y - 2.5, x0 + w, y - 2.5);
+        y -= lh + 1;
+        const max = Math.floor((y - z2.y - 4) / lh) + 1;
+        const vis = lignes.length > max ? lignes.slice(0, max - 1) : lignes;
+        vis.forEach((l, k) => {
+          if (k % 2) p.rgb([0.96, 0.97, 0.98], false).rect(x0, y - 2.4, w, lh, "f");
+          l.forEach((c, i) => p.rgb(i === 0 ? [0.1, 0.1, 0.1] : [0.2, 0.22, 0.26], false).text(xs[i] + 2, y, f2, couper(c, f2, parts[i] * w - 4), { bold: i === 0 }));
+          y -= lh;
+        });
+        if (lignes.length > vis.length) p.rgb([0.55, 0.2, 0.1], false).text(x0 + 2, y, f2, `\u2026 et ${lignes.length - vis.length} autres lignes (voir les tableaux d\xE9taill\xE9s du rapport)`);
       }
       function drawSynoptique2D(p, data, zx, zy, zw, zh) {
         if (!data.noeuds.length) return;
@@ -79191,52 +79471,123 @@ var require_vue3d = __commonJS({
           if (n.sous) p.rgb([0.35, 0.35, 0.35], false).text(cx, cy - 9, 7, n.sous, { align: "center" });
         }
       }
-      function drawSynoptiqueIso(p, data, zx, zy, zw, zh) {
+      function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
         if (!data.noeuds.length) return;
         const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
         const iso = (x, y, z2) => [(x - y) * C, -(x + y) * S + z2];
-        const dims = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+        const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+        const dimsDe = (n) => {
+          if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
+          if (n.type === "chambre") return [n.w * 0.8, n.h * 0.8, n.h * 0.55];
+          if (n.type === "coffret") return [n.w * 0.45, n.h * 0.55, n.h * 1.3];
+          return [n.h * 0.45, n.h * 0.45, n.h * 0.9];
+        };
+        const unite = data.noeuds.some((n) => n.w > 0) ? 1.9 : 1;
         const pts = [];
         data.noeuds.forEach((n) => {
-          const [a, b, h] = dims[n.type] || dims.sortie;
-          [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18)));
+          const [a, b, h] = dimsDe(n);
+          [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18 * unite)));
         });
         const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
         const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
-        const s = Math.min(zw / (X1 - X0), zh / (Y1 - Y0), 1.8);
+        const MX = Math.min(90, zw * 0.12), MY = Math.min(40, zh * 0.08);
+        const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), echelleMax);
         const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
         const P = (x, y, z2 = 0) => {
           const [u, v] = iso(x, y, z2);
           return [ox + u * s, oy + v * s];
         };
-        const LARG = 7, HAUT = 6;
+        const LARG = 7 * unite, HAUT = 6 * unite;
         const bout = (e) => {
           if (e.type !== "chambre") return { x: e.x, y: e.y, z: -HAUT };
-          const [a, b, h] = dims.chambre, z2 = -8 + h / 2;
+          const [a, b, h] = dimsDe(e), z2 = -8 * unite + h / 2;
           const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
           return { x: e.x + off[0], y: e.y + off[1], z: z2 };
         };
-        const vue = (vx, vy) => vx + vy;
-        function tranchee(t) {
+        const NORMALE = { pignonA: [-1, 0], pignonB: [1, 0], longPanA: [0, 1], longPanB: [0, -1] };
+        const SORTIE = 30 * unite;
+        function trace(t) {
           const A = bout(t.a), B = bout(t.b);
+          const na = t.a.type === "chambre" && NORMALE[t.a.face], nb = t.b.type === "chambre" && NORMALE[t.b.face];
+          const A2 = na ? { x: A.x + na[0] * SORTIE, y: A.y + na[1] * SORTIE } : { x: A.x, y: A.y };
+          const B2 = nb ? { x: B.x + nb[0] * SORTIE, y: B.y + nb[1] * SORTIE } : { x: B.x, y: B.y };
+          const horizA = na ? na[0] !== 0 : Math.abs(B2.x - A2.x) >= Math.abs(B2.y - A2.y);
+          const coude = horizA ? { x: B2.x, y: A2.y } : { x: A2.x, y: B2.y };
+          const pts2 = [A, A2, coude, B2, B].map((q) => ({ x: q.x, y: q.y }));
+          const net = pts2.filter((q, k) => k === 0 || Math.hypot(q.x - pts2[k - 1].x, q.y - pts2[k - 1].y) > 0.5);
+          let L = 0;
+          const cum = net.map((q, k) => k ? L += Math.hypot(q.x - net[k - 1].x, q.y - net[k - 1].y) : 0);
+          return net.map((q, k) => ({ ...q, z: A.z + (B.z - A.z) * (L ? cum[k] / L : 0) }));
+        }
+        const vue = (vx, vy) => vx + vy;
+        function segment(A0, B0, extA, extB, finA, finB) {
+          const dx0 = B0.x - A0.x, dy0 = B0.y - A0.y, L0 = Math.hypot(dx0, dy0) || 1, ux = dx0 / L0, uy = dy0 / L0;
+          const A = { ...A0, x: A0.x - (extA ? ux * LARG : 0), y: A0.y - (extA ? uy * LARG : 0) };
+          const B = { ...B0, x: B0.x + (extB ? ux * LARG : 0), y: B0.y + (extB ? uy * LARG : 0) };
           const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * LARG, ny = dx / L * LARG;
           const coin = (E, sgn, dz) => P(E.x + sgn * nx, E.y + sgn * ny, E.z + dz);
           const terre = MAT.terre, bord = [0.3, 0.22, 0.15];
           const sg = vue(nx, ny) >= 0 ? 1 : -1;
           p.texture([coin(A, sg, -HAUT), coin(B, sg, -HAUT), coin(B, sg, HAUT), coin(A, sg, HAUT)], nuance(terre, 0.78), { seed: 33, taille: 0.6, contour: bord });
-          [[B, t.b, 1], [A, t.a, -1]].forEach(([E, e, sens]) => {
-            if (e.type === "chambre" || vue(dx * sens, dy * sens) <= 0) return;
+          [[B, finB, 1], [A, finA, -1]].forEach(([E, fin, sens]) => {
+            if (!fin || vue(dx * sens, dy * sens) <= 0) return;
             p.texture([coin(E, 1, -HAUT), coin(E, -1, -HAUT), coin(E, -1, HAUT), coin(E, 1, HAUT)], nuance(terre, 0.66), { seed: 34, taille: 0.6, contour: bord });
           });
           p.texture([coin(A, 1, HAUT), coin(B, 1, HAUT), coin(B, -1, HAUT), coin(A, -1, HAUT)], nuance(terre, 1.08), { seed: 31, taille: 0.6, contour: bord });
-          p.rgb([0.85, 0.12, 0.1]).width(0.9).line(...P(A.x, A.y, A.z + HAUT + 0.3), ...P(B.x, B.y, B.z + HAUT + 0.3));
-          const [mx, my] = P((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2 + HAUT + 12);
-          etiquettes.push(() => cartouche(p, mx, my, t.label));
+          p.rgb([0.85, 0.12, 0.1]).width(0.9).line(...P(A0.x, A0.y, A0.z + HAUT + 0.3), ...P(B0.x, B0.y, B0.z + HAUT + 0.3));
+        }
+        const occupes = [];
+        const chevauche = (r) => occupes.reduce((acc, o) => {
+          const ix = Math.min(r.x1, o.x1) - Math.max(r.x0, o.x0), iy = Math.min(r.y1, o.y1) - Math.max(r.y0, o.y0);
+          return acc + (ix > 0 && iy > 0 ? ix * iy : 0);
+        }, 0);
+        const tailleCartouche = (label) => {
+          const l = Array.isArray(label) ? label : [String(label)];
+          return [Math.max(...l.map((x) => x.length)) * 4.3 + 12, l.length * 9.5 + 5];
+        };
+        const etiquettesTroncons = [];
+        function placerEtiquetteTroncon(t, pts2) {
+          const [w, h] = tailleCartouche(t.label);
+          const segs = pts2.slice(1).map((q, k) => ({ a: pts2[k], b: q, L: Math.hypot(q.x - pts2[k].x, q.y - pts2[k].y) })).sort((u, v) => v.L - u.L);
+          let best = null;
+          const decalages = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1], [0, 2], [0, -2], [2, 0], [-2, 0]];
+          for (const sg of segs) {
+            for (const f2 of [0.5, 0.35, 0.65, 0.2, 0.8]) {
+              for (const [ox2, oy2] of decalages) {
+                const x = sg.a.x + (sg.b.x - sg.a.x) * f2, y = sg.a.y + (sg.b.y - sg.a.y) * f2, z2 = sg.a.z + (sg.b.z - sg.a.z) * f2;
+                const [cx, cy] = P(x, y, z2 + HAUT + 12), mx = cx + ox2 * (w / 2 + 8), my = cy + oy2 * (h + 4);
+                const r = { x0: mx - w / 2 - 2, x1: mx + w / 2 + 2, y0: my - h / 2 - 2, y1: my + h / 2 + 2 };
+                const c = chevauche(r);
+                if (!best || c < best.c) best = { c, mx, my, r, cx, cy, decale: ox2 !== 0 || oy2 !== 0 };
+                if (c === 0) break;
+              }
+              if (best.c === 0) break;
+            }
+            if (best && best.c === 0) break;
+          }
+          if (best) {
+            occupes.push(best.r);
+            etiquettesTroncons.push(() => {
+              if (best.decale) {
+                const bx = Math.max(best.r.x0 + 2, Math.min(best.r.x1 - 2, best.cx)), by = Math.max(best.r.y0 + 2, Math.min(best.r.y1 - 2, best.cy));
+                p.rgb([0.45, 0.45, 0.45]).width(0.6).line(bx, by, best.cx, best.cy);
+                p.rgb([0.45, 0.45, 0.45], false).circle(best.cx, best.cy, 1.6, "F");
+              }
+              cartouche(p, best.mx, best.my, t.label);
+            });
+          }
+        }
+        function tranchee(t) {
+          const pts2 = trace(t);
+          return pts2.slice(1).map((q, k) => ({
+            cle: (pts2[k].x + pts2[k].y + q.x + q.y) / 2,
+            dessiner: () => segment(pts2[k], q, k > 0, k < pts2.length - 2, k === 0 && t.a.type !== "chambre", k === pts2.length - 2 && t.b.type !== "chambre")
+          }));
         }
         function volume(n) {
-          const [a, b, h] = dims[n.type] || dims.sortie, c = hexRgb(n.couleur);
+          const [a, b, h] = dimsDe(n), c = hexRgb(n.couleur);
           const x0 = n.x - a / 2, x1 = n.x + a / 2, y0 = n.y - b / 2, y1 = n.y + b / 2;
-          const z0 = n.type === "chambre" ? -8 : 0, z1 = z0 + h;
+          const z0 = n.type === "chambre" ? -8 * unite : 0, z1 = z0 + h;
           const mat = n.type === "chambre" ? MAT.beton : c;
           p.texture([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)], nuance(mat, 0.72), { seed: 41, taille: 0.6, contour: [0.25, 0.25, 0.25] });
           p.texture([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)], nuance(mat, 0.88), { seed: 42, taille: 0.6, contour: [0.25, 0.25, 0.25] });
@@ -79244,7 +79595,7 @@ var require_vue3d = __commonJS({
           if (n.type === "chambre") {
             p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6).poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], "B");
           }
-          const [tx, ty] = P(n.x, n.y, z1 + 14);
+          const [tx, ty] = n._etiq || P(n.x, n.y, z1 + 14);
           etiquettes.push(() => {
             const w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h2 = n.sous ? 22 : 14;
             p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(tx - w / 2, ty - h2 + 10, w, h2, "B");
@@ -79253,8 +79604,22 @@ var require_vue3d = __commonJS({
           });
         }
         const etiquettes = [];
+        data.noeuds.forEach((n) => {
+          const [, , h0] = dimsDe(n), z1 = (n.type === "chambre" ? -8 * unite : 0) + h0;
+          const [tx0, ty0] = P(n.x, n.y, z1 + 14), w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h = n.sous ? 22 : 14;
+          const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
+          let best = null;
+          for (const [dx, dy] of [[0, 0], [0, 1], [0, 2], [1, 0], [-1, 0], [1, 1], [-1, 1], [0, -2]]) {
+            const tx = tx0 + dx * (w / 2 + 10), ty = ty0 + dy * (h + 6), c = chevauche(rect(tx, ty));
+            if (!best || c < best.c) best = { c, tx, ty };
+            if (c === 0) break;
+          }
+          n._etiq = [best.tx, best.ty];
+          occupes.push(rect(best.tx, best.ty));
+        });
+        data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
         const elements = [
-          ...data.troncons.map((t) => ({ cle: (t.a.x + t.a.y + t.b.x + t.b.y) / 2, dessiner: () => tranchee(t) })),
+          ...data.troncons.flatMap((t) => tranchee(t)),
           ...data.noeuds.map((n) => {
             let cle = n.x + n.y;
             if (n.type !== "chambre") data.troncons.forEach((t) => {
@@ -79265,9 +79630,184 @@ var require_vue3d = __commonJS({
           })
         ].sort((u, v) => u.cle - v.cle);
         elements.forEach((e) => e.dessiner());
+        etiquettesTroncons.forEach((f2) => f2());
         etiquettes.forEach((f2) => f2());
       }
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      function couperEnLargeur(data, Wu) {
+        const pris = [];
+        data.noeuds.forEach((n) => pris.push([n.x - n.w / 2 - 34, n.x + n.w / 2 + 34]));
+        data.troncons.forEach((t) => {
+          if (t.e) pris.push([t.e.x - t.e.w / 2 - 8, t.e.x + t.e.w / 2 + 8]);
+        });
+        const libre = (x) => pris.every(([a, b]) => x <= a || x >= b);
+        const coupes = [0];
+        while (data.largeur - coupes[coupes.length - 1] > Wu + 1e-6) {
+          const c = coupes[coupes.length - 1], cible = c + Wu;
+          let x = null;
+          for (let v = cible; v > c + Wu * 0.4; v -= 4) if (libre(v)) {
+            x = v;
+            break;
+          }
+          coupes.push(x == null ? cible : x);
+        }
+        coupes.push(data.largeur);
+        return coupes;
+      }
+      function renvoisCoupes(data, coupes) {
+        const renvois = [];
+        data.troncons.forEach((t) => {
+          const x0 = Math.min(t.a.x, t.b.x), x1 = Math.max(t.a.x, t.b.x), y = t.a.y;
+          coupes.slice(1, -1).forEach((c) => {
+            if (c > x0 && c < x1) renvois.push({ x: c, y, n: renvois.length + 1 });
+          });
+        });
+        return renvois;
+      }
+      function decouperBandes(data, fmt, { texteMax = 10, texteMin = 7 } = {}) {
+        const [PW, PH] = FORMATS_PAGE[fmt] || FORMATS_PAGE.a0, k = PW / PAGE_W, M = MARGE * k;
+        const bandeTitre = 30 * k, bandePied = 18, garde = 46, ecartB = 28;
+        const zx = M, zy = M + bandePied, zw = PW - 2 * M, zh = PH - 2 * M - bandeTitre - bandePied;
+        const boites = [];
+        data.noeuds.forEach((n) => boites.push([n.x - n.w / 2, n.x + n.w / 2 + 30, n.y - n.h / 2, n.y + n.h / 2]));
+        data.troncons.forEach((t) => {
+          if (t.e) boites.push([t.e.x - t.e.w / 2, t.e.x + t.e.w / 2, t.e.y - t.e.h / 2, t.e.y + t.e.h / 2]);
+        });
+        const etendue = (c0, c1) => {
+          let y0 = Infinity, y1 = -Infinity;
+          boites.forEach(([a, b, h0, h1]) => {
+            if (b > c0 && a < c1) {
+              y0 = Math.min(y0, h0);
+              y1 = Math.max(y1, h1);
+            }
+          });
+          return Number.isFinite(y0) ? [y0 - 14, y1 + 14] : [0, data.hauteur];
+        };
+        const essai = (s2) => {
+          const coupes = couperEnLargeur(data, (zw - 2 * garde) / s2), n = coupes.length - 1;
+          const ys = coupes.slice(0, -1).map((c, b) => etendue(c, coupes[b + 1]));
+          const feuille = [], places = [];
+          let f2 = 0, h = 0;
+          ys.forEach(([y0, y1]) => {
+            const hb = (y1 - y0) * s2, besoin = (h ? ecartB : 0) + hb;
+            if (h && h + besoin > zh) {
+              f2 += 1;
+              h = 0;
+            }
+            places.push({ f: f2, haut: h ? h + ecartB : 0, hb });
+            h += (h ? ecartB : 0) + hb;
+            feuille[f2] = h;
+          });
+          return { s: s2, coupes, bandes: n, ys, places, feuilles: f2 + 1 };
+        };
+        const sMax = Math.min(texteMax / SYN.police, zh / data.hauteur), sMin = texteMin / SYN.police;
+        let r = null;
+        for (let s2 = sMax; s2 >= sMin * 0.999; s2 *= 0.96) {
+          const e = essai(s2);
+          if (e.feuilles === 1) {
+            r = e;
+            break;
+          }
+        }
+        if (!r) r = essai(Math.min(sMax, sMin));
+        return { fmt, PW, PH, k, M, bandeTitre, bandePied, garde, ecartB, zx, zy, zw, zh, ...r, folios: r.bandes, texte: SYN.police * r.s };
+      }
+      function formatOptimalBandes(data, { texteMin = 7 } = {}) {
+        const essais = ["a4", "a3", "a2", "a1", "a0"].map((f2) => decouperBandes(data, f2, { texteMin }));
+        return essais.find((d) => d.feuilles === 1 && d.texte >= texteMin) || essais[essais.length - 1];
+      }
+      function synoptiqueEnBandes(data, fmt, titre, opts = {}) {
+        const D = decouperBandes(data, fmt, opts);
+        const { PW, PH, k, M, garde, ecartB, zx, zy, zh, s, coupes, ys, places, feuilles } = D, N = coupes.length - 1;
+        const renvois = renvoisCoupes(data, coupes), pages = [];
+        for (let f2 = 0; f2 < feuilles; f2++) {
+          const p = new Page({ emitText: false, ombre: false });
+          p.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * k, `${titre} \u2014 synoptique du r\xE9seau`, { bold: true });
+          if (feuilles > 1) p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 4, 11 * k, `Feuille ${f2 + 1} / ${feuilles}`, { align: "right", bold: true });
+          p.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * k, PW - M, PH - M - 12 * k);
+          for (let b = 0; b < N; b++) {
+            if (places[b].f !== f2) continue;
+            const c0 = coupes[b], c1 = coupes[b + 1], lw = (c1 - c0) * s, y1 = ys[b][1], hb = places[b].hb;
+            const gx = zx + garde, ybb = zy + zh - places[b].haut - hb;
+            const oy = ybb - (data.hauteur - y1) * s, Y = (y) => oy + (data.hauteur - y) * s;
+            const n0 = p.labels.length;
+            p.clip([[gx, ybb], [gx + lw, ybb], [gx + lw, ybb + hb], [gx, ybb + hb]], () => {
+              drawSynoptiqueAncre(p, data, gx - c0 * s, oy, data.largeur * s, data.hauteur * s, s);
+            });
+            const garder = p.labels.slice(n0).filter((l) => l.x >= gx - 1 && l.x <= gx + lw + 1 && l.y >= ybb - 1 && l.y <= ybb + hb + 1);
+            p.labels.length = n0;
+            p.labels.push(...garder);
+            const bord = (x, sens, cx0) => {
+              renvois.filter((r) => Math.abs(r.x - cx0) < 1e-6).forEach((r) => {
+                const y = Y(r.y), cx = x + sens * 22;
+                p.rgb([0.36, 0.39, 0.45]).width(1.4).line(x, y, cx - sens * 10, y);
+                p.rgb([1, 1, 1], false).rgb([0.66, 0.27, 0.04]).width(1.2).circle(cx, y, 10, "B");
+                p.rgb([0.66, 0.27, 0.04], false).text(cx, y - 3, 8, `R${r.n}`, { align: "center", bold: true });
+              });
+              const yr = renvois.find((r) => Math.abs(r.x - cx0) < 1e-6);
+              p.rgb([0.45, 0.45, 0.45], false).text(x + sens * 42, (yr ? Y(yr.y) : ybb + hb / 2) - 5, 16, "\u2026", { align: "center", bold: true });
+            };
+            if (b < N - 1) bord(gx + lw, 1, c1);
+            if (b > 0) bord(gx, -1, c0);
+            const suivante = places[b + 1];
+            if (suivante && suivante.f === f2) p.rgb([0.82, 0.83, 0.86]).width(0.5).dash(true).line(zx, ybb - ecartB / 2, PW - M, ybb - ecartB / 2).dash(false);
+          }
+          p.rgb([0.45, 0.45, 0.45], false).text(M, M + 4, 7, `${N} bande${N > 1 ? "s" : ""} : \xAB \u2026 \xBB et renvois R en bout de bande, la suite reprend \xE0 gauche en dessous${f2 < feuilles - 1 ? ` \u2014 suite feuille ${f2 + 2}` : ""}.`, {});
+          pages.push(p);
+        }
+        return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH, bandes: N, feuilles };
+      }
+      function decouperFolios(data, fmt, { texteMax = 10, texteMin = 7 } = {}) {
+        const [PW, PH] = FORMATS_PAGE[fmt] || FORMATS_PAGE.a3, k = PW / PAGE_W, M = MARGE * k;
+        const bandeTitre = 30 * k, bandePied = 18, garde = 46;
+        const zx = M, zy = M + bandePied, zw = PW - 2 * M, zh = PH - 2 * M - bandeTitre - bandePied;
+        const sMax = texteMax / SYN.police, sH = zh / data.hauteur;
+        const sUne = Math.min(sMax, sH, (zw - 2 * garde) / data.largeur);
+        const s = SYN.police * sUne >= texteMin ? sUne : Math.min(sH, sMax);
+        const Wu = (zw - 2 * garde) / s;
+        const coupes = couperEnLargeur(data, Wu);
+        return { fmt, PW, PH, k, M, bandeTitre, bandePied, garde, zx, zy, zw, zh, s, Wu, coupes, folios: coupes.length - 1, texte: SYN.police * s };
+      }
+      function formatOptimalSynoptique(data, { texteMin = 7 } = {}) {
+        const ordre = ["a4", "a3", "a2", "a1", "a0"], essais = ordre.map((f2) => decouperFolios(data, f2, { texteMin }));
+        return essais.find((d) => d.folios === 1 && d.texte >= texteMin) || essais.slice(1).find((d) => d.texte >= texteMin) || essais[essais.length - 1];
+      }
+      function synoptiqueEnFolios(data, fmt, titre, opts = {}) {
+        const D = decouperFolios(data, fmt, opts);
+        const { PW, PH, k, M, garde, zx, zy, zw, zh, s, Wu, coupes } = D;
+        const N = coupes.length - 1, renvois = renvoisCoupes(data, coupes);
+        const pages = [];
+        for (let i = 0; i < N; i++) {
+          const p = new Page({ emitText: false, ombre: false }), c0 = coupes[i], c1 = coupes[i + 1];
+          p.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * k, `${titre} \u2014 synoptique du r\xE9seau`, { bold: true });
+          p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 4, 11 * k, `Folio ${i + 1} / ${N}`, { align: "right", bold: true });
+          p.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * k, PW - M, PH - M - 12 * k);
+          const lw = (c1 - c0) * s, gx = zx + garde + (Wu * s - lw) / 2;
+          const n0 = p.labels.length;
+          p.clip([[gx, zy], [gx + lw, zy], [gx + lw, zy + zh], [gx, zy + zh]], () => {
+            drawSynoptiqueAncre(p, data, gx - c0 * s, zy, data.largeur * s, zh, s);
+          });
+          const garder = p.labels.slice(n0).filter((l) => l.x >= gx - 1 && l.x <= gx + lw + 1);
+          p.labels.length = n0;
+          p.labels.push(...garder);
+          const oy = zy + (zh - data.hauteur * s) / 2, Y = (y) => oy + (data.hauteur - y) * s;
+          const bord = (x, sens) => {
+            p.rgb([0.55, 0.55, 0.55]).width(0.6).dash(true).line(x, zy, x, zy + zh).dash(false);
+            renvois.filter((r) => Math.abs(r.x - (sens > 0 ? c1 : c0)) < 1e-6).forEach((r) => {
+              const y = Y(r.y), cx = x + sens * 22, autre = sens > 0 ? i + 2 : i;
+              p.rgb([0.36, 0.39, 0.45]).width(1.4).line(x, y, cx - sens * 10, y);
+              p.rgb([1, 1, 1], false).rgb([0.66, 0.27, 0.04]).width(1.2).circle(cx, y, 10, "B");
+              p.rgb([0.66, 0.27, 0.04], false).text(cx, y - 3, 8, `R${r.n}`, { align: "center", bold: true });
+              p.rgb([0.3, 0.3, 0.3], false).text(cx, y - 20, 6.5, sens > 0 ? `\u2192 folio ${autre}` : `folio ${autre} \u2192`, { align: "center" });
+            });
+          };
+          if (i < N - 1) bord(gx + lw, 1);
+          if (i > 0) bord(gx, -1);
+          p.rgb([0.45, 0.45, 0.45], false).text(M, M + 4, 7, i < N - 1 ? `Suite au folio ${i + 2} : renvois R rep\xE9r\xE9s au bord droit.` : "Fin du synoptique.", {});
+          pages.push(p);
+        }
+        return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH };
+      }
+      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -79587,7 +80127,8 @@ var require_chambre_faces = __commonJS({
     "use strict";
     (function(root) {
       const FACES = ["pignonA", "pignonB", "longPanA", "longPanB"];
-      const LIBELLE = { pignonA: "pignon A", pignonB: "pignon B", longPanA: "long-pan A", longPanB: "long-pan B" };
+      const NUMERO = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+      const LIBELLE = { pignonA: "c\xF4t\xE9 4", pignonB: "c\xF4t\xE9 2", longPanA: "c\xF4t\xE9 3", longPanB: "c\xF4t\xE9 1" };
       const estPignon = (k) => k.startsWith("pignon");
       const opposee = { pignonA: "pignonB", pignonB: "pignonA", longPanA: "longPanB", longPanB: "longPanA" };
       const faceDe = (m, k) => ({ largeur: estPignon(k) ? m.l : m.L, hauteur: m.H });
@@ -79671,7 +80212,16 @@ var require_chambre_faces = __commonJS({
           avertissements
         };
       }
-      const api = { etudierChambre, FACES, LIBELLE };
+      function regrouperTraversees(etude) {
+        const g = /* @__PURE__ */ new Map();
+        for (const t of etude && etude.traversees || []) {
+          const [a, b] = t.cles, cle = NUMERO[a] <= NUMERO[b] ? `${a}|${b}` : `${b}|${a}`;
+          if (!g.has(cle)) g.set(cle, { cles: cle.split("|"), type: t.type, liaisons: [] });
+          g.get(cle).liaisons.push(t.liaison);
+        }
+        return [...g.values()].sort((x, y) => y.liaisons.length - x.liaisons.length || NUMERO[x.cles[0]] - NUMERO[y.cles[0]]).map((x) => ({ ...x, entree: LIBELLE[x.cles[0]], sortie: LIBELLE[x.cles[1]] }));
+      }
+      const api = { etudierChambre, regrouperTraversees, FACES, LIBELLE, NUMERO };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.ChambreFaces = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -79686,7 +80236,7 @@ var require_reseau = __commonJS({
       const FACES_CHAMBRE = ["pignonA", "pignonB", "longPanA", "longPanB"];
       const COULEURS = ["#e8661c", "#2459c9", "#16857a", "#b0302a", "#6b4fd0", "#c78a00", "#3f8f3a", "#5d6a70"];
       const TYPES = { chambre: "Chambre", coffret: "Coffret / tableau", sortie: "Sortie" };
-      const LIBELLE_FACE = { pignonA: "pignon A", pignonB: "pignon B", longPanA: "long-pan A", longPanB: "long-pan B", bas: "face du bas", sortie: "sortie" };
+      const LIBELLE_FACE = { longPanB: "c\xF4t\xE9 1", pignonB: "c\xF4t\xE9 2", longPanA: "c\xF4t\xE9 3", pignonA: "c\xF4t\xE9 4", bas: "face du bas", sortie: "sortie" };
       function creerReseau() {
         return { noeuds: [], troncons: [], seq: 1, actif: { vue: "coupe", noeud: null, troncon: null } };
       }
@@ -79723,9 +80273,9 @@ var require_reseau = __commonJS({
       }
       function choisirFace(r, nd, vers) {
         const libres = facesLibres(r, nd);
-        if (!libres.length) return null;
         if (nd.type !== "chambre") return libres[0];
         const ideale = faceVers(nd, vers.x, vers.y);
+        if (!libres.length) return ideale;
         if (libres.includes(ideale)) return ideale;
         const ordre = {
           pignonA: ["longPanA", "longPanB", "pignonB"],
@@ -79741,10 +80291,9 @@ var require_reseau = __commonJS({
         if (A.id === B.id) throw new Error("Impossible de relier un \xE9l\xE9ment \xE0 lui-m\xEAme");
         const faceA = opts.faceA || choisirFace(r, A, B);
         const faceB = opts.faceB || choisirFace(r, B, A);
-        if (!faceA) throw new Error(`${A.nom} n'a plus de face libre`);
-        if (!faceB) throw new Error(`${B.nom} n'a plus de face libre`);
-        if (!facesLibres(r, A).includes(faceA)) throw new Error(`${A.nom} : ${LIBELLE_FACE[faceA]} d\xE9j\xE0 occup\xE9`);
-        if (!facesLibres(r, B).includes(faceB)) throw new Error(`${B.nom} : ${LIBELLE_FACE[faceB]} d\xE9j\xE0 occup\xE9`);
+        const valide = (nd, f) => nd.type === "chambre" ? FACES_CHAMBRE.includes(f) : f === facesLibres(r, nd)[0];
+        if (!valide(A, faceA)) throw new Error(`${A.nom} : face \xAB ${faceA} \xBB inconnue`);
+        if (!valide(B, faceB)) throw new Error(`${B.nom} : face \xAB ${faceB} \xBB inconnue`);
         const t = {
           id: `t${r.seq++}`,
           a: { noeud: A.id, face: faceA },
@@ -79759,7 +80308,7 @@ var require_reseau = __commonJS({
         const t = troncon(r, tId);
         const nd = noeud(r, t[bout].noeud);
         if (t[bout].face === face) return t;
-        if (!facesLibres(r, nd).includes(face)) throw new Error(`${nd.nom} : ${LIBELLE_FACE[face]} d\xE9j\xE0 occup\xE9`);
+        if (nd.type === "chambre" && !FACES_CHAMBRE.includes(face)) throw new Error(`${nd.nom} : face \xAB ${face} \xBB inconnue`);
         t[bout].face = face;
         return t;
       }
@@ -79776,8 +80325,11 @@ var require_reseau = __commonJS({
           return { troncon: t, face: ici.face, autre: noeud(r, la.noeud), faceAutre: la.face };
         });
       }
+      function surFaceTous(r, id, face) {
+        return tronconsDe(r, id).filter((x) => x.face === face);
+      }
       function surFace(r, id, face) {
-        return tronconsDe(r, id).find((x) => x.face === face) || null;
+        return surFaceTous(r, id, face)[0] || null;
       }
       function verifierCoffret(cf, largeurNappe, hauteurNappe) {
         if (!cf || !(cf.largeur > 0) || !(cf.profondeur > 0)) return { connu: false, tient: null };
@@ -79868,6 +80420,257 @@ var require_reseau = __commonJS({
         const A = noeud(r, t.a.noeud), B = noeud(r, t.b.noeud);
         return `${A ? A.nom : "?"} \u2192 ${B ? B.nom : "?"}`;
       }
+      function contenuEtiquette(coupe) {
+        if (!coupe || !(coupe.fourreaux || []).length) return { phi: [], liaisons: [] };
+        const nb = /* @__PURE__ */ new Map();
+        coupe.fourreaux.forEach((f) => {
+          const d = Math.round(Number(f.od) || Number(f.code) || 0);
+          nb.set(d, (nb.get(d) || 0) + 1);
+        });
+        const lia = /* @__PURE__ */ new Map(), fourreauxDe = /* @__PURE__ */ new Map();
+        const parId = new Map(coupe.fourreaux.map((f) => [f.id, f]));
+        (coupe.cables || []).forEach((c) => {
+          const nom = String(c.liaison || c.label || "").trim();
+          if (!nom) return;
+          const base = nom.replace(/\s*-\s*PE$/i, ""), pe = base !== nom;
+          if (!lia.has(base)) {
+            lia.set(base, /* @__PURE__ */ new Map());
+            fourreauxDe.set(base, /* @__PURE__ */ new Set());
+          }
+          const k = (pe ? "PE " : "") + c.code;
+          lia.get(base).set(k, (lia.get(base).get(k) || 0) + 1);
+          if (c.parent != null && parId.has(c.parent)) fourreauxDe.get(base).add(c.parent);
+        });
+        const liaisons = [...lia].sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true })).map(([nom, m]) => {
+          const parOd = /* @__PURE__ */ new Map();
+          fourreauxDe.get(nom).forEach((id) => {
+            const f = parId.get(id), d = Math.round(Number(f.od) || Number(f.code) || 0);
+            parOd.set(d, (parOd.get(d) || 0) + 1);
+          });
+          return {
+            nom,
+            sections: [...m].sort((a, b) => a[0].startsWith("PE") - b[0].startsWith("PE") || b[1] - a[1]).map(([k, q]) => k.startsWith("PE") && q === 1 ? k : `${q}\xD7${k}`).join(" + "),
+            nf: fourreauxDe.get(nom).size,
+            phi: [...parOd].sort((a, b) => b[0] - a[0])
+          };
+        });
+        const occupes = new Set((coupe.cables || []).map((c) => c.parent).filter((x) => x != null));
+        const reserve = coupe.fourreaux.some((f) => f.id != null) ? coupe.fourreaux.filter((f) => f.id != null && !occupes.has(f.id)).length : 0;
+        return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons, total: coupe.fourreaux.length, reserve };
+      }
+      function dispositionAncree(r, opts) {
+        const E = opts.ecart == null ? 0.5 : opts.ecart, G = opts.marge == null ? 40 : opts.marge;
+        const tN = (id) => opts.tailleNoeud(noeud(r, id)), tE = (t) => opts.tailleEtiquette(t);
+        const adj = new Map(r.noeuds.map((n) => [n.id, []]));
+        r.troncons.forEach((t) => {
+          if (!adj.has(t.a.noeud) || !adj.has(t.b.noeud)) return;
+          adj.get(t.a.noeud).push({ v: t.b.noeud, t, face: t.a.face });
+          adj.get(t.b.noeud).push({ v: t.a.noeud, t, face: t.b.face });
+        });
+        const nomDe = (id) => (noeud(r, id) || {}).nom || "";
+        const parNom = (a, b) => nomDe(a).localeCompare(nomDe(b), "fr", { numeric: true });
+        const pos = {}, etiq = {}, place = /* @__PURE__ */ new Set(), arete = /* @__PURE__ */ new Set();
+        let decalY = 0, largeurMax = 0, rangsTotal = 0;
+        function derivation(parent, lien, sens) {
+          const items = [], dejaVus = /* @__PURE__ */ new Set([parent]);
+          let y = sens * tN(parent).h / 2, gauche = 0, droite = 0, cur = lien;
+          while (cur) {
+            const e = tE(cur.t), n2 = tN(cur.v);
+            const yL = y + sens * (e.h * E + e.h / 2);
+            items.push({ t: cur.t, dx: 0, dy: yL, w: e.w, h: e.h });
+            y = yL + sens * (e.h / 2 + e.h * E + n2.h / 2);
+            items.push({ id: cur.v, dx: 0, dy: y });
+            arete.add(cur.t.id);
+            dejaVus.add(cur.v);
+            gauche = Math.max(gauche, e.w / 2, n2.w / 2);
+            droite = Math.max(droite, e.w / 2, n2.w / 2);
+            y += sens * n2.h / 2;
+            const suite = adj.get(cur.v).filter((x) => !arete.has(x.t.id) && !place.has(x.v) && !dejaVus.has(x.v)).sort((a, b) => parNom(a.v, b.v));
+            cur = suite[0] || null;
+            suite.slice(1).forEach((x, k) => {
+              const e2 = tE(x.t), n3 = tN(x.v), dx = droite + G + Math.max(e2.w, n3.w) / 2;
+              items.push({ t: x.t, dx, dy: y + sens * (e2.h * E + e2.h / 2), w: e2.w, h: e2.h });
+              items.push({ id: x.v, dx, dy: y + sens * (e2.h * (1 + 2 * E) + n3.h / 2) });
+              arete.add(x.t.id);
+              dejaVus.add(x.v);
+              droite = dx + Math.max(e2.w, n3.w) / 2;
+              void k;
+            });
+          }
+          return { items, gauche, droite, prof: Math.abs(y), vus: dejaVus };
+        }
+        const restants = () => r.noeuds.map((n) => n.id).filter((id) => !place.has(id));
+        while (restants().length) {
+          const comp = /* @__PURE__ */ new Set(), q0 = [restants().sort(parNom)[0]];
+          while (q0.length) {
+            const u = q0.shift();
+            if (comp.has(u)) continue;
+            comp.add(u);
+            adj.get(u).forEach((x) => q0.push(x.v));
+          }
+          const chambres = [...comp].filter((id) => (noeud(r, id) || {}).type === "chambre");
+          const base = new Set(chambres.length >= 2 ? chambres : [...comp]);
+          const bfs = (s0) => {
+            const prec = /* @__PURE__ */ new Map([[s0, null]]), q = [s0];
+            let der = s0;
+            while (q.length) {
+              const u = q.shift();
+              der = u;
+              adj.get(u).filter((x) => base.has(x.v) && !prec.has(x.v)).sort((a2, b2) => parNom(a2.v, b2.v)).forEach((x) => {
+                prec.set(x.v, u);
+                q.push(x.v);
+              });
+            }
+            return { der, prec };
+          };
+          const debut = [...base].sort(parNom)[0];
+          const a = bfs(bfs(debut).der).der, b = bfs(a);
+          let chaine = [];
+          for (let u = b.der; u != null; u = b.prec.get(u)) chaine.push(u);
+          if (parNom(chaine[0], chaine[chaine.length - 1]) > 0) chaine.reverse();
+          const liens = chaine.slice(1).map((v, i) => adj.get(chaine[i]).find((x) => x.v === v));
+          liens.forEach((l) => arete.add(l.t.id));
+          chaine.forEach((id) => place.add(id));
+          const ensChaine = new Set(chaine);
+          const branches = chaine.map((id) => adj.get(id).filter((x) => !arete.has(x.t.id) && !ensChaine.has(x.v)).sort((x, y) => parNom(x.v, y.v)));
+          const calc = (k) => {
+            const n = chaine.length, coupes = [0];
+            if (k > 1) {
+              const cumul = [0];
+              for (let i = 0; i < liens.length; i++) cumul.push(cumul[i] + tE(liens[i].t).w * (1 + 2 * E));
+              for (let j = 1; j < k; j++) {
+                const cible = cumul[cumul.length - 1] * j / k;
+                let i = coupes[j - 1] + 1;
+                while (i < n - 1 && cumul[i] < cible) i++;
+                coupes.push(Math.min(i, n - 1));
+              }
+            }
+            coupes.push(n);
+            return coupes;
+          };
+          const essai = (k) => {
+            const coupes = calc(k);
+            if (new Set(coupes).size !== coupes.length) return null;
+            arete.clear();
+            r.troncons.forEach((t) => {
+              if (liens.some((l) => l.t.id === t.id)) arete.add(t.id);
+            });
+            const P = {}, L = {}, rangs = [];
+            let yRang = 0, xMax = 0, yMin = Infinity, yMax = -Infinity;
+            for (let j = 0; j < coupes.length - 1; j++) {
+              const ids = chaine.slice(coupes[j], coupes[j + 1]), dir = j % 2 ? -1 : 1;
+              const interdit = (i) => {
+                const g = coupes[j] + i;
+                if (j < coupes.length - 2 && g === coupes[j + 1] - 1) return 1;
+                if (j > 0 && g === coupes[j]) return -1;
+                return 0;
+              };
+              const der = ids.map((id, i) => {
+                const nb = { "-1": 0, 1: 0 }, res = [];
+                branches[coupes[j] + i].forEach((x) => {
+                  if (arete.has(x.t.id)) return;
+                  let s2 = x.face === "longPanB" ? -1 : x.face === "longPanA" ? 1 : nb[1] <= nb[-1] ? 1 : -1;
+                  if (s2 === interdit(i)) s2 = -s2;
+                  if (s2 === interdit(i)) return;
+                  nb[s2] += 1;
+                  const d = derivation(ids[i], x, s2);
+                  d.sens = s2;
+                  res.push(d);
+                });
+                [-1, 1].forEach((sg) => {
+                  const ds = res.filter((d) => d.sens === sg);
+                  if (ds.length < 2) return;
+                  const total = ds.reduce((a2, d) => a2 + d.gauche + d.droite, 0) + G * (ds.length - 1);
+                  let x0 = -total / 2;
+                  ds.forEach((d) => {
+                    const off = x0 + d.gauche;
+                    d.items.forEach((it) => {
+                      it.dx += off;
+                    });
+                    const g0 = d.gauche, d0 = d.droite;
+                    d.gauche = Math.max(0, g0 - off);
+                    d.droite = Math.max(0, d0 + off);
+                    x0 += g0 + d0 + G;
+                  });
+                });
+                return res;
+              });
+              const haut = Math.max(...ids.map((id, i) => Math.max(tN(id).h / 2, ...der[i].filter((d) => d.sens < 0).map((d) => d.prof))));
+              const bas = Math.max(...ids.map((id, i) => Math.max(tN(id).h / 2, ...der[i].filter((d) => d.sens > 0).map((d) => d.prof))));
+              if (j > 0) {
+                const lienRang = liens[coupes[j] - 1], e = tE(lienRang.t);
+                const pas = Math.max(rangs[j - 1].bas + haut + G, e.h * (1 + 2 * E) + (tN(chaine[coupes[j] - 1]).h + tN(ids[0]).h) / 2);
+                yRang = rangs[j - 1].y + pas;
+              }
+              const xs = [];
+              ids.forEach((id, i) => {
+                const demi = (cote) => Math.max(tN(id).w / 2, ...der[i].map((d) => cote > 0 ? d.droite : d.gauche));
+                if (i === 0) {
+                  xs.push(j === 0 ? demi(-1) : j % 2 ? rangs[j - 1].xFin : rangs[j - 1].xFin);
+                  return;
+                }
+                const e = tE(liens[coupes[j] + i - 1].t), prec = i - 1;
+                const demiPrec = Math.max(tN(ids[prec]).w / 2, ...der[prec].map((d) => dir > 0 ? d.droite : d.gauche));
+                const pas = Math.max(e.w * (1 + 2 * E) + (tN(ids[prec]).w + tN(id).w) / 2, demiPrec + demi(-dir) + G);
+                xs.push(xs[i - 1] + dir * pas);
+              });
+              ids.forEach((id, i) => {
+                P[id] = { x: xs[i], y: yRang };
+                der[i].forEach((d) => d.items.forEach((it) => {
+                  if (it.id != null) P[it.id] = { x: xs[i] + it.dx, y: yRang + it.dy };
+                  else L[it.t.id] = { x: xs[i] + it.dx, y: yRang + it.dy, w: it.w, h: it.h, sens: "v" };
+                }));
+                if (i > 0) {
+                  const t = liens[coupes[j] + i - 1].t, e = tE(t);
+                  const a1 = xs[i - 1] + dir * tN(ids[i - 1]).w / 2, b1 = xs[i] - dir * tN(id).w / 2;
+                  L[t.id] = { x: (a1 + b1) / 2, y: yRang, w: e.w, h: e.h, sens: "h" };
+                }
+              });
+              if (j > 0) {
+                const t = liens[coupes[j] - 1].t, e = tE(t), A = P[chaine[coupes[j] - 1]], B = P[ids[0]];
+                L[t.id] = { x: A.x, y: (A.y + tN(chaine[coupes[j] - 1]).h / 2 + B.y - tN(ids[0]).h / 2) / 2, w: e.w, h: e.h, sens: "v" };
+              }
+              rangs.push({ y: yRang, bas, xFin: xs[xs.length - 1] });
+            }
+            const pts = [];
+            Object.entries(P).forEach(([id, p2]) => {
+              const z2 = tN(id);
+              pts.push([p2.x - z2.w / 2, p2.y - z2.h / 2], [p2.x + z2.w / 2, p2.y + z2.h / 2]);
+            });
+            Object.values(L).forEach((l) => pts.push([l.x - l.w / 2, l.y - l.h / 2], [l.x + l.w / 2, l.y + l.h / 2]));
+            const minX = Math.min(...pts.map((q) => q[0])), maxX2 = Math.max(...pts.map((q) => q[0]));
+            yMin = Math.min(...pts.map((q) => q[1]));
+            yMax = Math.max(...pts.map((q) => q[1]));
+            xMax = maxX2;
+            return { P, L, k, minX, largeur: xMax - minX, hauteur: yMax - yMin, yMin };
+          };
+          let meilleur = essai(1);
+          if (opts.ratio) {
+            const score = (s2) => Math.min(opts.ratio / s2.largeur, 1 / s2.hauteur);
+            for (let k = 2; k <= Math.min(8, chaine.length); k++) {
+              const s2 = essai(k);
+              if (s2 && score(s2) > score(meilleur)) meilleur = s2;
+            }
+          }
+          const fin = essai(meilleur.k);
+          Object.entries(fin.P).forEach(([id, p2]) => {
+            pos[id] = { x: p2.x - fin.minX + G, y: p2.y - fin.yMin + G + decalY };
+            place.add(id);
+          });
+          Object.entries(fin.L).forEach(([id, l]) => {
+            etiq[id] = { ...l, x: l.x - fin.minX + G, y: l.y - fin.yMin + G + decalY };
+          });
+          decalY += fin.hauteur + 2 * G;
+          largeurMax = Math.max(largeurMax, fin.largeur + 2 * G);
+          rangsTotal += fin.k;
+        }
+        r.troncons.forEach((t) => {
+          if (etiq[t.id] || !pos[t.a.noeud] || !pos[t.b.noeud]) return;
+          const e = tE(t), A = pos[t.a.noeud], B = pos[t.b.noeud];
+          etiq[t.id] = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2, w: e.w, h: e.h, sens: Math.abs(A.x - B.x) > Math.abs(A.y - B.y) ? "h" : "v" };
+        });
+        return { noeuds: pos, etiquettes: etiq, largeur: largeurMax, hauteur: decalY, rangs: rangsTotal };
+      }
       const api = {
         FACES_CHAMBRE,
         COULEURS,
@@ -79883,13 +80686,16 @@ var require_reseau = __commonJS({
         troncon,
         tronconsDe,
         surFace,
+        surFaceTous,
         facesLibres,
         faceVers,
         verifierCoffret,
         depuisAncienneChambre,
         nomTroncon,
         continuite,
-        metre
+        metre,
+        dispositionAncree,
+        contenuEtiquette
       };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Reseau = api;

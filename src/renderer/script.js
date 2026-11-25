@@ -224,6 +224,29 @@
   const notificationContainer = document.getElementById("notification-container");
   const freezeBtn = document.getElementById("freezeBtn");
   const panel = document.querySelector(".panel");
+  // Panneau de gauche repliable (plus de place pour le synoptique, la chambre, le plan)
+  (function brancherRepli() {
+    const bouton = document.getElementById('replierPanneau'), wrap = document.querySelector('.wrap');
+    if (!bouton || !wrap) return;
+    const appliquer = (replie) => {
+      wrap.classList.toggle('panneau-replie', replie);
+      bouton.setAttribute('aria-expanded', String(!replie));
+      bouton.title = replie ? 'Déplier le panneau de gauche (Ctrl+B)' : 'Replier le panneau de gauche (Ctrl+B)';
+      bouton.querySelector('.sr-only').textContent = replie ? 'Déplier le panneau de gauche' : 'Replier le panneau de gauche';
+      try { localStorage.setItem('ttk-panneau-replie', replie ? '1' : '0'); } catch (_) { /* stockage indisponible */ }
+      // les vues (plan, synoptique, chambre) se recalent sur la nouvelle largeur
+      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    };
+    let initial = false;
+    try { initial = localStorage.getItem('ttk-panneau-replie') === '1'; } catch (_) { /* défaut : déplié */ }
+    appliquer(initial);
+    bouton.addEventListener('click', () => appliquer(!wrap.classList.contains('panneau-replie')));
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'b' && !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) {
+        e.preventDefault(); appliquer(!wrap.classList.contains('panneau-replie'));
+      }
+    });
+  })();
   const resizeHandle = document.querySelector(".panel-resize-handle");
 
   // Picker recherchable "chemin de câble" (créé dynamiquement)
@@ -3762,30 +3785,20 @@
 
     // Afficher le numéro du fourreau en haut du cercle (toujours visible)
     if (numero !== undefined) {
-      ctx.fillStyle = "#fff";
-      ctx.strokeStyle = "#000";
+      const sombre = document.documentElement.getAttribute('data-theme') === 'dark';
+      ctx.fillStyle = sombre ? "#ffffff" : "#1a1d1f";
+      ctx.strokeStyle = sombre ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.95)";
       ctx.lineWidth = getScaledLineWidth(3);
       ctx.font = `bold ${getScaledLineWidth(14)}px Arial`;
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      // Positionner au-dessus du cercle
+      ctx.lineJoin = 'round';
+      // Positionner au-dessus du cercle (contour d'abord, blanc par-dessus)
       ctx.strokeText(String(numero), x, y - ro - getScaledLineWidth(5));
       ctx.fillText(String(numero), x, y - ro - getScaledLineWidth(5));
     }
 
-    // Afficher le libellé si présent et si showInfo est activé
-    if (showInfo && f.label && f.label.trim()) {
-      ctx.fillStyle = "#fff";
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = getScaledLineWidth(3);
-      ctx.lineJoin = 'round';
-      ctx.font = `600 ${getScaledLineWidth(12)}px "IBM Plex Sans", system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
-      // Contour noir pour meilleure lisibilité
-      ctx.strokeText(f.label, x, y + ro + getScaledLineWidth(18));
-      ctx.fillText(f.label, x, y + ro + getScaledLineWidth(18));
-    }
+    // Nom de liaison : pas affiché sur la coupe (il est dans les tableaux et le PDF).
 
     ctx.restore();
   }
@@ -5139,20 +5152,14 @@
       selInfo.classList.remove('muted');
       const type = selectedMultiple[0].type === 'fourreau' ? 'fourreaux' : 'câbles';
       selInfo.innerHTML = `<div><b>SÉLECTION MULTIPLE</b> — ${selectedMultiple.length} ${type}</div><div><em>Utilisez Éditer (E) pour modifier tous les éléments sélectionnés</em></div>`;
-      if (freezeBtn) {
-        freezeBtn.disabled = false;
-        freezeBtn.textContent = 'Figer sélection (X)';
-      }
+      majBoutonFiger(true, 'Figer la sélection');
       return;
     }
 
     if (!selected) {
       selInfo.classList.add('muted');
       selInfo.innerHTML = '<em>Aucun objet sélectionné.</em>';
-      if (freezeBtn) {
-        freezeBtn.disabled = true;
-        freezeBtn.textContent = 'Figer (X)';
-      }
+      majBoutonFiger(false, 'Figer');
       return;
     }
     selInfo.classList.remove('muted');
@@ -5182,10 +5189,17 @@
       const customLabel = f.label ? `<div>Libellé : <b>${f.label}</b></div>` : '';
       selInfo.innerHTML = `<div><span class='swatch' style='background:${displayColor}'></span><b>${f.type} ${f.code}</b></div>${customLabel}<div>Ø extérieur : <b>${f.od}</b> — Ø intérieur min : <b>${f.idm}</b> mm</div><div>Aire intérieure : <b>${inner.toFixed(1)}</b> mm²</div><div>Câbles contenus : <b>${f.children.length}</b></div><div>Occupation : <b>${used.toFixed(1)}%</b> — Libre : <b>${free.toFixed(1)}%</b></div><div>Gelé : <b>${frozen ? 'Oui' : 'Non'}</b></div>`;
     }
-    if (freezeBtn) {
-      freezeBtn.disabled = false;
-      freezeBtn.textContent = frozen ? 'Dégeler (X)' : 'Figer (X)';
-    }
+    majBoutonFiger(true, frozen ? 'Dégeler' : 'Figer');
+  }
+  // Bouton Figer : seuls le libellé, l'infobulle et le nom accessible changent
+  // (l'icône et la touche X restent ; textContent les effaçait).
+  function majBoutonFiger(actif, libelle) {
+    if (!freezeBtn) return;
+    freezeBtn.disabled = !actif;
+    const lab = freezeBtn.querySelector('.ctrl-label');
+    if (lab) lab.textContent = libelle.replace('Figer la sélection', 'Figer');
+    freezeBtn.title = `${libelle} — X`;
+    freezeBtn.setAttribute('aria-label', `${libelle} (X)`);
   }
 
   // Occupation extraite dans geometry.js (pure, testée). Wrapper : passe les globales.
@@ -7176,8 +7190,10 @@
   }
 
   function tick() {
-    stepPhysics();
-    redraw();
+    // Coupe masquée par une vue réseau (synoptique, chambre) : simulation en pause,
+    // pour que ces vues restent fluides. Elle reprend au retour sur la coupe.
+    const coupeCachee = reseau && reseau.actif && reseau.actif.vue && reseau.actif.vue !== 'coupe';
+    if (!coupeCachee) { stepPhysics(); redraw(); }
     requestAnimationFrame(tick);
   }
 
@@ -7257,6 +7273,69 @@
     errorPdf('window.unhandledrejection', e.reason);
   });
 
+  // Options réseau de la modale PDF : visibles avec un réseau ; format conseillé
+  // pour le synoptique calculé d'après ses dimensions.
+  function majOptionsPdfReseau() {
+    const box = document.getElementById('pdfReseauOptions');
+    if (!box) return;
+    const actif = !!(reseau && reseau.noeuds && reseau.noeuds.length && reseau.troncons.length);
+    box.hidden = !actif;
+    const feuille = document.querySelector('#pdfExportModal .pdf-a4-sheet'), resume = document.getElementById('pdfReseauResume');
+    if (feuille) feuille.hidden = actif;
+    if (resume) resume.hidden = !actif;
+    if (!actif) { const go = document.getElementById('confirmPdfExport'); if (go) go.disabled = false; return; }
+    // Aperçu réseau : liste des fichiers qui seront produits (selon les cases)
+    const listeFichiers = () => {
+      const ol = document.getElementById('pdfReseauFichiers'); if (!ol) return;
+      const coche = (id) => document.getElementById(id)?.checked !== false;
+      const fmtS = (document.getElementById('pdfFormatSyn') || {}).value || 'auto';
+      const dS = decoupageSyn(synoptiqueAncre(1.414), fmtS);
+      const nCh = etudesChambresReseau().length, nCo = reseau.troncons.filter((t) => { const st = etatTroncon(t); return st && st.fourreaux.length; }).length;
+      const fmtC = ((document.getElementById('pdfFormatCoupes') || {}).value || 'a3').toUpperCase();
+      const items = [
+        coche('pdfGrpSyn') && `Synoptique — ${resumeDecoupage(dS)} + métré et continuité`,
+        coche('pdfGrpChambres') && nCh && `Chambres — ${nCh} page${nCh > 1 ? 's' : ''} A3`,
+        coche('pdfGrpCoupes') && nCo && `Coupes — ${nCo} tronçon${nCo > 1 ? 's' : ''} en ${fmtC}`,
+        coche('pdfGrpTableaux') && 'Tableaux fourreaux et câbles — A4 paysage',
+      ].filter(Boolean);
+      ol.innerHTML = '';
+      items.forEach((t) => { const li = document.createElement('li'); li.textContent = t; ol.appendChild(li); });
+      if (!items.length) { const li = document.createElement('li'); li.className = 'pdf-reseau-vide'; li.textContent = 'Aucune partie cochée : rien à exporter.'; ol.appendChild(li); }
+      const go = document.getElementById('confirmPdfExport'); if (go) go.disabled = !items.length;
+    };
+    ['pdfGrpSyn', 'pdfGrpChambres', 'pdfGrpCoupes', 'pdfGrpTableaux', 'pdfFormatCoupes', 'pdfFormatSyn'].forEach((id) => {
+      const el = document.getElementById(id); if (el && !el._ttkListe) { el._ttkListe = true; el.addEventListener('change', listeFichiers); }
+    });
+    listeFichiers();
+    const D = decoupageSyn(synoptiqueAncre(1.414), 'auto');
+    const txt = resumeDecoupage(D);
+    const opt = document.querySelector('#pdfFormatSyn option[value="auto"]');
+    if (opt) opt.textContent = `Automatique (conseillé : ${txt})`;
+    const sel = document.getElementById('pdfFormatSyn'), conseil = document.getElementById('pdfFormatConseil');
+    const maj = () => {
+      if (!conseil || !sel) return;
+      if (sel.value === 'auto') { conseil.textContent = `Format le plus petit qui reste lisible : ${txt}.`; return; }
+      const d = decoupageSyn(synoptiqueAncre(1.414), sel.value);
+      conseil.textContent = `${resumeDecoupage(d)}${d.texte < 7 ? ' — petit, préférez un format plus grand' : ''}.`;
+    };
+    if (sel && !sel._ttk) { sel._ttk = true; sel.addEventListener('change', () => { maj(); dessinerSynoptique(false); }); }
+    const mep = document.getElementById('pdfMiseEnPageSyn');
+    if (mep && !mep._ttk) { mep._ttk = true; mep.addEventListener('change', () => { majOptionsPdfReseau(); dessinerSynoptique(false); }); }
+    maj();
+  }
+  // Découpage du synoptique tel que l'export le fera (mise en page + format
+  // choisis dans la fenêtre PDF) : sert aux pointillés de l'app et au conseil.
+  function miseEnPageSyn() { return (document.getElementById('pdfMiseEnPageSyn') || {}).value || 'bandes'; }
+  function decoupageSyn(data, fmtChoisi) {
+    const V = window.Vue3D, v = fmtChoisi || (document.getElementById('pdfFormatSyn') || {}).value || 'auto';
+    if (miseEnPageSyn() === 'bandes') return v === 'auto' ? V.formatOptimalBandes(data) : V.decouperBandes(data, v);
+    return v === 'auto' ? V.formatOptimalSynoptique(data) : V.decouperFolios(data, v);
+  }
+  function resumeDecoupage(D) {
+    const t = `texte ${D.texte.toFixed(1).replace('.', ',')} pt`;
+    if (D.bandes != null) return `${D.fmt.toUpperCase()} — ${D.bandes} bande${D.bandes > 1 ? 's' : ''}${D.feuilles > 1 ? ` sur ${D.feuilles} feuilles` : ' sur 1 feuille'}, ${t}`;
+    return `${D.fmt.toUpperCase()} — ${D.folios} folio${D.folios > 1 ? 's' : ''}, ${t}`;
+  }
   function openPdfExportModal() {
     const modal = document.getElementById('pdfExportModal');
     if (!modal) {
@@ -7265,6 +7344,7 @@
     }
 
     const modalContent = modal.querySelector('.pdf-export-modal-enhanced');
+    majOptionsPdfReseau();
 
     // Pré-remplir les valeurs
     const currentDate = new Date().toLocaleDateString('fr-FR');
@@ -7540,6 +7620,7 @@
     if (data && Array.isArray(data.noeuds)) reseau = JSON.parse(JSON.stringify(data));
     else if (ancienneChambre && window.Reseau) reseau = window.Reseau.depuisAncienneChambre(ancienneChambre, null);
     else reseau = null;
+    try { SYN.zoom = null; } catch (e) { /* SYN pas encore initialisé (chargement au démarrage) */ } // nouveau projet : cadrage initial
   }
   // Coupe du plan affiché → tronçon actif (copie propre, sans le réseau).
   function sauverCoupeActive() {
@@ -7570,6 +7651,11 @@
     return [...n].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q} Ø${d}`);
   }
   // Étiquette d'un tronçon : un diamètre par ligne, la distance tout en bas.
+  // Isométrique : étiquette courte (nombre de fourreaux et longueur), le détail est au synoptique.
+  function etiquetteIso(t) {
+    const st = etatTroncon(t), n = st ? st.fourreaux.length : 0;
+    return [n ? `${n} fourreau${n > 1 ? 'x' : ''}` : 'coupe vide', t.longueurM ? `${String(t.longueurM).replace('.', ',')} m` : '? m'];
+  }
   function etiquetteTroncon(t) { return [...lignesFourreaux(t), t.longueurM ? `${t.longueurM} m` : '? m']; }
   function resumeFourreaux(t) {
     return lignesFourreaux(t).join(' + ');
@@ -7590,16 +7676,14 @@
     return st ? st.fourreaux.map((f) => ({ type: f.type || '', code: String(f.code || '') })) : [];
   }
   // Données du synoptique pour vue3d.js (2D / isométrique, écran et PDF).
-  function donneesSynoptique() {
-    const noeuds = reseau.noeuds.map((n) => {
-      let sous = '';
-      if (n.type === 'chambre') { const e = etudeChambre(n); sous = e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'); }
-      if (n.type === 'coffret') sous = n.coffret.genre + (n.coffret.largeur && n.coffret.profondeur ? ` ${n.coffret.largeur}×${n.coffret.profondeur}` : '');
-      return { nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, sous };
-    });
+  // Isométrique : MÊMES positions que la vue 2D (disposition ancrée + déplacements
+  // à la main), mêmes tailles d'éléments ; seule la projection change.
+  function donneesSynoptique(rapide = false) {
+    const d2 = synoptiqueAncre(1.414, rapide), parId = new Map(reseau.noeuds.map((n, i) => [n.id, d2.noeuds[i]]));
+    const noeuds = d2.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, w: n.w, h: n.h, sous: n.sous }));
     const troncons = reseau.troncons.map((t) => {
-      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
-      return { a: { x: A.x, y: A.y, face: t.a.face, type: A.type }, b: { x: B.x, y: B.y, face: t.b.face, type: B.type }, label: etiquetteTroncon(t) };
+      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud), pa = parId.get(A.id), pb = parId.get(B.id);
+      return { a: { x: pa.x, y: pa.y, w: pa.w, h: pa.h, face: t.a.face, type: A.type }, b: { x: pb.x, y: pb.y, w: pb.w, h: pb.h, face: t.b.face, type: B.type }, label: etiquetteIso(t) };
     });
     return { noeuds, troncons };
   }
@@ -7618,16 +7702,47 @@
     return vus;
   }
   // Étude d'une chambre (chambre-faces.js) à partir des coupes de ses tronçons.
+  // Plusieurs tronçons sur le même côté : leurs coupes sont accolées dans un seul
+  // masque, dans l'ordre de leurs destinations le long du côté, séparées de
+  // l'écart entre fourreaux. Chaque coupe est d'abord ramenée au sens « départ ».
+  function accolerMasques(face, parts) {
+    const V = window.Vue3D, pignon = face.startsWith('pignon');
+    // position de la destination le long du côté (repère chambre, y vers le haut)
+    const cle = (m) => (m._vers ? (pignon ? -m._vers.y : m._vers.x) : 0);
+    const tri = [...parts].sort((a, b) => cle(a) - cle(b));
+    const miroirDepart = V.coupeEnMiroir(face, 'depart');
+    const ordre = miroirDepart ? tri.reverse() : tri; // ordre le long de x de la coupe
+    const ecart = Math.max(FOURREAU_GAP || 0, 30);
+    let x0 = 0, n = 0;
+    const fourreaux = [], cables = [], noms = [], liaisons = [];
+    ordre.forEach((m, i) => {
+      const versDepart = m.sens === 'arrivee'; // vue de dos : on la retourne
+      const X = (x) => x0 + (versDepart ? m.largeur - x : x);
+      const ids = new Map();
+      m.fourreaux.forEach((f) => { n += 1; ids.set(f.id, `F${n}`); fourreaux.push({ ...f, id: `F${n}`, x: X(f.x) }); });
+      m.cables.forEach((c) => cables.push({ ...c, fourreau: ids.get(c.fourreau), x: X(c.x) }));
+      noms.push(m.nom); m.liaisons.forEach((l) => { if (!liaisons.includes(l)) liaisons.push(l); });
+      x0 += m.largeur + (i < ordre.length - 1 ? ecart : 0);
+    });
+    const ref = parts[0];
+    return { ...ref, nom: noms.join(' + '), sens: 'depart', largeur: Math.round(x0), hauteur: Math.max(...parts.map((m) => m.hauteur)),
+      fourreaux, cables, liaisons, longueurM: null, accoles: parts.length };
+  }
   function etudeChambre(nd) {
     if (!reseau || !nd || nd.type !== 'chambre' || !window.ChambreFaces) return null;
     const masques = {};
     R().FACES_CHAMBRE.forEach((f) => {
-      const v = R().surFace(reseau, nd.id, f);
-      const m = v && masqueTroncon(v.troncon);
-      if (!m) return;
-      // sens du tronçon sur cette face : la coupe est vue de dos à l'arrivée
-      m.sens = v.troncon.a.noeud === nd.id && v.troncon.a.face === f ? 'depart' : 'arrivee';
-      masques[f] = m;
+      const parts = R().surFaceTous(reseau, nd.id, f).map((v) => {
+        const m = masqueTroncon(v.troncon);
+        if (!m) return null;
+        // sens du tronçon sur cette face : la coupe est vue de dos à l'arrivée
+        m.sens = v.troncon.a.noeud === nd.id && v.troncon.a.face === f ? 'depart' : 'arrivee';
+        m.longueurM = v.troncon.longueurM || null;
+        m._vers = v.autre;
+        return m;
+      }).filter(Boolean);
+      if (parts.length === 1) masques[f] = parts[0];
+      else if (parts.length > 1) masques[f] = accolerMasques(f, parts);
     });
     if (!Object.keys(masques).length) return null;
     const CI = window.ChambresInfos;
@@ -7707,6 +7822,12 @@
   }
 
   function majBandeau() {
+    const btnReseau = document.getElementById('chambreModeBtn'); // cuivre quand une vue réseau est affichée
+    if (btnReseau) {
+      const vueReseau = !!(reseau && reseau.actif && reseau.actif.vue && reseau.actif.vue !== 'coupe');
+      btnReseau.classList.toggle('active', vueReseau); btnReseau.setAttribute('aria-pressed', String(vueReseau));
+      btnReseau.title = vueReseau ? 'Revenir à la coupe' : 'Réseau : synoptique, chambres, tronçons';
+    }
     let b = document.getElementById('reseauBandeau');
     if (!reseau) { if (b) b.hidden = true; return; }
     if (!b) {
@@ -7750,20 +7871,13 @@
 
   /* ── Synoptique 2D ── */
   const SYN = { sel: null, drag: null, lien: null, survol: null, vue: { k: 1, ox: 0, oy: 0 }, mode: '2d' };
-  // Taille d'un nœud dans le repère du synoptique : élargi pour contenir son nom,
-  // grossi par SYN.c quand le cadrage réduit fortement (texte toujours lisible).
-  const REF_AFFICHEE = new WeakMap(); // modèle affiché sous le nom d'une chambre (dernier dessin)
-  const tailleNoeud = (n) => {
-    const b = n.type === 'chambre' ? { w: 96, h: 52 } : n.type === 'coffret' ? { w: 56, h: 56 } : { w: 70, h: 40 };
-    const c = SYN.c || 1, sous = REF_AFFICHEE.get(n) || '';
-    const w = Math.max(b.w, String(n.nom || '').length * 7.8 + (n.type === 'sortie' ? 30 : 18), sous.length * 6.8 + 16);
-    return { w: w * c, h: b.h * c };
-  };
+  // Taille d'un nœud dans le repère du synoptique (élargi pour contenir son nom).
+  const tailleNoeud = (n) => ({ w: Math.max(n.type === 'chambre' ? 120 : 140, String(n.nom || '').length * 9.5 + (n.type === 'sortie' ? 34 : 24)), h: n.type === 'chambre' ? 62 : 48 });
   function noeudSous(x, y) {
     return [...reseau.noeuds].reverse().find((n) => { const s = tailleNoeud(n); return Math.abs(x - n.x) <= s.w / 2 && Math.abs(y - n.y) <= s.h / 2; }) || null;
   }
   function poigneeSous(x, y) {
-    return reseau.noeuds.find((n) => Math.hypot(x - (n.x + tailleNoeud(n).w / 2 + 12 * (SYN.c || 1)), y - n.y) <= 9 * (SYN.c || 1)) || null;
+    return reseau.noeuds.find((n) => Math.hypot(x - (n.x + tailleNoeud(n).w / 2 + 14), y - n.y) <= 13) || null;
   }
   function tronconSous(x, y) {
     return reseau.troncons.find((t) => {
@@ -7774,6 +7888,95 @@
     }) || null;
   }
 
+  // Bord d'une chambre sous le pointeur (bande extérieure du cadre) : on y tire
+  // une nouvelle liaison ; le centre sert à déplacer la chambre.
+  function bordChambreSous(x, y) {
+    const n = noeudSous(x, y);
+    if (!n || n.type !== 'chambre') return null;
+    const { w, h } = tailleNoeud(n), bx = w / 2 - Math.abs(x - n.x), by = h / 2 - Math.abs(y - n.y);
+    const bande = Math.max(10, Math.min(w, h) * 0.22);
+    return bx <= bande || by <= bande ? n : null;
+  }
+  // Côté de départ selon la direction du tirage (y vers le bas à l'écran) :
+  // haut = côté 1 (long-pan B), droite = 2 (pignon B), bas = 3 (long-pan A), gauche = 4 (pignon A).
+  function faceVers(n, x, y) {
+    const dx = x - n.x, dy = y - n.y;
+    return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'pignonB' : 'pignonA') : (dy < 0 ? 'longPanB' : 'longPanA');
+  }
+  const FACE_OPPOSEE = { pignonA: 'pignonB', pignonB: 'pignonA', longPanA: 'longPanB', longPanB: 'longPanA' };
+  // Liaison tirée depuis `de` et lâchée dans le vide : menu « Chambre / Coffret / Sortie ».
+  function menuNouvelElement(o, de, face, ev) {
+    o.querySelector('.syn-menu')?.remove();
+    const m = document.createElement('div');
+    m.className = 'syn-menu'; m.setAttribute('role', 'menu');
+    const src = R().noeud(reseau, de);
+    const titre = document.createElement('div'); titre.className = 'syn-menu-titre';
+    titre.textContent = src.type === 'chambre' && face ? `Depuis ${src.nom}.${{ longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 }[face]} :` : `Depuis ${src.nom} :`;
+    m.appendChild(titre);
+    const fermer = () => { m.remove(); document.removeEventListener('keydown', echap, true); document.removeEventListener('mousedown', dehors, true); };
+    const echap = (e) => { if (e.key === 'Escape') fermer(); };
+    const dehors = (e) => { if (!m.contains(e.target)) fermer(); };
+    [['chambre', 'Chambre'], ['coffret', 'Coffret / tableau'], ['sortie', 'Sortie']].forEach(([type, lib]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.textContent = lib;
+      b.addEventListener('click', () => {
+        fermer();
+        const n = R().ajouterNoeud(reseau, type, { x: src.x, y: src.y });
+        const opts = {};
+        if (src.type === 'chambre' && face) opts.faceA = face;
+        if (type === 'chambre' && face) opts.faceB = FACE_OPPOSEE[face];
+        try {
+          const t = R().relier(reseau, de, n.id, opts);
+          SYN.sel = { troncon: t.id };
+          showToast(`${n.nom} ajouté${type === 'chambre' || type === 'sortie' ? 'e' : ''} et relié${type === 'chambre' || type === 'sortie' ? 'e' : ''} : indiquez la longueur du tronçon`);
+        } catch (e) { R().supprimerNoeud(reseau, n.id); showToast(e.message); }
+        dessinerSynoptique();
+      });
+      m.appendChild(b);
+    });
+    const zone = o.querySelector('.chambre-dessin').getBoundingClientRect();
+    m.style.left = `${Math.min(ev.clientX - zone.left + 8, zone.width - 190)}px`;
+    m.style.top = `${Math.min(ev.clientY - zone.top + 8, zone.height - 150)}px`;
+    o.querySelector('.chambre-dessin').appendChild(m);
+    m.querySelector('button')?.focus();
+    setTimeout(() => { document.addEventListener('keydown', echap, true); document.addEventListener('mousedown', dehors, true); }, 0);
+  }
+  // Étiquette de tronçon sous le pointeur (repère du schéma).
+  function etiquetteSous(x, y) {
+    const d = SYN.data; if (!d) return null;
+    const e = d.troncons.find((t) => t.e && Math.abs(x - t.e.x) <= t.e.w / 2 && Math.abs(y - t.e.y) <= t.e.h / 2);
+    return e ? R().troncon(reseau, e.id) : null;
+  }
+  // Aimantation orthogonale pendant le glisser : l'élément s'aligne en X ou en Y sur
+  // les éléments qui lui sont reliés (puis sur les autres), pour des tronçons droits.
+  // Seuil : 12 px à l'écran. Alt maintenu : déplacement libre.
+  function decalageAimante(n, dx, dy, k, libre) {
+    SYN.guides = [];
+    const q = synBase && synBase.dis.noeuds[n.id], c = (synBase && synBase.cadre) || { tx: 0, ty: 0 };
+    if (!q || libre) return { dx: Math.round(dx), dy: Math.round(dy) };
+    const bx = q.x + c.tx, by = q.y + c.ty, x = bx + dx, y = by + dy, seuil = 12 / k;
+    const relies = new Set();
+    reseau.troncons.forEach((t) => { if (t.a.noeud === n.id) relies.add(t.b.noeud); if (t.b.noeud === n.id) relies.add(t.a.noeud); });
+    const autres = reseau.noeuds.filter((m) => m.id !== n.id);
+    const cherche = (axe, v) => {
+      for (const groupe of [autres.filter((m) => relies.has(m.id)), autres.filter((m) => !relies.has(m.id))]) {
+        let best = null;
+        groupe.forEach((m) => { const d = Math.abs(m[axe] - v); if (d <= seuil && (!best || d < best.d)) best = { d, v: m[axe], m }; });
+        if (best) return best;
+      }
+      return null;
+    };
+    const sx = cherche('x', x), sy = cherche('y', y);
+    const nx = sx ? sx.v : x, ny = sy ? sy.v : y;
+    if (sx) SYN.guides.push({ x1: nx, y1: Math.min(ny, sx.m.y), x2: nx, y2: Math.max(ny, sx.m.y) });
+    if (sy) SYN.guides.push({ x1: Math.min(nx, sy.m.x), y1: ny, x2: Math.max(nx, sy.m.x), y2: ny });
+    return { dx: Math.round(nx - bx), dy: Math.round(ny - by) };
+  }
+  // Un seul redessin par image pendant pan / zoom / glisser, sans recalcul du réseau.
+  let synImage = 0;
+  function planifierSyn() {
+    if (synImage) return;
+    synImage = requestAnimationFrame(() => { synImage = 0; dessinerSynoptique(false, true); });
+  }
   function construireSynoptique() {
     let o = document.getElementById('reseauOverlay');
     if (o) return o;
@@ -7793,17 +7996,23 @@
           <button type="button" class="chambre-btn chambre-btn-second" data-ajout="sortie">Ajouter une sortie</button>
         </div>
         <div id="reseauEdition" class="reseau-edition"></div>
-        <p class="chambre-aide">Glissez un élément pour le déplacer. Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
-        <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
+        <p class="chambre-aide">Tirez depuis le <b>bord</b> d'une chambre vers un côté et lâchez dans le vide : chambre, coffret ou sortie reliée sur ce côté. Glissez le centre d'un élément pour le déplacer : il s'aligne sur les éléments reliés (Alt : libre). Ses étiquettes suivent ; « Disposition automatique » annule. Tirez depuis son <b>+</b> vers un autre pour les relier, ou cliquez le <b>+</b> pour ajouter une chambre reliée. Double-clic : ouvrir la chambre ou la coupe.</p>
+        <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="reseauAuto">Disposition automatique</button><button type="button" class="chambre-btn chambre-btn-discret" id="reseauRetour">Retour à la coupe</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
+    o.querySelector('#reseauAuto').addEventListener('click', () => {
+      reseau.noeuds.forEach((n) => { delete n.decal; });
+      SYN.zoom = null; dessinerSynoptique();
+      showToast('Disposition automatique rétablie');
+    });
     o.querySelectorAll('[data-ajout]').forEach((b) => b.addEventListener('click', () => {
       const n = R().ajouterNoeud(reseau, b.dataset.ajout);
       SYN.sel = { noeud: n.id }; dessinerSynoptique();
     }));
     o.querySelector('#reseauRetour').addEventListener('click', masquerVues);
+
     o.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
-      SYN.mode = b.dataset.mode;
+      SYN.mode = b.dataset.mode; SYN.zoom = null; // chaque vue repart cadrée
       o.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('actif', x === b));
       o.querySelector('.reseau-ajouts').hidden = SYN.mode === 'iso';
       dessinerSynoptique();
@@ -7812,41 +8021,85 @@
     const pos = (ev) => { const r = cv.getBoundingClientRect(), v = SYN.vue || { k: 1, ox: 0, oy: 0 };
       return { x: (ev.clientX - r.left - v.ox) / v.k, y: (ev.clientY - r.top - v.oy) / v.k }; };
     cv.addEventListener('mousedown', (ev) => {
-      if (SYN.mode === 'iso') return; // vue de consultation
+      if (SYN.mode === 'iso') { // vue de consultation : déplacement de la vue seulement
+        SYN.pan = { x: ev.clientX, y: ev.clientY, px: (SYN.zoom || {}).px || 0, py: (SYN.zoom || {}).py || 0 };
+        if (!SYN.zoom) SYN.zoom = { k: 1, px: 0, py: 0 };
+        return;
+      }
       const p = pos(ev);
       const pg = poigneeSous(p.x, p.y);
-      if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y, x0: p.x, y0: p.y }; return; }
+      if (pg) { SYN.lien = { de: pg.id, x: p.x, y: p.y, x0: p.x, y0: p.y, plus: true }; return; }
+      const bordure = bordChambreSous(p.x, p.y);
+      if (bordure) { SYN.sel = { noeud: bordure.id }; SYN.lien = { de: bordure.id, x: p.x, y: p.y, x0: p.x, y0: p.y, bord: true }; return; }
       const n = noeudSous(p.x, p.y);
-      if (n) { SYN.sel = { noeud: n.id }; SYN.drag = { id: n.id, dx: p.x - n.x, dy: p.y - n.y }; dessinerSynoptique(); return; }
-      const t = tronconSous(p.x, p.y);
-      SYN.sel = t ? { troncon: t.id } : null; dessinerSynoptique();
+      if (n) {
+        SYN.sel = { noeud: n.id };
+        const d = n.decal || { dx: 0, dy: 0 };
+        SYN.glisse = { id: n.id, x: ev.clientX, y: ev.clientY, dx: d.dx || 0, dy: d.dy || 0, bouge: false };
+        dessinerSynoptique(); return;
+      }
+      const t = tronconSous(p.x, p.y) || etiquetteSous(p.x, p.y);
+      SYN.sel = t ? { troncon: t.id } : null;
+      if (!t) SYN.pan = { x: ev.clientX, y: ev.clientY, px: (SYN.zoom || {}).px || 0, py: (SYN.zoom || {}).py || 0 };
+      dessinerSynoptique();
     });
     cv.addEventListener('mousemove', (ev) => {
       const p = pos(ev);
-      if (SYN.drag) { const n = R().noeud(reseau, SYN.drag.id); n.x = Math.round(p.x - SYN.drag.dx); n.y = Math.round(p.y - SYN.drag.dy); dessinerSynoptique(false); return; }
-      if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; dessinerSynoptique(false); return; }
+      if (SYN.pan) { SYN.zoom.px = SYN.pan.px + (ev.clientX - SYN.pan.x); SYN.zoom.py = SYN.pan.py - (ev.clientY - SYN.pan.y); planifierSyn(); return; }
+      if (SYN.glisse) {
+        const g = SYN.glisse, k = (SYN.vue && SYN.vue.k) || 1, mx = ev.clientX - g.x, my = ev.clientY - g.y;
+        if (!g.bouge && Math.hypot(mx, my) < 4) return;
+        g.bouge = true;
+        const n = R().noeud(reseau, g.id);
+        if (n) n.decal = decalageAimante(n, g.dx + mx / k, g.dy + my / k, k, ev.altKey);
+        cv.style.cursor = 'grabbing'; planifierSyn(); return;
+      }
+      if (SYN.lien) { SYN.lien.x = p.x; SYN.lien.y = p.y; planifierSyn(); return; }
       const surPlus = !!poigneeSous(p.x, p.y);
-      cv.style.cursor = surPlus ? 'crosshair' : (noeudSous(p.x, p.y) || tronconSous(p.x, p.y)) ? 'pointer' : 'default';
-      cv.title = surPlus ? 'Tirer vers un élément pour le relier · Clic : ajouter une chambre reliée' : '';
+      const surBord = !surPlus && bordChambreSous(p.x, p.y);
+      cv.style.cursor = surPlus || surBord ? 'crosshair' : noeudSous(p.x, p.y) ? 'grab' : (tronconSous(p.x, p.y) || etiquetteSous(p.x, p.y)) ? 'pointer' : 'default';
+      cv.title = surPlus ? 'Tirer vers un élément pour le relier · Clic : ajouter une chambre reliée'
+        : surBord ? 'Tirer vers un côté : nouvelle liaison (lâcher dans le vide pour créer une chambre, un coffret ou une sortie)' : '';
     });
     window.addEventListener('mouseup', (ev) => {
       if (SYN.lien && !o.hidden) {
         const p = pos(ev), cible = noeudSous(p.x, p.y), de = SYN.lien.de;
-        const clic = Math.hypot(p.x - SYN.lien.x0, p.y - SYN.lien.y0) < 4;
+        const clic = Math.hypot(p.x - SYN.lien.x0, p.y - SYN.lien.y0) < 4, lien = SYN.lien;
         SYN.lien = null;
-        if (clic) { // clic simple sur « + » : prolonger le réseau d'une chambre reliée
+        const src0 = R().noeud(reseau, de), face = src0 && src0.type === 'chambre' && !clic ? faceVers(src0, p.x, p.y) : null;
+        if (clic && lien.bord) { /* simple clic sur le bord : sélection seulement */ }
+        else if (clic) { // clic simple sur « + » : prolonger le réseau d'une chambre reliée
           const src = R().noeud(reseau, de);
           const n = R().ajouterNoeud(reseau, 'chambre', { x: src.x + 220, y: src.y });
           try { const t = R().relier(reseau, de, n.id); SYN.sel = { troncon: t.id }; showToast(`${n.nom} ajoutée et reliée : indiquez la longueur du tronçon`); }
           catch (e) { R().supprimerNoeud(reseau, n.id); showToast(e.message); }
         } else if (cible && cible.id !== de) {
-          try { const t = R().relier(reseau, de, cible.id); SYN.sel = { troncon: t.id }; showToast(`Tronçon ${R().nomTroncon(reseau, t)} créé : indiquez sa longueur`); }
+          const opts = face ? { faceA: face } : {};
+          if (face && cible.type === 'chambre' && R().facesLibres(reseau, cible).includes(FACE_OPPOSEE[face])) opts.faceB = FACE_OPPOSEE[face];
+          try { const t = R().relier(reseau, de, cible.id, opts); SYN.sel = { troncon: t.id }; showToast(`Tronçon ${R().nomTroncon(reseau, t)} créé : indiquez sa longueur`); }
           catch (e) { showToast(e.message); }
+        } else if (!cible) {
+          dessinerSynoptique(); menuNouvelElement(o, de, face, ev); return;
         }
         dessinerSynoptique();
       }
-      if (SYN.drag) { SYN.drag = null; dessinerSynoptique(); }
+      if (SYN.pan) { SYN.pan = null; }
+      if (SYN.glisse) {
+        const bouge = SYN.glisse.bouge; SYN.glisse = null; SYN.guides = [];
+        if (bouge && !o.hidden) { dessinerSynoptique(); }
+      }
     });
+    cv.addEventListener('wheel', (ev) => {
+      ev.preventDefault();
+      const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 }), r = cv.getBoundingClientRect();
+      const f = Math.exp(-ev.deltaY * 0.0015), k2 = Math.max(1, Math.min(12, z.k * f)), g = k2 / z.k;
+      // zoom autour du curseur
+      const cx = ev.clientX - r.left - r.width / 2, cy = ev.clientY - r.top - r.height / 2;
+      const cyp = -cy; // décalage vertical compté vers le haut (repère du dessin)
+      z.px = cx - (cx - z.px) * g; z.py = cyp - (cyp - z.py) * g; z.k = k2;
+      if (k2 === 1) { z.px = 0; z.py = 0; }
+      planifierSyn();
+    }, { passive: false });
     cv.addEventListener('dblclick', (ev) => {
       if (SYN.mode === 'iso') return;
       const p = pos(ev);
@@ -7863,7 +8116,7 @@
     return o;
   }
 
-  function dessinerSynoptique(panneau = true) {
+  function dessinerSynoptique(panneau = true, rapide = false) {
     const o = document.getElementById('reseauOverlay');
     if (!o || o.hidden || !reseau) return;
     const cv = o.querySelector('#reseauCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
@@ -7875,84 +8128,144 @@
     if (SYN.mode === 'iso') {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height); // feuille, même rendu que le PDF
       const page = new window.Vue3D.Page({ emitText: false, ombre: false });
-      window.Vue3D.drawSynoptiqueIso(page, donneesSynoptique(), 20, 20, zone.width - 40, zone.height - 40);
+      const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 }), zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
+      window.Vue3D.drawSynoptiqueIso(page, donneesSynoptique(rapide), (zone.width - zw) / 2 + z.px, (zone.height - zh) / 2 + z.py, zw, zh, { echelleMax: Infinity });
       window.Vue3D.rejouerSurCanvas(ctx, page, zone.height);
       if (panneau) remplirEdition();
       return;
     }
-    ctx.fillStyle = th.fond; ctx.fillRect(0, 0, zone.width, zone.height);
-    ctx.strokeStyle = th.hairline; ctx.lineWidth = 1;
-    for (let x = 0; x < zone.width; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, zone.height); ctx.stroke(); }
-    for (let y = 0; y < zone.height; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(zone.width, y); ctx.stroke(); }
-    // cadrage : tous les éléments visibles (figé pendant un glisser pour ne pas fuir sous la souris)
-    if (!SYN.drag && !SYN.lien) {
-      if (reseau.noeuds.length) {
-        const xs = reseau.noeuds.map((n) => n.x), ys = reseau.noeuds.map((n) => n.y);
-        const x0 = Math.min(...xs) - 80, x1 = Math.max(...xs) + 100, y0 = Math.min(...ys) - 60, y1 = Math.max(...ys) + 60;
-        const k = Math.min(1.4, (zone.width - 40) / (x1 - x0), (zone.height - 40) / (y1 - y0));
-        SYN.c = Math.max(1, Math.min(1.9, 0.85 / k)); // compense la réduction pour le texte
-        SYN.vue = { k, ox: (zone.width - (x1 - x0) * k) / 2 - x0 * k, oy: (zone.height - (y1 - y0) * k) / 2 - y0 * k };
-      } else SYN.vue = { k: 1, ox: 0, oy: 0 };
+    // Synoptique ancré : disposition calculée (pas de placement libre), même dessin que le PDF.
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height);
+    const data = synoptiqueAncre(zone.width / Math.max(1, zone.height), rapide);
+    SYN.data = data;
+    if (!SYN.zoom) { // cadrage initial lisible : texte ~ 8 px, début du réseau à gauche
+      const zw0 = zone.width - 40, zh0 = zone.height - 40, sFit = Math.min(zw0 / data.largeur, zh0 / data.hauteur);
+      const k = Math.max(1, Math.min(12, 0.75 / sFit, zh0 / (data.hauteur * sFit)));
+      const zw1 = zw0 * k, s1 = sFit * k;
+      SYN.zoom = { k, px: k > 1 ? 20 - (zone.width - zw1) / 2 - (zw1 - data.largeur * s1) / 2 : 0, py: 0 };
     }
+    const z = SYN.zoom;
+    const zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
+    const page = new window.Vue3D.Page({ emitText: false, ombre: false });
+    const res = window.Vue3D.drawSynoptiqueAncre(page, data, (zone.width - zw) / 2 + z.px, (zone.height - zh) / 2 + z.py, zw, zh, Infinity);
+    window.Vue3D.rejouerSurCanvas(ctx, page, zone.height);
+    if (!res) { SYN.vue = { k: 1, ox: 0, oy: 0 }; if (panneau) remplirEdition(); return; }
+    // repère écran ↔ schéma (pour la souris) : x = ox + X·k ; y = oy + Y·k
+    SYN.vue = { k: res.s, ox: res.ox, oy: zone.height - res.oy - data.hauteur * res.s };
     ctx.setTransform(dpr * SYN.vue.k, 0, 0, dpr * SYN.vue.k, dpr * SYN.vue.ox, dpr * SYN.vue.oy);
-    // tronçons (étiquettes dessinées après les nœuds : toujours lisibles)
-    const etiquettes = [];
-    for (const t of reseau.troncons) {
-      const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud);
-      const sel = SYN.sel && SYN.sel.troncon === t.id, actif = t.id === reseau.actif.troncon;
-      ctx.strokeStyle = sel ? th.cuivre : th.ardoise; ctx.lineWidth = sel ? 4 : 3; ctx.setLineDash(t.coupe || actif ? [] : [6, 4]);
-      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]);
-      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-      etiquettes.push(() => {
-      const c = SYN.c || 1, lignes = etiquetteTroncon(t), lh = 14 * c;
-      ctx.font = `600 ${11 * c}px ${th.mono}`;
-      const w = Math.max(...lignes.map((l) => ctx.measureText(l).width)) + 16 * c, h = lignes.length * lh + 6 * c;
-      ctx.fillStyle = th.surface; ctx.strokeStyle = sel ? th.cuivre : th.hairline; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect(mx - w / 2, my - h / 2, w, h, 8); ctx.fill(); ctx.stroke();
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      lignes.forEach((l, i) => {
-        const der = i === lignes.length - 1;
-        ctx.font = `${der ? 700 : 500} ${11 * c}px ${th.mono}`; ctx.fillStyle = der || sel ? th.cuivre : th.encre;
-        ctx.fillText(l, mx, my - h / 2 + 3 * c + lh * (i + 0.5));
+    // limites des folios du PDF (format de l'export) : pointillés gris + numéros
+    {
+      const D = decoupageSyn(data), nomPart = D.bandes != null ? 'Bande' : 'Folio';
+      ctx.save();
+      ctx.strokeStyle = 'rgba(110,116,128,0.7)'; ctx.lineWidth = 1.2 / SYN.vue.k; ctx.setLineDash([7 / SYN.vue.k, 6 / SYN.vue.k]);
+      D.coupes.slice(1, -1).forEach((x) => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, data.hauteur); ctx.stroke(); });
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(90,96,110,0.85)'; ctx.font = `600 ${12 / SYN.vue.k}px 'IBM Plex Sans', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      D.coupes.slice(0, -1).forEach((x, i) => { // libellé court si le folio est étroit à l'écran
+        const larg = D.coupes[i + 1] - x, long = `${nomPart} ${i + 1} / ${D.folios} · ${D.fmt.toUpperCase()}`;
+        const txt = ctx.measureText(long).width < larg - 16 / SYN.vue.k ? long : ctx.measureText(`${nomPart[0]}${i + 1}`).width < larg ? `${nomPart[0]}${i + 1}` : '';
+        if (txt) ctx.fillText(txt, x + larg / 2, 6 / SYN.vue.k);
       });
-      });
+      ctx.restore();
+    }
+    // sélection, tronçon en cours de tirage, poignées « + »
+    const sel = SYN.sel || {};
+    if (sel.troncon) {
+      const t = R().troncon(reseau, sel.troncon), e = t && data.troncons.find((x) => x.id === t.id);
+      if (e && e.e) { ctx.strokeStyle = th.cuivre; ctx.lineWidth = 3 / SYN.vue.k; ctx.strokeRect(e.e.x - e.e.w / 2 - 6, e.e.y - e.e.h / 2 - 6, e.e.w + 12, e.e.h + 12); }
+    }
+    if (SYN.glisse && SYN.glisse.bouge && SYN.guides && SYN.guides.length) {
+      ctx.strokeStyle = th.cuivre; ctx.setLineDash([4 / SYN.vue.k, 4 / SYN.vue.k]); ctx.lineWidth = 1.2 / SYN.vue.k;
+      SYN.guides.forEach((gd) => { ctx.beginPath(); ctx.moveTo(gd.x1, gd.y1); ctx.lineTo(gd.x2, gd.y2); ctx.stroke(); });
+      ctx.setLineDash([]);
     }
     if (SYN.lien) {
       const A = R().noeud(reseau, SYN.lien.de);
-      ctx.strokeStyle = th.cuivre; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(SYN.lien.x, SYN.lien.y); ctx.stroke(); ctx.setLineDash([]);
+      let x0 = A.x, y0 = A.y;
+      if (A.type === 'chambre' && Math.hypot(SYN.lien.x - SYN.lien.x0, SYN.lien.y - SYN.lien.y0) >= 4) {
+        // départ au milieu du côté visé, côté surligné et numéroté
+        const f = faceVers(A, SYN.lien.x, SYN.lien.y), { w, h } = tailleNoeud(A);
+        const d = { pignonA: [-w / 2, 0], pignonB: [w / 2, 0], longPanA: [0, h / 2], longPanB: [0, -h / 2] }[f];
+        x0 = A.x + d[0]; y0 = A.y + d[1];
+        const libre = true; // un côté peut porter plusieurs tronçons (coupes accolées)
+        ctx.strokeStyle = libre ? th.cuivre : '#b3261e'; ctx.lineWidth = 5 / SYN.vue.k;
+        ctx.beginPath();
+        if (d[0]) { ctx.moveTo(x0, A.y - h / 2); ctx.lineTo(x0, A.y + h / 2); } else { ctx.moveTo(A.x - w / 2, y0); ctx.lineTo(A.x + w / 2, y0); }
+        ctx.stroke();
+        ctx.fillStyle = libre ? th.cuivre : '#b3261e'; ctx.beginPath(); ctx.arc(SYN.lien.x, SYN.lien.y, 11 / SYN.vue.k, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.font = `700 ${12 / SYN.vue.k}px 'IBM Plex Sans', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(String({ longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 }[f]), SYN.lien.x, SYN.lien.y + 0.5 / SYN.vue.k);
+        ctx.strokeStyle = libre ? th.cuivre : '#b3261e';
+      } else ctx.strokeStyle = th.cuivre;
+      ctx.setLineDash([8 / SYN.vue.k, 6 / SYN.vue.k]); ctx.lineWidth = 2.5 / SYN.vue.k;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(SYN.lien.x, SYN.lien.y); ctx.stroke(); ctx.setLineDash([]);
     }
-    // nœuds
     for (const n of reseau.noeuds) {
-      if (n.type === 'chambre') {
-        const e = etudeChambre(n);
-        REF_AFFICHEE.set(n, e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'));
-      }
-      const { w, h } = tailleNoeud(n), sel = SYN.sel && SYN.sel.noeud === n.id, c = SYN.c || 1;
-      ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = n.couleur; ctx.fillStyle = th.fond; // opaque : le tronçon passe derrière
-      ctx.beginPath();
-      if (n.type === 'chambre') ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, 6);
-      else if (n.type === 'coffret') ctx.rect(n.x - w / 2, n.y - h / 2, w, h);
-      else { ctx.moveTo(n.x - w / 2, n.y - h / 2); ctx.lineTo(n.x + w / 2 - 14, n.y - h / 2); ctx.lineTo(n.x + w / 2, n.y); ctx.lineTo(n.x + w / 2 - 14, n.y + h / 2); ctx.lineTo(n.x - w / 2, n.y + h / 2); ctx.closePath(); }
-      ctx.fill();
-      ctx.fillStyle = n.couleur; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
-      ctx.stroke();
-      if (sel) { ctx.strokeStyle = th.cuivre; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(n.x - w / 2 - 5, n.y - h / 2 - 5, w + 10, h + 10); ctx.setLineDash([]); }
-      ctx.fillStyle = th.encre; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = `600 ${13 * c}px ${th.sans}`; ctx.fillText(n.nom, n.x - (n.type === 'sortie' ? 6 * c : 0), n.y - (n.type === 'chambre' ? 7 * c : n.type === 'coffret' ? 6 * c : 0));
-      if (n.type === 'chambre') {
-        ctx.font = `500 ${11 * c}px ${th.mono}`; ctx.fillStyle = th.cuivre;
-        ctx.fillText(REF_AFFICHEE.get(n), n.x, n.y + 11 * c);
-      }
-      if (n.type === 'coffret') { ctx.font = `500 ${10 * c}px ${th.sans}`; ctx.fillStyle = th.ardoise; ctx.fillText(n.coffret.genre, n.x, n.y + 12 * c); }
-      // poignée « + » pour relier
-      const hx = n.x + w / 2 + 12 * c;
-      ctx.fillStyle = th.surface; ctx.strokeStyle = th.cuivre; ctx.lineWidth = 1.5 * c;
-      ctx.beginPath(); ctx.arc(hx, n.y, 8 * c, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(hx - 4 * c, n.y); ctx.lineTo(hx + 4 * c, n.y); ctx.moveTo(hx, n.y - 4 * c); ctx.lineTo(hx, n.y + 4 * c); ctx.stroke(); // « + » dessiné
+      const { w, h } = tailleNoeud(n);
+      if (sel.noeud === n.id) { ctx.strokeStyle = th.cuivre; ctx.setLineDash([6, 4]); ctx.lineWidth = 2.5 / SYN.vue.k; ctx.strokeRect(n.x - w / 2 - 7, n.y - h / 2 - 7, w + 14, h + 14); ctx.setLineDash([]); }
+      const hx = n.x + w / 2 + 14, r = 10;
+      ctx.fillStyle = '#ffffff'; ctx.strokeStyle = th.cuivre; ctx.lineWidth = Math.max(1.5, 2 / SYN.vue.k);
+      ctx.beginPath(); ctx.arc(hx, n.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hx - 5, n.y); ctx.lineTo(hx + 5, n.y); ctx.moveTo(hx, n.y - 5); ctx.lineTo(hx, n.y + 5); ctx.stroke(); // « + » dessiné
     }
-    etiquettes.forEach((f) => f());
     if (panneau) remplirEdition();
+  }
+
+  // Disposition ancrée du réseau + contenu des étiquettes (écran, PDF, isométrique).
+  function contenuTroncon(t) {
+    const st = etatTroncon(t);
+    return { ...R().contenuEtiquette(st ? { fourreaux: st.fourreaux, cables: st.cables } : null), L: t.longueurM };
+  }
+  function sousNoeud(n) {
+    if (n.type === 'chambre') { const e = etudeChambre(n); return e && e.etude.ok ? e.etude.ref : n.ref === MACONNEE ? 'maçonnée' : (n.ref || 'modèle auto'); }
+    if (n.type === 'coffret') return n.coffret.genre + (n.coffret.largeur && n.coffret.profondeur ? ` ${n.coffret.largeur}×${n.coffret.profondeur}` : '');
+    return '';
+  }
+  // Disposition ancrée + décalages manuels (n.decal, glisser dans le synoptique).
+  // rapide = true : réutilise le dernier calcul (pan, zoom, glisser) et garde le
+  // cadrage figé ; sinon tout est recalculé puis recadré.
+  let synBase = null;
+  // Synoptique toujours en longueur : la disposition suit la construction de la VRD
+  // (chaîne de chambres, dérivations, déplacements à la main), jamais repliée en
+  // serpentin. Le PDF le découpe en folios.  Le premier argument (ancien ratio de
+  // page) est ignoré.
+  function synoptiqueAncre(ratio0, rapide = false) {
+    const V = window.Vue3D, ratio = null;
+    if (!rapide || !synBase || synBase.ratio !== ratio) {
+      const contenus = new Map(reseau.troncons.map((t) => [t.id, contenuTroncon(t)]));
+      const dis = R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
+      synBase = { ratio, dis, contenus, sous: new Map(reseau.noeuds.map((n) => [n.id, sousNoeud(n)])) };
+    }
+    const { dis, contenus, sous } = synBase;
+    const dec = (id) => { const n = R().noeud(reseau, id), d = n && n.decal; return d ? [d.dx || 0, d.dy || 0] : [0, 0]; };
+    const P = {}, Lb = {};
+    reseau.noeuds.forEach((n) => { const q = dis.noeuds[n.id] || { x: n.x || 0, y: n.y || 0 }, [dx, dy] = dec(n.id); P[n.id] = { x: q.x + dx, y: q.y + dy }; });
+    reseau.troncons.forEach((t) => {
+      const l = dis.etiquettes[t.id]; if (!l) return;
+      const a = dec(t.a.noeud), b = dec(t.b.noeud);
+      Lb[t.id] = { ...l, x: l.x + (a[0] + b[0]) / 2, y: l.y + (a[1] + b[1]) / 2 };
+    });
+    let largeur = dis.largeur, hauteur = dis.hauteur;
+    let tx = 0, ty = 0;
+    if (!rapide) { // recadrage : tout reste dans le cadre même après un déplacement
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const bord = (x, y, w, h) => { x0 = Math.min(x0, x - w / 2); x1 = Math.max(x1, x + w / 2); y0 = Math.min(y0, y - h / 2); y1 = Math.max(y1, y + h / 2); };
+      reseau.noeuds.forEach((n) => { const s2 = tailleNoeud(n); bord(P[n.id].x, P[n.id].y, s2.w + 60, s2.h); });
+      Object.values(Lb).forEach((l) => bord(l.x, l.y, l.w, l.h));
+      if (Number.isFinite(x0)) {
+        const G = 40; tx = G - x0; ty = G - y0;
+        largeur = Math.max(1, x1 - x0 + 2 * G); hauteur = Math.max(1, y1 - y0 + 2 * G);
+      }
+      synBase.cadre = { largeur, hauteur, tx, ty };
+    } else if (synBase.cadre) ({ largeur, hauteur, tx, ty } = synBase.cadre);
+    Object.values(P).forEach((q) => { q.x += tx; q.y += ty; });
+    Object.values(Lb).forEach((l) => { l.x += tx; l.y += ty; });
+    reseau.noeuds.forEach((n) => { n.x = Math.round(P[n.id].x); n.y = Math.round(P[n.id].y); });
+    return {
+      largeur, hauteur, rangs: dis.rangs,
+      noeuds: reseau.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, ...tailleNoeud(n), sous: sous.has(n.id) ? sous.get(n.id) : sousNoeud(n) })),
+      troncons: reseau.troncons.map((t) => ({ id: t.id, a: R().noeud(reseau, t.a.noeud), b: R().noeud(reseau, t.b.noeud), e: Lb[t.id] && { ...Lb[t.id], ...contenus.get(t.id) } })),
+    };
   }
 
   // Réglages d'une chambre maçonnée (valeurs par défaut modifiables, à valider).
@@ -8100,8 +8413,18 @@
       c.problemes.forEach((x) => note(`À vérifier : ${x}`, 'chambre-res-ko'));
       h('Métré des fourreaux');
       if (!m.lignes.length) note('Aucun fourreau sur des tronçons de longueur connue.');
-      m.lignes.forEach((l) => note(`${l.fourreau} : [${l.metres.toLocaleString('fr-FR')} m] (${l.nombre} tube(s)-tronçon)`, 'chambre-res-ligne reseau-valeur'));
-      if (m.lignes.length) note(`Total : [${m.totalMetres.toLocaleString('fr-FR')} m] de fourreaux sur [${m.longueurReseau.toLocaleString('fr-FR')} m] de tranchée`, 'chambre-res-titre reseau-valeur');
+      if (m.lignes.length) { // tableau compact : type · longueur · tubes × tronçons
+        const fr = (v) => v.toLocaleString('fr-FR');
+        const t = document.createElement('table'); t.className = 'reseau-metre';
+        t.innerHTML = '<thead><tr><th scope="col">Fourreau</th><th scope="col">Longueur</th><th scope="col" title="Tubes × tronçons">Tubes</th></tr></thead>';
+        const tb = document.createElement('tbody');
+        m.lignes.forEach((l) => { const tr = document.createElement('tr'); [l.fourreau, `${fr(l.metres)} m`, String(l.nombre)].forEach((v) => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }); tb.appendChild(tr); });
+        t.appendChild(tb);
+        const tf = document.createElement('tfoot'); tf.innerHTML = '<tr><th scope="row">Total</th><td></td><td></td></tr>';
+        tf.querySelector('td').textContent = `${fr(m.totalMetres)} m`;
+        t.appendChild(tf); box.appendChild(t);
+        note(`sur ${fr(m.longueurReseau)} m de tranchée`, 'chambre-aide');
+      }
       m.sansLongueur.forEach((t) => note(`Longueur manquante : ${t} (non compté)`, 'chambre-res-ko'));
       return;
     }
@@ -8197,6 +8520,12 @@
     const d = { pignonA: Math.abs(x), pignonB: Math.abs(x - g.L), longPanA: Math.abs(y), longPanB: Math.abs(y - g.l) };
     return Object.keys(d).reduce((a, b) => (d[b] < d[a] ? b : a));
   }
+  // Pastille de côté sous le pointeur (repère écran) → clé de face.
+  function pastilleSousPoint(px, py) {
+    const g = vueChambreGeo;
+    if (!g || !g.pastilles) return null;
+    return Object.keys(g.pastilles).find((k) => { const q = g.pastilles[k]; return Math.hypot(px - q.x, py - (g.H - q.y)) <= q.r + 6; }) || null;
+  }
   function chambreCourante() { return reseau && reseau.actif.noeud ? R().noeud(reseau, reseau.actif.noeud) : null; }
 
   function construireVueChambre() {
@@ -8210,7 +8539,7 @@
         <h3 id="chambreTitre">Chambre</h3>
         <div class="chambre-faces" id="chambreFaces"></div>
         <div id="chambreResultat" class="chambre-resultat"></div>
-        <p class="chambre-aide">Vue de dessus : pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut. Flèche : élément suivant. Double-clic sur une face : sa coupe.</p>
+        <p class="chambre-aide">Vue de dessus : côté 1 en haut, 2 à droite, 3 en bas, 4 à gauche. Cliquez une pastille numérotée (ou double-cliquez une face) pour ouvrir sa coupe. Flèche : élément suivant.</p>
         <div class="chambre-actions"><button type="button" class="chambre-btn chambre-btn-discret" id="chambreSyn">Modifier dans le synoptique</button></div>
       </aside>`;
     document.querySelector('.canvas-wrap')?.appendChild(o);
@@ -8218,19 +8547,28 @@
     const cv = o.querySelector('#chambreCanvas');
     const pos = (ev) => { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
     const flecheSous = (p) => vueChambreFleches.find((f) => p.x >= f.x && p.x <= f.x + f.w && p.y >= f.y && p.y <= f.y + f.h);
-    cv.addEventListener('click', (ev) => { const f = flecheSous(pos(ev)); if (f) allerA(f.vers); });
-    cv.addEventListener('dblclick', (ev) => {
-      const p = pos(ev); if (flecheSous(p)) return;
-      const face = faceSousPoint(p.x, p.y), nd = chambreCourante();
-      if (!face || !nd) return;
+    const ouvrirFace = (face) => {
+      const nd = chambreCourante(); if (!face || !nd) return;
       const v = R().surFace(reseau, nd.id, face);
       ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, face).id);
+    };
+    cv.addEventListener('click', (ev) => {
+      const p = pos(ev), f = flecheSous(p);
+      if (f) { allerA(f.vers); return; }
+      const k = pastilleSousPoint(p.x, p.y);
+      if (k) ouvrirFace(k); // la pastille numérotée ouvre la coupe du côté en un clic
+    });
+    cv.addEventListener('dblclick', (ev) => {
+      const p = pos(ev); if (flecheSous(p) || pastilleSousPoint(p.x, p.y)) return;
+      ouvrirFace(faceSousPoint(p.x, p.y));
     });
     cv.addEventListener('mousemove', (ev) => {
       const p = pos(ev), f = flecheSous(p);
-      const survol = f ? f.vers : null;
-      if (survol !== vueChambreGeo?.survol) { if (vueChambreGeo) vueChambreGeo.survol = survol; dessinerFleches(); }
-      cv.style.cursor = f || faceSousPoint(p.x, p.y) ? 'pointer' : 'default';
+      const survol = f ? f.vers : null, pa = f ? null : pastilleSousPoint(p.x, p.y);
+      if (vueChambreGeo && (survol !== vueChambreGeo.survol || pa !== vueChambreGeo.survolPastille)) {
+        vueChambreGeo.survol = survol; vueChambreGeo.survolPastille = pa; dessinerFleches();
+      }
+      cv.style.cursor = f || pa || faceSousPoint(p.x, p.y) ? 'pointer' : 'default';
     });
     window.addEventListener('resize', () => { if (!o.hidden) dessinerVueChambre(); });
     return o;
@@ -8252,15 +8590,30 @@
     if (!o || o.hidden || !nd) return;
     const box = o.querySelector('#chambreFaces');
     box.innerHTML = '';
-    R().FACES_CHAMBRE.forEach((f) => {
-      const v = R().surFace(reseau, nd.id, f);
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'chambre-face' + (v && v.troncon.id === reseau.actif.troncon ? ' active' : '');
-      b.innerHTML = '<strong></strong><span></span>';
-      b.querySelector('strong').textContent = LIB(f);
-      b.querySelector('span').textContent = v ? `→ ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''} · ${resumeFourreaux(v.troncon)}` : 'libre — relier et dessiner';
-      b.addEventListener('click', () => ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, f).id));
-      box.appendChild(b);
+    ["longPanB", "pignonB", "longPanA", "pignonA"].forEach((f) => { // côtés 1 à 4
+      const vs = R().surFaceTous(reseau, nd.id, f), nom = `Masque ${nd.nom}.${{ longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 }[f]}`;
+      const ligne = (v) => `→ ${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''} · ${resumeFourreaux(v.troncon)}`;
+      if (vs.length <= 1) {
+        const v = vs[0];
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'chambre-face' + (v && v.troncon.id === reseau.actif.troncon ? ' active' : '');
+        b.innerHTML = '<strong></strong><span></span>';
+        b.querySelector('strong').textContent = nom;
+        b.querySelector('span').textContent = v ? ligne(v) : 'libre — relier et dessiner';
+        b.addEventListener('click', () => ouvrirTroncon(v ? v.troncon.id : relierFaceLibre(nd, f).id));
+        box.appendChild(b);
+        return;
+      }
+      // côté partagé : une carte, une ligne cliquable par tronçon (coupes accolées)
+      const carte = document.createElement('div');
+      carte.className = 'chambre-face chambre-face-multi' + (vs.some((v) => v.troncon.id === reseau.actif.troncon) ? ' active' : '');
+      const titre = document.createElement('strong'); titre.textContent = `${nom} · ${vs.length} coupes accolées`; carte.appendChild(titre);
+      vs.forEach((v) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'chambre-face-ligne' + (v.troncon.id === reseau.actif.troncon ? ' active' : '');
+        b.textContent = ligne(v); b.addEventListener('click', () => ouvrirTroncon(v.troncon.id));
+        carte.appendChild(b);
+      });
+      box.appendChild(carte);
     });
     const cv = o.querySelector('#chambreCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
@@ -8282,15 +8635,23 @@
       dessinerFleches(); return;
     }
     const e = r.etude, page = new V.Page({ emitText: false, ombre: false });
-    const couleurs = V.drawChambreDessus(page, e, r.masques, 16, 40, W - 32, H - 80);
+    // bandes réservées sur les bords pour les flèches « élément suivant » : la
+    // chambre est dessinée dans ce qui reste, rien ne peut se chevaucher
+    const B = bandesFleches(ctx, nd);
+    const couleurs = V.drawChambreDessus(page, e, r.masques, B.g, B.b, W - B.g - B.d, H - B.h - B.b);
     V.rejouerSurCanvas(ctx, page, H);
-    vueChambreGeo = { ...page.geoDessus, H };
+    vueChambreGeo = { ...page.geoDessus, H, pastilles: page.pastillesCotes || {}, libelles: page.libellesCotes || {} };
     const ligne = (txt, cls, c) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; if (c) d.style.color = c; res.appendChild(d); };
     const css = (c) => c ? `rgb(${c.map((v) => Math.round(v * 255)).join(',')})` : '';
     ligne(`Modèle ${e.ref}${nd.ref ? ' (imposé)' : ' (automatique)'} — ${e.L} × ${e.l} mm, H ${e.H} mm`, 'chambre-res-titre');
+    if (e.infos && e.infos.tampon && e.infos.tampons) ligne(`${e.infos.tampons} tampon(s) ${e.infos.tampon.L} × ${e.infos.tampon.l} ${e.infos.tampon.classe}${e.infos.paroi ? ` — paroi ${e.infos.paroi} mm` : ''} (à valider)`, 'chambre-res-ligne');
     Object.values(e.faces).forEach((f) => ligne(`${f.tient ? 'OK' : 'NON'} · ${f.face} : [${Math.round(f.largeurMasque)} × ${Math.round(f.hauteurMasque)}] dans [${f.largeurFace} × ${f.hauteurFace}] mm`, f.tient ? 'chambre-res-ok' : 'chambre-res-ko'));
-    if (e.traversees.length) ligne('Traversées', 'chambre-res-titre');
-    e.traversees.forEach((t, i) => ligne(`${i + 1}. ${t.liaison} — ${t.entree} → ${t.sortie} (${t.type})`, 'chambre-res-ligne', css(couleurs.get(t.liaison))));
+    const faisceaux = window.ChambreFaces.regrouperTraversees(e);
+    if (faisceaux.length) ligne('Traversées (faisceaux)', 'chambre-res-titre');
+    faisceaux.forEach((fx, i) => {
+      ligne(`${i + 1}. ${fx.entree} → ${fx.sortie} · ${fx.liaisons.length} liaison${fx.liaisons.length > 1 ? 's' : ''} (${fx.type})`, 'chambre-res-ligne');
+      ligne(fx.liaisons.join(' · '), 'chambre-aide');
+    });
     if (e.arrets.length) ligne('S\'arrêtent dans la chambre', 'chambre-res-titre');
     e.arrets.forEach((a) => ligne(`• ${a.liaison} (${a.face})`, 'chambre-res-ligne', css(couleurs.get(a.liaison))));
     (e.avertissements || []).forEach((a) => ligne(`À vérifier : ${a}`, 'chambre-res-ko'));
@@ -8299,6 +8660,23 @@
   }
 
   // Flèches « → suivant » au-delà de chaque face reliée (clic : y aller).
+  // Flèches de la chambre par bord (haut = côté 1, droite = 2, bas = 3, gauche = 4)
+  // et largeur des bandes à réserver pour elles.
+  const BORD_FACE = { longPanB: 'haut', pignonB: 'droite', longPanA: 'bas', pignonA: 'gauche' };
+  function flechesParBord(ctx, nd) {
+    const res = { haut: [], droite: [], bas: [], gauche: [] };
+    ctx.font = `600 13px 'IBM Plex Sans', system-ui, sans-serif`;
+    R().FACES_CHAMBRE.forEach((f) => R().surFaceTous(reseau, nd.id, f).forEach((v) => {
+      const txt = `${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
+      res[BORD_FACE[f]].push({ f, v, txt, w: ctx.measureText(txt).width + 34, h: 26 });
+    }));
+    return res;
+  }
+  function bandesFleches(ctx, nd) {
+    const F = flechesParBord(ctx, nd), M = 12, H0 = 26 + 2 * M;
+    return { h: F.haut.length ? H0 : M, b: F.bas.length ? H0 : M,
+      g: F.gauche.length ? Math.max(...F.gauche.map((a) => a.w)) + 2 * M : M, d: F.droite.length ? Math.max(...F.droite.map((a) => a.w)) + 2 * M : M };
+  }
   function dessinerFleches() {
     const o = document.getElementById('chambreOverlay'), nd = chambreCourante(), g = vueChambreGeo;
     if (!o || !nd || !g) return;
@@ -8307,20 +8685,39 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const W = cv.width / dpr, H = cv.height / dpr;
     const pt = (x, y) => [g.ox + x * g.s, g.H - (g.oy + y * g.s)];
-    const ancres = { pignonA: [...pt(-g.e - 380, g.l / 2), 'right'], pignonB: [...pt(g.L + g.e + 380, g.l / 2), 'left'],
-      longPanA: [...pt(g.L / 2, -g.e - 380), 'top'], longPanB: [...pt(g.L / 2, g.l + g.e + 380), 'bottom'] };
     vueChambreFleches = [];
-    R().FACES_CHAMBRE.forEach((f) => {
-      const v = R().surFace(reseau, nd.id, f);
-      if (!v) return;
+    // Pastilles de côté : anneau d'appel + bulle « coupe » au survol (clic : ouvre le masque).
+    Object.entries(g.pastilles || {}).forEach(([k, q]) => {
+      const x = q.x, y = g.H - q.y, chaud = g.survolPastille === k;
+      ctx.strokeStyle = chaud ? '#e8661c' : 'rgba(232,102,28,0.55)'; ctx.lineWidth = chaud ? 3 : 2;
+      ctx.beginPath(); ctx.arc(x, y, q.r + 4, 0, Math.PI * 2); ctx.stroke();
+      if (chaud) {
+        const txt = 'Ouvrir la coupe de ce côté';
+        ctx.font = `600 12px 'IBM Plex Sans', system-ui, sans-serif`;
+        const w = ctx.measureText(txt).width + 16, h = 22, bx = Math.max(4, Math.min(W - w - 4, x - w / 2)), by = Math.max(4, y - q.r - 10 - h);
+        ctx.fillStyle = '#1a1d1f'; ctx.beginPath(); ctx.roundRect(bx, by, w, h, 6); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + w / 2, by + h / 2 + 1);
+      }
+    });
+    // flèches dans les bandes réservées : rangée centrée en haut / en bas, pile
+    // centrée à gauche / à droite (centrées sur la chambre quand c'est possible)
+    const F = flechesParBord(ctx, nd), [cxC, cyC] = pt(g.L / 2, g.l / 2), M = 12, ESP = 8;
+    const poses = [];
+    ['haut', 'bas'].forEach((bord) => {
+      const L = F[bord]; if (!L.length) return;
+      const total = L.reduce((a, f2) => a + f2.w, 0) + ESP * (L.length - 1);
+      let x = Math.max(4, Math.min(W - total - 4, cxC - total / 2));
+      L.forEach((a) => { poses.push({ ...a, x, y: bord === 'haut' ? M : H - M - a.h }); x += a.w + ESP; });
+    });
+    ['gauche', 'droite'].forEach((bord) => {
+      const L = F[bord]; if (!L.length) return;
+      const total = L.reduce((a, f2) => a + f2.h, 0) + ESP * (L.length - 1);
+      let y = Math.max(4, Math.min(H - total - 4, cyC - total / 2));
+      L.forEach((a) => { poses.push({ ...a, x: bord === 'gauche' ? M : W - M - a.w, y }); y += a.h + ESP; });
+    });
+    poses.forEach(({ f, v, txt, w, h, x, y }) => {
       const dir = { pignonA: 'left', pignonB: 'right', longPanA: 'down', longPanB: 'up' }[f];
-      const txt = `${v.autre.nom}${v.troncon.longueurM ? ' · ' + v.troncon.longueurM + ' m' : ''}`;
       ctx.font = `600 13px 'IBM Plex Sans', system-ui, sans-serif`;
-      const w = ctx.measureText(txt).width + 34, h = 26;
-      let [x, y, cote] = ancres[f];
-      x = cote === 'right' ? x - w : cote === 'left' ? x : x - w / 2;
-      y = cote === 'top' ? y : cote === 'bottom' ? y - h : y - h / 2;
-      x = Math.max(4, Math.min(W - w - 4, x)); y = Math.max(4, Math.min(H - h - 4, y));
       const survol = g.survol === v.autre.id;
       ctx.fillStyle = survol ? v.autre.couleur : '#ffffff'; ctx.strokeStyle = v.autre.couleur; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(x, y, w, h, 13); ctx.fill(); ctx.stroke();
@@ -8349,10 +8746,56 @@
   function etatPlanCourant() {
     return { shape: SHAPE, width: WORLD_W_MM, height: WORLD_H_MM, diameter: WORLD_D_MM, fourreaux, cables };
   }
+  // Tassement par gravité des câbles d'un fourreau (comme la simulation de l'app) :
+  // chaque câble, du plus gros au plus petit, descend au point le plus bas possible
+  // (fond du fourreau, appui sur la paroi et un câble, ou sur deux câbles). Repère écran (y vers le bas).
+  function tasserCablesFourreau(f, cables) {
+    const R = (f.idm > 0 ? f.idm : f.od * 0.8) / 2 * MM_TO_PX, eps = 1e-6, poses = [];
+    const libre = (x, y, r) => Math.hypot(x - f.x, y - f.y) <= R - r + 1e-3
+      && poses.every((q) => Math.hypot(x - q.x, y - q.y) >= q.r + r - 1e-3);
+    [...cables].sort((a, b) => b.od - a.od).forEach((c) => {
+      const r = c.od / 2 * MM_TO_PX, Rr = R - r, cand = [];
+      if (Rr < 0) { cand.push([f.x, f.y]); }
+      else {
+        cand.push([f.x, f.y + Rr]);
+        poses.forEach((q) => {
+          // paroi (cercle Rr centré fourreau) ∩ cercle (q, q.r + r)
+          const d = Math.hypot(q.x - f.x, q.y - f.y), rq = q.r + r;
+          if (d > eps) {
+            const a = (Rr * Rr - rq * rq + d * d) / (2 * d), h2 = Rr * Rr - a * a;
+            if (h2 >= 0) { const h = Math.sqrt(h2), ux = (q.x - f.x) / d, uy = (q.y - f.y) / d, mx = f.x + a * ux, my = f.y + a * uy;
+              cand.push([mx - h * uy, my + h * ux], [mx + h * uy, my - h * ux]); }
+          }
+          poses.forEach((o) => {
+            if (o === q) return;
+            const dd = Math.hypot(o.x - q.x, o.y - q.y), r1 = q.r + r, r2 = o.r + r;
+            if (dd < eps || dd > r1 + r2) return;
+            const a = (r1 * r1 - r2 * r2 + dd * dd) / (2 * dd), h2 = r1 * r1 - a * a;
+            if (h2 < 0) return;
+            const h = Math.sqrt(h2), ux = (o.x - q.x) / dd, uy = (o.y - q.y) / dd, mx = q.x + a * ux, my = q.y + a * uy;
+            cand.push([mx - h * uy, my + h * ux], [mx + h * uy, my - h * ux]);
+          });
+        });
+      }
+      let best = null;
+      cand.forEach(([x, y]) => { if (libre(x, y, r) && (!best || y > best[1] + 1e-6 || (Math.abs(y - best[1]) < 1e-6 && Math.abs(x - f.x) < Math.abs(best[0] - f.x)))) best = [x, y]; });
+      if (!best) best = [c.x, c.y];
+      poses.push({ x: best[0], y: best[1], r, c });
+    });
+    return poses.map((q) => ({ ...q.c, x: q.x, y: q.y }));
+  }
   function etatDepuisSauvegarde(d) {
     const c = (d && d.container) || {};
-    return { shape: c.shape || 'rect', width: c.width, height: c.height, diameter: c.diameter,
-      fourreaux: (d && d.fourreaux) || [], cables: (d && d.cables) || [] };
+    const fourreaux = (d && d.fourreaux) || [], cables = (d && d.cables) || [];
+    // Les positions enregistrées peuvent précéder la simulation : on les tasse comme l'app.
+    const parF = new Map(fourreaux.map((f) => [f.id, f]));
+    const tasses = new Map();
+    fourreaux.forEach((f) => {
+      const dedans = cables.filter((cb) => cb.parent === f.id && cb.od > 0);
+      if (dedans.length && Number.isFinite(f.x) && Number.isFinite(f.y)) tasserCablesFourreau(f, dedans).forEach((cb) => { if (cb.id != null) tasses.set(cb.id, cb); });
+    });
+    return { shape: c.shape || 'rect', width: c.width, height: c.height, diameter: c.diameter, fourreaux,
+      cables: cables.map((cb) => (parF.has(cb.parent) && tasses.get(cb.id)) || cb) };
   }
 
   // État de plan → « masque » au format de vue3d.js (mm, Y vers le haut).
@@ -8373,6 +8816,7 @@
     });
     const cb = (st.cables || []).filter(c => ids.has(c.parent) && c.od > 0).map(c => ({
       fourreau: ids.get(c.parent), od: c.od, x: c.x / MM_TO_PX, y: H - c.y / MM_TO_PX, phase: getCablePhaseLabel(c) || null,
+      code: c.code || '', fam: c.fam || '', liaison: c.liaison || '',
     }));
     let chambre = null;
     if (avecChambre && !isCirc && window.ChambresInfos && window.CompatChambres) {
@@ -8389,17 +8833,24 @@
   function buildMasqueFromPlan(titre) { return buildMasqueFromState(etatPlanCourant(), titre); }
 
   // Écrit une page Vue3D (opérateurs bruts) dans jsPDF, textes via l'API jsPDF.
-  function writeVue3DPage(pdf, page) {
+  function writeVue3DPage(pdf, page, format = 'a4', hauteurPt = null, { nouvelle = true, echelle = 1 } = {}) {
     const V = window.Vue3D, k = 25.4 / 72; // pt → mm
-    pdf.addPage('a4', 'landscape');
+    if (nouvelle) pdf.addPage(format, 'landscape');
+    const HP = hauteurPt || V.PAGE_H * echelle;
     pdf.internal.write('q');
+    if (echelle !== 1) pdf.internal.write(`${echelle} 0 0 ${echelle} 0 0 cm`);
     pdf.internal.write(page.ops.join('\n'));
     pdf.internal.write('Q');
-    for (const l of page.labels) {
+    for (const l0 of page.labels) {
+      const l = echelle === 1 ? l0 : { ...l0, x: l0.x * echelle, y: l0.y * echelle, size: l0.size * echelle };
       pdf.setFont('helvetica', l.bold ? 'bold' : 'normal');
       pdf.setFontSize(l.size);
       pdf.setTextColor(Math.round(l.rgb[0] * 255), Math.round(l.rgb[1] * 255), Math.round(l.rgb[2] * 255));
-      pdf.text(l.text.replace(/→/g, '->').replace(/≥/g, '>='), l.x * k, (V.PAGE_H - l.y) * k, { align: l.align });
+      const txt = l.text.replace(/→/g, '->').replace(/≥/g, '>=');
+      if (l.vertical) { // tourné de 90° : alignement calculé à la main le long du texte
+        const w = pdf.getTextWidth(txt), d = l.align === 'center' ? w / 2 : l.align === 'right' ? w : 0;
+        pdf.text(txt, l.x * k, (HP - l.y) * k + d, { angle: 90 });
+      } else pdf.text(txt, l.x * k, (HP - l.y) * k, { align: l.align });
     }
     pdf.setTextColor(0, 0, 0);
   }
@@ -8414,10 +8865,22 @@
       p.rgb([0, 0, 0], false).text(MARGE, PAGE_H - MARGE - 4, 16, `${titre} — ${sous}`, { bold: true });
       p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
     };
-    const p1 = new V.Page({ emitText: false, ombre: false });
-    entete(p1, 'synoptique du réseau');
-    V.drawSynoptique2D(p1, data, MARGE, MARGE, PAGE_W - 2 * MARGE, PAGE_H - 2 * MARGE - 30);
-    writeVue3DPage(pdf, p1);
+    // Synoptique ancré, au format choisi (auto : le plus petit où le texte fait au moins 6 pt)
+    {
+      const syn = synoptiqueAncre(1.414), choix = (document.getElementById('pdfFormatSyn') || {}).value || 'auto';
+      const essai = (fmt) => {
+        const [PW, PH] = V.FORMATS_PAGE[fmt], M = MARGE * PW / PAGE_W;
+        const pg = new V.Page({ emitText: false, ombre: false });
+        pg.rgb([0, 0, 0], false).text(M, PH - M - 4, 16 * PW / PAGE_W, `${titre} — synoptique du réseau (${fmt.toUpperCase()})`, { bold: true });
+        pg.rgb([0, 0, 0]).width(0.8).line(M, PH - M - 12 * PW / PAGE_W, PW - M, PH - M - 12 * PW / PAGE_W);
+        const res = V.drawSynoptiqueAncre(pg, syn, M, M, PW - 2 * M, PH - 2 * M - 30 * PW / PAGE_W);
+        return { fmt, pg, PH, texte: res ? 11 * res.s : 99 };
+      };
+      let r1 = null;
+      if (choix !== 'auto') r1 = essai(choix);
+      else for (const f of ['a4', 'a3', 'a2', 'a1', 'a0']) { r1 = essai(f); if (r1.texte >= 6) break; }
+      writeVue3DPage(pdf, r1.pg, r1.fmt, r1.PH);
+    }
     const p2 = new V.Page({ emitText: false, ombre: false });
     entete(p2, 'vue isométrique');
     V.drawSynoptiqueIso(p2, data, MARGE, MARGE, PAGE_W - 2 * MARGE, PAGE_H - 2 * MARGE - 30);
@@ -8439,6 +8902,201 @@
       p3.rgb([0.25, 0.25, 0.25], false).text(x2 + 14, y2, 7, `${l.chemin.join(' → ')} · ${l.longueurM.toLocaleString('fr-FR')} m${l.longueurIncomplete ? ' (incomplète)' : ''}${ok ? '' : ' · ' + l.problemes.join(', ')}`.slice(0, 95)); y2 -= 12;
     });
     writeVue3DPage(pdf, p3);
+  }
+
+
+  // ─── Dossier PDF d'un réseau : un fichier par groupe ──────────────────────
+  // synoptique + métré/continuité · une page A3 par chambre · une coupe par
+  // tronçon (A3 ou plus) · tableaux de tous les tronçons. Pas de « vue
+  // principale » ni d'isométrique (illisibles sur un gros réseau).
+  function teintePdf(css, k = 0.8) {
+    let r = 200, g = 200, b = 200;
+    const s0 = String(css || ''), hx = /^#([0-9a-f]{6})$/i.exec(s0), hs = /hsla?\(\s*([\d.]+)[ ,]+([\d.]+)%[ ,]+([\d.]+)%/i.exec(s0);
+    if (hx) { const n = parseInt(hx[1], 16); r = n >> 16 & 255; g = n >> 8 & 255; b = n & 255; }
+    else if (hs) {
+      const h = Number(hs[1]) / 360, sa = Number(hs[2]) / 100, li = Number(hs[3]) / 100;
+      const q = li < 0.5 ? li * (1 + sa) : li + sa - li * sa, pp = 2 * li - q;
+      const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? pp + (q - pp) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp; };
+      r = f(h + 1 / 3) * 255; g = f(h) * 255; b = f(h - 1 / 3) * 255;
+    }
+    return [r, g, b].map((v) => Math.round(v + (255 - v) * k));
+  }
+  // Tableau paginé en A4 paysage (en-tête répété, fond de ligne optionnel).
+  function tableauPaysage(pdf, titre, sousTitre, colonnes, lignes, fond, premiere = false) {
+    if (!premiere) pdf.addPage('a4', 'landscape');
+    const PW = pdf.internal.pageSize.getWidth(), PH = pdf.internal.pageSize.getHeight(), mg = 12, LU = PW - 2 * mg;
+    const somme = colonnes.reduce((s2, c) => s2 + c.poids, 0);
+    colonnes.forEach((c) => { c.l = LU * c.poids / somme; });
+    let y = 0;
+    const entete = (suite) => {
+      pdf.setTextColor(26, 29, 31); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13);
+      pdf.text(titre + (suite ? ' (suite)' : ''), mg, mg + 6);
+      if (sousTitre && !suite) { pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8.5); pdf.setTextColor(90, 96, 110); pdf.text(sousTitre, mg, mg + 11.5); }
+      y = mg + 15;
+      pdf.setFillColor(40, 44, 52); pdf.rect(mg, y, LU, 7, 'F');
+      pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5);
+      let x = mg; colonnes.forEach((c) => { pdf.text(c.titre, c.droite ? x + c.l - 2 : x + 2, y + 4.8, { align: c.droite ? 'right' : 'left' }); x += c.l; });
+      y += 7;
+    };
+    entete(false);
+    lignes.forEach((ln, i) => {
+      pdf.setFontSize(8); pdf.setFont('helvetica', 'normal');
+      const cel = colonnes.map((c) => pdf.splitTextToSize(String(ln[c.cle] == null ? '' : ln[c.cle]), Math.max(4, c.l - 4)));
+      const h = 2.6 + Math.max(1, ...cel.map((t) => t.length)) * 3.4;
+      if (y + h > PH - mg) { pdf.addPage('a4', 'landscape'); entete(true); pdf.setFontSize(8); }
+      const f = fond ? fond(ln, i) : null;
+      if (f) { pdf.setFillColor(f[0], f[1], f[2]); pdf.rect(mg, y, LU, h, 'F'); }
+      pdf.setDrawColor(205, 210, 218); pdf.setLineWidth(0.15); pdf.line(mg, y + h, mg + LU, y + h);
+      let x = mg;
+      colonnes.forEach((c, k) => {
+        pdf.setFont('helvetica', k === 0 || c.gras ? 'bold' : 'normal');
+        const coul = c.couleur ? c.couleur(ln) : [26, 29, 31]; pdf.setTextColor(coul[0], coul[1], coul[2]);
+        pdf.text(cel[k], c.droite ? x + c.l - 2 : x + 2, y + 3.7, { align: c.droite ? 'right' : 'left' });
+        x += c.l;
+      });
+      y += h;
+    });
+    pdf.setTextColor(26, 29, 31);
+  }
+  // Tableaux fourreaux + câbles de plusieurs plans (tronçons) : groupes = [{ nom, fourreaux, cables }].
+  function ajouterTableauxPdf(pdf, groupes, premiere = false) {
+    const avecTroncon = groupes.length > 1;
+    const lignesF = [], lignesC = [];
+    const PALETTE = ['#e8661c', '#2459c9', '#16857a', '#b0302a', '#6b4fd0', '#c78a00', '#3f8f3a', '#c2185b', '#00838f', '#795548'];
+    const coulLiaison = new Map();
+    const fondL = (nom) => { if (!coulLiaison.has(nom)) coulLiaison.set(nom, teintePdf(PALETTE[coulLiaison.size % PALETTE.length], 0.84)); return coulLiaison.get(nom); };
+    groupes.forEach((g) => {
+      const fo = g.fourreaux || [], ca = g.cables || [];
+      fo.forEach((f, idx) => {
+        const dedans = ca.filter((c) => c.parent === f.id);
+        const aire = (d) => Math.PI * d * d / 4, inter = aire(f.idm || 0);
+        const occ = inter > 0 ? dedans.reduce((s2, c) => s2 + aire(c.od), 0) / inter * 100 : 0;
+        const parSection = new Map();
+        dedans.forEach((c) => { const ph = getCablePhaseLabel(c), k2 = `${c.code}${ph ? ' ' + ph : ''}`; parSection.set(k2, (parSection.get(k2) || 0) + 1); });
+        lignesF.push({ tr: g.nom || '', n: `F${idx + 1}`, nom: getPdfFourreauName(f, idx + 1), type: `${f.type || ''} ${f.code || ''}`.trim(),
+          diam: `${Number(f.od).toFixed(0)} / ${Number(f.idm).toFixed(0)}`, nb: String(dedans.length),
+          cables: [...parSection].map(([k2, q]) => `${q}× ${k2}`).join(', ') || 'réserve (vide)', occ: `${occ.toFixed(1)} %`, _occ: occ, _col: f.customColor || f.color });
+      });
+      ca.forEach((c, idx) => {
+        const pi = fo.findIndex((f) => f.id === c.parent);
+        lignesC.push({ tr: g.nom || '', liaison: c.liaison || '—', nom: getPdfCableName(c, idx), fam: c.fam || '', section: `${c.code}`,
+          fourreau: pi >= 0 ? `F${pi + 1} · ${fo[pi].type || ''} ${fo[pi].code || ''}`.trim() : 'hors fourreau', phase: getCablePhaseLabel(c) || '—', _l: c.liaison || c.label || '—' });
+      });
+    });
+    const colTr = avecTroncon ? [{ titre: 'Tronçon', cle: 'tr', poids: 14 }] : [];
+    if (lignesF.length) tableauPaysage(pdf, 'DÉTAIL DES FOURREAUX', 'Fond de ligne = couleur du fourreau · taux : vert ≤ 33 %, orange ≤ 50 %, rouge au-delà', [
+      ...colTr, { titre: 'N°', cle: 'n', poids: 4 }, { titre: 'Liaison / nom', cle: 'nom', poids: 26 }, { titre: 'Type', cle: 'type', poids: 8 },
+      { titre: 'Ø ext / int', cle: 'diam', poids: 8 }, { titre: 'Câbles', cle: 'nb', poids: 5, droite: true }, { titre: 'Contenu', cle: 'cables', poids: 28 },
+      { titre: 'Taux', cle: 'occ', poids: 7, droite: true, gras: true, couleur: (l) => (l._occ <= 33 ? [26, 122, 60] : l._occ <= 50 ? [180, 110, 0] : [200, 30, 30]) },
+    ], lignesF, (l) => teintePdf(l._col, 0.8), premiere);
+    if (lignesC.length) tableauPaysage(pdf, 'LISTING DÉTAILLÉ DES CÂBLES', 'Fond de ligne = une couleur par liaison', [
+      ...colTr, { titre: 'Liaison', cle: 'liaison', poids: 28 }, { titre: 'Repère', cle: 'nom', poids: 8 }, { titre: 'Famille', cle: 'fam', poids: 13 },
+      { titre: 'Section', cle: 'section', poids: 8 }, { titre: 'Fourreau', cle: 'fourreau', poids: 13 }, { titre: 'Phase', cle: 'phase', poids: 6 },
+    ], lignesC, (l) => fondL(l._l), premiere && !lignesF.length);
+  }
+  // Page « coupe d'un tronçon » (repère A4 paysage ; agrandie à l'écriture).
+  function pageCoupeTroncon(m, titre) {
+    const V = window.Vue3D, { PAGE_W, PAGE_H, MARGE } = V;
+    const p = new V.Page({ emitText: false, ombre: false });
+    p.text(MARGE, PAGE_H - MARGE - 4, 16, titre, { bold: true });
+    p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+    const zoneY = 175, zoneH = PAGE_H - MARGE - 40 - zoneY;
+    p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
+    V.drawCoupe(p, m, MARGE + 60, zoneY, 290, zoneH - 10);
+    p.text(440, zoneY + zoneH + 10, 9, 'Vue 3D (tronçon de 1,5 m)', { bold: true });
+    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500);
+    let y = 140;
+    p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
+    p.text(MARGE, y, 9, 'Fourreaux', { bold: true }); y -= 13;
+    const parId = new Map(); m.cables.forEach((c) => parId.set(c.fourreau, (parId.get(c.fourreau) || 0) + 1));
+    const col = (i) => MARGE + (i % 2) * 390;
+    m.fourreaux.slice(0, 20).forEach((f, i) => { p.text(col(i), y - Math.floor(i / 2) * 10, 7.5, `${f.id}  ${f.type} ${f.code}  ${String(f.libelle || '').slice(0, 52)}  · ${parId.get(f.id) || 0} câble(s)`); });
+    if (m.fourreaux.length > 20) p.text(MARGE, y - 10 * 10 - 2, 7.5, `… et ${m.fourreaux.length - 20} autres (voir les tableaux)`);
+    return p;
+  }
+  // Pages « métré et continuité » paginées (A4 paysage).
+  function pagesMetreContinuite(titre) {
+    const V = window.Vue3D, { PAGE_W, PAGE_H, MARGE } = V, pages = [];
+    const m = R().metre(reseau, fourreauxDeTroncon), c = R().continuite(reseau, liaisonsDeTroncon);
+    let p = null, y = 0, x = 0, colonne = 0;
+    const nouvelle = (suite) => {
+      p = new V.Page({ emitText: false, ombre: false }); pages.push(p);
+      p.rgb([0, 0, 0], false).text(MARGE, PAGE_H - MARGE - 4, 16, `${titre} — métré et continuité${suite ? ' (suite)' : ''}`, { bold: true });
+      p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
+      y = PAGE_H - MARGE - 40; colonne = 0; x = MARGE;
+    };
+    nouvelle(false);
+    p.rgb([0, 0, 0], false).text(MARGE, y, 11, 'Métré des fourreaux', { bold: true }); y -= 16;
+    p.text(MARGE, y, 8, 'Fourreau', { bold: true }); p.text(MARGE + 120, y, 8, 'Tubes × tronçons', { bold: true }); p.text(MARGE + 220, y, 8, 'Longueur (m)', { bold: true }); y -= 12;
+    m.lignes.forEach((l) => { p.text(MARGE, y, 8, l.fourreau); p.text(MARGE + 120, y, 8, String(l.nombre)); p.text(MARGE + 220, y, 8, l.metres.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')); y -= 11; });
+    p.text(MARGE, y - 2, 8.5, `Total : ${m.totalMetres.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} m de fourreaux — ${m.longueurReseau.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} m de tranchée`, { bold: true }); y -= 16;
+    m.sansLongueur.forEach((t) => { p.rgb([0.7, 0.15, 0.1], false).text(MARGE, y, 7.5, `Longueur manquante, non compté : ${t}`); y -= 10; });
+    // continuité sur deux colonnes, puis pages suivantes
+    const largeurCol = (PAGE_W - 2 * MARGE - 300 - 10) / 2;
+    x = MARGE + 300; y = PAGE_H - MARGE - 40; colonne = 0;
+    p.rgb([0, 0, 0], false).text(x, y, 11, 'Continuité des liaisons', { bold: true }); y -= 16;
+    c.liaisons.forEach((l) => {
+      if (y < MARGE + 24) {
+        colonne += 1;
+        if (colonne > 1) { nouvelle(true); x = MARGE; colonne = 0; } else x += largeurCol + 10;
+        y = PAGE_H - MARGE - 40;
+      }
+      const ok = !l.problemes.length, n = Math.floor(largeurCol / 4.1);
+      p.rgb(ok ? [0.1, 0.45, 0.2] : [0.75, 0.12, 0.1], false).text(x, y, 7.5, `${ok ? 'OK' : 'NON'}  ${l.nom}`.slice(0, n), { bold: true }); y -= 9;
+      p.rgb([0.3, 0.3, 0.3], false).text(x + 12, y, 6.5, `${l.chemin.join(' → ')} · ${l.longueurM.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} m${l.longueurIncomplete ? ' (incomplète)' : ''}${ok ? '' : ' · ' + l.problemes.join(', ')}`.slice(0, Math.floor(largeurCol / 3.5))); y -= 11;
+    });
+    return pages;
+  }
+  async function exporterDossierReseau(formData, JsPDF) {
+    const V = window.Vue3D, base = `${(formData.projectName || 'projet').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}`;
+    const groupes = formData.groupes || {}, fichiers = [];
+    if (sauverCoupeActive) sauverCoupeActive(); // la coupe affichée rejoint son tronçon
+    // 1. synoptique + métré et continuité
+    if (groupes.synoptique !== false) {
+      const syn = synoptiqueAncre(1.414), choix = formData.formatSyn || 'auto';
+      // en longueur, découpé en folios au format choisi (A3 par défaut)
+      const bandes = (formData.miseEnPageSyn || 'bandes') === 'bandes';
+      const fmt = choix !== 'auto' ? choix : (bandes ? V.formatOptimalBandes(syn) : V.formatOptimalSynoptique(syn)).fmt;
+      const f = bandes ? V.synoptiqueEnBandes(syn, fmt, formData.projectName) : V.synoptiqueEnFolios(syn, fmt, formData.projectName);
+      const pdf = new JsPDF('landscape', 'mm', fmt);
+      f.pages.forEach((pg, i) => writeVue3DPage(pdf, pg, fmt, f.PH, { nouvelle: i > 0 }));
+      const fmtSyn = bandes ? `${fmt.toUpperCase()}_${f.bandes}bandes` : `${fmt.toUpperCase()}_${f.pages.length}folio${f.pages.length > 1 ? 's' : ''}`;
+      pagesMetreContinuite(formData.projectName).forEach((pg) => writeVue3DPage(pdf, pg));
+      fichiers.push([pdf, `${base}_synoptique_${fmtSyn}.pdf`]);
+    }
+    // 2. une page A3 par chambre
+    const etudes = etudesChambresReseau();
+    if (groupes.chambres !== false && etudes.length) {
+      const pdf = new JsPDF('landscape', 'mm', 'a3');
+      etudes.forEach((et, i) => {
+        const pc = new V.Page({ emitText: false, ombre: false });
+        V.dessinerPageChambreA3(pc, et.etude, et.masques, { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR') });
+        writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: i > 0 });
+      });
+      fichiers.push([pdf, `${base}_chambres_A3.pdf`]);
+    }
+    // 3. une page par tronçon : coupe + vue 3D, au format choisi (A3 par défaut)
+    if (groupes.coupes !== false) {
+      const fmt = formData.formatCoupes || 'a3', ech = V.FORMATS_PAGE[fmt][0] / V.PAGE_W;
+      const pdf = new JsPDF('landscape', 'mm', fmt); let n = 0;
+      reseau.troncons.forEach((t) => {
+        const st = etatTroncon(t); if (!st || !st.fourreaux.length) return;
+        const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false); if (!m) return;
+        const L = t.longueurM ? ` · ${String(t.longueurM).replace('.', ',')} m` : '';
+        writeVue3DPage(pdf, pageCoupeTroncon(m, `Coupe ${R().nomTroncon(reseau, t)}${L}`), fmt, V.FORMATS_PAGE[fmt][1], { nouvelle: n > 0, echelle: ech });
+        n += 1;
+      });
+      if (n) fichiers.push([pdf, `${base}_coupes_${fmt.toUpperCase()}.pdf`]);
+    }
+    // 4. tableaux de tous les tronçons
+    if (groupes.tableaux !== false) {
+      const pdf = new JsPDF('landscape', 'mm', 'a4');
+      const gr = reseau.troncons.map((t) => { const st = etatTroncon(t); return st && st.fourreaux.length ? { nom: R().nomTroncon(reseau, t), fourreaux: st.fourreaux, cables: st.cables } : null; }).filter(Boolean);
+      if (gr.length) { ajouterTableauxPdf(pdf, gr, true); fichiers.push([pdf, `${base}_tableaux.pdf`]); }
+    }
+    for (const [pdf, nom] of fichiers) { pdf.save(nom); await new Promise((r) => setTimeout(r, 400)); }
+    showToast(`Dossier PDF : ${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''} enregistré${fichiers.length > 1 ? 's' : ''}`, 'success', 6000);
+    return fichiers.map((f) => f[1]);
   }
 
   function addVue3DPages(pdf, titre) {
@@ -8470,9 +9128,10 @@
     // Page 2 : chambre de tirage compatible
     const etudes = etudesChambresReseau();
     for (const et of etudes) {
+      // une page A3 par chambre : vue de dessus, masques C?.1 à C?.4, tableaux, cartouche
       const pc = new V.Page({ emitText: false, ombre: false });
-      V.dessinerEtudeChambre(pc, et.etude, et.masques);
-      writeVue3DPage(pdf, pc);
+      V.dessinerPageChambreA3(pc, et.etude, et.masques, { projet: titre, date: new Date().toLocaleDateString('fr-FR') });
+      writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1]);
     }
     if (m.chambre && !etudes.length) {
       const c = new V.Page({ emitText: false, ombre: false });
@@ -8504,7 +9163,16 @@
       client: document.getElementById('pdfClient')?.value || '',
       description: document.getElementById('pdfDescription')?.value || '',
       includeStats: document.getElementById('pdfIncludeStats')?.checked || true,
-      include3D: document.getElementById('pdfInclude3D')?.checked !== false
+      include3D: document.getElementById('pdfInclude3D')?.checked !== false,
+      formatSyn: document.getElementById('pdfFormatSyn')?.value || 'auto',
+      miseEnPageSyn: document.getElementById('pdfMiseEnPageSyn')?.value || 'bandes',
+      formatCoupes: document.getElementById('pdfFormatCoupes')?.value || 'a3',
+      groupes: {
+        synoptique: document.getElementById('pdfGrpSyn')?.checked !== false,
+        chambres: document.getElementById('pdfGrpChambres')?.checked !== false,
+        coupes: document.getElementById('pdfGrpCoupes')?.checked !== false,
+        tableaux: document.getElementById('pdfGrpTableaux')?.checked !== false,
+      },
     };
 
     return exportToPDFWithData(formData);
@@ -8571,6 +9239,13 @@
       }
 
       logPdf('jsPDFClass résolue');
+
+      // Réseau : dossier en plusieurs PDF (synoptique, chambres A3, coupes, tableaux), sans vue principale.
+      if (reseau && reseau.noeuds && reseau.noeuds.length && reseau.troncons.length) {
+        const fichiers = await exporterDossierReseau(formData, jsPDFClass);
+        console.timeEnd('[PDF] total');
+        return { success: true, fichiers };
+      }
 
       // Créer le PDF en format A4 portrait
       const pdf = new jsPDFClass('portrait', 'mm', 'a4');
@@ -8843,477 +9518,116 @@
         pdf.text(`Généré par TontonKAD le ${dateStr}`, col1X, statsLineY);
         pdf.setTextColor(0, 0, 0);
 
-        // === NOUVELLE PAGE : DÉTAIL DES FOURREAUX === //
-        if (stats.fourreauxDetails && stats.fourreauxDetails.length > 0) {
-          pdf.addPage();
-
-          // Titre
-          pdf.setFontSize(14);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('DÉTAIL DES FOURREAUX', margin, margin + 10);
-
-          // Note explicative
-          pdf.setFontSize(9);
-          pdf.setFont('helvetica', 'italic');
-          pdf.text('Les numéros correspondent aux étiquettes affichées sur le schéma (page précédente)', margin, margin + 17);
-
-          // Configuration du tableau
-          const tableStartY = margin + 25;
-          const rowHeight = 7;
-          const colWidths = {
-            numero: 12,
-            nom: 22,
-            type: 48,
-            code: 42,
-            nbCables: 18,
-            occupation: 38
+        // === TABLEAUX (paysage) : fourreaux puis câbles === //
+        // Colonnes réparties par poids (le nom prend la place, les codes courts restent étroits),
+        // fond de ligne teinté par fourreau / par liaison, en-tête répété à chaque page.
+        const teinte = (css, k = 0.8) => {
+          let r = 200, g = 200, b = 200;
+          const s = String(css || '');
+          const hx = /^#([0-9a-f]{6})$/i.exec(s);
+          const hs = /hsla?\(\s*([\d.]+)[ ,]+([\d.]+)%[ ,]+([\d.]+)%/i.exec(s);
+          if (hx) { const n = parseInt(hx[1], 16); r = n >> 16 & 255; g = n >> 8 & 255; b = n & 255; }
+          else if (hs) {
+            const h = Number(hs[1]) / 360, sa = Number(hs[2]) / 100, li = Number(hs[3]) / 100;
+            const q = li < 0.5 ? li * (1 + sa) : li + sa - li * sa, pp = 2 * li - q;
+            const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? pp + (q - pp) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp; };
+            r = f(h + 1 / 3) * 255; g = f(h) * 255; b = f(h - 1 / 3) * 255;
+          }
+          return [r, g, b].map((v) => Math.round(v + (255 - v) * k));
+        };
+        const PALETTE_LIAISONS = ['#e8661c', '#2459c9', '#16857a', '#b0302a', '#6b4fd0', '#c78a00', '#3f8f3a', '#c2185b', '#00838f', '#795548'];
+        const couleurLiaison = new Map();
+        const fondLiaison = (nom) => {
+          if (!couleurLiaison.has(nom)) couleurLiaison.set(nom, teinte(PALETTE_LIAISONS[couleurLiaison.size % PALETTE_LIAISONS.length], 0.84));
+          return couleurLiaison.get(nom);
+        };
+        const tableauPdf = (titre, sousTitre, colonnes, lignes, fond) => {
+          pdf.addPage('a4', 'landscape');
+          const PW = pdf.internal.pageSize.getWidth(), PH = pdf.internal.pageSize.getHeight(), mg = 12, LU = PW - 2 * mg;
+          const somme = colonnes.reduce((s, c) => s + c.poids, 0);
+          colonnes.forEach((c) => { c.l = LU * c.poids / somme; });
+          let y = 0;
+          const entete = (suite) => {
+            pdf.setTextColor(26, 29, 31); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13);
+            pdf.text(titre + (suite ? ' (suite)' : ''), mg, mg + 6);
+            if (sousTitre && !suite) { pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8.5); pdf.setTextColor(90, 96, 110); pdf.text(sousTitre, mg, mg + 11.5); }
+            y = mg + 15;
+            pdf.setFillColor(40, 44, 52); pdf.rect(mg, y, LU, 7, 'F');
+            pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5);
+            let x = mg;
+            colonnes.forEach((c) => { pdf.text(c.titre, c.droite ? x + c.l - 2 : x + 2, y + 4.8, { align: c.droite ? 'right' : 'left' }); x += c.l; });
+            y += 7;
           };
-          // Total: 180mm (contentWidth)
-
-          // En-tête du tableau
-          pdf.setFillColor(41, 128, 185); // Bleu
-          pdf.setDrawColor(0, 0, 0); // Bordures noires
-          pdf.setTextColor(255, 255, 255); // Blanc
-          pdf.setFontSize(9);
-          pdf.setFont('helvetica', 'bold');
-
-          // Dessiner un grand rectangle de fond pour toute la ligne d'en-tête
-          const totalWidth = colWidths.numero + colWidths.nom + colWidths.type + colWidths.code + colWidths.nbCables + colWidths.occupation;
-          pdf.rect(margin, tableStartY, totalWidth, rowHeight, 'FD');
-
-          // Écrire les textes d'en-tête
-          let currentX = margin;
-          pdf.text('N°', currentX + 2, tableStartY + 5);
-          currentX += colWidths.numero;
-
-          pdf.text('Nom', currentX + 2, tableStartY + 5);
-          currentX += colWidths.nom;
-
-          pdf.text('Type', currentX + 2, tableStartY + 5);
-          currentX += colWidths.type;
-
-          pdf.text('Code', currentX + 2, tableStartY + 5);
-          currentX += colWidths.code;
-
-          pdf.text('Câbles', currentX + 2, tableStartY + 5);
-          currentX += colWidths.nbCables;
-
-          pdf.text('Occupation', currentX + 2, tableStartY + 5);
-
-          // Lignes de données
-          pdf.setTextColor(0, 0, 0); // Noir
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(8);
-
-          let currentY = tableStartY + rowHeight;
-          stats.fourreauxDetails.forEach((f, idx) => {
-            // Vérifier si on doit changer de page
-            if (currentY > pageHeight - 30) {
-              pdf.addPage();
-              currentY = margin + 10;
-
-              // Répéter l'en-tête sur la nouvelle page
-              pdf.setFillColor(41, 128, 185);
-              pdf.setDrawColor(0, 0, 0);
-              pdf.setTextColor(255, 255, 255);
-              pdf.setFont('helvetica', 'bold');
-
-              // Dessiner un grand rectangle pour l'en-tête
-              const headerTotalWidth = colWidths.numero + colWidths.nom + colWidths.type + colWidths.code + colWidths.nbCables + colWidths.occupation;
-              pdf.rect(margin, currentY, headerTotalWidth, rowHeight, 'FD');
-
-              // Écrire les textes
-              let headerX = margin;
-              pdf.text('N°', headerX + 2, currentY + 5);
-              headerX += colWidths.numero;
-              pdf.text('Nom', headerX + 2, currentY + 5);
-              headerX += colWidths.nom;
-              pdf.text('Type', headerX + 2, currentY + 5);
-              headerX += colWidths.type;
-              pdf.text('Code', headerX + 2, currentY + 5);
-              headerX += colWidths.code;
-              pdf.text('Câbles', headerX + 2, currentY + 5);
-              headerX += colWidths.nbCables;
-              pdf.text('Occupation', headerX + 2, currentY + 5);
-
-              currentY += rowHeight;
-              pdf.setTextColor(0, 0, 0);
-              pdf.setFont('helvetica', 'normal');
-            }
-
-            // Couleur alternée pour les lignes
-            if (idx % 2 === 0) {
-              pdf.setFillColor(248, 250, 252);
-              pdf.rect(margin, currentY, contentWidth, rowHeight, 'F');
-            }
-
-            // Coloration selon le taux d'occupation
-            const occupationRate = parseFloat(f.occupation);
-            let occupationColor = [0, 128, 0]; // Vert par défaut (< 33%)
-            if (occupationRate > 50) {
-              occupationColor = [255, 0, 0]; // Rouge si > 50%
-            } else if (occupationRate >= 33) {
-              occupationColor = [255, 165, 0]; // Orange si 33-50%
-            }
-
-            currentX = margin;
-
-            // Bordures
-            pdf.setDrawColor(200, 200, 200);
-            pdf.rect(currentX, currentY, colWidths.numero, rowHeight);
-            pdf.text(String(f.numero), currentX + 2, currentY + 5);
-            currentX += colWidths.numero;
-
-            // Nom du fourreau (label personnalisé ou auto-généré)
-            pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
-            const fourreauObj = fourreaux.find(fo => fo.id === f.id);
-            const nomFourreau = f.nom || getPdfFourreauName(fourreauObj, f.numero);
-            pdf.text(truncatePdfText(nomFourreau, 14), currentX + 2, currentY + 5);
-            currentX += colWidths.nom;
-
-            pdf.rect(currentX, currentY, colWidths.type, rowHeight);
-            const typeText = f.type.length > 20 ? f.type.substring(0, 17) + '...' : f.type;
-            pdf.text(typeText, currentX + 2, currentY + 5);
-            currentX += colWidths.type;
-
-            pdf.rect(currentX, currentY, colWidths.code, rowHeight);
-            const codeText = f.code.length > 18 ? f.code.substring(0, 15) + '...' : f.code;
-            pdf.text(codeText, currentX + 2, currentY + 5);
-            currentX += colWidths.code;
-
-            pdf.rect(currentX, currentY, colWidths.nbCables, rowHeight);
-            pdf.text(String(f.nbCables), currentX + 2, currentY + 5);
-            currentX += colWidths.nbCables;
-
-            pdf.rect(currentX, currentY, colWidths.occupation, rowHeight);
-            pdf.setTextColor(...occupationColor);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text(f.occupation + ' %', currentX + 2, currentY + 5);
-            pdf.setFont('helvetica', 'normal');
-            pdf.setTextColor(0, 0, 0);
-
-            currentY += rowHeight;
+          entete(false);
+          lignes.forEach((ln, i) => {
+            pdf.setFontSize(8); pdf.setFont('helvetica', 'normal');
+            const cellules = colonnes.map((c) => pdf.splitTextToSize(String(ln[c.cle] == null ? '' : ln[c.cle]), Math.max(4, c.l - 4)));
+            const h = 2.6 + Math.max(1, ...cellules.map((t) => t.length)) * 3.4;
+            if (y + h > PH - mg) { pdf.addPage('a4', 'landscape'); entete(true); pdf.setFontSize(8); }
+            const f = fond ? fond(ln, i) : null;
+            if (f) { pdf.setFillColor(f[0], f[1], f[2]); pdf.rect(mg, y, LU, h, 'F'); }
+            pdf.setDrawColor(205, 210, 218); pdf.setLineWidth(0.15); pdf.line(mg, y + h, mg + LU, y + h);
+            let x = mg;
+            colonnes.forEach((c, k) => {
+              pdf.setFont('helvetica', k === 0 || c.gras ? 'bold' : 'normal');
+              const coul = c.couleur ? c.couleur(ln) : [26, 29, 31];
+              pdf.setTextColor(coul[0], coul[1], coul[2]);
+              pdf.text(cellules[k], c.droite ? x + c.l - 2 : x + 2, y + 3.7, { align: c.droite ? 'right' : 'left' });
+              x += c.l;
+            });
+            y += h;
           });
+          pdf.setTextColor(26, 29, 31);
+          return { y, mg };
+        };
 
-          // Légende des couleurs
-          currentY += 5;
-          pdf.setFontSize(8);
-          pdf.setFont('helvetica', 'italic');
-
-          pdf.setFillColor(0, 128, 0);
-          pdf.circle(margin + 2, currentY + 1, 1.5, 'F');
-          pdf.text('Occupation < 33% (OK)', margin + 6, currentY + 2);
-
-          pdf.setFillColor(255, 165, 0);
-          pdf.circle(margin + 50, currentY + 1, 1.5, 'F');
-          pdf.text('Occupation 33-50% (Attention)', margin + 54, currentY + 2);
-
-          pdf.setFillColor(255, 0, 0);
-          pdf.circle(margin + 110, currentY + 1, 1.5, 'F');
-          pdf.text('Occupation > 50% (Saturé)', margin + 114, currentY + 2);
-        }
-
-        // === NOUVELLE PAGE : LISTING DÉTAILLÉ DES CÂBLES === //
-        if (cables.length > 0) {
-          pdf.addPage();
-
-          // Titre
-          pdf.setFontSize(14);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('LISTING DÉTAILLÉ DES CÂBLES', margin, margin + 10);
-
-          // Configuration du tableau
-          const tableStartY = margin + 20;
-          const rowHeight = 6;
-          const colWidths = {
-            numero: 10,
-            nom: 18,
-            famille: 45,
-            section: 25,
-            localisation: 55,
-            phase: 27
-          };
-          // Total: 180mm (contentWidth)
-
-          // En-tête du tableau
-          pdf.setFillColor(52, 152, 219); // Bleu clair
-          pdf.setDrawColor(0, 0, 0); // Bordures noires
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFontSize(8);
-          pdf.setFont('helvetica', 'bold');
-
-          // Dessiner un grand rectangle de fond pour toute la ligne d'en-tête
-          const totalWidth = colWidths.numero + colWidths.nom + colWidths.famille + colWidths.section + colWidths.localisation + colWidths.phase;
-          pdf.rect(margin, tableStartY, totalWidth, rowHeight, 'FD');
-
-          // Écrire les textes d'en-tête
-          let currentX = margin;
-          pdf.text('N°', currentX + 2, tableStartY + 4);
-          currentX += colWidths.numero;
-
-          pdf.text('Nom', currentX + 2, tableStartY + 4);
-          currentX += colWidths.nom;
-
-          pdf.text('Famille', currentX + 2, tableStartY + 4);
-          currentX += colWidths.famille;
-
-          pdf.text('Section', currentX + 2, tableStartY + 4);
-          currentX += colWidths.section;
-
-          pdf.text('Localisation', currentX + 2, tableStartY + 4);
-          currentX += colWidths.localisation;
-
-          pdf.text('Phase', currentX + 2, tableStartY + 4);
-
-          // Lignes de données
-          pdf.setTextColor(0, 0, 0);
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(7);
-
-          let currentY = tableStartY + rowHeight;
-          cables.forEach((c, idx) => {
-            // Vérifier si on doit changer de page
-            if (currentY > pageHeight - 30) {
-              pdf.addPage();
-              currentY = margin + 10;
-
-              // Répéter l'en-tête
-              pdf.setFillColor(52, 152, 219);
-              pdf.setDrawColor(0, 0, 0);
-              pdf.setTextColor(255, 255, 255);
-              pdf.setFont('helvetica', 'bold');
-
-              // Dessiner un grand rectangle pour l'en-tête
-              const headerTotalWidth = colWidths.numero + colWidths.nom + colWidths.famille + colWidths.section + colWidths.localisation + colWidths.phase;
-              pdf.rect(margin, currentY, headerTotalWidth, rowHeight, 'FD');
-
-              // Écrire les textes
-              let headerX = margin;
-              pdf.text('N°', headerX + 2, currentY + 4);
-              headerX += colWidths.numero;
-              pdf.text('Nom', headerX + 2, currentY + 4);
-              headerX += colWidths.nom;
-              pdf.text('Famille', headerX + 2, currentY + 4);
-              headerX += colWidths.famille;
-              pdf.text('Section', headerX + 2, currentY + 4);
-              headerX += colWidths.section;
-              pdf.text('Localisation', headerX + 2, currentY + 4);
-              headerX += colWidths.localisation;
-              pdf.text('Phase', headerX + 2, currentY + 4);
-
-              currentY += rowHeight;
-              pdf.setTextColor(0, 0, 0);
-              pdf.setFont('helvetica', 'normal');
-            }
-
-            // Couleur alternée
-            if (idx % 2 === 0) {
-              pdf.setFillColor(248, 250, 252);
-              pdf.rect(margin, currentY, contentWidth, rowHeight, 'F');
-            }
-
-            currentX = margin;
-
-            // Bordures et contenu
-            pdf.setDrawColor(200, 200, 200);
-            pdf.rect(currentX, currentY, colWidths.numero, rowHeight);
-            pdf.text(String(idx + 1), currentX + 2, currentY + 4);
-            currentX += colWidths.numero;
-
-            // Nom du câble (depuis la couleur, ou label personnalisé, ou numéro)
-            pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
-            const nomCable = getPdfCableName(c, idx);
-            pdf.text(truncatePdfText(nomCable, 14), currentX + 2, currentY + 4);
-            currentX += colWidths.nom;
-
-            pdf.rect(currentX, currentY, colWidths.famille, rowHeight);
-            const famText = c.fam.length > 28 ? c.fam.substring(0, 25) + '...' : c.fam;
-            pdf.text(famText, currentX + 2, currentY + 4);
-            currentX += colWidths.famille;
-
-            pdf.rect(currentX, currentY, colWidths.section, rowHeight);
-            const sectionText = c.code + '²';
-            pdf.text(sectionText, currentX + 2, currentY + 4);
-            currentX += colWidths.section;
-
-            pdf.rect(currentX, currentY, colWidths.localisation, rowHeight);
-            let locText = 'Hors fourreau';
-            if (c.parent) {
-              const parentIdx = fourreaux.findIndex(f => f.id === c.parent);
-              if (parentIdx !== -1) {
-                const parentFourreau = fourreaux[parentIdx];
-                const parentAutoName = `F${parentIdx + 1}`;
-                const parentName = getPdfFourreauName(parentFourreau, parentIdx + 1);
-                locText = parentName === parentAutoName ? `Fourreau #${parentIdx + 1}` : `#${parentIdx + 1} ${parentName}`;
-              }
-            }
-            pdf.text(truncatePdfText(locText, 32), currentX + 2, currentY + 4);
-            currentX += colWidths.localisation;
-
-            pdf.rect(currentX, currentY, colWidths.phase, rowHeight);
-            const phaseText = getCablePhaseLabel(c) || 'N/A';
-            pdf.text(phaseText, currentX + 2, currentY + 4);
-
-            currentY += rowHeight;
-          });
-
-          // Résumé
-          currentY += 5;
-          pdf.setFontSize(9);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(`Total: ${cables.length} câble(s)`, margin, currentY);
-        }
-
-        // === NOUVELLE PAGE : LISTING DÉTAILLÉ DES FOURREAUX === //
         if (fourreaux.length > 0) {
-          pdf.addPage();
-
-          // Titre
-          pdf.setFontSize(14);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('LISTING DÉTAILLÉ DES FOURREAUX', margin, margin + 10);
-
-          // Configuration du tableau
-          const tableStartY = margin + 20;
-          const rowHeight = 6;
-          const colWidths = {
-            numero: 10,
-            nom: 20,
-            type: 45,
-            code: 38,
-            nbCables: 20,
-            cables: 47
-          };
-          // Total: 180mm (contentWidth)
-
-          // En-tête du tableau
-          pdf.setFillColor(46, 204, 113); // Vert
-          pdf.setDrawColor(0, 0, 0); // Bordures noires
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFontSize(8);
-          pdf.setFont('helvetica', 'bold');
-
-          // Dessiner un grand rectangle de fond pour toute la ligne d'en-tête
-          const totalWidth = colWidths.numero + colWidths.nom + colWidths.type + colWidths.code + colWidths.nbCables + colWidths.cables;
-          pdf.rect(margin, tableStartY, totalWidth, rowHeight, 'FD');
-
-          // Écrire les textes d'en-tête
-          let currentX = margin;
-          pdf.text('N°', currentX + 2, tableStartY + 4);
-          currentX += colWidths.numero;
-
-          pdf.text('Nom', currentX + 2, tableStartY + 4);
-          currentX += colWidths.nom;
-
-          pdf.text('Type', currentX + 2, tableStartY + 4);
-          currentX += colWidths.type;
-
-          pdf.text('Code', currentX + 2, tableStartY + 4);
-          currentX += colWidths.code;
-
-          pdf.text('Nb câbles', currentX + 2, tableStartY + 4);
-          currentX += colWidths.nbCables;
-
-          pdf.text('Liste câbles', currentX + 2, tableStartY + 4);
-
-          // Lignes de données
-          pdf.setTextColor(0, 0, 0);
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(7);
-
-          let currentY = tableStartY + rowHeight;
-          fourreaux.forEach((f, idx) => {
-            // Vérifier si on doit changer de page
-            if (currentY > pageHeight - 30) {
-              pdf.addPage();
-              currentY = margin + 10;
-
-              // Répéter l'en-tête
-              pdf.setFillColor(46, 204, 113);
-              pdf.setDrawColor(0, 0, 0);
-              pdf.setTextColor(255, 255, 255);
-              pdf.setFont('helvetica', 'bold');
-
-              // Dessiner un grand rectangle pour l'en-tête
-              const headerTotalWidth = colWidths.numero + colWidths.nom + colWidths.type + colWidths.code + colWidths.nbCables + colWidths.cables;
-              pdf.rect(margin, currentY, headerTotalWidth, rowHeight, 'FD');
-
-              // Écrire les textes
-              let headerX = margin;
-              pdf.text('N°', headerX + 2, currentY + 4);
-              headerX += colWidths.numero;
-              pdf.text('Nom', headerX + 2, currentY + 4);
-              headerX += colWidths.nom;
-              pdf.text('Type', headerX + 2, currentY + 4);
-              headerX += colWidths.type;
-              pdf.text('Code', headerX + 2, currentY + 4);
-              headerX += colWidths.code;
-              pdf.text('Nb câbles', headerX + 2, currentY + 4);
-              headerX += colWidths.nbCables;
-              pdf.text('Liste câbles', headerX + 2, currentY + 4);
-
-              currentY += rowHeight;
-              pdf.setTextColor(0, 0, 0);
-              pdf.setFont('helvetica', 'normal');
-            }
-
-            // Couleur alternée
-            if (idx % 2 === 0) {
-              pdf.setFillColor(248, 250, 252);
-              pdf.rect(margin, currentY, contentWidth, rowHeight, 'F');
-            }
-
-            currentX = margin;
-
-            // Bordures et contenu
-            pdf.setDrawColor(200, 200, 200);
-            pdf.rect(currentX, currentY, colWidths.numero, rowHeight);
-            pdf.text(String(idx + 1), currentX + 2, currentY + 4);
-            currentX += colWidths.numero;
-
-            // Nom du fourreau
-            pdf.rect(currentX, currentY, colWidths.nom, rowHeight);
-            const nomFourreau = getPdfFourreauName(f, idx + 1);
-            pdf.text(truncatePdfText(nomFourreau, 16), currentX + 2, currentY + 4);
-            currentX += colWidths.nom;
-
-            pdf.rect(currentX, currentY, colWidths.type, rowHeight);
-            const typeText = f.type.length > 23 ? f.type.substring(0, 20) + '...' : f.type;
-            pdf.text(typeText, currentX + 2, currentY + 4);
-            currentX += colWidths.type;
-
-            pdf.rect(currentX, currentY, colWidths.code, rowHeight);
-            const codeText = f.code.length > 20 ? f.code.substring(0, 17) + '...' : f.code;
-            pdf.text(codeText, currentX + 2, currentY + 4);
-            currentX += colWidths.code;
-
-            // Compter les câbles dans ce fourreau
-            const cablesInFourreau = cables.filter(c => c.parent === f.id);
-            pdf.rect(currentX, currentY, colWidths.nbCables, rowHeight);
-            pdf.text(String(cablesInFourreau.length), currentX + 2, currentY + 4);
-            currentX += colWidths.nbCables;
-
-            // Liste des noms des câbles
-            pdf.rect(currentX, currentY, colWidths.cables, rowHeight);
-            if (cablesInFourreau.length > 0) {
-              const cableNames = cablesInFourreau.map(c => {
-                const cIdx = cables.findIndex(cable => cable.id === c.id);
-                return getPdfCableName(c, cIdx);
-              }).join(', ');
-              const namesText = truncatePdfText(cableNames, 20);
-              pdf.text(namesText, currentX + 2, currentY + 4);
-            } else {
-              pdf.text('Aucun', currentX + 2, currentY + 4);
-            }
-
-            currentY += rowHeight;
+          const lignesF = fourreaux.map((f, idx) => {
+            const dedans = cables.filter((c) => c.parent === f.id);
+            const parSection = new Map();
+            dedans.forEach((c) => { const k = `${c.code}${getCablePhaseLabel(c) ? ' ' + getCablePhaseLabel(c) : ''}`; parSection.set(k, (parSection.get(k) || 0) + 1); });
+            const liaisonsF = [...new Set(dedans.map((c) => c.liaison).filter(Boolean))];
+            return {
+              n: String(idx + 1), nom: getPdfFourreauName(f, idx + 1) + (liaisonsF.length > 1 ? ` (${liaisonsF.length} liaisons)` : ''),
+              type: `${f.type || ''} ${f.code || ''}`.trim(), diam: `${Number(f.od).toFixed(0)} / ${Number(f.idm).toFixed(0)}`,
+              nb: String(dedans.length),
+              cables: [...parSection].map(([k, q]) => `${q}× ${k}`).join(', ') || (f.reserve || !dedans.length ? 'réserve (vide)' : ''),
+              occ: `${calculateFourreauOccupancy(f).toFixed(1)} %`, _occ: calculateFourreauOccupancy(f), _col: f.customColor || f.color,
+            };
           });
+          const fin = tableauPdf('DÉTAIL DES FOURREAUX', 'N° = étiquette du schéma · fond de ligne = couleur du fourreau · taux : vert ≤ 33 %, orange ≤ 50 %, rouge au-delà', [
+            { titre: 'N°', cle: 'n', poids: 4 },
+            { titre: 'Liaison / nom', cle: 'nom', poids: 30 },
+            { titre: 'Type', cle: 'type', poids: 9 },
+            { titre: 'Ø ext / int', cle: 'diam', poids: 8 },
+            { titre: 'Câbles', cle: 'nb', poids: 5, droite: true },
+            { titre: 'Contenu', cle: 'cables', poids: 34 },
+            { titre: 'Taux', cle: 'occ', poids: 7, droite: true, gras: true, couleur: (l) => (l._occ <= 33 ? [26, 122, 60] : l._occ <= 50 ? [180, 110, 0] : [200, 30, 30]) },
+          ], lignesF, (l) => teinte(l._col, 0.8));
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+          pdf.text(`Total : ${fourreaux.length} fourreau(x)`, fin.mg, Math.min(fin.y + 6, pdf.internal.pageSize.getHeight() - 5));
+        }
 
-          // Résumé
-          currentY += 5;
-          pdf.setFontSize(9);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(`Total: ${fourreaux.length} fourreau(x)`, margin, currentY);
+        if (cables.length > 0) {
+          const lignesC = cables.map((c, idx) => {
+            const pi = fourreaux.findIndex((f) => f.id === c.parent);
+            return {
+              n: String(idx + 1), liaison: c.liaison || '—', nom: getPdfCableName(c, idx), fam: c.fam || '',
+              section: `${c.code}`, fourreau: pi >= 0 ? `F${pi + 1} · ${fourreaux[pi].type || ''} ${fourreaux[pi].code || ''}`.trim() : 'hors fourreau',
+              phase: getCablePhaseLabel(c) || '—', _liaison: c.liaison || c.label || '—',
+            };
+          });
+          const fin = tableauPdf('LISTING DÉTAILLÉ DES CÂBLES', 'Fond de ligne = une couleur par liaison', [
+            { titre: 'N°', cle: 'n', poids: 4 },
+            { titre: 'Liaison', cle: 'liaison', poids: 30 },
+            { titre: 'Repère', cle: 'nom', poids: 8 },
+            { titre: 'Famille', cle: 'fam', poids: 14 },
+            { titre: 'Section', cle: 'section', poids: 8 },
+            { titre: 'Fourreau', cle: 'fourreau', poids: 14 },
+            { titre: 'Phase', cle: 'phase', poids: 6 },
+          ], lignesC, (l) => fondLiaison(l._liaison));
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+          pdf.text(`Total : ${cables.length} câble(s)`, fin.mg, Math.min(fin.y + 6, pdf.internal.pageSize.getHeight() - 5));
         }
       }
 

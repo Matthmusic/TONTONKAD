@@ -88,7 +88,6 @@
     const fourreaux = window.fourreaux || [];
     const mmToPx    = window.MM_TO_PX   || 0.5;
     const scale     = window.displayScale || 1;
-    const showInfo  = window.showInfo;
 
     fourreauxLayer.destroyChildren();
 
@@ -122,6 +121,7 @@
       }
 
       // Numéro au-dessus du cercle
+      const sombre = document.documentElement.getAttribute('data-theme') === 'dark';
       const fontSize = Math.max(8, 13 / scale);
       group.add(new Konva.Text({
         x:           -ro,
@@ -131,26 +131,15 @@
         text:        String(idx + 1),
         fontSize:    fontSize,
         fontStyle:   'bold',
-        fill:        '#fff',
-        stroke:      '#000',
-        strokeWidth: Math.max(0.5, 2.5 / scale),
+        // contraste selon le thème : blanc sur halo sombre (sombre), encre sur
+        // halo blanc (clair) ; le halo est peint SOUS le remplissage
+        fill:        sombre ? '#ffffff' : '#1a1d1f',
+        stroke:      sombre ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)',
+        strokeWidth: Math.max(0.5, 3 / scale),
+        fillAfterStrokeEnabled: true,
       }));
 
-      // Label (si showInfo activé)
-      if (showInfo && f.label && f.label.trim()) {
-        group.add(new Konva.Text({
-          x:           -ro,
-          y:           ro + 4 / scale,
-          width:       ro * 2,
-          align:       'center',
-          text:        f.label.trim(),
-          fontSize:    Math.max(7, 12 / scale),
-          fontStyle:   'bold',
-          fill:        '#fff',
-          stroke:      '#000',
-          strokeWidth: Math.max(0.5, 2 / scale),
-        }));
-      }
+      // Nom de liaison : pas affiché sur la coupe (il est dans les tableaux et le PDF).
 
       fourreauxLayer.add(group);
     });

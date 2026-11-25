@@ -12,7 +12,11 @@
 // seule face, elle s'arrête dans la chambre.
 (function (root) {
   const FACES = ['pignonA', 'pignonB', 'longPanA', 'longPanB'];
-  const LIBELLE = { pignonA: 'pignon A', pignonB: 'pignon B', longPanA: 'long-pan A', longPanB: 'long-pan B' };
+  // Côtés numérotés vus de dessus, dans le sens horaire, 1 en haut (choix du
+  // bureau d'études) : 1 = haut (ex long-pan B), 2 = droite (ex pignon B),
+  // 3 = bas (ex long-pan A), 4 = gauche (ex pignon A). Masque d'un côté : « C7.1 ».
+  const NUMERO = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
+  const LIBELLE = { pignonA: 'côté 4', pignonB: 'côté 2', longPanA: 'côté 3', longPanB: 'côté 1' };
   const estPignon = (k) => k.startsWith('pignon');
   const opposee = { pignonA: 'pignonB', pignonB: 'pignonA', longPanA: 'longPanB', longPanB: 'longPanA' };
 
@@ -93,7 +97,21 @@
     };
   }
 
-  const api = { etudierChambre, FACES, LIBELLE };
+
+  // Traversées regroupées par couple de côtés (un faisceau par couple) : lisible
+  // même quand 30 liaisons traversent la chambre. Du plus gros faisceau au plus petit.
+  function regrouperTraversees(etude) {
+    const g = new Map();
+    for (const t of (etude && etude.traversees) || []) {
+      const [a, b] = t.cles, cle = NUMERO[a] <= NUMERO[b] ? `${a}|${b}` : `${b}|${a}`;
+      if (!g.has(cle)) g.set(cle, { cles: cle.split('|'), type: t.type, liaisons: [] });
+      g.get(cle).liaisons.push(t.liaison);
+    }
+    return [...g.values()].sort((x, y) => y.liaisons.length - x.liaisons.length || NUMERO[x.cles[0]] - NUMERO[y.cles[0]])
+      .map((x) => ({ ...x, entree: LIBELLE[x.cles[0]], sortie: LIBELLE[x.cles[1]] }));
+  }
+
+  const api = { etudierChambre, regrouperTraversees, FACES, LIBELLE, NUMERO };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ChambreFaces = api;
 })(typeof window !== 'undefined' ? window : globalThis);
