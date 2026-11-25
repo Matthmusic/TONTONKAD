@@ -144,3 +144,18 @@ describe('synoptique ancré', () => {
     expect(e2).toMatchObject({ total: 3, reserve: 1 });
   });
 });
+
+describe('nord = côté 1 partout', () => {
+  test('les côtés suivent le synoptique : droite 2 → 4, bas 3 → 1', () => {
+    const r = R.creerReseau();
+    const a = R.ajouterNoeud(r, 'chambre'), b = R.ajouterNoeud(r, 'chambre'), s = R.ajouterNoeud(r, 'sortie');
+    // faces volontairement « fausses » au départ
+    const t1 = R.relier(r, a.id, b.id, { faceA: 'longPanB', faceB: 'longPanA' });
+    const t2 = R.relier(r, a.id, s.id, { faceA: 'pignonA' });
+    const dis = { noeuds: { [a.id]: { x: 0, y: 0 }, [b.id]: { x: 500, y: 0 }, [s.id]: { x: 0, y: 300 } } };
+    expect(R.alignerFaces(r, dis)).toBe(3);
+    expect([t1.a.face, t1.b.face]).toEqual(['pignonB', 'pignonA']); // 2 → 4
+    expect(t2.a.face).toBe('longPanA');                             // sort par 3 vers le bas
+    expect(R.alignerFaces(r, dis)).toBe(0);                         // stable
+  });
+});

@@ -80458,6 +80458,27 @@ var require_reseau = __commonJS({
         const reserve = coupe.fourreaux.some((f) => f.id != null) ? coupe.fourreaux.filter((f) => f.id != null && !occupes.has(f.id)).length : 0;
         return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons, total: coupe.fourreaux.length, reserve };
       }
+      function faceDirection(dx, dy) {
+        if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "pignonB" : "pignonA";
+        return dy < 0 ? "longPanB" : "longPanA";
+      }
+      function alignerFaces(r, dis) {
+        let n = 0;
+        r.troncons.forEach((t) => {
+          const A = dis.noeuds[t.a.noeud], B = dis.noeuds[t.b.noeud];
+          if (!A || !B) return;
+          [["a", A, B], ["b", B, A]].forEach(([bout, ici, la]) => {
+            const nd = noeud(r, t[bout].noeud);
+            if (!nd || nd.type !== "chambre") return;
+            const f = faceDirection(la.x - ici.x, la.y - ici.y);
+            if (t[bout].face !== f) {
+              t[bout].face = f;
+              n += 1;
+            }
+          });
+        });
+        return n;
+      }
       function dispositionAncree(r, opts) {
         const E = opts.ecart == null ? 0.5 : opts.ecart, G = opts.marge == null ? 40 : opts.marge;
         const tN = (id) => opts.tailleNoeud(noeud(r, id)), tE = (t) => opts.tailleEtiquette(t);
@@ -80688,6 +80709,8 @@ var require_reseau = __commonJS({
         surFace,
         surFaceTous,
         facesLibres,
+        alignerFaces,
+        faceDirection,
         faceVers,
         verifierCoffret,
         depuisAncienneChambre,

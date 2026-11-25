@@ -7805,6 +7805,7 @@
   /* ── Vues et bandeau de navigation ── */
   function afficherVue(vue, noeudId) {
     if (!reseau) return;
+    synoptiqueAncre(1.414); // côtés alignés sur le synoptique avant toute vue (chambre comprise)
     if (noeudId) reseau.actif.noeud = noeudId;
     reseau.actif.vue = vue;
     if (vue !== 'coupe' && typeof closeRightToolsPane === 'function') closeRightToolsPane(); // place pour le dessin
@@ -8234,6 +8235,10 @@
     if (!rapide || !synBase || synBase.ratio !== ratio) {
       const contenus = new Map(reseau.troncons.map((t) => [t.id, contenuTroncon(t)]));
       const dis = R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
+      // nord = côté 1 partout : les côtés des chambres suivent le synoptique
+      // (vers la droite 2 → 4, vers le bas 3 → 1) ; l'étude des chambres en découle
+      const realignes = R().alignerFaces(reseau, dis);
+      if (realignes && typeof showToast === 'function') showToast(`${realignes} côté${realignes > 1 ? 's' : ''} de chambre réaligné${realignes > 1 ? 's' : ''} sur le synoptique (côté 1 au nord) : vérifiez les chambres`, 'info', 6000);
       synBase = { ratio, dis, contenus, sous: new Map(reseau.noeuds.map((n) => [n.id, sousNoeud(n)])) };
     }
     const { dis, contenus, sous } = synBase;
@@ -9050,6 +9055,7 @@
   async function exporterDossierReseau(formData, JsPDF) {
     const V = window.Vue3D, base = `${(formData.projectName || 'projet').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}`;
     const groupes = formData.groupes || {}, fichiers = [];
+    synoptiqueAncre(1.414); // côtés des chambres alignés sur le synoptique avant l'étude
     if (sauverCoupeActive) sauverCoupeActive(); // la coupe affichée rejoint son tronçon
     // 1. synoptique + métré et continuité
     if (groupes.synoptique !== false) {
