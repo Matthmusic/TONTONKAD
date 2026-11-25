@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron')
 const path = require('path');
 const fs = require('fs').promises;
 const McpClaude = require('./mcp-claude.js');
+const Transition = require('./transition-nodial.js');
 
 let mainWindow;
 let autoUpdater = null; // Chargé de façon lazy après que l'app soit prête
@@ -164,7 +165,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, '../preload/preload.js')
     },
-    backgroundColor: '#f0f2f5', // Light par défaut
+    backgroundColor: '#F1F3F5', // Light par défaut (charte nodial)
     show: false
   });
 
@@ -182,7 +183,7 @@ function createWindow() {
     mainWindow.webContents.executeJavaScript(`
       localStorage.getItem('tontonkad-theme') || 'light'
     `).then(theme => {
-      const backgroundColor = theme === 'dark' ? '#12121c' : '#f0f2f5';
+      const backgroundColor = theme === 'dark' ? '#16191D' : '#F1F3F5';
       mainWindow.setBackgroundColor(backgroundColor);
     });
 
@@ -344,9 +345,9 @@ function createMenu() {
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: 'info',
-              title: 'À propos de TONTONKAD',
-              message: `TONTONKAD v${app.getVersion()}`,
-              detail: 'Application de dimensionnement de chemins de câbles et fourreaux\n\n© 2025 TONTONKAD Team',
+              title: 'À propos de nodial',
+              message: `nodial v${app.getVersion()}`,
+              detail: 'Fourreaux, chambres de tirage et réseaux VRD\n\n© 2026 nodial',
               buttons: ['OK']
             });
           }
@@ -421,7 +422,7 @@ async function openProject() {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Ouvrir un projet',
     filters: [
-      { name: 'Projets TONTONKAD', extensions: ['json'] },
+      { name: 'Projets nodial', extensions: ['nodial', 'json', 'tontonkad'] },
       { name: 'Tous les fichiers', extensions: ['*'] }
     ],
     properties: ['openFile']
@@ -458,9 +459,9 @@ ipcMain.handle('save-project', async (event, data) => {
 async function saveProjectAs(content = null) {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Sauvegarder le projet',
-    defaultPath: 'projet-tontonkad.json',
+    defaultPath: 'projet.nodial',
     filters: [
-      { name: 'Projets TONTONKAD', extensions: ['json'] },
+      { name: 'Projets nodial', extensions: ['nodial', 'json', 'tontonkad'] },
       { name: 'Tous les fichiers', extensions: ['*'] }
     ]
   });
@@ -489,7 +490,7 @@ ipcMain.handle('export-file', async (event, { type, content, defaultName }) => {
 
   const result = await dialog.showSaveDialog(mainWindow, {
     title: `Exporter en ${type.toUpperCase()}`,
-    defaultPath: defaultName || `export-tontonkad.${type}`,
+    defaultPath: defaultName || `export-nodial.${type}`,
     filters
   });
 
@@ -673,7 +674,7 @@ ipcMain.handle('get-app-version', () => {
 // Gérer le changement de thème
 ipcMain.on('set-theme', (event, theme) => {
   if (mainWindow && mainWindow.webContents) {
-    const backgroundColor = theme === 'dark' ? '#12121c' : '#f0f2f5';
+    const backgroundColor = theme === 'dark' ? '#16191D' : '#F1F3F5';
 
     // Méthode 1: Changer le backgroundColor de la fenêtre
     mainWindow.setBackgroundColor(backgroundColor);
@@ -722,6 +723,17 @@ app.whenReady().then(async () => {
   userDataPath = app.getPath('userData');
   configPath = path.join(userDataPath, 'config.json');
 
+  // nodial : reprise des réglages de TONTONKAD au premier lancement (sans effet sous TONTONKAD)
+  let reprise = null;
+  if (!isDev) {
+    try {
+      reprise = await Transition.reprendreDonnees({ userData: userDataPath, fs });
+      if (reprise.action !== 'rien') console.log('[OK] Reprise TONTONKAD:', reprise.copies.map(c => c.de));
+    } catch (error) {
+      console.error('[ERROR] Reprise des donnees TONTONKAD:', error);
+    }
+  }
+
   // En mode dev, utiliser directement le dossier data du projet
   // En production, utiliser APPDATA
   if (isDev) {
@@ -745,6 +757,9 @@ app.whenReady().then(async () => {
 
   console.log(`[INFO] Dossier de donnees actif: ${activeDataFolder}`);
   createWindow();
+  if (reprise && reprise.action === 'copier') {
+    mainWindow.webContents.once('did-finish-load', () => mainWindow.webContents.send('reprise-tontonkad', { elements: reprise.copies.length }));
+  }
 });
 
 app.on('window-all-closed', () => {

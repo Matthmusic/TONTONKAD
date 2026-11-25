@@ -1,4 +1,4 @@
-// Manuel d'Utilisation TontonKAD v2
+// Manuel d'utilisation nodial
 // Structure moderne et professionnelle
 
 (function() {
@@ -19,11 +19,11 @@
       gap: 12px;
       padding: 10px 14px;
       background: var(--glass-bg);
-      border: 1px solid rgba(255,145,77,0.25);
+      border: 1px solid rgba(255,101,5,0.25);
       border-radius: 8px;
     }
     .manual-kbd-item:hover {
-      background: rgba(255,145,77,0.12);
+      background: rgba(255,101,5,0.12);
     }
     .manual-kbd-key {
       display: inline-flex;
@@ -32,10 +32,10 @@
       font-family: Consolas, monospace;
       font-size: 12px;
       font-weight: 700;
-      color: #ff914d;
+      color: #FF6505;
       padding: 5px 10px;
-      background: rgba(255,145,77,0.15);
-      border: 1px solid rgba(255,145,77,0.3);
+      background: rgba(255,101,5,0.15);
+      border: 1px solid rgba(255,101,5,0.3);
       border-radius: 5px;
       white-space: nowrap;
     }
@@ -44,12 +44,12 @@
 
     /* Mode clair - plus contrasté */
     [data-theme="light"] .manual-kbd-item {
-      background: rgba(255,145,77,0.18);
-      border-color: rgba(255,145,77,0.5);
+      background: rgba(255,101,5,0.18);
+      border-color: rgba(255,101,5,0.5);
     }
     [data-theme="light"] .manual-kbd-key {
-      background: rgba(255,145,77,0.35);
-      border-color: rgba(255,145,77,0.65);
+      background: rgba(255,101,5,0.35);
+      border-color: rgba(255,101,5,0.65);
       color: #111111;
     }
   `;
@@ -68,7 +68,7 @@
         title: '📘 Présentation Générale',
         content: `
           <p>
-            <strong>TontonKAD</strong> est une application d'ingénierie assistée par ordinateur (CAO/DAO) spécialisée dans l'organisation de fourreaux et câbles électriques.
+            <strong>nodial</strong> est une application d'ingénierie assistée par ordinateur (CAO/DAO) spécialisée dans l'organisation de fourreaux et câbles électriques.
           </p>
           <p>
             L'application permet de :

@@ -1,4 +1,4 @@
-// Theme Manager pour TONTONKAD
+// Theme Manager pour nodial
 // Gestion centralisée du thème sombre/clair
 
 (function() {
@@ -12,20 +12,20 @@
 
     if (brandLogo) {
       brandLogo.src = theme === 'dark'
-        ? '../../assets/icons/ico/TONTONKADB.png'
-        : '../../assets/icons/ico/TONTONKADN.png';
+        ? '../../assets/icons/ico/nodial-sombre.png'
+        : '../../assets/icons/ico/nodial-clair.png';
     }
 
     if (favicon) {
       favicon.href = theme === 'dark'
-        ? '../../assets/icons/ico/TONTONKADB.ico'
-        : '../../assets/icons/ico/TONTONKADN.ico';
+        ? '../../assets/icons/ico/nodial-sombre.ico'
+        : '../../assets/icons/ico/nodial-clair.ico';
     }
 
     if (titlebarLogo) {
       titlebarLogo.src = theme === 'dark'
-        ? '../../assets/icons/ico/TONTONKADB.png'
-        : '../../assets/icons/ico/TONTONKADN.png';
+        ? '../../assets/brand/nodial/kit/nodial_logo_sombre.svg'
+        : '../../assets/brand/nodial/kit/nodial_logo_clair.svg';
     }
   }
 

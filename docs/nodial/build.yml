@@ -1,0 +1,98 @@
+# Modèle de workflow pour le dépôt de BUILD nodial (privé).
+# À copier dans Matthmusic/nodial : .github/workflows/build.yml
+#
+# Le build tourne dans le dépôt privé ; la release (installeur, latest.yml, blockmap)
+# et la fiche cea-app.json sont publiées dans le dépôt PUBLIC Matthmusic/nodial-releases.
+#
+# Secret à créer dans Matthmusic/nodial (Settings › Secrets › Actions) :
+#   RELEASES_TOKEN = jeton « fine-grained » limité au seul dépôt nodial-releases,
+#                    permission Contents : Read and write.
+# GITHUB_TOKEN ne suffit pas : il n'a de droits que sur le dépôt où tourne le workflow.
+
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      # --publish never : electron-builder ne publie rien lui-même (il tenterait de le faire
+      # vers nodial-releases avec un jeton sans droits). Il écrit quand même latest.yml et,
+      # dans l'app, app-update.yml qui pointe vers nodial-releases (build.publish).
+      - name: Build Windows
+        run: npx electron-builder --win --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            dist/*-Setup-*.exe
+            dist/latest.yml
+            dist/*.exe.blockmap
+          retention-days: 5
+
+  release:
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+
+      - name: Notes de version depuis cea-app.json
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          node -e "const c=require('./cea-app.json').changelog[process.argv[1]];if(!c){console.error('Pas d entree '+process.argv[1]+' dans le changelog de cea-app.json');process.exit(1)}console.log(c.changes.map(x=>'- '+x).join('\n'))" "$V" > notes.md
+          cat notes.md
+
+      - name: Release dans nodial-releases
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: Matthmusic/nodial-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: nodial ${{ github.ref_name }}
+          body_path: notes.md
+          files: dist-artifacts/windows-build/*
+
+      # Le CEA App Store lit la fiche sur la branche main du dépôt public.
+      - name: Fiche CEA App Store dans nodial-releases
+        uses: actions/checkout@v4
+        with:
+          repository: Matthmusic/nodial-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          path: releases-repo
+
+      - run: |
+          mkdir -p releases-repo/ico
+          cp cea-app.json releases-repo/cea-app.json
+          cp assets/icons/ico/nodial-clair.ico releases-repo/ico/nodial.ico 2>/dev/null || true
+          cd releases-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Fiche CEA App Store ${GITHUB_REF_NAME}"
+          git push

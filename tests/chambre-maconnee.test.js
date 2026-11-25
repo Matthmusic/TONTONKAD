@@ -33,3 +33,12 @@ describe('chambre maçonnée sur mesure (valeurs par défaut à valider)', () =>
     expect(r.ref).toMatch(/^Maçonnée/);
   });
 });
+
+describe('maçonnée : côtés fixes (nord = côté 1)', () => {
+  test('les grosses nappes sur les pignons élargissent les pignons, sans échange L / l', () => {
+    const CI = require('../src/renderer/chambres-infos.js');
+    const c = CI.chambreMaconnee({ pignonB: { largeur: 1305, hauteur: 660 }, pignonA: { largeur: 1120, hauteur: 665 }, longPanA: { largeur: 355, hauteur: 205 } }, {});
+    expect(c.l).toBeGreaterThanOrEqual(1305 + 2 * CI.MACONNEE_DEFAUTS.degagementLateral); // le pignon reçoit la nappe de 1305
+    expect(c.L).toBeLessThan(c.l);
+  });
+});

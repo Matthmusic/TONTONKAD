@@ -246,6 +246,32 @@
     return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons, total: coupe.fourreaux.length, reserve };
   }
 
+  // ─── Côtés alignés sur le synoptique (nord = côté 1) ──────────────────────
+  // Une seule convention partout : côté 1 en haut (long-pan B), 2 à droite
+  // (pignon B), 3 en bas (long-pan A), 4 à gauche (pignon A). Le côté d'un bout
+  // de tronçon suit la direction du tronçon dans la disposition du synoptique :
+  // vers la droite on sort par 2 et on arrive dans la suivante par 4 ; vers le
+  // bas on sort par 3 et on arrive par 1. dis = résultat de dispositionAncree.
+  // Retourne le nombre de bouts de tronçon dont le côté a changé.
+  function faceDirection(dx, dy) {
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'pignonB' : 'pignonA';
+    return dy < 0 ? 'longPanB' : 'longPanA'; // y vers le bas dans le synoptique
+  }
+  function alignerFaces(r, dis) {
+    let n = 0;
+    r.troncons.forEach((t) => {
+      const A = dis.noeuds[t.a.noeud], B = dis.noeuds[t.b.noeud];
+      if (!A || !B) return;
+      [['a', A, B], ['b', B, A]].forEach(([bout, ici, la]) => {
+        const nd = noeud(r, t[bout].noeud);
+        if (!nd || nd.type !== 'chambre') return;
+        const f = faceDirection(la.x - ici.x, la.y - ici.y);
+        if (t[bout].face !== f) { t[bout].face = f; n += 1; }
+      });
+    });
+    return n;
+  }
+
   // ─── Disposition ancrée du synoptique ─────────────────────────────────────
   // Pas de placement libre : la chaîne principale des chambres est alignée,
   // les dérivations partent à la perpendiculaire (au-dessus si côté haut,
@@ -439,7 +465,7 @@
   const api = {
     FACES_CHAMBRE, COULEURS, TYPES, LIBELLE_FACE,
     creerReseau, ajouterNoeud, relier, changerFace, supprimerNoeud, supprimerTroncon,
-    noeud, troncon, tronconsDe, surFace, surFaceTous, facesLibres, faceVers, verifierCoffret,
+    noeud, troncon, tronconsDe, surFace, surFaceTous, facesLibres, alignerFaces, faceDirection, faceVers, verifierCoffret,
     depuisAncienneChambre, nomTroncon, continuite, metre, dispositionAncree, contenuEtiquette,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

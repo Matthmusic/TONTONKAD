@@ -16,14 +16,14 @@ describe('branchement du serveur MCP intégré dans Claude', () => {
   test('fichier absent : configuration créée', () => {
     const r = M.fusionnerConfig(null, entree);
     expect(r.etat).toBe('ajoute');
-    expect(JSON.parse(r.texte).mcpServers.tontonkad).toEqual(entree);
+    expect(JSON.parse(r.texte).mcpServers.nodial).toEqual(entree);
   });
   test('les autres serveurs et réglages sont conservés', () => {
     const avant = JSON.stringify({ theme: 'dark', mcpServers: { autre: { command: 'x', args: [] } } });
     const r = JSON.parse(M.fusionnerConfig(avant, entree).texte);
     expect(r.theme).toBe('dark');
     expect(r.mcpServers.autre).toEqual({ command: 'x', args: [] });
-    expect(r.mcpServers.tontonkad).toEqual(entree);
+    expect(r.mcpServers.nodial).toEqual(entree);
   });
   test('déjà à jour, ou à mettre à jour après déplacement de l\'app', () => {
     const t = M.fusionnerConfig(null, entree).texte;
@@ -45,7 +45,7 @@ describe('branchement du serveur MCP intégré dans Claude', () => {
     expect(r.numStartups).toBe(12);
     expect(r.projects).toEqual({ 'C:/p': { mcpServers: {} } });
     expect(r.mcpServers.autre.command).toBe('y');
-    expect(r.mcpServers.tontonkad.type).toBe('stdio');
+    expect(r.mcpServers.nodial.type).toBe('stdio');
   });
   test('Claude Code : les anciennes inscriptions par dossier (qui masquent) sont retirées', () => {
     const avant = JSON.stringify({ projects: { 'C:/Users/x': { mcpServers: { tontonkad: { command: 'vieux' }, autre: { command: 'z' } } } } });
@@ -58,6 +58,16 @@ describe('branchement du serveur MCP intégré dans Claude', () => {
   });
   test('commande Claude Code équivalente', () => {
     const c = M.commandeClaudeCode(entree, 'win32');
-    expect(c).toMatch(/^claude mcp add tontonkad --scope user -e ELECTRON_RUN_AS_NODE="1" -e TONTONKAD_DATA=".+" -- "C:\\Program Files\\TONTONKAD\\TONTONKAD\.exe" ".+server\.js"$/);
+    expect(c).toMatch(/^claude mcp add nodial --scope user -e ELECTRON_RUN_AS_NODE="1" -e TONTONKAD_DATA=".+" -- "C:\\Program Files\\TONTONKAD\\TONTONKAD\.exe" ".+server\.js"$/);
+  });
+});
+
+describe('renommage tontonkad → nodial', () => {
+  test('l\'ancienne inscription « tontonkad » est retirée au branchement', () => {
+    const avant = JSON.stringify({ mcpServers: { tontonkad: { command: 'vieux' }, autre: { command: 'z' } } });
+    expect(M.etatBranchement(avant, entree)).toBe('a_mettre_a_jour');
+    const r = JSON.parse(M.fusionnerConfig(avant, entree).texte);
+    expect(Object.keys(r.mcpServers).sort()).toEqual(['autre', 'nodial']);
+    expect(M.etatBranchement(JSON.stringify(r), entree)).toBe('branche');
   });
 });

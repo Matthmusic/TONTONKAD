@@ -1889,7 +1889,7 @@
 
     const circles = (layout.placements || []).map(p => {
       const r = radiusById.get(p.id) || 10;
-      return `<circle cx="${toX(p.x)}" cy="${toY(p.y)}" r="${toR(r)}" fill="var(--accent-primary,#ff914d)" fill-opacity="0.7" stroke="var(--accent-primary,#e07030)" stroke-width="0.8"/>`;
+      return `<circle cx="${toX(p.x)}" cy="${toY(p.y)}" r="${toR(r)}" fill="var(--accent-primary,#FF6505)" fill-opacity="0.7" stroke="var(--accent-primary,#e07030)" stroke-width="0.8"/>`;
     }).join('');
 
     return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
@@ -3580,11 +3580,11 @@
     // Afficher les cellules de grille si disponibles (après placement automatique)
     if (lastGridCells && lastGridCells.length > 0) {
       ctx.fillStyle = theme === 'dark'
-        ? 'rgba(255, 145, 77, 0.08)'
-        : 'rgba(255, 145, 77, 0.05)';
+        ? 'rgba(255, 101, 5, 0.08)'
+        : 'rgba(255, 101, 5, 0.05)';
       ctx.strokeStyle = theme === 'dark'
-        ? 'rgba(255, 145, 77, 0.25)'
-        : 'rgba(255, 145, 77, 0.2)';
+        ? 'rgba(255, 101, 5, 0.25)'
+        : 'rgba(255, 101, 5, 0.2)';
       ctx.lineWidth = 1;
 
       lastGridCells.forEach(cell => {
@@ -4183,7 +4183,7 @@
 
     // Couleur : dorée pour OSNAP, orange pour snap-grille
     const isOsnap = osnapType === 'center' || osnapType === 'quadrant';
-    const baseRgb = isOsnap ? '255, 200, 0' : (theme === 'dark' ? '255, 145, 77' : '255, 120, 50');
+    const baseRgb = isOsnap ? '255, 200, 0' : (theme === 'dark' ? '255, 101, 5' : '255, 120, 50');
 
     ctx.save();
 
@@ -4741,7 +4741,7 @@
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
-    const fileName = `tontonkad_autocad_${wM}x${hM}m_${date}_${time}.dxf`;
+    const fileName = `nodial_autocad_${wM}x${hM}m_${date}_${time}.dxf`;
 
     // Mode Electron : utiliser l'API exportFile avec dialogue de sauvegarde
     if (window.electronAPI && window.electronAPI.exportFile) {
@@ -4784,7 +4784,7 @@
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     const time = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
-    const fileName = `tontonkad_zwcad_${wM}x${hM}m_${date}_${time}.dxf`;
+    const fileName = `nodial_zwcad_${wM}x${hM}m_${date}_${time}.dxf`;
 
     // Mode Electron : utiliser l'API exportFile avec dialogue de sauvegarde
     if (window.electronAPI && window.electronAPI.exportFile) {
@@ -6667,8 +6667,8 @@
     const gap = Math.max(bandH * 0.2, 6);
     const topY = -gap - bandH;
     ctx.save();
-    ctx.strokeStyle = '#ff914d';
-    ctx.fillStyle = 'rgba(255,145,77,0.18)';
+    ctx.strokeStyle = '#FF6505';
+    ctx.fillStyle = 'rgba(255,101,5,0.18)';
     ctx.lineWidth = getScaledLineWidth(1.5);
     for (let i = 0; i < sel.N; i++) {
       ctx.beginPath();
@@ -6676,7 +6676,7 @@
       ctx.fill();
       ctx.stroke();
     }
-    ctx.fillStyle = '#ff914d';
+    ctx.fillStyle = '#FF6505';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `${getScaledLineWidth(12)}px 'JetBrains Mono', monospace`;
@@ -6713,12 +6713,12 @@
     } else {
       ctx.rect(cx - bw / 2, cy - bh / 2, bw, bh);
     }
-    ctx.fillStyle = 'rgba(255,145,77,0.15)';
-    ctx.strokeStyle = '#ff914d';
+    ctx.fillStyle = 'rgba(255,101,5,0.15)';
+    ctx.strokeStyle = '#FF6505';
     ctx.lineWidth = getScaledLineWidth(1.2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#ff914d';
+    ctx.fillStyle = '#FF6505';
     ctx.fillText(text, cx, cy);
     ctx.restore();
   }
@@ -7283,6 +7283,8 @@
     const feuille = document.querySelector('#pdfExportModal .pdf-a4-sheet'), resume = document.getElementById('pdfReseauResume');
     if (feuille) feuille.hidden = actif;
     if (resume) resume.hidden = !actif;
+    const simple = document.getElementById('pdfOptionsSimple'); if (simple) simple.hidden = actif; // l'export réseau a ses propres parties
+    editeurCartouche();
     if (!actif) { const go = document.getElementById('confirmPdfExport'); if (go) go.disabled = false; return; }
     // Aperçu réseau : liste des fichiers qui seront produits (selon les cases)
     const listeFichiers = () => {
@@ -7294,8 +7296,10 @@
       const fmtC = ((document.getElementById('pdfFormatCoupes') || {}).value || 'a3').toUpperCase();
       const items = [
         coche('pdfGrpSyn') && `Synoptique — ${resumeDecoupage(dS)} + métré et continuité`,
-        coche('pdfGrpChambres') && nCh && `Chambres — ${nCh} page${nCh > 1 ? 's' : ''} A3`,
-        coche('pdfGrpCoupes') && nCo && `Coupes — ${nCo} tronçon${nCo > 1 ? 's' : ''} en ${fmtC}`,
+        ...(coche('pdfGrpChambres') && coche('pdfGrpCoupes') && nCh
+          ? [`Chambres et coupes — chaque chambre (A3) suivie des coupes de ses côtés .1 à .4${nCo ? ` (${fmtC})` : ''}`]
+          : [coche('pdfGrpChambres') && nCh && `Chambres — ${nCh} page${nCh > 1 ? 's' : ''} A3`,
+            coche('pdfGrpCoupes') && nCo && `Coupes — ${nCo} tronçon${nCo > 1 ? 's' : ''} en ${fmtC}`]),
         coche('pdfGrpTableaux') && 'Tableaux fourreaux et câbles — A4 paysage',
       ].filter(Boolean);
       ol.innerHTML = '';
@@ -7310,7 +7314,7 @@
     const D = decoupageSyn(synoptiqueAncre(1.414), 'auto');
     const txt = resumeDecoupage(D);
     const opt = document.querySelector('#pdfFormatSyn option[value="auto"]');
-    if (opt) opt.textContent = `Automatique (conseillé : ${txt})`;
+    if (opt) opt.textContent = `Automatique (${D.fmt.toUpperCase()})`; // le détail est sous la liste
     const sel = document.getElementById('pdfFormatSyn'), conseil = document.getElementById('pdfFormatConseil');
     const maj = () => {
       if (!conseil || !sel) return;
@@ -7322,6 +7326,117 @@
     const mep = document.getElementById('pdfMiseEnPageSyn');
     if (mep && !mep._ttk) { mep._ttk = true; mep.addEventListener('change', () => { majOptionsPdfReseau(); dessinerSynoptique(false); }); }
     maj();
+  }
+  // ── Fenêtre d'export PDF : informations du projet, cartouche, aperçu ──────
+  // Cartouche et informations : avec le réseau (enregistrés avec le projet) ;
+  // sans réseau, gardés pour la session (et le défaut mémorisé du poste).
+  let cartoucheHorsReseau = null, infosPdfHorsReseau = null;
+  function cartoucheCourant() {
+    if (reseau) return reseau.cartouche || (reseau.cartouche = cartoucheProjet());
+    return cartoucheHorsReseau || (cartoucheHorsReseau = cartoucheProjet());
+  }
+  const CHAMPS_INFOS_PDF = { pdfProjectName: 'projet', pdfClient: 'client', pdfAuthor: 'auteur', pdfPhase: 'phase', pdfIndice: 'indice', pdfNumPlan: 'plan', pdfViewName: 'vue', pdfDescription: 'description', pdfTeinte3D: 'teinte3D' };
+  // Couleur des fourreaux dans les vues 3D du PDF (rouge par défaut, vert en option)
+  function teinteFourreaux3D() { const el = document.getElementById('pdfTeinte3D'); return el && el.value === 'vert' ? 'vert' : 'rouge'; }
+  function infosPdf() {
+    const o = {}; Object.entries(CHAMPS_INFOS_PDF).forEach(([id, k]) => { const el = document.getElementById(id); if (el) o[k] = el.value.trim(); });
+    return o;
+  }
+  function restaurerInfosPdf() {
+    let src = (reseau && reseau.pdfInfos) || infosPdfHorsReseau;
+    if (!src) { try { src = JSON.parse(localStorage.getItem('nodial-pdf-infos') || 'null'); } catch (e) { src = null; } }
+    if (!src) return;
+    Object.entries(CHAMPS_INFOS_PDF).forEach(([id, k]) => { const el = document.getElementById(id); if (el && src[k] != null && (!el.value || el.tagName === 'SELECT')) el.value = src[k]; });
+    const cpt = document.getElementById('pdfDescriptionCounter'), d = document.getElementById('pdfDescription'); if (cpt && d) cpt.textContent = d.value.length;
+  }
+  function memoriserInfosPdf() {
+    const o = infosPdf();
+    if (reseau) reseau.pdfInfos = o; else infosPdfHorsReseau = o;
+    try { localStorage.setItem('nodial-pdf-infos', JSON.stringify({ ...o, description: '' })); } catch (e) { /* stockage plein : sans gravité */ }
+  }
+  // Aperçu du cartouche, dessiné par le même code que le PDF (+ logos).
+  function apercuCartouche() {
+    const cv = document.getElementById('pdfCartoucheApercu'); if (!cv || !window.Vue3D) return;
+    const V = window.Vue3D, W = 300, H = 220, dpr = window.devicePixelRatio || 1, ctx = cv.getContext('2d');
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+    const infos = infosPdf(), et = reseau ? etudesChambresReseau()[0] : null, e = et ? et.etude : { ok: false, nom: 'C1' };
+    const p = new V.Page({ emitText: false, ombre: false }), z = { x: 6, y: 6, w: W - 12, h: H - 12 };
+    const opts = { projet: infos.projet || 'Nom du projet', client: infos.client, auteur: infos.auteur, phase: infos.phase, indice: infos.indice || 'A', plan: infos.plan, date: new Date().toLocaleDateString('fr-FR') };
+    V.dessinerCartouche(p, z, cartoucheCourant(), V.valeursCartouche(e, opts));
+    V.rejouerSurCanvas(ctx, p, H);
+    (p.images || []).forEach((im) => { const img = new Image(); img.onload = () => ctx.drawImage(img, im.x, H - im.y - im.h, im.w, im.h); img.src = im.src; });
+  }
+  function editeurCartouche() {
+    const box = document.getElementById('pdfCartouche'); if (!box) return;
+    const c = cartoucheCourant();
+    const corps = document.getElementById('pdfCartoucheChamps');
+    const rendreChamps = () => {
+      corps.textContent = '';
+      c.champs.forEach((ch, i) => {
+        const tr = document.createElement('tr');
+        const lib = document.createElement('input'); lib.type = 'text'; lib.value = ch.libelle; lib.setAttribute('aria-label', `Libellé du champ ${i + 1}`);
+        lib.addEventListener('input', () => { ch.libelle = lib.value; apercuCartouche(); });
+        const val = document.createElement('input'); val.type = 'text'; val.value = ch.valeur; val.setAttribute('aria-label', `Valeur du champ ${ch.libelle || i + 1}`);
+        val.addEventListener('input', () => { ch.valeur = val.value; apercuCartouche(); });
+        const lg = document.createElement('input'); lg.type = 'checkbox'; lg.checked = !!ch.large; lg.setAttribute('aria-label', `${ch.libelle} sur toute la largeur`);
+        lg.addEventListener('change', () => { ch.large = lg.checked; apercuCartouche(); });
+        const act = document.createElement('td');
+        [['↑', 'Monter', -1], ['↓', 'Descendre', 1]].forEach(([t, l, d]) => { const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'pdf-mini-btn'; b2.textContent = t; b2.setAttribute('aria-label', `${l} « ${ch.libelle} »`); b2.disabled = !c.champs[i + d];
+          b2.addEventListener('click', () => { [c.champs[i], c.champs[i + d]] = [c.champs[i + d], c.champs[i]]; rendreChamps(); apercuCartouche(); }); act.appendChild(b2); });
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'pdf-mini-btn'; del.textContent = '×'; del.setAttribute('aria-label', `Supprimer « ${ch.libelle} »`);
+        del.addEventListener('click', () => { c.champs.splice(i, 1); rendreChamps(); apercuCartouche(); }); act.appendChild(del);
+        [lib, val, lg].forEach((x) => { const td = document.createElement('td'); td.appendChild(x); tr.appendChild(td); });
+        tr.appendChild(act); corps.appendChild(tr);
+      });
+    };
+    const rendreLogos = () => box.querySelectorAll('.pdf-logo').forEach((z) => {
+      const lg = cartoucheCourant()[z.dataset.logo], ap = z.querySelector('.pdf-logo-apercu');
+      ap.classList.toggle('plein', !!(lg && lg.src)); ap.style.backgroundImage = lg && lg.src ? `url("${lg.src}")` : '';
+      z.querySelector('[data-retirer]').disabled = !(lg && lg.src);
+    });
+    const chargerLogo = (k, fichier) => {
+      if (!fichier || !/^image\/(png|jpe?g)$/i.test(fichier.type)) { showToast('Choisissez une image PNG ou JPEG', 'error'); return; }
+      const lecteur = new FileReader();
+      lecteur.onload = () => { // réduit à 400 px au plus (taille du PDF et du projet)
+        const img = new Image();
+        img.onload = () => {
+          const k2 = Math.min(1, 400 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+          cv.width = Math.max(1, Math.round(img.width * k2)); cv.height = Math.max(1, Math.round(img.height * k2));
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          cartoucheCourant()[k] = { src: cv.toDataURL('image/png'), format: 'PNG' }; rendreLogos(); apercuCartouche();
+        };
+        img.src = lecteur.result;
+      };
+      lecteur.readAsDataURL(fichier);
+    };
+    if (!box._ttk) {
+      box._ttk = true;
+      box.querySelectorAll('.pdf-logo').forEach((z) => {
+        const k = z.dataset.logo, zone = z.querySelector('.pdf-logo-zone');
+        z.querySelector('input[type=file]').addEventListener('change', (ev) => { chargerLogo(k, ev.target.files && ev.target.files[0]); ev.target.value = ''; });
+        ['dragenter', 'dragover'].forEach((t) => zone.addEventListener(t, (ev) => { ev.preventDefault(); zone.classList.add('survol'); }));
+        ['dragleave', 'drop'].forEach((t) => zone.addEventListener(t, () => zone.classList.remove('survol')));
+        zone.addEventListener('drop', (ev) => { ev.preventDefault(); chargerLogo(k, ev.dataTransfer.files && ev.dataTransfer.files[0]); });
+        z.querySelector('[data-retirer]').addEventListener('click', () => { cartoucheCourant()[k] = null; rendreLogos(); apercuCartouche(); });
+      });
+      document.getElementById('pdfCartoucheAjout').addEventListener('click', () => { cartoucheCourant().champs.push({ libelle: 'Nouveau champ', valeur: '' }); editeurCartouche(); });
+      document.getElementById('pdfCartoucheRaz').addEventListener('click', () => { cartoucheCourant().champs = window.Vue3D.CARTOUCHE_DEFAUT.map((x) => ({ ...x })); editeurCartouche(); });
+      document.getElementById('pdfCartoucheDefaut').addEventListener('click', () => {
+        try { localStorage.setItem('ttk-cartouche-defaut', JSON.stringify(cartoucheCourant())); showToast('Cartouche mémorisé : il servira pour les nouveaux projets de ce poste', 'success'); }
+        catch (e) { showToast('Impossible de mémoriser le cartouche (logos trop lourds ?)', 'error'); }
+      });
+      // informations du projet : mémorisées et reportées dans l'aperçu à la frappe
+      Object.keys(CHAMPS_INFOS_PDF).forEach((id) => document.getElementById(id)?.addEventListener('input', () => { memoriserInfosPdf(); apercuCartouche(); }));
+      // onglets (clic, flèches gauche/droite)
+      const tabs = [...document.querySelectorAll('#pdfExportModal .pdf-onglet')];
+      const choisir = (t) => { tabs.forEach((x) => { const on = x === t; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; document.getElementById(x.getAttribute('aria-controls')).hidden = !on; }); t.focus(); };
+      tabs.forEach((t, i) => {
+        t.addEventListener('click', () => choisir(t));
+        t.addEventListener('keydown', (ev) => { const d = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0; if (d) { ev.preventDefault(); choisir(tabs[(i + d + tabs.length) % tabs.length]); } });
+      });
+    }
+    rendreChamps(); rendreLogos(); apercuCartouche();
   }
   // Découpage du synoptique tel que l'export le fera (mise en page + format
   // choisis dans la fenêtre PDF) : sert aux pointillés de l'app et au conseil.
@@ -7344,6 +7459,7 @@
     }
 
     const modalContent = modal.querySelector('.pdf-export-modal-enhanced');
+    restaurerInfosPdf();
     majOptionsPdfReseau();
 
     // Pré-remplir les valeurs
@@ -7680,10 +7796,12 @@
   // à la main), mêmes tailles d'éléments ; seule la projection change.
   function donneesSynoptique(rapide = false) {
     const d2 = synoptiqueAncre(1.414, rapide), parId = new Map(reseau.noeuds.map((n, i) => [n.id, d2.noeuds[i]]));
-    const noeuds = d2.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, w: n.w, h: n.h, sous: n.sous }));
+    // chambres : dimensions intérieures réelles (L le long des côtés 1/3, l le long des 2/4)
+    const dimsReelles = (nd) => { if (!nd || nd.type !== 'chambre') return null; const e = etudeChambre(nd); return e && e.etude && e.etude.ok ? { L: e.etude.L, l: e.etude.l, H: e.etude.H } : null; };
+    const noeuds = d2.noeuds.map((n, i) => ({ nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y, w: n.w, h: n.h, sous: n.sous, dims: dimsReelles(reseau.noeuds[i]) }));
     const troncons = reseau.troncons.map((t) => {
       const A = R().noeud(reseau, t.a.noeud), B = R().noeud(reseau, t.b.noeud), pa = parId.get(A.id), pb = parId.get(B.id);
-      return { a: { x: pa.x, y: pa.y, w: pa.w, h: pa.h, face: t.a.face, type: A.type }, b: { x: pb.x, y: pb.y, w: pb.w, h: pb.h, face: t.b.face, type: B.type }, label: etiquetteIso(t) };
+      return { a: { x: pa.x, y: pa.y, w: pa.w, h: pa.h, face: t.a.face, type: A.type }, b: { x: pb.x, y: pb.y, w: pb.w, h: pb.h, face: t.b.face, type: B.type }, label: etiquetteIso(t), nf: (etatTroncon(t) || { fourreaux: [] }).fourreaux.length };
     });
     return { noeuds, troncons };
   }
@@ -7706,12 +7824,14 @@
   // masque, dans l'ordre de leurs destinations le long du côté, séparées de
   // l'écart entre fourreaux. Chaque coupe est d'abord ramenée au sens « départ ».
   function accolerMasques(face, parts) {
-    const V = window.Vue3D, pignon = face.startsWith('pignon');
-    // position de la destination le long du côté (repère chambre, y vers le haut)
-    const cle = (m) => (m._vers ? (pignon ? -m._vers.y : m._vers.x) : 0);
-    const tri = [...parts].sort((a, b) => cle(a) - cle(b));
-    const miroirDepart = V.coupeEnMiroir(face, 'depart');
-    const ordre = miroirDepart ? tri.reverse() : tri; // ordre le long de x de la coupe
+    const V = window.Vue3D;
+    // Le masque accolé est au sens « départ » : x vers la droite de qui, dans la
+    // chambre, regarde la paroi. Les coupes sont rangées de gauche à droite selon la
+    // position de leur destination le long de cet axe. NORMALE_FACE : y vers le
+    // haut ; _vers est un élément du synoptique (y vers le bas) → -y.
+    const nf = V.NORMALE_FACE[face] || [1, 0], droite = [nf[1], -nf[0]];
+    const cle = (m) => (m._vers ? m._vers.x * droite[0] - m._vers.y * droite[1] : 0);
+    const ordre = [...parts].sort((a, b) => cle(a) - cle(b)); // ordre le long de x de la coupe
     const ecart = Math.max(FOURREAU_GAP || 0, 30);
     let x0 = 0, n = 0;
     const fourreaux = [], cables = [], noms = [], liaisons = [];
@@ -7805,6 +7925,7 @@
   /* ── Vues et bandeau de navigation ── */
   function afficherVue(vue, noeudId) {
     if (!reseau) return;
+    synoptiqueAncre(1.414); // côtés alignés sur le synoptique avant toute vue (chambre comprise)
     if (noeudId) reseau.actif.noeud = noeudId;
     reseau.actif.vue = vue;
     if (vue !== 'coupe' && typeof closeRightToolsPane === 'function') closeRightToolsPane(); // place pour le dessin
@@ -7856,7 +7977,7 @@
   function themeCanvas() {
     const cs = getComputedStyle(document.documentElement), v = (n, d) => (cs.getPropertyValue(n).trim() || d);
     return { fond: v('--modal-bg-solid', '#f8f9fa'), encre: v('--text-primary', '#1a1d1f'), ardoise: v('--text-secondary', '#4a5568'),
-      estompe: v('--text-muted', '#718096'), hairline: v('--glass-border', 'rgba(45,52,54,0.1)'), cuivre: v('--primary-orange', '#ff914d'),
+      estompe: v('--text-muted', '#718096'), hairline: v('--glass-border', 'rgba(45,52,54,0.1)'), cuivre: v('--primary-orange', '#FF6505'),
       surface: v('--bg-card', '#ffffff'), sans: "'IBM Plex Sans', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" };
   }
   // Flèche dessinée (pas de glyphe) : pointe vers dir ∈ left|right|up|down.
@@ -8045,7 +8166,7 @@
     });
     cv.addEventListener('mousemove', (ev) => {
       const p = pos(ev);
-      if (SYN.pan) { SYN.zoom.px = SYN.pan.px + (ev.clientX - SYN.pan.x); SYN.zoom.py = SYN.pan.py - (ev.clientY - SYN.pan.y); planifierSyn(); return; }
+      if (SYN.pan) { const e = echelleSyn(); SYN.zoom.px = SYN.pan.px + (ev.clientX - SYN.pan.x) / e; SYN.zoom.py = SYN.pan.py - (ev.clientY - SYN.pan.y) / e; planifierSyn(); return; }
       if (SYN.glisse) {
         const g = SYN.glisse, k = (SYN.vue && SYN.vue.k) || 1, mx = ev.clientX - g.x, my = ev.clientY - g.y;
         if (!g.bouge && Math.hypot(mx, my) < 4) return;
@@ -8094,7 +8215,7 @@
       const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 }), r = cv.getBoundingClientRect();
       const f = Math.exp(-ev.deltaY * 0.0015), k2 = Math.max(1, Math.min(12, z.k * f)), g = k2 / z.k;
       // zoom autour du curseur
-      const cx = ev.clientX - r.left - r.width / 2, cy = ev.clientY - r.top - r.height / 2;
+      const e = echelleSyn(), cx = (ev.clientX - r.left - r.width / 2) / e, cy = (ev.clientY - r.top - r.height / 2) / e;
       const cyp = -cy; // décalage vertical compté vers le haut (repère du dessin)
       z.px = cx - (cx - z.px) * g; z.py = cyp - (cyp - z.py) * g; z.k = k2;
       if (k2 === 1) { z.px = 0; z.py = 0; }
@@ -8116,10 +8237,12 @@
     return o;
   }
 
+  const TAU_ISO = 1.4; // agrandissement écran de la vue isométrique (texte lisible)
+  const echelleSyn = () => (SYN.mode === 'iso' ? TAU_ISO : 1); // px écran par unité de page
   function dessinerSynoptique(panneau = true, rapide = false) {
     const o = document.getElementById('reseauOverlay');
     if (!o || o.hidden || !reseau) return;
-    const cv = o.querySelector('#reseauCanvas'), zone = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const cv = o.querySelector('#reseauCanvas'); let zone = cv.parentElement.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
     cv.width = Math.max(1, Math.floor(zone.width * dpr)); cv.height = Math.max(1, Math.floor(zone.height * dpr));
     cv.style.width = `${zone.width}px`; cv.style.height = `${zone.height}px`;
     const ctx = cv.getContext('2d');
@@ -8127,9 +8250,32 @@
     const th = themeCanvas();
     if (SYN.mode === 'iso') {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, zone.width, zone.height); // feuille, même rendu que le PDF
-      const page = new window.Vue3D.Page({ emitText: false, ombre: false });
-      const z = SYN.zoom || (SYN.zoom = { k: 1, px: 0, py: 0 }), zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
-      window.Vue3D.drawSynoptiqueIso(page, donneesSynoptique(rapide), (zone.width - zw) / 2 + z.px, (zone.height - zh) / 2 + z.py, zw, zh, { echelleMax: Infinity });
+      // Écran : étiquettes en points comme le PDF, donc trop petites ; page dessinée
+      // τ fois plus petite puis agrandie de τ (texte et volumes ensemble).
+      const TAU = TAU_ISO, zoneEcran = zone;
+      zone = { width: zoneEcran.width / TAU, height: zoneEcran.height / TAU };
+      ctx.setTransform(dpr * TAU, 0, 0, dpr * TAU, 0, 0);
+      const page = new window.Vue3D.Page({ emitText: false, ombre: false }), dataIso = donneesSynoptique(rapide);
+      const dessinerIso = (pg, z) => {
+        const zw = (zone.width - 40) * z.k, zh = (zone.height - 40) * z.k;
+        return window.Vue3D.drawSynoptiqueIso(pg, dataIso, (zone.width - zw) / 2 + z.px, (zone.height - zh) / 2 + z.py, zw, zh, { echelleMax: Infinity });
+      };
+      if (!SYN.zoom) { // cadrage initial lisible : éléments voisins espacés d'~120 px, début du réseau à gauche
+        const brouillon = (z) => (dessinerIso(new window.Vue3D.Page({ emitText: false, ombre: false }), z) || {}).noeuds || [];
+        const p1 = brouillon({ k: 1, px: 0, py: 0 }), ici = new Map(dataIso.noeuds.map((n, i) => [`${n.x},${n.y}`, p1[i]]));
+        const lg = dataIso.troncons.map((t) => { const a = ici.get(`${t.a.x},${t.a.y}`), b = ici.get(`${t.b.x},${t.b.y}`); return a && b ? Math.hypot(a[0] - b[0], a[1] - b[1]) : 0; }).filter((v) => v > 0).sort((a, b) => a - b);
+        const k = lg.length ? Math.max(1, Math.min(8, 150 / lg[Math.floor(lg.length * 0.75)])) : 1; // tronçons principaux (les postes collés à leur chambre ne comptent pas)
+        SYN.zoom = { k, px: 0, py: 0 };
+        if (k > 1) {
+          const pos = brouillon(SYN.zoom);
+          if (pos.length) {
+            const x0 = Math.min(...pos.map((q) => q[0])), vis = pos.filter((q) => q[0] <= x0 + zone.width * 0.75).map((q) => q[1]).sort((a, b) => a - b);
+            SYN.zoom.px = zone.width * 0.2 - x0;
+            SYN.zoom.py = zone.height / 2 - vis[vis.length >> 1];
+          }
+        }
+      }
+      dessinerIso(page, SYN.zoom);
       window.Vue3D.rejouerSurCanvas(ctx, page, zone.height);
       if (panneau) remplirEdition();
       return;
@@ -8233,7 +8379,25 @@
     const V = window.Vue3D, ratio = null;
     if (!rapide || !synBase || synBase.ratio !== ratio) {
       const contenus = new Map(reseau.troncons.map((t) => [t.id, contenuTroncon(t)]));
-      const dis = R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
+      const disposer = () => R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
+      let dis = disposer();
+      // nord = côté 1 partout : les côtés des chambres suivent le synoptique TEL QU'IL EST
+      // AFFICHÉ, déplacements à la main compris (un poste glissé de dessous à dessus de
+      // sa chambre passe du côté 3 au côté 1) ; l'étude des chambres et l'isométrique en découlent
+      const ou = (d) => Object.fromEntries(reseau.noeuds.map((n) => { const q = d.noeuds[n.id] || { x: n.x || 0, y: n.y || 0 }, k = n.decal || {}; return [n.id, { x: q.x + (k.dx || 0), y: q.y + (k.dy || 0) }]; }));
+      const affiche = ou(dis);
+      const realignes = R().alignerFaces(reseau, { noeuds: affiche });
+      if (realignes) {
+        // la disposition automatique dépend des côtés : on la refait, puis chaque élément
+        // garde la place où il est affiché (son décalage est recalculé), rien ne saute
+        dis = disposer();
+        reseau.noeuds.forEach((n) => {
+          const q = dis.noeuds[n.id]; if (!q) return;
+          const dx = Math.round(affiche[n.id].x - q.x), dy = Math.round(affiche[n.id].y - q.y);
+          if (dx || dy) n.decal = { dx, dy }; else delete n.decal;
+        });
+        if (typeof showToast === 'function') showToast(`${realignes} côté${realignes > 1 ? 's' : ''} de chambre réaligné${realignes > 1 ? 's' : ''} sur le synoptique (côté 1 au nord) : vérifiez les chambres`, 'info', 6000);
+      }
       synBase = { ratio, dis, contenus, sous: new Map(reseau.noeuds.map((n) => [n.id, sousNoeud(n)])) };
     }
     const { dis, contenus, sous } = synBase;
@@ -8736,6 +8900,7 @@
 
   window.reseauTontonkad = {
     activer: activerReseau, vue: afficherVue, ouvrirTroncon, etat: () => reseau, etudeChambre: (id) => etudeChambre(R().noeud(reseau, id)),
+    donneesIso: () => donneesSynoptique(), // atelier : rendus de variantes de l'isométrique
     faceAt: (x, y) => faceSousPoint(x, y), fleches: () => vueChambreFleches, cadrage: () => ({ ...SYN.vue }),
     selectionner: (sel) => { SYN.sel = sel; dessinerSynoptique(false); remplirEdition(); },
   };
@@ -8811,12 +8976,12 @@
       ids.set(f.id, id);
       const noms = [...new Set((st.cables || []).filter(c => c.parent === f.id && c.liaison).map(c => c.liaison))];
       return { id, type: f.type || '', code: String(f.code || ''), od: f.od, di: f.idm > 0 ? f.idm : f.od * 0.8,
-        x: f.x / MM_TO_PX, y: H - f.y / MM_TO_PX, libelle: f.label || '',
+        x: f.x / MM_TO_PX, y: H - f.y / MM_TO_PX, libelle: f.label || '', couleur: f.customColor || f.color || null,
         liaisons: noms.length ? noms : (f.label ? [f.label] : []) };
     });
     const cb = (st.cables || []).filter(c => ids.has(c.parent) && c.od > 0).map(c => ({
       fourreau: ids.get(c.parent), od: c.od, x: c.x / MM_TO_PX, y: H - c.y / MM_TO_PX, phase: getCablePhaseLabel(c) || null,
-      code: c.code || '', fam: c.fam || '', liaison: c.liaison || '',
+      code: c.code || '', fam: c.fam || '', liaison: c.liaison || '', couleur: c.customColor || c.color || null,
     }));
     let chambre = null;
     if (avecChambre && !isCirc && window.ChambresInfos && window.CompatChambres) {
@@ -8853,6 +9018,13 @@
       } else pdf.text(txt, l.x * k, (HP - l.y) * k, { align: l.align });
     }
     pdf.setTextColor(0, 0, 0);
+    // images (logos du cartouche) : coin bas-gauche en points, repère PDF
+    (page.images || []).forEach((im) => {
+      try {
+        const fmt = im.format || (/^data:image\/jpe?g/i.test(String(im.src)) ? 'JPEG' : 'PNG');
+        pdf.addImage(im.src, fmt, im.x * echelle * k, (HP - (im.y + im.h) * echelle) * k, im.w * echelle * k, im.h * echelle * k);
+      } catch (e) { console.warn('[PDF] logo illisible', e); }
+    });
   }
 
 
@@ -9004,7 +9176,7 @@
     p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
     V.drawCoupe(p, m, MARGE + 60, zoneY, 290, zoneH - 10);
     p.text(440, zoneY + zoneH + 10, 9, 'Vue 3D (tronçon de 1,5 m)', { bold: true });
-    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500);
+    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500, { teinte: teinteFourreaux3D() });
     let y = 140;
     p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
     p.text(MARGE, y, 9, 'Fourreaux', { bold: true }); y -= 13;
@@ -9047,9 +9219,31 @@
     });
     return pages;
   }
+  // Cartouche des pages chambre : propre au projet (enregistré avec lui), sinon
+  // le cartouche par défaut mémorisé sur le poste, sinon celui de nodial.
+  function cartoucheDefautPoste() {
+    try { const c = JSON.parse(localStorage.getItem('ttk-cartouche-defaut') || 'null'); return c && Array.isArray(c.champs) ? c : null; } catch (e) { return null; }
+  }
+  function cartoucheProjet() {
+    const c = (reseau && reseau.cartouche) || cartoucheHorsReseau || cartoucheDefautPoste() || {};
+    return { champs: c.champs && c.champs.length ? c.champs : window.Vue3D.CARTOUCHE_DEFAUT.map((x) => ({ ...x })), logoMOA: c.logoMOA || null, logoMOE: c.logoMOE || null };
+  }
+  // « Réalisé avec nodial » + icône, discret, en pied à droite de chaque page.
+  function piedNodial(pdf) {
+    const V = window.Vue3D, n = pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= n; i++) {
+      pdf.setPage(i);
+      const w = pdf.internal.pageSize.getWidth(), h = pdf.internal.pageSize.getHeight(), c = 3.2;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(140, 146, 156);
+      pdf.text(V.MENTION_NODIAL, w - 6, h - 3.6, { align: 'right' });
+      try { pdf.addImage(V.ICONE_NODIAL_PNG, 'PNG', w - 6 - pdf.getTextWidth(V.MENTION_NODIAL) - c - 1.2, h - 3.6 - c + 0.6, c, c); } catch (e) { /* icône facultative */ }
+    }
+    pdf.setTextColor(0, 0, 0);
+  }
   async function exporterDossierReseau(formData, JsPDF) {
     const V = window.Vue3D, base = `${(formData.projectName || 'projet').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}`;
     const groupes = formData.groupes || {}, fichiers = [];
+    synoptiqueAncre(1.414); // côtés des chambres alignés sur le synoptique avant l'étude
     if (sauverCoupeActive) sauverCoupeActive(); // la coupe affichée rejoint son tronçon
     // 1. synoptique + métré et continuité
     if (groupes.synoptique !== false) {
@@ -9064,29 +9258,54 @@
       pagesMetreContinuite(formData.projectName).forEach((pg) => writeVue3DPage(pdf, pg));
       fichiers.push([pdf, `${base}_synoptique_${fmtSyn}.pdf`]);
     }
-    // 2. une page A3 par chambre
+    // 2-3. chambres et coupes. Les deux cochées : UN seul PDF, chaque chambre (page A3
+    // et pages de suite) suivie des coupes de ses côtés non vides, dans l'ordre .1 à .4 ;
+    // les tronçons qui ne touchent aucune chambre étudiée viennent à la fin.
     const etudes = etudesChambresReseau();
-    if (groupes.chambres !== false && etudes.length) {
-      const pdf = new JsPDF('landscape', 'mm', 'a3');
-      etudes.forEach((et, i) => {
-        const pc = new V.Page({ emitText: false, ombre: false });
-        V.dessinerPageChambreA3(pc, et.etude, et.masques, { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR') });
-        writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: i > 0 });
+    const fmtC = formData.formatCoupes || 'a3', echC = V.FORMATS_PAGE[fmtC][0] / V.PAGE_W;
+    const pageCoupe = (t, prefixe) => {
+      const st = etatTroncon(t); if (!st || !st.fourreaux.length) return null;
+      const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false); if (!m) return null;
+      const L = t.longueurM ? ` · ${String(t.longueurM).replace('.', ',')} m` : '';
+      return pageCoupeTroncon(m, `${prefixe || ''}Coupe ${R().nomTroncon(reseau, t)}${L}`);
+    };
+    const optsChambres = () => {
+      const synS = synoptiqueAncre(1.414), bandesS = V.decouperBandes(synS, 'a0');
+      const situation = { noeuds: synS.noeuds, troncons: synS.troncons, coupes: bandesS.coupes, ys: bandesS.ys };
+      return { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR'), situation, iso: donneesSynoptique(), cartouche: cartoucheCourant(),
+        client: formData.client, auteur: document.getElementById('pdfAuthor')?.value || '', phase: formData.phase, indice: formData.indice || 'A', plan: formData.plan };
+    };
+    const pagesDeChambre = (et, opts) => V.pagesChambreA3(et.etude, et.masques, opts, () => new V.Page({ emitText: false, ombre: false }));
+    if (groupes.chambres !== false && groupes.coupes !== false && etudes.length) {
+      const pdf = new JsPDF('landscape', 'mm', 'a3'), opts = optsChambres(), vus = new Set();
+      let premiere = true;
+      const ecrireA3 = (pc) => { writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: !premiere }); premiere = false; };
+      const ecrireCoupe = (pc) => { writeVue3DPage(pdf, pc, fmtC, V.FORMATS_PAGE[fmtC][1], { nouvelle: !premiere, echelle: echC }); premiere = false; };
+      const COTES = [[1, 'longPanB'], [2, 'pignonB'], [3, 'longPanA'], [4, 'pignonA']];
+      reseau.noeuds.filter((n) => n.type === 'chambre').forEach((nd) => {
+        const et = etudeChambre(nd); if (!et || !et.etude.ok) return;
+        pagesDeChambre(et, opts).forEach(ecrireA3);
+        COTES.forEach(([c, face]) => R().surFaceTous(reseau, nd.id, face).forEach((v) => {
+          const pc = pageCoupe(v.troncon, `${nd.nom}.${c} — `); if (!pc) return;
+          ecrireCoupe(pc); vus.add(v.troncon.id);
+        }));
       });
-      fichiers.push([pdf, `${base}_chambres_A3.pdf`]);
-    }
-    // 3. une page par tronçon : coupe + vue 3D, au format choisi (A3 par défaut)
-    if (groupes.coupes !== false) {
-      const fmt = formData.formatCoupes || 'a3', ech = V.FORMATS_PAGE[fmt][0] / V.PAGE_W;
-      const pdf = new JsPDF('landscape', 'mm', fmt); let n = 0;
-      reseau.troncons.forEach((t) => {
-        const st = etatTroncon(t); if (!st || !st.fourreaux.length) return;
-        const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false); if (!m) return;
-        const L = t.longueurM ? ` · ${String(t.longueurM).replace('.', ',')} m` : '';
-        writeVue3DPage(pdf, pageCoupeTroncon(m, `Coupe ${R().nomTroncon(reseau, t)}${L}`), fmt, V.FORMATS_PAGE[fmt][1], { nouvelle: n > 0, echelle: ech });
-        n += 1;
-      });
-      if (n) fichiers.push([pdf, `${base}_coupes_${fmt.toUpperCase()}.pdf`]);
+      reseau.troncons.filter((t) => !vus.has(t.id)).forEach((t) => { const pc = pageCoupe(t); if (pc) ecrireCoupe(pc); });
+      fichiers.push([pdf, `${base}_chambres_et_coupes.pdf`]);
+    } else {
+      // une seule des deux parties cochée : son PDF à part, comme avant
+      if (groupes.chambres !== false && etudes.length) {
+        const pdf = new JsPDF('landscape', 'mm', 'a3'), opts = optsChambres();
+        let premiere = true;
+        const ecrire = (pc) => { writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: !premiere }); premiere = false; };
+        etudes.forEach((et) => pagesDeChambre(et, opts).forEach(ecrire));
+        fichiers.push([pdf, `${base}_chambres_A3.pdf`]);
+      }
+      if (groupes.coupes !== false) {
+        const pdf = new JsPDF('landscape', 'mm', fmtC); let n = 0;
+        reseau.troncons.forEach((t) => { const pc = pageCoupe(t); if (!pc) return; writeVue3DPage(pdf, pc, fmtC, V.FORMATS_PAGE[fmtC][1], { nouvelle: n > 0, echelle: echC }); n += 1; });
+        if (n) fichiers.push([pdf, `${base}_coupes_${fmtC.toUpperCase()}.pdf`]);
+      }
     }
     // 4. tableaux de tous les tronçons
     if (groupes.tableaux !== false) {
@@ -9094,7 +9313,7 @@
       const gr = reseau.troncons.map((t) => { const st = etatTroncon(t); return st && st.fourreaux.length ? { nom: R().nomTroncon(reseau, t), fourreaux: st.fourreaux, cables: st.cables } : null; }).filter(Boolean);
       if (gr.length) { ajouterTableauxPdf(pdf, gr, true); fichiers.push([pdf, `${base}_tableaux.pdf`]); }
     }
-    for (const [pdf, nom] of fichiers) { pdf.save(nom); await new Promise((r) => setTimeout(r, 400)); }
+    for (const [pdf, nom] of fichiers) { piedNodial(pdf); pdf.save(nom); await new Promise((r) => setTimeout(r, 400)); }
     showToast(`Dossier PDF : ${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''} enregistré${fichiers.length > 1 ? 's' : ''}`, 'success', 6000);
     return fichiers.map((f) => f[1]);
   }
@@ -9114,7 +9333,7 @@
     p.text(MARGE, zoneY + zoneH + 10, 9, 'Coupe', { bold: true });
     V.drawCoupe(p, m, MARGE + 50, zoneY, 300, zoneH - 10);
     p.text(440, zoneY + zoneH + 10, 9, 'Vue 3D (tronçon de 1.5 m, perspective cavalière)', { bold: true });
-    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500);
+    V.draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, 1500, { teinte: teinteFourreaux3D() });
     let y = 140;
     p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
     p.text(MARGE, y, 9, 'Fourreaux', { bold: true }); y -= 13;
@@ -9157,13 +9376,16 @@
   async function exportToPDF() {
     // Pour compatibilité avec l'ancienne modal HTML
     const formData = {
-      projectName: document.getElementById('pdfProjectName')?.value || 'Projet TontonKAD',
+      projectName: document.getElementById('pdfProjectName')?.value || 'Projet nodial',
       viewName: document.getElementById('pdfViewName')?.value || 'Vue principale',
-      author: document.getElementById('pdfAuthor')?.value || 'TontonKAD',
+      author: document.getElementById('pdfAuthor')?.value || 'nodial',
       client: document.getElementById('pdfClient')?.value || '',
       description: document.getElementById('pdfDescription')?.value || '',
       includeStats: document.getElementById('pdfIncludeStats')?.checked || true,
       include3D: document.getElementById('pdfInclude3D')?.checked !== false,
+      phase: document.getElementById('pdfPhase')?.value || '',
+      indice: document.getElementById('pdfIndice')?.value || '',
+      plan: document.getElementById('pdfNumPlan')?.value || '',
       formatSyn: document.getElementById('pdfFormatSyn')?.value || 'auto',
       miseEnPageSyn: document.getElementById('pdfMiseEnPageSyn')?.value || 'bandes',
       formatCoupes: document.getElementById('pdfFormatCoupes')?.value || 'a3',
@@ -9239,6 +9461,8 @@
       }
 
       logPdf('jsPDFClass résolue');
+      // logo du maître d'ouvrage (cartouche) : aussi en en-tête de l'export simple
+      { const lm = cartoucheCourant().logoMOA; selectedImageBase64 = (lm && lm.src) || null; }
 
       // Réseau : dossier en plusieurs PDF (synoptique, chambres A3, coupes, tableaux), sans vue principale.
       if (reseau && reseau.noeuds && reseau.noeuds.length && reseau.troncons.length) {
@@ -9347,7 +9571,7 @@
         const clientImageY = margin + (availableHeight - clientImageHeight) / 2;
 
         try {
-          pdf.addImage(selectedImageBase64, 'JPEG', clientImageX, clientImageY, clientImageWidth, clientImageHeight);
+          pdf.addImage(selectedImageBase64, /^data:image\/png/i.test(selectedImageBase64) ? 'PNG' : 'JPEG', clientImageX, clientImageY, clientImageWidth, clientImageHeight);
           logPdf('client image added', { clientImageWidth, clientImageHeight, clientImageX, clientImageY });
         } catch (err) {
           errorPdf('addImage client failed', err);
@@ -9515,7 +9739,7 @@
         pdf.setFont('helvetica', 'italic');
         pdf.setTextColor(100, 100, 100);
         const dateStr = new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        pdf.text(`Généré par TontonKAD le ${dateStr}`, col1X, statsLineY);
+        pdf.text(`Généré par nodial le ${dateStr}`, col1X, statsLineY);
         pdf.setTextColor(0, 0, 0);
 
         // === TABLEAUX (paysage) : fourreaux puis câbles === //
@@ -9644,6 +9868,7 @@
       const fileName = `${formData.projectName.replace(/[^a-z0-9]/gi, '_')}_${dateStr}_${timeStr}.pdf`;
       logPdf('saving file', fileName);
       try {
+        piedNodial(pdf);
         pdf.save(fileName);
       } catch (err) {
         errorPdf('pdf.save failed', err);
@@ -11500,10 +11725,10 @@
           if (projectName) {
             const projects = this.getAllProjects();
             data = projects[projectName];
-            filename = `${projectName.replace(/[^a-z0-9]/gi, '_')}.tontonkad`;
+            filename = `${projectName.replace(/[^a-z0-9]/gi, '_')}.nodial`;
           } else {
             data = this.captureCurrentState();
-            filename = `projet_${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.tontonkad`;
+            filename = `projet_${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.nodial`;
           }
 
           const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -11652,7 +11877,7 @@
 
       // Couleur selon la classe du bouton
       let color = 'rgba(30, 30, 30, 0.95)'; // Défaut
-      if (btn.classList.contains('btn-load')) color = '#ff914d';
+      if (btn.classList.contains('btn-load')) color = '#FF6505';
       else if (btn.classList.contains('btn-save')) color = '#f59e0b';
       else if (btn.classList.contains('btn-rename') || btn.classList.contains('btn-rename-folder')) color = '#8b5cf6';
       else if (btn.classList.contains('btn-export')) color = '#059669';
@@ -11761,20 +11986,20 @@
 
     if (brandLogo) {
       brandLogo.src = isDark
-        ? '../../assets/icons/ico/TONTONKADB.png'
-        : '../../assets/icons/ico/TONTONKADN.png';
+        ? '../../assets/icons/ico/nodial-sombre.png'
+        : '../../assets/icons/ico/nodial-clair.png';
     }
 
     if (titlebarLogo) {
       titlebarLogo.src = isDark
-        ? '../../assets/icons/ico/TONTONKADB.png'
-        : '../../assets/icons/ico/TONTONKADN.png';
+        ? '../../assets/brand/nodial/kit/nodial_logo_sombre.svg'
+        : '../../assets/brand/nodial/kit/nodial_logo_clair.svg';
     }
 
     if (favicon) {
       favicon.href = isDark
-        ? '../../assets/icons/ico/TONTONKADB.ico'
-        : '../../assets/icons/ico/TONTONKADN.ico';
+        ? '../../assets/icons/ico/nodial-sombre.ico'
+        : '../../assets/icons/ico/nodial-clair.ico';
     }
   }
   function initThemeSwitcher() {
@@ -12002,7 +12227,7 @@
             this.refreshUI();
           } catch (error) {
             console.error('Erreur import:', error);
-            showToast('Erreur lors de l\'import — vérifiez que le fichier est un projet TontonKAD valide');
+            showToast('Erreur lors de l\'import — vérifiez que le fichier est un projet nodial valide');
           }
           e.target.value = ''; // Reset input
         }
@@ -12721,7 +12946,7 @@
       }
 
       const fullName = folderName ? `${folderName}_${projectName}` : projectName;
-      const filename = `${fullName.replace(/[^a-z0-9]/gi, '_')}.tontonkad`;
+      const filename = `${fullName.replace(/[^a-z0-9]/gi, '_')}.nodial`;
 
       const blob = new Blob([JSON.stringify(project, null, 2)], {
         type: 'application/json'

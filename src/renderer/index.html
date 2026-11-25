@@ -3,21 +3,21 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>TontonKAD - Organisateur de Fourreaux & Câbles</title>
+    <title>nodial — fourreaux, chambres et réseaux</title>
     <meta name="description" content="Application web pour organiser fourreaux et câbles électriques - Calcul d'occupation et visualisation 2D - Thème CEA"/>
     <meta name="keywords" content="fourreaux, câbles, électricité, organisation, calcul, visualisation, CEA"/>
-    <meta name="author" content="TontonKAD"/>
+    <meta name="author" content="nodial"/>
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website"/>
-    <meta property="og:title" content="TontonKAD - Organisateur de Fourreaux & Câbles"/>
+    <meta property="og:title" content="nodial — fourreaux, chambres et réseaux"/>
     <meta property="og:description" content="Application web pour organiser fourreaux et câbles électriques - Nouvelle interface CEA"/>
-    <meta property="og:image" content="TONTONKAD.svg"/>
+    <meta property="og:image" content="../../assets/brand/nodial/nodial_v6_icone_clair.svg"/>
 
     <!-- Security - Electron CSP -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self' data: https://fonts.gstatic.com"/>
 
-    <link id="favicon" rel="icon" type="image/x-icon" href="../../assets/icons/ico/TONTONKADN.ico"/>
+    <link id="favicon" rel="icon" type="image/x-icon" href="../../assets/icons/ico/nodial-clair.ico"/>
 
     <!-- Font Awesome 6 (local) -->
     <link rel="stylesheet" href="../../assets/fonts/fontawesome-free-6.5.1-web/css/all.min.css"/>
@@ -31,8 +31,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="TontonKAD">
-    <link rel="apple-touch-icon" href="TONTONKAD.svg">
+    <meta name="apple-mobile-web-app-title" content="nodial">
+    <link rel="apple-touch-icon" href="../../assets/brand/nodial/nodial_v6_icone_clair_256.png">
 
     <!-- Préchargement des ressources critiques -->
     <link rel="preload" href="script.js" as="script">
@@ -45,8 +45,7 @@
   <div id="custom-titlebar" class="custom-titlebar">
     <div class="titlebar-drag-region">
       <div class="titlebar-left">
-        <img id="titlebar-logo" src="../../assets/icons/ico/TONTONKADN.png" alt="TONTONKAD Logo" class="titlebar-logo">
-        <span class="titlebar-title">TONTONKAD</span>
+        <img id="titlebar-logo" src="../../assets/brand/nodial/kit/nodial_logo_clair.svg" alt="nodial" class="titlebar-logo">
         <div id="version-info" class="titlebar-version" title="Version de l'application">
           <span id="version-number">v2.7.0</span>
         </div>
@@ -224,7 +223,7 @@
               </div>
               <div class="custom-path-hint">
                 <span class="hint-icon">💡</span>
-                <span>Exemple : <code>Z:\F - UTILITAIRES\TONTONKAD\DATABASE</code></span>
+                <span>Exemple : <code>Z:\F - UTILITAIRES\nodial\DATABASE</code></span>
               </div>
             </div>
           </div>
@@ -235,7 +234,7 @@
         <!-- Serveur MCP intégré : Claude -->
         <section class="mcp-section" aria-labelledby="mcp-titre">
           <h4 id="mcp-titre" class="mcp-titre">Claude (serveur MCP)</h4>
-          <p class="settings-description">Le serveur MCP de TONTONKAD est installé avec l'application : Claude peut lire vos notes de calcul, générer les masques, étudier un réseau et dessiner sur vos plans. Aucun autre logiciel à installer.</p>
+          <p class="settings-description">Le serveur MCP de nodial est installé avec l'application : Claude peut lire vos notes de calcul, générer les masques, étudier un réseau et dessiner sur vos plans. Aucun autre logiciel à installer.</p>
           <div class="mcp-ligne">
             <span id="mcp-etat" class="mcp-etat" role="status">Vérification…</span>
             <button id="mcp-brancher-btn" type="button" class="btn-primary btn-compact">Brancher à Claude</button>
@@ -263,7 +262,7 @@
   <div id="manual-modal" class="modal-overlay" style="display: none;" role="dialog" aria-labelledby="manual-modal-title" aria-modal="true">
     <div class="pdf-export-modal-content" style="max-width: 1000px;">
       <div class="modal-header">
-        <h3 class="modal-title" id="manual-modal-title">Manuel d'utilisation — TontonKAD</h3>
+        <h3 class="modal-title" id="manual-modal-title">Manuel d'utilisation — nodial</h3>
         <button id="manual-close-btn" class="btn-close" aria-label="Fermer">&times;</button>
       </div>
       <div class="pdf-export-body">
@@ -278,7 +277,7 @@
     <aside class="panel" id="panneauGauche">
       <div class="panel-resize-handle"></div>
       <!-- .brand supprimée : logo/titre/manuel/réglages/version vivaient ici,
-           redondants avec la titlebar (qui affiche déjà logo + "TONTONKAD").
+           redondants avec la titlebar (qui affiche déjà logo + nom de l'app).
            Tout est monté dans la titlebar — libère toute cette hauteur pour
            .setup-zone/.panel-middle. -->
       <!-- ZONE FIXE — configuration boîte -->
@@ -1077,7 +1076,7 @@
           <div class="projects-list-section">
             <div class="projects-header">
               <h4>Projets sauvegardés</h4>
-              <button id="importProject" type="button" class="btn-secondary btn-compact" title="Ouvrir un fichier projet (.json, .tontonkad) — Ctrl+O">Ouvrir un fichier…</button>
+              <button id="importProject" type="button" class="btn-secondary btn-compact" title="Ouvrir un fichier projet (.nodial, .json, .tontonkad) — Ctrl+O">Ouvrir un fichier…</button>
               <button id="toggleFolderCreation" type="button" class="btn-secondary btn-compact">+ Créer un dossier</button>
             </div>
             <div id="folderCreationField" class="folder-field" style="display: none;">
@@ -1105,7 +1104,7 @@
 
         <!-- Éléments cachés pour fonctionnalité existante -->
         <button id="exportCurrentProject" type="button" style="display: none;">Export actuel</button>
-        <input type="file" id="importProjectFile" accept=".tontonkad,.json" style="display: none;">
+        <input type="file" id="importProjectFile" accept=".nodial,.tontonkad,.json" style="display: none;">
       </div>
     </div>
   </div>
@@ -1141,164 +1140,130 @@
   <div id="pdfExportModal" class="modal-overlay" style="display: none;" role="dialog" aria-labelledby="pdfExportModal-title" aria-modal="true">
     <div class="pdf-export-modal-enhanced">
       <div class="modal-header">
-        <h3 class="modal-title" id="pdfExportModal-title">Export PDF — Configuration</h3>
+        <h3 class="modal-title" id="pdfExportModal-title">Exporter en PDF</h3>
         <button class="btn-close" id="closePdfExportModal" aria-label="Fermer">&times;</button>
       </div>
 
       <div class="pdf-export-body">
         <div class="pdf-export-main">
-        <p class="pdf-export-description">
-          Configurez les informations de votre document PDF avant l'export.
-        </p>
-
-        <div class="pdf-export-form">
-          <!-- Section Informations du projet -->
-          <div class="pdf-form-section">
-            <div class="pdf-section-header">
-              <span class="pdf-section-icon">📋</span>
-              <h4 class="pdf-section-title">Informations du projet</h4>
-            </div>
-
-            <div class="pdf-form-grid">
-              <div class="pdf-form-field">
-                <label for="pdfProjectName" class="pdf-field-label">
-                  <span class="label-icon">🏷️</span>
-                  <span>Nom du projet</span>
-                </label>
-                <input type="text" id="pdfProjectName" class="pdf-input" placeholder="Mon projet TontonKAD" maxlength="50">
-              </div>
-
-              <div class="pdf-form-field">
-                <label for="pdfViewName" class="pdf-field-label">
-                  <span class="label-icon">👁️</span>
-                  <span>Nom de la vue</span>
-                </label>
-                <input type="text" id="pdfViewName" class="pdf-input" placeholder="Vue principale" maxlength="50">
-              </div>
-            </div>
+          <div class="pdf-onglets" role="tablist" aria-label="Étapes de l'export">
+            <button type="button" class="pdf-onglet" role="tab" id="pdfTabProjet" aria-controls="pdfPaneProjet" aria-selected="true"><span class="pdf-onglet-n">1</span> Projet</button>
+            <button type="button" class="pdf-onglet" role="tab" id="pdfTabCartouche" aria-controls="pdfPaneCartouche" aria-selected="false" tabindex="-1"><span class="pdf-onglet-n">2</span> Cartouche et logos</button>
+            <button type="button" class="pdf-onglet" role="tab" id="pdfTabContenu" aria-controls="pdfPaneContenu" aria-selected="false" tabindex="-1"><span class="pdf-onglet-n">3</span> Contenu</button>
           </div>
 
-          <!-- Section Informations client -->
-          <div class="pdf-form-section">
-            <div class="pdf-section-header">
-              <span class="pdf-section-icon">👥</span>
-              <h4 class="pdf-section-title">Informations client</h4>
+          <!-- 1. Projet : alimente le cartouche ({projet} {client} {auteur} {indice} {phase} {plan}) -->
+          <section class="pdf-pane" id="pdfPaneProjet" role="tabpanel" aria-labelledby="pdfTabProjet">
+            <div class="pdf-grille">
+              <label class="pdf-champ pdf-large" for="pdfProjectName"><span>Nom du projet</span>
+                <input type="text" id="pdfProjectName" class="pdf-input" placeholder="Ex. MA04 — réseau BT" maxlength="60"></label>
+              <label class="pdf-champ" for="pdfClient"><span>Client / maître d'ouvrage</span>
+                <input type="text" id="pdfClient" class="pdf-input" placeholder="Nom du client" maxlength="60"></label>
+              <label class="pdf-champ" for="pdfAuthor"><span>Auteur (dessiné par)</span>
+                <input type="text" id="pdfAuthor" class="pdf-input" placeholder="Votre nom" maxlength="50"></label>
+              <label class="pdf-champ" for="pdfPhase"><span>Phase</span>
+                <input type="text" id="pdfPhase" class="pdf-input" placeholder="APS, APD, PRO, EXE…" maxlength="20" list="pdfPhases">
+                <datalist id="pdfPhases"><option value="APS"><option value="APD"><option value="PRO"><option value="DCE"><option value="EXE"><option value="DOE"></datalist></label>
+              <label class="pdf-champ" for="pdfIndice"><span>Indice</span>
+                <input type="text" id="pdfIndice" class="pdf-input" placeholder="A" maxlength="6"></label>
+              <label class="pdf-champ" for="pdfNumPlan"><span>N° de plan</span>
+                <input type="text" id="pdfNumPlan" class="pdf-input" placeholder="Ex. VRD-BT-012" maxlength="30"></label>
+              <label class="pdf-champ" for="pdfViewName"><span>Nom de la vue</span>
+                <input type="text" id="pdfViewName" class="pdf-input" placeholder="Vue principale" maxlength="50"></label>
+              <label class="pdf-champ pdf-large" for="pdfDescription"><span>Description <small><span id="pdfDescriptionCounter">0</span>/200</small></span>
+                <textarea id="pdfDescription" class="pdf-textarea" placeholder="Notes, remarques…" maxlength="200" rows="3"></textarea></label>
             </div>
+            <p class="pdf-aide">Ces informations remplissent le cartouche et l'en-tête des PDF. Elles sont enregistrées avec le projet.</p>
+          </section>
 
-            <div class="pdf-form-grid">
-              <div class="pdf-form-field">
-                <label for="pdfAuthor" class="pdf-field-label">
-                  <span class="label-icon">✍️</span>
-                  <span>Auteur</span>
-                </label>
-                <input type="text" id="pdfAuthor" class="pdf-input" placeholder="Votre nom" maxlength="50">
-              </div>
-
-              <div class="pdf-form-field">
-                <label for="pdfClient" class="pdf-field-label">
-                  <span class="label-icon">🏢</span>
-                  <span>Client</span>
-                </label>
-                <input type="text" id="pdfClient" class="pdf-input" placeholder="Nom du client" maxlength="50">
-              </div>
-            </div>
-          </div>
-
-          <!-- Section Description -->
-          <div class="pdf-form-section">
-            <div class="pdf-section-header">
-              <span class="pdf-section-icon">📝</span>
-              <h4 class="pdf-section-title">Description</h4>
-            </div>
-
-            <div class="pdf-form-field">
-              <textarea id="pdfDescription" class="pdf-textarea" placeholder="Description du projet, notes, remarques..." maxlength="200" rows="4" aria-label="Description du projet"></textarea>
-              <div class="pdf-char-counter">
-                <span id="pdfDescriptionCounter">0</span>/200 caractères
-              </div>
-            </div>
-          </div>
-
-          <!-- Section Options -->
-          <div class="pdf-form-section">
-            <div class="pdf-section-header">
-              <span class="pdf-section-icon">⚙️</span>
-              <h4 class="pdf-section-title">Options d'export</h4>
-            </div>
-
-            <div class="pdf-options-card">
-              <label class="pdf-checkbox-label">
-                <input type="checkbox" id="pdfIncludeStats" checked class="pdf-checkbox">
-                <div class="pdf-checkbox-content">
-                  <div class="pdf-checkbox-title">📊 Inclure les statistiques détaillées</div>
-                  <div class="pdf-checkbox-subtitle">Ajoute un tableau récapitulatif des câbles et fourreaux</div>
+          <!-- 2. Cartouche et logos -->
+          <section class="pdf-pane" id="pdfPaneCartouche" role="tabpanel" aria-labelledby="pdfTabCartouche" hidden>
+            <div class="pdf-cartouche" id="pdfCartouche">
+              <div class="pdf-cartouche-logos">
+                <div class="pdf-logo" data-logo="logoMOA">
+                  <label class="pdf-logo-zone" title="Cliquez ou déposez une image (PNG ou JPEG)">
+                    <span class="pdf-logo-apercu" aria-hidden="true"><span>Logo<br>maître d'ouvrage</span></span>
+                    <input type="file" accept="image/png,image/jpeg" class="sr-only" aria-label="Choisir le logo du maître d'ouvrage">
+                  </label>
+                  <div class="pdf-logo-actions"><b>Maître d'ouvrage</b><span>en haut à gauche du cartouche · aussi en en-tête de l'export simple</span><button type="button" class="pdf-mini-btn" data-retirer>Retirer</button></div>
                 </div>
-              </label>
-              <label class="pdf-checkbox-label">
-                <input type="checkbox" id="pdfInclude3D" checked class="pdf-checkbox">
-                <div class="pdf-checkbox-content">
-                  <div class="pdf-checkbox-title">🧊 Inclure la vue 3D</div>
-                  <div class="pdf-checkbox-subtitle">Ajoute la coupe en 3D du plan et la chambre de tirage compatible</div>
+                <div class="pdf-logo" data-logo="logoMOE">
+                  <label class="pdf-logo-zone" title="Cliquez ou déposez une image (PNG ou JPEG)">
+                    <span class="pdf-logo-apercu" aria-hidden="true"><span>Logo<br>maître d'œuvre</span></span>
+                    <input type="file" accept="image/png,image/jpeg" class="sr-only" aria-label="Choisir le logo du maître d'œuvre">
+                  </label>
+                  <div class="pdf-logo-actions"><b>Maître d'œuvre</b><span>en haut à droite du cartouche</span><button type="button" class="pdf-mini-btn" data-retirer>Retirer</button></div>
                 </div>
-              </label>
-              <div id="pdfReseauOptions" class="pdf-reseau-options" hidden>
-                <div class="pdf-checkbox-title">Réseau : parties à exporter (un PDF par partie)</div>
-                <div class="pdf-reseau-groupes">
-                  <label><input type="checkbox" id="pdfGrpSyn" checked> Synoptique + métré et continuité</label>
-                  <label><input type="checkbox" id="pdfGrpChambres" checked> Chambres (une page A3 chacune)</label>
-                  <label><input type="checkbox" id="pdfGrpCoupes" checked> Coupes par tronçon</label>
-                  <label><input type="checkbox" id="pdfGrpTableaux" checked> Tableaux fourreaux et câbles</label>
-                </div>
-                <label class="pdf-select-label" for="pdfMiseEnPageSyn">
-                  <span class="pdf-checkbox-title">Mise en page du synoptique</span>
+              </div>
+              <div class="pdf-cartouche-entete"><b>Champs du cartouche</b><span class="pdf-aide">dans l'ordre d'affichage · « Large » = sur toute la largeur</span></div>
+              <table class="pdf-cartouche-champs"><thead><tr><th scope="col">Libellé</th><th scope="col">Valeur</th><th scope="col">Large</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody id="pdfCartoucheChamps"></tbody></table>
+              <div class="pdf-cartouche-actions">
+                <button type="button" class="pdf-mini-btn" id="pdfCartoucheAjout">+ Ajouter un champ</button>
+                <button type="button" class="pdf-mini-btn" id="pdfCartoucheDefaut">Mémoriser comme défaut sur ce poste</button>
+                <button type="button" class="pdf-mini-btn" id="pdfCartoucheRaz">Rétablir le cartouche par défaut</button>
+              </div>
+              <p class="pdf-aide">Remplissage automatique : <code>{projet}</code> <code>{client}</code> <code>{auteur}</code> <code>{phase}</code> <code>{indice}</code> <code>{plan}</code> <code>{date}</code> <code>{chambre}</code> <code>{modele}</code> <code>{interieur}</code> <code>{tampons}</code> <code>{format}</code> <code>{folio}</code></p>
+            </div>
+          </section>
+
+          <!-- 3. Contenu -->
+          <section class="pdf-pane" id="pdfPaneContenu" role="tabpanel" aria-labelledby="pdfTabContenu" hidden>
+            <div class="pdf-options-card" id="pdfOptionsSimple">
+              <label class="pdf-checkbox-label"><input type="checkbox" id="pdfIncludeStats" checked class="pdf-checkbox">
+                <div class="pdf-checkbox-content"><div class="pdf-checkbox-title">Statistiques détaillées</div><div class="pdf-checkbox-subtitle">Tableau récapitulatif des câbles et fourreaux</div></div></label>
+              <label class="pdf-checkbox-label"><input type="checkbox" id="pdfInclude3D" checked class="pdf-checkbox">
+                <div class="pdf-checkbox-content"><div class="pdf-checkbox-title">Vue 3D</div><div class="pdf-checkbox-subtitle">Coupe en 3D du plan et chambre de tirage compatible</div></div></label>
+            </div>
+            <div class="pdf-grille">
+              <label class="pdf-champ" for="pdfTeinte3D"><span>Couleur des fourreaux (vues 3D)</span>
+                <select id="pdfTeinte3D" class="pdf-select">
+                  <option value="rouge" selected>Rouge</option>
+                  <option value="vert">Vert</option>
+                </select></label>
+            </div>
+            <div id="pdfReseauOptions" class="pdf-reseau-options" hidden>
+              <div class="pdf-checkbox-title">Parties à exporter — un PDF par partie</div>
+              <div class="pdf-reseau-groupes">
+                <label><input type="checkbox" id="pdfGrpSyn" checked> Synoptique + métré et continuité</label>
+                <label><input type="checkbox" id="pdfGrpChambres" checked> Chambres (une page A3 chacune)</label>
+                <label><input type="checkbox" id="pdfGrpCoupes" checked> Coupes par tronçon</label>
+                <label><input type="checkbox" id="pdfGrpTableaux" checked> Tableaux fourreaux et câbles</label>
+              </div>
+              <div class="pdf-grille">
+                <label class="pdf-champ" for="pdfMiseEnPageSyn"><span>Mise en page du synoptique</span>
                   <select id="pdfMiseEnPageSyn" class="pdf-select">
-                    <option value="bandes" selected>Bandes empilées sur une grande feuille (« … » et suite en dessous)</option>
-                    <option value="folios">Folios séparés (une page par morceau)</option>
-                  </select>
-                </label>
-                <label class="pdf-select-label" for="pdfFormatSyn">
-                  <span class="pdf-checkbox-title">Format du synoptique</span>
+                    <option value="bandes" selected>Bandes sur une grande feuille</option>
+                    <option value="folios">Folios séparés</option>
+                  </select></label>
+                <label class="pdf-champ" for="pdfFormatSyn"><span>Format du synoptique</span>
                   <select id="pdfFormatSyn" class="pdf-select">
                     <option value="auto" selected>Automatique</option>
-                    <option value="a4">A4 paysage</option>
-                    <option value="a3">A3 paysage</option>
-                    <option value="a2">A2 paysage</option>
-                    <option value="a1">A1 paysage</option>
-                    <option value="a0">A0 paysage</option>
-                  </select>
-                  <span id="pdfFormatConseil" class="pdf-checkbox-subtitle"></span>
-                </label>
-                <label class="pdf-select-label" for="pdfFormatCoupes">
-                  <span class="pdf-checkbox-title">Format des coupes par tronçon</span>
+                    <option value="a4">A4 paysage</option><option value="a3">A3 paysage</option><option value="a2">A2 paysage</option><option value="a1">A1 paysage</option><option value="a0">A0 paysage</option>
+                  </select></label>
+                <label class="pdf-champ" for="pdfFormatCoupes"><span>Format des coupes par tronçon</span>
                   <select id="pdfFormatCoupes" class="pdf-select">
-                    <option value="a3" selected>A3 paysage</option>
-                    <option value="a2">A2 paysage</option>
-                    <option value="a1">A1 paysage</option>
-                  </select>
-                </label>
+                    <option value="a3" selected>A3 paysage</option><option value="a2">A2 paysage</option><option value="a1">A1 paysage</option>
+                  </select></label>
               </div>
+              <p id="pdfFormatConseil" class="pdf-aide"></p>
             </div>
-          </div>
-        </div>
+          </section>
         </div>
 
-        <!-- Sidebar aperçu : feuille A4 portrait -->
+        <!-- Aperçu : cartouche en direct + fichiers produits (réseau) ou feuille (export simple) -->
         <aside class="pdf-preview-sidebar">
-          <div class="pdf-section-header">
-            <span class="pdf-section-icon">🖼️</span>
-            <h4 class="pdf-section-title">Aperçu</h4>
-          </div>
+          <h4 class="pdf-section-title">Aperçu du cartouche</h4>
+          <canvas id="pdfCartoucheApercu" class="pdf-cartouche-apercu" width="300" height="220" aria-label="Aperçu du cartouche"></canvas>
           <div class="pdf-a4-sheet">
             <img id="pdfPreviewImage" class="pdf-preview-image" alt="Aperçu de l'export PDF">
           </div>
           <div id="pdfReseauResume" class="pdf-reseau-resume" hidden>
             <p class="pdf-reseau-resume-titre">Fichiers générés</p>
             <ol id="pdfReseauFichiers" class="pdf-reseau-fichiers"></ol>
-            <p class="pdf-checkbox-subtitle">Un PDF par partie cochée. La vue principale n'est pas exportée en mode réseau.</p>
+            <p class="pdf-aide">Un PDF par partie cochée.</p>
           </div>
         </aside>
       </div>
-
       <div class="modal-actions">
         <button id="cancelPdfExport" type="button" class="btn-cancel">Annuler</button>
         <button id="confirmPdfExport" type="button" class="btn-primary">

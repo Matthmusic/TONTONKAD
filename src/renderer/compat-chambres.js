@@ -103,9 +103,9 @@
     const w = Math.max(chW + pad * 2 + 96, 210);
     const h = chH + pad * 2;
     return `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" role="img">` +
-      `<rect x="${ox}" y="${oy}" width="${chW.toFixed(1)}" height="${chH.toFixed(1)}" rx="2" fill="rgba(255,145,77,0.10)" stroke="#ff914d" stroke-width="1.5"/>` +
+      `<rect x="${ox}" y="${oy}" width="${chW.toFixed(1)}" height="${chH.toFixed(1)}" rx="2" fill="rgba(255,101,5,0.10)" stroke="#FF6505" stroke-width="1.5"/>` +
       `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bxW.toFixed(1)}" height="${bxH.toFixed(1)}" fill="rgba(130,130,130,0.20)" stroke="currentColor" stroke-width="1.2"/>` +
-      `<text x="${(ox + chW + 8).toFixed(1)}" y="${(oy + 12)}" font-size="10" fill="#ff914d" font-family="monospace">${s.ref ? s.ref + ' ' : ''}${s.l}×${s.H}</text>` +
+      `<text x="${(ox + chW + 8).toFixed(1)}" y="${(oy + 12)}" font-size="10" fill="#FF6505" font-family="monospace">${s.ref ? s.ref + ' ' : ''}${s.l}×${s.H}</text>` +
       `<text x="${(ox + chW + 8).toFixed(1)}" y="${(oy + 26)}" font-size="10" fill="currentColor" font-family="monospace">boîte ${W}×${H}</text>` +
       `</svg>`;
   }
@@ -125,8 +125,8 @@
       const x = pad + i * s.l * scale;
       const tw = s.l * scale;
       tampons +=
-        `<rect x="${x.toFixed(1)}" y="${rowY}" width="${Math.max(1, tw - 2).toFixed(1)}" height="${rowH}" rx="3" fill="rgba(255,145,77,0.18)" stroke="#ff914d" stroke-width="1.5"/>` +
-        `<text x="${(x + tw / 2).toFixed(1)}" y="${(rowY + rowH / 2 + 4)}" font-size="10" fill="#ff914d" text-anchor="middle" font-family="monospace">${s.l}</text>`;
+        `<rect x="${x.toFixed(1)}" y="${rowY}" width="${Math.max(1, tw - 2).toFixed(1)}" height="${rowH}" rx="3" fill="rgba(255,101,5,0.18)" stroke="#FF6505" stroke-width="1.5"/>` +
+        `<text x="${(x + tw / 2).toFixed(1)}" y="${(rowY + rowH / 2 + 4)}" font-size="10" fill="#FF6505" text-anchor="middle" font-family="monospace">${s.l}</text>`;
     }
     const boxBar =
       `<line x1="${pad}" y1="${barY}" x2="${(pad + bw).toFixed(1)}" y2="${barY}" stroke="currentColor" stroke-width="1.5"/>` +

@@ -78008,7 +78008,7 @@ var require_compat_chambres = __commonJS({
         const bx = ox + (chW - bxW) / 2, by = oy + (chH - bxH) / 2;
         const w = Math.max(chW + pad * 2 + 96, 210);
         const h = chH + pad * 2;
-        return `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" role="img"><rect x="${ox}" y="${oy}" width="${chW.toFixed(1)}" height="${chH.toFixed(1)}" rx="2" fill="rgba(255,145,77,0.10)" stroke="#ff914d" stroke-width="1.5"/><rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bxW.toFixed(1)}" height="${bxH.toFixed(1)}" fill="rgba(130,130,130,0.20)" stroke="currentColor" stroke-width="1.2"/><text x="${(ox + chW + 8).toFixed(1)}" y="${oy + 12}" font-size="10" fill="#ff914d" font-family="monospace">${s.ref ? s.ref + " " : ""}${s.l}\xD7${s.H}</text><text x="${(ox + chW + 8).toFixed(1)}" y="${oy + 26}" font-size="10" fill="currentColor" font-family="monospace">bo\xEEte ${W}\xD7${H}</text></svg>`;
+        return `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" role="img"><rect x="${ox}" y="${oy}" width="${chW.toFixed(1)}" height="${chH.toFixed(1)}" rx="2" fill="rgba(255,101,5,0.10)" stroke="#FF6505" stroke-width="1.5"/><rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bxW.toFixed(1)}" height="${bxH.toFixed(1)}" fill="rgba(130,130,130,0.20)" stroke="currentColor" stroke-width="1.2"/><text x="${(ox + chW + 8).toFixed(1)}" y="${oy + 12}" font-size="10" fill="#FF6505" font-family="monospace">${s.ref ? s.ref + " " : ""}${s.l}\xD7${s.H}</text><text x="${(ox + chW + 8).toFixed(1)}" y="${oy + 26}" font-size="10" fill="currentColor" font-family="monospace">bo\xEEte ${W}\xD7${H}</text></svg>`;
       }
       function buildTileSchema(W, s) {
         if (!s) return "";
@@ -78023,7 +78023,7 @@ var require_compat_chambres = __commonJS({
         for (let i = 0; i < s.N; i++) {
           const x = pad + i * s.l * scale;
           const tw = s.l * scale;
-          tampons += `<rect x="${x.toFixed(1)}" y="${rowY}" width="${Math.max(1, tw - 2).toFixed(1)}" height="${rowH}" rx="3" fill="rgba(255,145,77,0.18)" stroke="#ff914d" stroke-width="1.5"/><text x="${(x + tw / 2).toFixed(1)}" y="${rowY + rowH / 2 + 4}" font-size="10" fill="#ff914d" text-anchor="middle" font-family="monospace">${s.l}</text>`;
+          tampons += `<rect x="${x.toFixed(1)}" y="${rowY}" width="${Math.max(1, tw - 2).toFixed(1)}" height="${rowH}" rx="3" fill="rgba(255,101,5,0.18)" stroke="#FF6505" stroke-width="1.5"/><text x="${(x + tw / 2).toFixed(1)}" y="${rowY + rowH / 2 + 4}" font-size="10" fill="#FF6505" text-anchor="middle" font-family="monospace">${s.l}</text>`;
         }
         const boxBar = `<line x1="${pad}" y1="${barY}" x2="${(pad + bw).toFixed(1)}" y2="${barY}" stroke="currentColor" stroke-width="1.5"/><line x1="${pad}" y1="${barY - 4}" x2="${pad}" y2="${barY + 4}" stroke="currentColor" stroke-width="1.5"/><line x1="${(pad + bw).toFixed(1)}" y1="${barY - 4}" x2="${(pad + bw).toFixed(1)}" y2="${barY + 4}" stroke="currentColor" stroke-width="1.5"/><text x="${pad}" y="${barY + labelH + 1}" font-size="10" fill="currentColor" font-family="monospace">bo\xEEte ${W} mm</text>`;
         return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img">${tampons}${boxBar}</svg>`;
@@ -78050,13 +78050,13 @@ var require_chambres_infos = __commonJS({
         L1T: { ...SERIE_T, tampons: 1 },
         L2T: { ...SERIE_T, tampons: 2 },
         L3T: { ...SERIE_T, tampons: 3 },
-        L4T: { ...SERIE_T, tampons: 4, aVerifier: "longueur 1670 mm dans TONTONKAD, 1870 mm dans les sources publiques" },
+        L4T: { ...SERIE_T, tampons: 4, aVerifier: "longueur 1670 mm dans le catalogue nodial, 1870 mm dans les sources publiques" },
         "1/2 L4T": { ...SERIE_T, tampons: null },
         L5T: { ...SERIE_T, tampons: 3 },
         L6T: { ...SERIE_T, tampons: 4 },
         L1C: { ...SERIE_C, tampons: null },
         L2C: { ...SERIE_C, tampons: null },
-        L3C: { ...SERIE_C, tampons: null, aVerifier: "largeur 520 mm dans TONTONKAD, 380 mm dans les sources publiques" },
+        L3C: { ...SERIE_C, tampons: null, aVerifier: "largeur 520 mm dans le catalogue nodial, 380 mm dans les sources publiques" },
         K1C: { ...SERIE_K, tampons: null },
         K2C: { ...SERIE_K, tampons: null },
         K3C: { ...SERIE_K, tampons: null }
@@ -78083,7 +78083,7 @@ var require_chambres_infos = __commonJS({
             marge: { largeur: face.largeur - W, hauteur: face.hauteur - H },
             tient: face.largeur >= W && face.hauteur >= H,
             infos: infosChambre2(m.ref),
-            source: "Cotes int\xE9rieures du catalogue TONTONKAD (chambres Stradal)."
+            source: "Cotes int\xE9rieures du catalogue nodial (chambres Stradal)."
           };
         };
         if (refImposee) {
@@ -78153,15 +78153,15 @@ var require_chambres_infos = __commonJS({
         const larg = (ks) => Math.max(0, ...ks.filter((k) => b[k]).map((k) => b[k].largeur));
         const haut = Math.max(0, ...Object.values(b).filter(Boolean).map((x) => x.hauteur));
         const tMin = Math.min(o.tampon.L, o.tampon.l), tMax = Math.max(o.tampon.L, o.tampon.l);
-        let l = up(Math.max(larg(["pignonA", "pignonB"]) + 2 * o.degagementLateral, tMin));
-        let L = up(Math.max(larg(["longPanA", "longPanB"]) + 2 * o.degagementLateral, o.longueurMin, tMax));
-        if (l > L) [L, l] = [l, L];
+        const l = up(Math.max(larg(["pignonA", "pignonB"]) + 2 * o.degagementLateral, tMin));
+        const L = up(Math.max(larg(["longPanA", "longPanB"]) + 2 * o.degagementLateral, o.longueurMin, tMax));
         const H = up(Math.max(haut + o.degagementHaut, 400));
-        const tampons = Math.max(1, Math.ceil(L / o.ouvertureParTampon));
+        const grand = Math.max(L, l);
+        const tampons = Math.max(1, Math.ceil(grand / o.ouvertureParTampon));
         const controles = [];
         const c = controleTampon(o.tampon.classe, o.zone);
         if (!c.ok) controles.push(c.message);
-        if (tampons * tMax > L) controles.push(`${tampons} tampon(s) de ${tMax} mm ne tiennent pas sur ${L} mm : r\xE9duire le nombre ou la taille`);
+        if (tampons * tMax > grand) controles.push(`${tampons} tampon(s) de ${tMax} mm ne tiennent pas sur ${grand} mm : r\xE9duire le nombre ou la taille`);
         return {
           ref: `Ma\xE7onn\xE9e ${L}\xD7${l}`,
           L,
@@ -78597,8 +78597,8 @@ var require_vue3d = __commonJS({
       const K = 0.5522847498;
       const PHASE_RGB = { L1: [0.55, 0.3, 0.1], L2: [0.1, 0.1, 0.1], L3: [0.5, 0.5, 0.5], N: [0.1, 0.3, 0.8], PE: [0.1, 0.6, 0.2], PEN: [0.1, 0.3, 0.8] };
       const GRILLAGE_RGB = { rouge: [0.85, 0.1, 0.1], vert: [0.1, 0.6, 0.2], bleu: [0.1, 0.3, 0.8], jaune: [0.9, 0.75, 0], marron: [0.5, 0.3, 0.1] };
-      const WINANSI = { "\u2014": "\x97", "\u2013": "\x96", "\u2026": "\x85", "\u2022": "\x95", "\u2019": "\x92", "\u20AC": "\x80" };
-      const pdfStr = (s) => "(" + String(s).replace(/\u2192/g, "->").replace(/\u2265/g, ">=").replace(/[\u2014\u2013\u2026\u2022\u2019\u20AC]/g, (c) => WINANSI[c]).replace(/[^\x20-\x7E\x80-\x97\u00A0-\u00FF]/g, "?").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)") + ")";
+      const WINANSI = { "\u2014": "\x97", "\u2013": "\x96", "\u2026": "\x85", "\u2022": "\x95", "\u2019": "\x92", "\u20AC": "\x80", "\u0153": "\x9C", "\u0152": "\x8C", "\u2018": "\x91", "\u201C": "\x93", "\u201D": "\x94" };
+      const pdfStr = (s) => "(" + String(s).replace(/\u2192/g, "->").replace(/\u2265/g, ">=").replace(/[\u2014\u2013\u2026\u2022\u2019\u20AC\u0153\u0152\u2018\u201C\u201D]/g, (c) => WINANSI[c]).replace(/[^\x20-\x7E\x80-\x9F\u00A0-\u00FF]/g, "?").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)") + ")";
       const f = (v) => (Math.round(v * 100) / 100).toString();
       class Page {
         // emitText=false : les textes ne sont pas écrits dans le flux (polices
@@ -78630,6 +78630,13 @@ var require_vue3d = __commonJS({
         }
         rect(x, y, w, h, mode = "S") {
           this.ops.push(`${f(x)} ${f(y)} ${f(w)} ${f(h)} re ${mode}`);
+          return this;
+        }
+        // Rectangle à coins arrondis (rayon r), courbes de Bézier : PDF, canvas et jsPDF.
+        rrect(x, y, w, h, r, mode = "S") {
+          r = Math.max(0, Math.min(r, w / 2, h / 2));
+          const k = r * (1 - K), x1 = x + w, y1 = y + h;
+          this.ops.push(`${f(x + r)} ${f(y)} m ${f(x1 - r)} ${f(y)} l ${f(x1 - k)} ${f(y)} ${f(x1)} ${f(y + k)} ${f(x1)} ${f(y + r)} c ${f(x1)} ${f(y1 - r)} l ${f(x1)} ${f(y1 - k)} ${f(x1 - k)} ${f(y1)} ${f(x1 - r)} ${f(y1)} c ${f(x + r)} ${f(y1)} l ${f(x + k)} ${f(y1)} ${f(x)} ${f(y1 - k)} ${f(x)} ${f(y1 - r)} c ${f(x)} ${f(y + r)} l ${f(x)} ${f(y + k)} ${f(x + k)} ${f(y)} ${f(x + r)} ${f(y)} c h ${mode}`);
           return this;
         }
         poly(pts, mode = "S") {
@@ -78679,10 +78686,21 @@ var require_vue3d = __commonJS({
         }
         // Cylindre ombré de a (face avant) vers b (arrière) : bandes de teinte
         // (reflet en haut à gauche), extrémité avant creuse.
-        cylindre(ax, ay, bx, by, r, ri, base) {
+        // partie : 'tout', 'corps' (tube seul) ou 'bouche' (face avant seule) ; pour une
+        // nappe, on dessine tous les corps puis toutes les bouches (toutes au premier plan).
+        cylindre(ax, ay, bx, by, r, ri, base, partie = "tout") {
           const len = Math.hypot(bx - ax, by - ay) || 1;
           const n = [-(by - ay) / len, (bx - ax) / len];
           const shade = (k) => base.map((c) => Math.max(0, Math.min(1, c * k + (k > 1 ? (k - 1) * 0.6 : 0))));
+          if (partie !== "bouche") this.corpsCylindre(ax, ay, bx, by, r, n, shade);
+          if (partie === "corps") return this;
+          this.rgb(shade(0.45)).width(0.4);
+          this.rgb(shade(1.15), false).circle(ax, ay, r, "B");
+          this.rgb([0.18, 0.16, 0.15], false).circle(ax, ay, ri, "f");
+          this.rgb([0.32, 0.29, 0.27], false).circle(ax + r * 0.08, ay - r * 0.08, ri * 0.82, "f");
+          return this;
+        }
+        corpsCylindre(ax, ay, bx, by, r, n, shade) {
           this.rgb(shade(0.55), false).circle(bx, by, r, "f");
           const K2 = 14;
           for (let i = 0; i < K2; i++) {
@@ -78694,9 +78712,6 @@ var require_vue3d = __commonJS({
           }
           this.rgb(shade(0.45)).width(0.4);
           this.line(ax + n[0] * r, ay + n[1] * r, bx + n[0] * r, by + n[1] * r).line(ax - n[0] * r, ay - n[1] * r, bx - n[0] * r, by - n[1] * r);
-          this.rgb(shade(1.15), false).circle(ax, ay, r, "B");
-          this.rgb([0.18, 0.16, 0.15], false).circle(ax, ay, ri, "f");
-          this.rgb([0.32, 0.29, 0.27], false).circle(ax + r * 0.08, ay - r * 0.08, ri * 0.82, "f");
           return this;
         }
         toString() {
@@ -78710,6 +78725,7 @@ var require_vue3d = __commonJS({
         betonClair: [0.8, 0.79, 0.76],
         betonSombre: [0.62, 0.61, 0.58],
         tpc: [0.8, 0.14, 0.1],
+        tpcVert: [0.16, 0.56, 0.24],
         surface: { chaussee: [0.3, 0.3, 0.32], trottoir: [0.68, 0.66, 0.62], espace_vert: [0.38, 0.58, 0.28], prive: [0.55, 0.62, 0.4] }
       };
       const fit = (wMm, hMm, wPt, hPt) => Math.min(wPt / wMm, hPt / hMm);
@@ -78731,7 +78747,7 @@ var require_vue3d = __commonJS({
           }
         }
         for (const fo of m.fourreaux) {
-          p.rgb([1, 1, 1], false).rgb([0.85, 0.4, 0.05]).width(1).circle(X(fo.x), Y(fo.y), fo.od / 2 * s, "B");
+          p.rgb([1, 1, 1], false).rgb(fo.teinte === "vert" ? [0.16, 0.56, 0.24] : [0.85, 0.4, 0.05]).width(1).circle(X(fo.x), Y(fo.y), fo.od / 2 * s, "B");
           p.width(0.5).circle(X(fo.x), Y(fo.y), fo.di / 2 * s);
         }
         for (const c of m.cables) {
@@ -78742,8 +78758,10 @@ var require_vue3d = __commonJS({
         p.rgb([0, 0, 0], false);
         return s;
       }
-      function draw3D(p, m, x0, y0, wPt, hPt, longueurMm) {
-        const top = m.tranchee ? m.tranchee.profondeur : m.hauteur;
+      const TEINTES_FOURREAU = { rouge: "tpc", vert: "tpcVert" };
+      function draw3D(p, m, x0, y0, wPt, hPt, longueurMm, opts = {}) {
+        const matFourreau = (fo) => MAT[TEINTES_FOURREAU[fo.teinte] || TEINTES_FOURREAU[opts.teinte] || "tpc"];
+        const top = m.tranchee ? m.tranchee.profondeur : m.hauteur + Math.max(120, m.hauteur * 0.3);
         const ang = Math.PI / 6, red = 0.5;
         const dx = Math.cos(ang) * red * longueurMm, dy = Math.sin(ang) * red * longueurMm;
         const MG = m.forme === "circ" ? 0 : 0.35, SG = m.forme === "circ" ? 0 : 0.18;
@@ -78755,14 +78773,18 @@ var require_vue3d = __commonJS({
         p.width(0.7);
         const n = [-Math.sin(ang), Math.cos(ang)];
         const fourreaux = () => {
-          const order = [...m.fourreaux].sort((a2, b2) => b2.y - a2.y || b2.x - a2.x);
+          const cable = (c) => p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), "B");
+          const order = [...m.fourreaux].sort((a2, b2) => a2.y - b2.y || a2.x - b2.x);
           for (const fo of order) {
-            const r = fo.od / 2 * s, cx = X(fo.x), cy = Y(fo.y);
-            p.cylindre(cx, cy, cx + ex, cy + ey, r, fo.di / 2 * s, MAT.tpc);
+            const cx = X(fo.x), cy = Y(fo.y);
+            p.cylindre(cx, cy, cx + ex, cy + ey, fo.od / 2 * s, fo.di / 2 * s, matFourreau(fo), "corps");
           }
-          for (const c of m.cables) {
-            p.rgb(PHASE_RGB[c.phase] || [0.25, 0.25, 0.25], false).rgb([0, 0, 0]).width(0.3).circle(X(c.x), Y(c.y), Math.max(0.6, c.od / 2 * s), "B");
+          for (const fo of order) {
+            const cx = X(fo.x), cy = Y(fo.y);
+            p.cylindre(cx, cy, cx + ex, cy + ey, fo.od / 2 * s, fo.di / 2 * s, matFourreau(fo), "bouche");
+            m.cables.filter((c) => c.fourreau === fo.id).forEach(cable);
           }
+          m.cables.filter((c) => !c.fourreau || !m.fourreaux.some((fo) => fo.id === c.fourreau)).forEach(cable);
         };
         if (m.forme === "circ") {
           const r = m.largeur / 2 * s, cx = X(m.largeur / 2), cy = Y(m.largeur / 2);
@@ -78786,8 +78808,8 @@ var require_vue3d = __commonJS({
             for (let t = 0.1; t < 1; t += 0.1) p.line(X(10) + ex * t, gy + ey * t, X(m.largeur - 10) + ex * t, gy + ey * t);
           }
           p.texture([[x02 - M, y02 + H], [x02 - M + ex, y02 + H + ey], [x02 + ex, y02 + H + ey], [x02, y02 + H]], surf, { seed: 3, contraste: 0.08 });
-          p.texture([[x02 + W, y02 - sol], [x02 + W + ex, y02 - sol + ey], [x02 + W + M + ex, y02 - sol + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + ex, y02 + H + ey], [x02 + W, y02 + H]], MAT.terre.map((c) => c * 0.85), { seed: 10 });
-          p.texture([[x02 + W, y02 + H], [x02 + W + ex, y02 + H + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + M, y02 + H]], surf, { seed: 4, contraste: 0.08 });
+          p.texture([[x02 + W + M, y02 - sol], [x02 + W + M + ex, y02 - sol + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + M, y02 + H]], MAT.terre.map((c) => c * 0.72), { seed: 12, contour: [0.3, 0.22, 0.15] });
+          p.texture([[x02 + W, y02 + H], [x02 + W + ex, y02 + H + ey], [x02 + W + M + ex, y02 + H + ey], [x02 + W + M, y02 + H]], surf, { seed: 4, contraste: 0.08, contour: [0.3, 0.22, 0.15] });
           p.texture([[x02 - M, y02 - sol], [x02 + W + M, y02 - sol], [x02 + W + M, y02 + H], [x02 + W, y02 + H], [x02 + W, y02], [x02, y02], [x02, y02 + H], [x02 - M, y02 + H]], MAT.terre, { seed: 8, contour: [0.3, 0.22, 0.15] });
           p.texture([[x02, y02], [x02 + W, y02], [x02 + W, y02 - Math.min(lit, sol)], [x02, y02 - Math.min(lit, sol)]], MAT.sable, { seed: 9, taille: 0.7 });
           p.rgb([0.3, 0.22, 0.15]).width(0.6).line(x02 + W, y02 + H, x02 + W + ex, y02 + H + ey).line(x02, y02 + H, x02 + ex, y02 + H + ey);
@@ -79043,7 +79065,7 @@ var require_vue3d = __commonJS({
       }
       function dessinerEtudeChambre(p, e, masques) {
         p.text(MARGE, PAGE_H - MARGE - 4, 16, `${e.nom || "Chambre"} \u2014 ${e.ok ? e.ref : "aucune chambre"} \u2014 vue de dessus`, { bold: true });
-        p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, "TONTONKAD \u2014 \xE9tude de chambre", { align: "right" });
+        p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, "nodial \u2014 \xE9tude de chambre", { align: "right" });
         p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
         const x = 560;
         let y = PAGE_H - MARGE - 40;
@@ -79321,111 +79343,385 @@ var require_vue3d = __commonJS({
       }
       const FORMATS_PAGE = { a4: [842, 595], a3: [1191, 842], a2: [1684, 1191], a1: [2384, 1684], a0: [3370, 2384] };
       const MISE_EN_PAGE_CHAMBRE = [
-        { type: "vuedessus", x: 0, y: 0, w: 5, h: 5 },
-        { type: "masque", cote: 1, x: 5, y: 0, w: 3.5, h: 3 },
-        { type: "masque", cote: 2, x: 8.5, y: 0, w: 3.5, h: 3 },
-        { type: "masque", cote: 3, x: 5, y: 3, w: 3.5, h: 3 },
-        { type: "masque", cote: 4, x: 8.5, y: 3, w: 3.5, h: 3 },
-        { type: "fourreaux", x: 0, y: 5, w: 5, h: 3 },
-        { type: "cables", x: 5, y: 6, w: 4, h: 2 },
-        { type: "cartouche", x: 9, y: 6, w: 3, h: 2 }
+        { type: "situation", x: 0, y: 0, w: 5, h: 4.7 },
+        { type: "masque", cote: 1, x: 5, y: 0, w: 3.5, h: 2.35 },
+        { type: "masque", cote: 2, x: 8.5, y: 0, w: 3.5, h: 2.35 },
+        { type: "masque", cote: 3, x: 5, y: 2.35, w: 3.5, h: 2.35 },
+        { type: "masque", cote: 4, x: 8.5, y: 2.35, w: 3.5, h: 2.35 },
+        { type: "contenu", x: 0, y: 4.7, w: 8.5, h: 3.3 },
+        { type: "cartouche", x: 8.5, y: 4.7, w: 3.5, h: 3.3 }
       ];
       const FACE_DU_COTE = { 1: "longPanB", 2: "pignonB", 3: "longPanA", 4: "pignonA" };
+      const TEINTE_COTE = { 1: [0.984, 0.89, 0.882], 2: [0.886, 0.953, 0.898], 3: [0.882, 0.922, 0.98], 4: [0.984, 0.937, 0.835] };
+      const TEINTE_LIGNE = { 1: [0.992, 0.945, 0.94], 2: [0.94, 0.976, 0.949], 3: [0.94, 0.961, 0.992], 4: [0.992, 0.969, 0.918] };
       const couper = (t, taille, largeur) => {
         t = String(t);
         const n = Math.max(3, Math.floor(largeur / (taille * 0.5)));
         return t.length > n ? t.slice(0, n - 1) + "\u2026" : t;
       };
+      function cssRgb(c) {
+        const s0 = String(c || "").trim();
+        let m = /^#([0-9a-f]{6})$/i.exec(s0);
+        if (m) {
+          const n = parseInt(m[1], 16);
+          return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+        }
+        m = /^rgba?\(\s*([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)/i.exec(s0);
+        if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+        m = /^hsla?\(\s*([\d.]+)(?:deg)?[ ,]+([\d.]+)%[ ,]+([\d.]+)%/i.exec(s0);
+        if (m) {
+          const h = +m[1] / 360, sa = +m[2] / 100, l = +m[3] / 100, q = l < 0.5 ? l * (1 + sa) : l + sa - l * sa, pp = 2 * l - q;
+          const f2 = (t) => {
+            t = (t + 1) % 1;
+            return t < 1 / 6 ? pp + (q - pp) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp;
+          };
+          return [f2(h + 1 / 3), f2(h), f2(h - 1 / 3)];
+        }
+        return null;
+      }
+      function phaseDeCouleur(rgb) {
+        if (!rgb) return null;
+        const [r, g, b] = rgb, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+        if (mx - mn < 0.08) return l < 0.35 ? "L2" : "L3";
+        if (r > g && g > b && r - b > 0.15) return "L1";
+        if (g >= r && g > b) return "PE";
+        if (b > r && b > g) return "N";
+        return null;
+      }
+      function sectionsParPhases(m) {
+        return [...m].sort((a, b) => a[0].startsWith("PE") - b[0].startsWith("PE") || b[1] - a[1]).map(([k, q]) => {
+          if (k.startsWith("PE")) return q === 1 ? k : `${q}\xD7${k.slice(3)} PE`;
+          if (q >= 3 && q % 3 === 0) return q === 3 ? `3\xD7${k}` : `3\xD7${q / 3}\xD7${k}`;
+          if (q > 3 && q % 3 === 1) return `${q === 4 ? "3" : `3\xD7${(q - 1) / 3}`}\xD7${k} + 1\xD7${k}`;
+          return `${q}\xD7${k}`;
+        }).join(" + ");
+      }
+      const CARTOUCHE_DEFAUT = [
+        { libelle: "Projet", valeur: "{projet}", large: true },
+        { libelle: "Ma\xEEtre d\u2019ouvrage", valeur: "{client}", large: true },
+        { libelle: "Objet", valeur: "\xC9tude de chambre {chambre}", large: true },
+        { libelle: "Chambre", valeur: "{modele}", large: true },
+        { libelle: "Int\xE9rieur", valeur: "{interieur}" },
+        { libelle: "Tampons", valeur: "{tampons}" },
+        { libelle: "Phase", valeur: "{phase}" },
+        { libelle: "N\xB0 plan", valeur: "{plan}" },
+        { libelle: "Indice", valeur: "{indice}" },
+        { libelle: "Date", valeur: "{date}" },
+        { libelle: "Dessin\xE9", valeur: "{auteur}" },
+        { libelle: "V\xE9rifi\xE9", valeur: "" },
+        { libelle: "\xC9chelle", valeur: "sans" },
+        { libelle: "Format", valeur: "{format}" },
+        { libelle: "Folio", valeur: "{folio}" }
+      ];
+      function remplirCartouche(champs, valeurs) {
+        return (Array.isArray(champs) && champs.length ? champs : CARTOUCHE_DEFAUT).map((c) => ({
+          libelle: String(c.libelle || ""),
+          large: !!c.large,
+          valeur: String(c.valeur == null ? "" : c.valeur).replace(/\{(\w+)\}/g, (t, k) => valeurs[k] != null ? String(valeurs[k]) : "").trim()
+        }));
+      }
+      function drawSituation(p, sit, nomChambre, z2) {
+        if (!sit || !sit.noeuds || !sit.noeuds.length || !sit.coupes) return;
+        const bandes = sit.coupes.slice(0, -1).map((c0, b) => ({ c0, c1: sit.coupes[b + 1], y0: sit.ys[b][0], y1: sit.ys[b][1] }));
+        const gap = 120, H = bandes.reduce((a, b) => a + (b.y1 - b.y0), 0) + gap * (bandes.length - 1), W = Math.max(...bandes.map((b) => b.c1 - b.c0)) + 160;
+        const s = Math.min((z2.w - 8) / W, (z2.h - 8) / H), ox = z2.x + (z2.w - W * s) / 2 + 80 * s;
+        let yHaut = z2.y + z2.h - (z2.h - H * s) / 2;
+        bandes.forEach((b, i) => {
+          const hb = (b.y1 - b.y0) * s, yb = yHaut - hb;
+          const X = (x) => ox + (x - b.c0) * s, Y = (y) => yb + (b.y1 - y) * s;
+          const n0 = p.labels.length;
+          p.clip([[ox, yb], [ox + (b.c1 - b.c0) * s, yb], [ox + (b.c1 - b.c0) * s, yHaut], [ox, yHaut]], () => {
+            p.rgb([0.36, 0.39, 0.45]).width(Math.max(0.4, 4 * s));
+            sit.troncons.forEach((t) => {
+              if (!t.a || !t.b) return;
+              p.line(X(t.a.x), Y(t.a.y), X(t.b.x), Y(t.a.y)).line(X(t.b.x), Y(t.a.y), X(t.b.x), Y(t.b.y));
+            });
+            sit.troncons.forEach((t) => {
+              const e = t.e;
+              if (!e) return;
+              p.rgb([1, 1, 1], false).rgb([0.8, 0.82, 0.86]).width(Math.max(0.2, 2 * s)).rect(X(e.x - e.w / 2), Y(e.y + e.h / 2), e.w * s, e.h * s, "B");
+            });
+            sit.noeuds.forEach((n2) => {
+              p.rgb([1, 1, 1], false).rgb(cssRgb(n2.couleur) || [0.36, 0.42, 0.44]).width(Math.max(0.4, 4 * s)).rect(X(n2.x - n2.w / 2), Y(n2.y + n2.h / 2), n2.w * s, n2.h * s, "B");
+              const f2 = Math.min(7, 30 * s);
+              if (f2 >= 2.2) p.rgb([0.1, 0.1, 0.1], false).text(X(n2.x), Y(n2.y) - f2 * 0.35, f2, n2.nom, { align: "center", bold: true });
+            });
+          });
+          const xd = ox + (b.c1 - b.c0) * s;
+          const garder = p.labels.slice(n0).filter((l) => l.y >= yb - 1 && l.y <= yHaut + 1 && l.x >= ox - 1 && l.x <= xd + 1);
+          p.labels.length = n0;
+          p.labels.push(...garder);
+          if (i < bandes.length - 1) p.rgb([0.48, 0.51, 0.56], false).text(ox + (b.c1 - b.c0) * s + 3, yb + hb / 2 - 3, 9, "\u2026", { bold: true });
+          if (i > 0) p.rgb([0.48, 0.51, 0.56], false).text(ox - 9, yb + hb / 2 - 3, 9, "\u2026", { bold: true });
+          const n = sit.noeuds.find((x) => x.nom === nomChambre);
+          if (n && n.x >= b.c0 && n.x <= b.c1) {
+            const cx = X(n.x), cy = Y(n.y), rx = Math.max(10, n.w * s * 0.95), ry = Math.max(9, n.h * s * 1.6), k = 0.5523;
+            p.rgb([0.85, 0.11, 0.11]).width(1.6);
+            p.ops.push(`${(cx + rx).toFixed(2)} ${cy.toFixed(2)} m ${(cx + rx).toFixed(2)} ${(cy + ry * k).toFixed(2)} ${(cx + rx * k).toFixed(2)} ${(cy + ry).toFixed(2)} ${cx.toFixed(2)} ${(cy + ry).toFixed(2)} c ${(cx - rx * k).toFixed(2)} ${(cy + ry).toFixed(2)} ${(cx - rx).toFixed(2)} ${(cy + ry * k).toFixed(2)} ${(cx - rx).toFixed(2)} ${cy.toFixed(2)} c ${(cx - rx).toFixed(2)} ${(cy - ry * k).toFixed(2)} ${(cx - rx * k).toFixed(2)} ${(cy - ry).toFixed(2)} ${cx.toFixed(2)} ${(cy - ry).toFixed(2)} c ${(cx + rx * k).toFixed(2)} ${(cy - ry).toFixed(2)} ${(cx + rx).toFixed(2)} ${(cy - ry * k).toFixed(2)} ${(cx + rx).toFixed(2)} ${cy.toFixed(2)} c S`);
+            [[1, 0, ry], [2, rx, 0], [3, 0, -ry], [4, -rx, 0]].forEach(([k2, ex, ey]) => {
+              p.rgb([0.1, 0.11, 0.12], false).rgb([1, 1, 1]).width(0.8).circle(cx + ex, cy + ey, 4.6, "B");
+              p.rgb([1, 1, 1], false).text(cx + ex, cy + ey - 2, 5.6, String(k2), { align: "center", bold: true });
+            });
+            p.rgb([0.85, 0.11, 0.11], false).text(cx + rx + 7, cy + ry - 2, 8, n.nom, { bold: true });
+          }
+          yHaut = yb - gap * s;
+        });
+      }
+      function drawMasqueFace(p, mq, cote, e, z2) {
+        const FW = cote % 2 ? e.L : e.l, FH = e.H, ep = Math.max(80, (e.infos && e.infos.paroi || 150) * 0.5);
+        const s = Math.min(z2.w / (FW + 2 * ep), (z2.h - 22) / (FH + 2 * ep)), ox = z2.x + (z2.w - (FW + 2 * ep) * s) / 2 + ep * s, oy = z2.y + 12 + (z2.h - 22 - (FH + 2 * ep) * s) / 2 + ep * s;
+        p.rgb([0.79, 0.77, 0.72], false).rgb([0.44, 0.42, 0.38]).width(0.6).rect(ox - ep * s, oy - ep * s, (FW + 2 * ep) * s, (FH + 2 * ep) * s, "B");
+        p.rgb([1, 1, 1], false).rect(ox, oy, FW * s, FH * s, "B");
+        p.rgb([0.29, 0.33, 0.41], false).text(ox + FW * s / 2, oy + (FH + ep) * s + 2.5, 6, `${cote % 2 ? "Long-pan" : "Pignon"} \xB7 ${FW} \xD7 ${FH} mm int\xE9rieur`, { align: "center", bold: true });
+        const nx = (FW - mq.largeur) / 2, nyHaut = Math.min(FH, Math.max(mq.hauteur, FH - 250)), ny = nyHaut - mq.hauteur;
+        const X = (x) => ox + (nx + x) * s, Y = (y) => oy + (ny + y) * s;
+        const Xf = mq.sens === "arrivee" ? (x) => X(mq.largeur - x) : X;
+        p.rgb([0.69, 0.19, 0.16], false);
+        if (nx > 40) p.text(ox + nx * s / 2, Y(mq.hauteur / 2) - 2, 5.5, String(Math.round(nx)), { align: "center" });
+        if (FH - nyHaut > 40) p.text(X(mq.largeur / 2), oy + (nyHaut + (FH - nyHaut) / 2) * s - 2, 5.5, String(Math.round(FH - nyHaut)), { align: "center" });
+        p.rgb([0.984, 0.965, 0.933], false).rgb([0.23, 0.25, 0.28]).width(0.6).rect(X(0), Y(0), mq.largeur * s, mq.hauteur * s, "B");
+        const ordre = [];
+        (mq.cables || []).forEach((c) => {
+          const l = String(c.liaison || "").replace(/\s*-\s*PE$/i, "");
+          if (l && !ordre.includes(l)) ordre.push(l);
+        });
+        const coulF = (f2) => cssRgb(f2.couleur) || COUL_LIAISON[Math.max(0, ordre.indexOf(String((f2.liaisons || [])[0] || "").replace(/\s*-\s*PE$/i, ""))) % COUL_LIAISON.length];
+        const fs2 = Math.max(4.5, Math.min(8, Math.max(mq.largeur, mq.hauteur) * s / 22));
+        mq.fourreaux.forEach((f2) => {
+          const c = coulF(f2), ro = f2.od / 2 * s, ri = (f2.di || f2.od * 0.8) / 2 * s;
+          p.rgb(nuance(c, 1.82), false).rgb(c).width(Math.max(0.5, 1.1 * s * 10)).circle(Xf(f2.x), Y(f2.y), ro, "B");
+          p.rgb([1, 1, 1], false).width(Math.max(0.3, 0.6 * s * 10)).circle(Xf(f2.x), Y(f2.y), ri, "B");
+          p.rgb([0.1, 0.11, 0.12], false).text(Xf(f2.x), Y(f2.y) + ro + 1.2, fs2, String(f2.id).replace(/^F/, ""), { align: "center", bold: true });
+        });
+        (mq.cables || []).forEach((c) => {
+          const rgb = cssRgb(c.couleur), ph = c.phase || phaseDeCouleur(rgb), col = rgb || PHASE_RGB[ph] || [0.5, 0.5, 0.5], r = c.od / 2 * s;
+          p.rgb(col, false).rgb([0.04, 0.06, 0.08]).width(0.3).circle(Xf(c.x), Y(c.y), r, "B");
+          if (ph && r >= 2.6) p.rgb([1, 1, 1], false).text(Xf(c.x), Y(c.y) - r * 0.32, Math.min(r * 0.9, 5), ph, { align: "center", bold: true });
+        });
+        const nb = /* @__PURE__ */ new Map();
+        mq.fourreaux.forEach((f2) => {
+          const d = Math.round(f2.od);
+          nb.set(d, (nb.get(d) || 0) + 1);
+        });
+        p.rgb([0.29, 0.33, 0.41], false).text(z2.x + 2, z2.y + 2, 6.5, couper([...nb].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q}\xD7\xD8${d}`).join(" \xB7 "), 6.5, z2.w * 0.62));
+        p.rgb([0.69, 0.19, 0.16], false).text(z2.x + z2.w - 2, z2.y + 2, 6.5, `nappe ${Math.round(mq.largeur)} \xD7 ${Math.round(mq.hauteur)} mm`, { align: "right", bold: true });
+      }
+      function lignesContenuChambre(e, masques) {
+        const lignes = [];
+        for (let c = 1; c <= 4; c++) {
+          const mq = (masques || {})[FACE_DU_COTE[c]];
+          if (!mq) continue;
+          const parL = /* @__PURE__ */ new Map(), od = new Map(mq.fourreaux.map((f2) => [f2.id, Math.round(f2.od)]));
+          (mq.cables || []).forEach((cb) => {
+            const nom = String(cb.liaison || "").trim();
+            if (!nom) return;
+            const base = nom.replace(/\s*-\s*PE$/i, ""), pe = base !== nom || cb.phase === "PE" || cb.fonction === "PE";
+            if (!parL.has(base)) parL.set(base, { f: /* @__PURE__ */ new Set(), cab: /* @__PURE__ */ new Map() });
+            const g = parL.get(base);
+            if (cb.fourreau) g.f.add(cb.fourreau);
+            const k = (pe ? "PE " : "") + (cb.code || `\xD8${cb.od}`);
+            g.cab.set(k, (g.cab.get(k) || 0) + 1);
+          });
+          [...parL].sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true })).forEach(([nom, g]) => {
+            const ids = [...g.f].sort((a, b) => Number(String(a).slice(1)) - Number(String(b).slice(1)));
+            const parOd = /* @__PURE__ */ new Map();
+            ids.forEach((id) => {
+              const d = od.get(id);
+              if (d) parOd.set(d, (parOd.get(d) || 0) + 1);
+            });
+            lignes.push({ cote: c, cells: [`${e.nom}.${c}`, nomCourt(nom), ids.join(", "), [...parOd].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q}\xD7\xD8${d}`).join(" "), sectionsParPhases(g.cab)] });
+          });
+        }
+        return lignes;
+      }
       function dessinerPageChambreA3(p, e, masques, opts = {}) {
         const [PW, PH] = FORMATS_PAGE.a3, M = 28, ENT = 34;
         const gx = M, gy = M, gw = PW - 2 * M, gh = PH - 2 * M - ENT, CW = gw / 12, CH = gh / 8, G = 5;
         const zone = (b) => ({ x: gx + b.x * CW + G / 2, y: gy + (8 - b.y - b.h) * CH + G / 2, w: b.w * CW - G, h: b.h * CH - G });
-        const masquesM = masques || {};
-        p.rgb([0.1, 0.1, 0.1], false).text(M, PH - M - 16, 18, `${e.nom || "Chambre"} \u2014 ${e.ok ? e.ref : "aucune chambre"}`, { bold: true });
-        p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 16, 9, `${opts.projet || ""} \xB7 TONTONKAD \u2014 \xE9tude de chambre`, { align: "right" });
-        p.rgb([0.66, 0.27, 0.04]).width(1.2).line(M, PH - M - 24, PW - M, PH - M - 24);
-        const cadre = (z2, titre) => {
-          p.rgb([0.995, 0.995, 0.99], false).rgb([0.78, 0.8, 0.84]).width(0.7).rect(z2.x, z2.y, z2.w, z2.h, "B");
-          if (titre) {
-            p.rgb([0.93, 0.94, 0.96], false).rect(z2.x, z2.y + z2.h - 15, z2.w, 15, "f");
-            p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 6, z2.y + z2.h - 11, 8.5, couper(titre, 8.5, z2.w - 12), { bold: true });
-          }
+        const masquesM = masques || {}, etudeOk = e && e.ok;
+        if (!p.images) p.images = [];
+        enteteChambre(p, `${e.nom || "Chambre"} \u2014 ${etudeOk ? e.ref : "aucune chambre"}`, opts);
+        const cadre = (z2, titre, teinte) => {
+          p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(z2.x, z2.y, z2.w, z2.h, "B");
+          if (!titre) return { ...z2 };
+          p.rgb(teinte || [0.93, 0.945, 0.965], false).rect(z2.x + 0.35, z2.y + z2.h - 15, z2.w - 0.7, 14.65, "f");
+          p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 6, z2.y + z2.h - 11, 8.5, couper(titre, 8.5, z2.w - 12), { bold: true });
+          return { x: z2.x + 4, y: z2.y + 4, w: z2.w - 8, h: z2.h - 23 };
         };
-        const etudeOk = e && e.ok;
         for (const b of MISE_EN_PAGE_CHAMBRE) {
           const z2 = zone(b);
-          if (b.type === "vuedessus") {
-            cadre(z2, "Vue de dessus");
-            if (etudeOk) drawChambreDessus(p, e, masquesM, z2.x + 4, z2.y + 4, z2.w - 8, z2.h - 24);
+          if (b.type === "situation") {
+            const zi = cadre(z2, "Situation dans le r\xE9seau");
+            if (opts.iso && opts.iso.noeuds && opts.iso.noeuds.some((n) => n.nom === e.nom)) {
+              const enc = { w: zi.w * 0.44, h: zi.h * 0.48 };
+              enc.x = zi.x;
+              enc.y = zi.y;
+              const oIso = { repere: e.nom, reserve: enc, echelleMax: Infinity };
+              const essai = drawSynoptiqueIso(new Page({ emitText: false, ombre: false }), opts.iso, zi.x, zi.y, zi.w, zi.h, oIso) || {};
+              if (essai.repere) {
+                const r = essai.repere;
+                p.rgb([0.85, 0.11, 0.11]).width(0.7).dash(true).line(r.x0, (r.y0 + r.y1) / 2, enc.x + enc.w, enc.y + enc.h * 0.6).dash(false);
+              }
+              drawSynoptiqueIso(p, opts.iso, zi.x, zi.y, zi.w, zi.h, oIso);
+              p.rgb([1, 1, 1], false).rgb([0.45, 0.48, 0.53]).width(0.9).rect(enc.x, enc.y, enc.w, enc.h, "B");
+              drawSynoptiqueIso(p, opts.iso, enc.x + 2, enc.y + 2, enc.w - 4, enc.h - 4, { cible: e.nom, echelleMax: Infinity });
+              p.rgb([0.45, 0.48, 0.53]).width(0.9).rect(enc.x, enc.y, enc.w, enc.h, "S");
+            } else drawSituation(p, opts.situation, e.nom, zi);
           } else if (b.type === "masque") {
-            const k = FACE_DU_COTE[b.cote], mq = masquesM[k];
+            const mq = masquesM[FACE_DU_COTE[b.cote]];
             const L = mq && mq.longueurM ? ` \xB7 ${String(mq.longueurM).replace(".", ",")} m` : "";
-            cadre(z2, `${e.nom || "C"}.${b.cote} \xB7 ${mq ? mq.nom + L : "c\xF4t\xE9 libre"}`);
-            if (mq) {
-              drawCoupe(p, mq, z2.x + 40, z2.y + 34, z2.w - 80, z2.h - 64);
-              const nb = /* @__PURE__ */ new Map();
-              mq.fourreaux.forEach((f2) => {
-                const d = Math.round(f2.od);
-                nb.set(d, (nb.get(d) || 0) + 1);
-              });
-              p.rgb([0.25, 0.25, 0.25], false).text(z2.x + 6, z2.y + 6, 7, couper([...nb].sort((a, c) => c[0] - a[0]).map(([d, q]) => `${q} \xD7 \xD8${d}`).join("   ") + `   \xB7   nappe ${Math.round(mq.largeur)} \xD7 ${Math.round(mq.hauteur)} mm`, 7, z2.w - 12));
-            }
-          } else if (b.type === "fourreaux") {
-            cadre(z2, "Contenu des fourreaux, par c\xF4t\xE9 et par liaison");
-            const lignes = [];
-            for (let c = 1; c <= 4; c++) {
-              const mq = masquesM[FACE_DU_COTE[c]];
-              if (!mq) continue;
-              const parLiaison = /* @__PURE__ */ new Map();
-              mq.fourreaux.forEach((f2) => {
-                const nom = String(f2.liaisons && f2.liaisons[0] || f2.libelle || "r\xE9serve").replace(/\s*-\s*PE$/i, "");
-                if (!parLiaison.has(nom)) parLiaison.set(nom, { f: /* @__PURE__ */ new Map(), c: /* @__PURE__ */ new Map() });
-                const g = parLiaison.get(nom), d = Math.round(f2.od);
-                g.f.set(d, (g.f.get(d) || 0) + 1);
-                (mq.cables || []).filter((x) => x.fourreau === f2.id).forEach((x) => {
-                  const k2 = x.code || `\xD8${x.od}`;
-                  g.c.set(k2, (g.c.get(k2) || 0) + 1);
-                });
-              });
-              [...parLiaison].sort((a, c2) => a[0].localeCompare(c2[0], "fr", { numeric: true })).forEach(([nom, g]) => lignes.push([
-                `${e.nom}.${c}`,
-                nomCourt(nom),
-                [...g.f].sort((a, c2) => c2[0] - a[0]).map(([d, q]) => `${q}\xD7\xD8${d}`).join(" "),
-                [...g.c].map(([k2, q]) => `${q}\xD7${k2}`).join(" + ") || "\u2014"
-              ]));
-            }
-            tableauPdf(p, z2, ["Masque", "Liaison", "Fourreaux", "C\xE2bles"], [0.11, 0.42, 0.17, 0.3], lignes);
-          } else if (b.type === "cables") {
-            cadre(z2, "Travers\xE9es de la chambre (faisceaux)");
-            const LIB = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
-            const lignes = [];
-            regrouperFaisceaux(e).forEach((fx, i) => [...new Set(fx.liaisons.map((x) => String(x).replace(/\s*-\s*PE$/i, "")))].forEach((l, j) => lignes.push([j ? "" : `${i + 1}`, j ? "" : `${e.nom}.${LIB[fx.cles[0]]} \u2192 ${e.nom}.${LIB[fx.cles[1]]}`, nomCourt(l)])));
-            const arr = /* @__PURE__ */ new Map();
-            (e.arrets || []).forEach((a) => {
-              if (!arr.has(a.cle)) arr.set(a.cle, []);
-              arr.get(a.cle).push(a.liaison);
-            });
-            arr.forEach((noms, k) => [...new Set(noms.map((x) => String(x).replace(/\s*-\s*PE$/i, "")))].forEach((l, j) => lignes.push([j ? "" : "\u25A0", j ? "" : `s'arr\xEAte en ${e.nom}.${LIB[k]}`, nomCourt(l)])));
-            tableauPdf(p, z2, ["N\xB0", "C\xF4t\xE9s", "Liaison"], [0.08, 0.3, 0.62], lignes);
+            const zi = cadre(z2, `${e.nom || "C"}.${b.cote} \xB7 ${mq ? mq.nom + L : "c\xF4t\xE9 libre"}`, TEINTE_COTE[b.cote]);
+            if (mq && etudeOk) drawMasqueFace(p, mq, b.cote, e, zi);
+          } else if (b.type === "contenu") {
+            const zi = cadre(z2, "Contenu des fourreaux, par c\xF4t\xE9 et par liaison");
+            p.lignesRestantes = tableauQuadrille(p, zi, ENTETES_CONTENU, PARTS_CONTENU, lignesContenuChambre(e, masquesM), "suite sur la page suivante");
           } else if (b.type === "cartouche") {
-            cadre(z2, "Cartouche");
-            const L2 = [
-              ["Projet", opts.projet || "\u2014"],
-              ["Chambre", `${e.nom || "\u2014"} \xB7 ${etudeOk ? e.ref : "\u2014"}`],
-              ["Int\xE9rieur", etudeOk ? `${e.L} \xD7 ${e.l} \xD7 ${e.H} mm` : "\u2014"],
-              ...etudeOk && e.infos && e.infos.tampon && e.infos.tampons ? [["Tampons", `${e.infos.tampons} \xD7 ${e.infos.tampon.L}\xD7${e.infos.tampon.l} ${e.infos.tampon.classe} (\xE0 valider)`]] : [],
-              ["Date", opts.date || ""],
-              ["Indice", opts.indice || "A"],
-              ["\xC9tabli par", "CEA \u2014 TONTONKAD"]
-            ];
-            L2.forEach(([k, v], i) => {
-              const y = z2.y + z2.h - 30 - i * 13;
-              p.rgb([0.4, 0.4, 0.4], false).text(z2.x + 8, y, 7.5, k);
-              p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 70, y, 8, couper(v, 8, z2.w - 78), { bold: true });
-            });
+            cadre(z2, null);
+            dessinerCartouche(p, { x: z2.x + 5, y: z2.y + 5, w: z2.w - 10, h: z2.h - 10 }, opts.cartouche || {}, valeursCartouche(e, opts));
           }
         }
         return p;
+      }
+      function valeursCartouche(e, opts) {
+        const ok2 = e && e.ok;
+        return {
+          projet: opts.projet || "",
+          chambre: e.nom || "",
+          modele: ok2 ? e.ref : "\u2014",
+          date: opts.date || "",
+          indice: opts.indice || "A",
+          format: "A3",
+          client: opts.client || "",
+          auteur: opts.auteur || "",
+          phase: opts.phase || "",
+          plan: opts.plan || "",
+          interieur: ok2 ? `${e.L} \xD7 ${e.l} \xD7 ${e.H} mm` : "\u2014",
+          tampons: ok2 && e.infos && e.infos.tampon && e.infos.tampons ? `${e.infos.tampons} \xD7 ${e.infos.tampon.L}\xD7${e.infos.tampon.l} ${e.infos.tampon.classe}` : "\u2014",
+          folio: opts.folio ? `${opts.folio.i} / ${opts.folio.n}` : "1 / 1"
+        };
+      }
+      function enteteChambre(p, titre, opts) {
+        const [PW, PH] = FORMATS_PAGE.a3, M = 28;
+        p.rgb([0.1, 0.1, 0.1], false).text(M, PH - M - 16, 18, titre, { bold: true });
+        const folio = opts.folio && opts.folio.n > 1 ? `Folio ${opts.folio.i} / ${opts.folio.n}  \xB7  ` : "";
+        p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 16, 9, `${folio}${opts.projet || ""} \xB7 nodial \u2014 \xE9tude de chambre`, { align: "right" });
+        p.rgb([0.72, 0.3, 0.07]).width(1.2).line(M, PH - M - 24, PW - M, PH - M - 24);
+      }
+      function pagesChambreA3(e, masques, opts, nouvellePage) {
+        const essai = (folio) => {
+          const pages = [], o = { ...opts, folio };
+          const p0 = nouvellePage();
+          dessinerPageChambreA3(p0, e, masques, o);
+          pages.push(p0);
+          let reste = p0.lignesRestantes || [];
+          while (reste.length && pages.length < 50) {
+            const ps = nouvellePage();
+            reste = dessinerPageContenuA3(ps, e, reste, { ...o, masques, folio: folio && { ...folio, i: pages.length + 1 } });
+            pages.push(ps);
+          }
+          return pages;
+        };
+        const n = essai(null).length;
+        return n > 1 ? essai({ i: 1, n }) : essai(null);
+      }
+      const ENTETES_CONTENU = ["Masque", "Liaison", "N\xB0 fourreaux", "Fourreaux", "C\xE2bles"], PARTS_CONTENU = [0.08, 0.26, 0.17, 0.2, 0.29];
+      function dessinerPageContenuA3(p, e, lignes, opts = {}) {
+        const [PW, PH] = FORMATS_PAGE.a3, M = 28, ENT = 34, gw = PW - 2 * M, gh = PH - 2 * M - ENT, CW = gw / 12, CH = gh / 8, G = 5;
+        if (!p.images) p.images = [];
+        enteteChambre(p, `${e.nom || "Chambre"} \u2014 contenu des fourreaux (suite)`, opts);
+        const zt = { x: M + G / 2, y: M + G / 2, w: 8.5 * CW - G, h: gh - G };
+        p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(zt.x, zt.y, zt.w, zt.h, "B");
+        p.rgb([0.93, 0.945, 0.965], false).rect(zt.x + 0.35, zt.y + zt.h - 15, zt.w - 0.7, 14.65, "f");
+        p.rgb([0.1, 0.1, 0.1], false).text(zt.x + 6, zt.y + zt.h - 11, 8.5, "Contenu des fourreaux, par c\xF4t\xE9 et par liaison (suite)", { bold: true });
+        const reste = tableauQuadrille(p, { x: zt.x + 4, y: zt.y + 4, w: zt.w - 8, h: zt.h - 23 }, ENTETES_CONTENU, PARTS_CONTENU, lignes, "suite sur la page suivante");
+        const zc = { x: M + 8.5 * CW + G / 2, y: M + G / 2, w: 3.5 * CW - G, h: 3.3 * CH - G };
+        p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(zc.x, zc.y, zc.w, zc.h, "B");
+        dessinerCartouche(p, { x: zc.x + 5, y: zc.y + 5, w: zc.w - 10, h: zc.h - 10 }, opts.cartouche || {}, valeursCartouche(e, opts));
+        const vues = lignes.slice(0, lignes.length - reste.length);
+        const cotes = [...new Set(vues.map((l) => l.cote).filter((c) => c >= 1 && c <= 4))].sort();
+        const masques = opts.masques || {};
+        const aDessiner = cotes.filter((c) => masques[FACE_DU_COTE[c]]);
+        if (aDessiner.length && e && e.ok) {
+          const zl = { x: zc.x, y: zc.y + zc.h + G, w: zc.w, h: M + gh - G / 2 - (zc.y + zc.h + G) };
+          const hCase = (zl.h - G * (aDessiner.length - 1)) / aDessiner.length;
+          aDessiner.forEach((c, i) => {
+            const mq = masques[FACE_DU_COTE[c]], z2 = { x: zl.x, y: zl.y + zl.h - (i + 1) * hCase - i * G, w: zl.w, h: hCase };
+            const L = mq.longueurM ? ` \xB7 ${String(mq.longueurM).replace(".", ",")} m` : "";
+            p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(z2.x, z2.y, z2.w, z2.h, "B");
+            p.rgb(TEINTE_COTE[c], false).rect(z2.x + 0.35, z2.y + z2.h - 15, z2.w - 0.7, 14.65, "f");
+            p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 6, z2.y + z2.h - 11, 8.5, couper(`${e.nom || "C"}.${c} \xB7 ${mq.nom}${L}`, 8.5, z2.w - 12), { bold: true });
+            drawMasqueFace(p, mq, c, e, { x: z2.x + 4, y: z2.y + 4, w: z2.w - 8, h: z2.h - 23 });
+          });
+        }
+        return reste;
+      }
+      function dessinerCartouche(p, z2, cart, valeurs) {
+        const cote = Math.min(58, z2.h * 0.3), yLogo = z2.y + z2.h - cote;
+        [["MOA", cart.logoMOA, z2.x], ["MOE", cart.logoMOE, z2.x + z2.w - cote]].forEach(([nom, logo, x]) => {
+          if (logo && logo.src) {
+            if (!p.images) p.images = [];
+            p.images.push({ src: logo.src, format: logo.format, x, y: yLogo, w: cote, h: cote });
+          } else {
+            p.rgb([0.6, 0.64, 0.69]).width(0.6).dash(true).rect(x, yLogo, cote, cote, "S").dash(false);
+            p.rgb([0.48, 0.51, 0.56], false).text(x + cote / 2, yLogo + cote / 2 - 3, 7.5, `Logo ${nom}`, { align: "center", bold: true });
+          }
+        });
+        p.rgb([0.48, 0.51, 0.56], false).text(z2.x + z2.w / 2, yLogo + cote / 2 - 3, 6.5, "Ma\xEEtre d\u2019ouvrage \xB7 Ma\xEEtre d\u2019\u0153uvre", { align: "center" });
+        const champs = remplirCartouche(cart.champs, valeurs);
+        const rangees = [];
+        let cur = [];
+        champs.forEach((c) => {
+          if (c.large) {
+            if (cur.length) {
+              rangees.push(cur);
+              cur = [];
+            }
+            rangees.push([c]);
+          } else {
+            cur.push(c);
+            if (cur.length === 2) {
+              rangees.push(cur);
+              cur = [];
+            }
+          }
+        });
+        if (cur.length) rangees.push(cur);
+        const haut = yLogo - 6, lh = Math.min(24, (haut - z2.y) / Math.max(1, rangees.length)), fl = Math.min(8.5, lh * 0.5);
+        rangees.forEach((r, i) => {
+          const y = haut - (i + 1) * lh, n = r.length, wc = z2.w / n;
+          r.forEach((c, k) => {
+            const x = z2.x + k * wc, wl = Math.min(wc * 0.42, 62);
+            p.rgb([0.965, 0.97, 0.976], false).rgb([0.81, 0.83, 0.86]).width(0.5).rect(x, y, wl, lh, "B");
+            p.rgb([1, 1, 1], false).rect(x + wl, y, wc - wl, lh, "B");
+            p.rgb([0.29, 0.33, 0.41], false).text(x + 3, y + lh / 2 - fl * 0.35, fl, couper(c.libelle, fl, wl - 5));
+            p.rgb([0.1, 0.1, 0.1], false).text(x + wl + 3, y + lh / 2 - fl * 0.35, fl, couper(c.valeur, fl, wc - wl - 5), { bold: true });
+          });
+        });
+      }
+      function tableauQuadrille(p, z2, entetes, parts, lignes, renvoi) {
+        const f2 = 6.8, lh = 9.4, x0 = z2.x, w = z2.w, xs = [];
+        let acc = x0;
+        parts.forEach((q) => {
+          xs.push(acc);
+          acc += q * w;
+        });
+        xs.push(x0 + w);
+        let y = z2.y + z2.h - lh;
+        const max = Math.max(1, Math.floor((z2.h - lh) / lh));
+        const vis = lignes.length > max ? lignes.slice(0, max - 1) : lignes, reste = lignes.slice(vis.length);
+        p.rgb([0.953, 0.961, 0.973], false).rect(x0, y, w, lh, "f");
+        entetes.forEach((t, i) => p.rgb([0.18, 0.2, 0.25], false).text(xs[i] + 3, y + 3, f2, t, { bold: true }));
+        vis.forEach((l) => {
+          y -= lh;
+          p.rgb(TEINTE_LIGNE[l.cote] || [1, 1, 1], false).rect(x0, y, w, lh, "f");
+          l.cells.forEach((c, i) => p.rgb(i === 0 ? [0.1, 0.1, 0.1] : i === 2 ? [0.72, 0.3, 0.07] : i === 4 ? [0.42, 0.25, 0.08] : [0.18, 0.2, 0.25], false).text(xs[i] + 3, y + 3, f2, couper(c, f2, parts[i] * w - 6), { bold: i === 0 || i === 2 }));
+        });
+        p.rgb([0.81, 0.83, 0.86]).width(0.5);
+        const yb = y;
+        for (let k = 0; k <= vis.length + 1; k++) p.line(x0, yb + k * lh, x0 + w, yb + k * lh);
+        xs.forEach((x) => p.line(x, yb, x, z2.y + z2.h));
+        if (reste.length) p.rgb([0.55, 0.2, 0.1], false).text(x0 + 3, yb - 8, f2, `\u2026 ${reste.length} ligne${reste.length > 1 ? "s" : ""} de plus : ${renvoi || "voir les tableaux d\xE9taill\xE9s du rapport"}`);
+        return reste;
       }
       function tableauPdf(p, z2, entetes, parts, lignes) {
         const f2 = 6.6, lh = 8.6, x0 = z2.x + 4, w = z2.w - 8;
@@ -79471,36 +79767,142 @@ var require_vue3d = __commonJS({
           if (n.sous) p.rgb([0.35, 0.35, 0.35], false).text(cx, cy - 9, 7, n.sous, { align: "center" });
         }
       }
-      function drawSynoptiqueIso(p, data, zx, zy, zw, zh, { echelleMax = 1.8 } = {}) {
+      const ANNEAU = { marge: 0.18, mini: 26 };
+      const ISO_DEFAUT = { projection: "iso", liaisons: "sol", etiquettesTroncons: false, trait: { couleur: [0.086, 0.098, 0.114], epaisseur: 3.2, selonFourreaux: true, liser\u00E9: true } };
+      function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) {
         if (!data.noeuds.length) return;
-        const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
-        const iso = (x, y, z2) => [(x - y) * C, -(x + y) * S + z2];
+        const { echelleMax = 1.8 } = opts;
+        const O = { ...ISO_DEFAUT, ...opts, trait: { ...ISO_DEFAUT.trait, ...opts.trait || {} } };
+        const SOL = O.liaisons === "sol";
+        let iso, profondeur;
+        if (O.projection === "plano") {
+          const KX = 0.34, KY = 0.62;
+          iso = (x, y, z2) => [x - z2 * KX, -y + z2 * KY];
+          profondeur = (x, y) => x * KX + y * KY;
+        } else {
+          const C = Math.cos(Math.PI / 6), S = Math.sin(Math.PI / 6);
+          iso = (x, y, z2) => [(x - y) * C, -(x + y) * S + z2];
+          profondeur = (x, y) => x + y;
+        }
         const DEF = { chambre: [64, 40, 26], coffret: [30, 22, 60], sortie: [14, 14, 34] };
+        const G = (() => {
+          const ch = data.noeuds.filter((n) => n.type === "chambre" && n.w > 0);
+          if (!ch.length || !data.troncons.length) return 1;
+          const lg = data.troncons.map((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y)).sort((u, v) => u - v), L = lg[Math.floor(lg.length * 0.75)];
+          const wMax = Math.max(...ch.map((n) => n.w * 0.8));
+          let dmin = Infinity;
+          ch.forEach((a, i) => ch.forEach((b, j) => {
+            if (j > i) dmin = Math.min(dmin, Math.hypot(a.x - b.x, a.y - b.y));
+          }));
+          return Math.max(1, Math.min(3, 0.4 * L / wMax, 0.6 * dmin / wMax));
+        })();
+        const avecDims = data.noeuds.filter((n) => n.type === "chambre" && n.dims && n.dims.L > 0 && n.dims.l > 0);
+        const KMM = (() => {
+          if (!avecDims.length) return 0;
+          const ref = Math.max(...data.noeuds.filter((n) => n.type === "chambre" && n.w > 0).map((n) => n.w * 0.8 * G), 64);
+          return ref / Math.max(...avecDims.map((n) => Math.max(n.dims.L, n.dims.l)));
+        })();
+        const MED_CH = (() => {
+          const v = avecDims.map((n) => Math.max(n.dims.L, n.dims.l) * KMM).sort((a, b) => a - b);
+          return v.length ? v[v.length >> 1] : 0;
+        })();
         const dimsDe = (n) => {
+          if (n.type === "chambre" && KMM && n.dims && n.dims.L > 0 && n.dims.l > 0) {
+            const H = n.dims.H > 0 ? n.dims.H : Math.min(n.dims.L, n.dims.l);
+            return [n.dims.L * KMM, n.dims.l * KMM, Math.max(14, H * KMM * 0.45)];
+          }
+          if (KMM && n.type !== "chambre") {
+            const m = MED_CH;
+            return n.type === "coffret" ? [m * 0.32, m * 0.26, m * 0.62] : [m * 0.16, m * 0.16, m * 0.42];
+          }
           if (!(n.w > 0 && n.h > 0)) return DEF[n.type] || DEF.sortie;
-          if (n.type === "chambre") return [n.w * 0.8, n.h * 0.8, n.h * 0.55];
-          if (n.type === "coffret") return [n.w * 0.45, n.h * 0.55, n.h * 1.3];
-          return [n.h * 0.45, n.h * 0.45, n.h * 0.9];
+          if (n.type === "chambre") return [n.w * 0.8 * G, n.h * 0.8 * G, n.h * 0.55 * G];
+          if (n.type === "coffret") return [n.w * 0.45 * G, n.h * 0.55 * G, n.h * 0.9 * G];
+          return [n.h * 0.45 * G, n.h * 0.45 * G, n.h * 0.9 * G];
         };
-        const unite = data.noeuds.some((n) => n.w > 0) ? 1.9 : 1;
+        const unite = (data.noeuds.some((n) => n.w > 0) ? 1.9 : 1) * G;
+        data = { ...data, noeuds: data.noeuds.map((n) => ({ ...n })), troncons: data.troncons.map((t) => ({ ...t, a: { ...t.a }, b: { ...t.b } })) };
+        {
+          const NORM = { pignonA: [-1, 0], pignonB: [1, 0], longPanA: [0, 1], longPanB: [0, -1] };
+          const parPos = (x, y) => data.noeuds.find((n) => n.x === x && n.y === y);
+          data.troncons.forEach((t) => {
+            [[t.a, t.b], [t.b, t.a]].forEach(([c, o]) => {
+              if (c.type !== "chambre" || o.type === "chambre") return;
+              const ch = parPos(c.x, c.y), autre = parPos(o.x, o.y);
+              if (!ch || !autre) return;
+              let [ux, uy] = NORM[c.face] || [o.x - c.x, o.y - c.y];
+              const l = Math.hypot(ux, uy) || 1;
+              ux /= l;
+              uy /= l;
+              const [a, b] = dimsDe(ch), [a2, b2] = dimsDe(autre);
+              const besoin = Math.abs(ux) * (a + a2) / 2 + Math.abs(uy) * (b + b2) / 2 + 28 * unite;
+              const dn = (o.x - c.x) * ux + (o.y - c.y) * uy;
+              if (dn >= besoin) return;
+              const ox2 = o.x, oy2 = o.y, nx = o.x + ux * (besoin - dn), ny = o.y + uy * (besoin - dn);
+              autre.x = nx;
+              autre.y = ny;
+              data.troncons.forEach((t2) => [t2.a, t2.b].forEach((e) => {
+                if (e.x === ox2 && e.y === oy2) {
+                  e.x = nx;
+                  e.y = ny;
+                }
+              }));
+            });
+          });
+        }
+        const CIBLE = O.cible ? data.noeuds.find((n) => n.nom === O.cible) : null;
+        const REPERE = !CIBLE && O.repere ? data.noeuds.find((n) => n.nom === O.repere) : null;
+        const TR = Array.isArray(O.troncon) ? (() => {
+          const A = data.noeuds.find((n) => n.nom === O.troncon[0]), B = data.noeuds.find((n) => n.nom === O.troncon[1]);
+          return A && B ? data.troncons.find((t) => [[A, B], [B, A]].some(([u, v]) => t.a.x === u.x && t.a.y === u.y && t.b.x === v.x && t.b.y === v.y)) || null : null;
+        })() : null;
+        let cadres = data.noeuds;
+        if (TR) {
+          const mx = (TR.a.x + TR.b.x) / 2, my = (TR.a.y + TR.b.y) / 2, R = Math.max(80, Math.hypot(TR.b.x - TR.a.x, TR.b.y - TR.a.y) * 0.75);
+          cadres = data.noeuds.filter((n) => Math.hypot(n.x - mx, n.y - my) <= R);
+        }
+        if (CIBLE) {
+          const dV = data.troncons.filter((t) => t.a.x === CIBLE.x && t.a.y === CIBLE.y || t.b.x === CIBLE.x && t.b.y === CIBLE.y).map((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y));
+          void dV;
+          const relie = (n) => data.troncons.some((t) => {
+            const ici = (e) => e.x === CIBLE.x && e.y === CIBLE.y, la = (e) => e.x === n.x && e.y === n.y;
+            return ici(t.a) && la(t.b) || ici(t.b) && la(t.a);
+          });
+          cadres = data.noeuds.filter((n) => n === CIBLE || relie(n));
+        }
         const pts = [];
-        data.noeuds.forEach((n) => {
+        cadres.forEach((n) => {
           const [a, b, h] = dimsDe(n);
-          [[-a, -b, 0], [a, b, 0], [-a, b, h], [a, -b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18 * unite)));
+          [[-a, -b, 0], [a, -b, 0], [a, b, 0], [-a, b, 0], [-a, -b, h], [a, -b, h], [a, b, h], [-a, b, h]].forEach(([dx, dy, z2]) => pts.push(iso(n.x + dx / 2, n.y + dy / 2, z2 + 18 * unite)));
         });
-        const X0 = Math.min(...pts.map((q) => q[0])) - 20, X1 = Math.max(...pts.map((q) => q[0])) + 20;
-        const Y0 = Math.min(...pts.map((q) => q[1])) - 20, Y1 = Math.max(...pts.map((q) => q[1])) + 20;
-        const MX = Math.min(90, zw * 0.12), MY = Math.min(40, zh * 0.08);
+        const PADU = CIBLE ? 6 : 20;
+        const X0 = Math.min(...pts.map((q) => q[0])) - PADU, X1 = Math.max(...pts.map((q) => q[0])) + PADU;
+        const Y0 = Math.min(...pts.map((q) => q[1])) - PADU, Y1 = Math.max(...pts.map((q) => q[1])) + PADU;
+        const MX = CIBLE ? Math.min(30, zw * 0.06) : Math.min(90, zw * 0.12), MY = CIBLE ? Math.min(18, zh * 0.05) : Math.min(40, zh * 0.08);
         const s = Math.min((zw - 2 * MX) / (X1 - X0), (zh - 2 * MY) / (Y1 - Y0), echelleMax);
-        const ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
+        let ox = zx + (zw - (X1 - X0) * s) / 2 - X0 * s, oy = zy + (zh - (Y1 - Y0) * s) / 2 - Y0 * s;
+        if (CIBLE) {
+          const [a0, b0] = dimsDe(CIBLE), m0 = ANNEAU.marge * Math.max(a0, b0), mini0 = ANNEAU.mini / (s * 0.8);
+          const rx0 = Math.max(a0 / 2 + m0, mini0), ry0 = Math.max(b0 / 2 + m0, mini0), PAS = 14;
+          const q = Array.from({ length: 36 }, (_, i) => {
+            const t = i / 36 * 2 * Math.PI, [u, v] = iso(CIBLE.x + rx0 * Math.cos(t), CIBLE.y + ry0 * Math.sin(t), 0);
+            return [ox + u * s, oy + v * s];
+          });
+          const x0 = Math.min(...q.map((k) => k[0])) - PAS, x1 = Math.max(...q.map((k) => k[0])) + PAS, y0 = Math.min(...q.map((k) => k[1])) - PAS, y1 = Math.max(...q.map((k) => k[1])) + PAS;
+          if (x0 < zx) ox += zx - x0;
+          else if (x1 > zx + zw) ox -= x1 - (zx + zw);
+          if (y0 < zy) oy += zy - y0;
+          else if (y1 > zy + zh) oy -= y1 - (zy + zh);
+        }
         const P = (x, y, z2 = 0) => {
           const [u, v] = iso(x, y, z2);
           return [ox + u * s, oy + v * s];
         };
         const LARG = 7 * unite, HAUT = 6 * unite;
         const bout = (e) => {
-          if (e.type !== "chambre") return { x: e.x, y: e.y, z: -HAUT };
-          const [a, b, h] = dimsDe(e), z2 = -8 * unite + h / 2;
+          if (e.type !== "chambre") return { x: e.x, y: e.y, z: SOL ? 0 : -HAUT };
+          const nd = data.noeuds.find((n) => n.x === e.x && n.y === e.y) || e;
+          const [a, b, h] = dimsDe(nd), z2 = SOL ? 0 : -8 * unite + h / 2;
           const off = { pignonA: [-a / 2, 0], pignonB: [a / 2, 0], longPanA: [0, b / 2], longPanB: [0, -b / 2] }[e.face] || [0, 0];
           return { x: e.x + off[0], y: e.y + off[1], z: z2 };
         };
@@ -79519,7 +79921,7 @@ var require_vue3d = __commonJS({
           const cum = net.map((q, k) => k ? L += Math.hypot(q.x - net[k - 1].x, q.y - net[k - 1].y) : 0);
           return net.map((q, k) => ({ ...q, z: A.z + (B.z - A.z) * (L ? cum[k] / L : 0) }));
         }
-        const vue = (vx, vy) => vx + vy;
+        const vue = profondeur;
         function segment(A0, B0, extA, extB, finA, finB) {
           const dx0 = B0.x - A0.x, dy0 = B0.y - A0.y, L0 = Math.hypot(dx0, dy0) || 1, ux = dx0 / L0, uy = dy0 / L0;
           const A = { ...A0, x: A0.x - (extA ? ux * LARG : 0), y: A0.y - (extA ? uy * LARG : 0) };
@@ -79565,7 +79967,7 @@ var require_vue3d = __commonJS({
             }
             if (best && best.c === 0) break;
           }
-          if (best) {
+          if (best && best.c <= 0.15 * (best.r.x1 - best.r.x0) * (best.r.y1 - best.r.y0)) {
             occupes.push(best.r);
             etiquettesTroncons.push(() => {
               if (best.decale) {
@@ -79580,7 +79982,7 @@ var require_vue3d = __commonJS({
         function tranchee(t) {
           const pts2 = trace(t);
           return pts2.slice(1).map((q, k) => ({
-            cle: (pts2[k].x + pts2[k].y + q.x + q.y) / 2,
+            cle: profondeur((pts2[k].x + q.x) / 2, (pts2[k].y + q.y) / 2),
             dessiner: () => segment(pts2[k], q, k > 0, k < pts2.length - 2, k === 0 && t.a.type !== "chambre", k === pts2.length - 2 && t.b.type !== "chambre")
           }));
         }
@@ -79595,43 +79997,172 @@ var require_vue3d = __commonJS({
           if (n.type === "chambre") {
             p.rgb(nuance(c, 0.9), false).rgb([0.2, 0.2, 0.2]).width(0.6).poly([P(x0 + 6, y0 + 6, z1 + 0.5), P(x1 - 6, y0 + 6, z1 + 0.5), P(x1 - 6, y1 - 6, z1 + 0.5), P(x0 + 6, y1 - 6, z1 + 0.5)], "B");
           }
-          const [tx, ty] = n._etiq || P(n.x, n.y, z1 + 14);
+          const et = n._etiq;
           etiquettes.push(() => {
-            const w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h2 = n.sous ? 22 : 14;
-            p.rgb([1, 1, 1], false).rgb(c).width(1.2).rect(tx - w / 2, ty - h2 + 10, w, h2, "B");
-            p.rgb([0.08, 0.08, 0.08], false).text(tx, ty, 8.5, n.nom, { align: "center", bold: true });
-            if (n.sous) p.rgb([0.3, 0.3, 0.3], false).text(tx, ty - 9, 6.5, n.sous, { align: "center" });
+            if (!et) return;
+            const w = ETQ.w(n.nom), h2 = ETQ.h, x02 = et.bx - w / 2, y02 = et.by - h2 / 2;
+            if (et.d > 6) {
+              const [vx, vy] = P(n.x, n.y, z1), ax = Math.max(x02, Math.min(x02 + w, vx)), ay = Math.max(y02, Math.min(y02 + h2, vy));
+              p.rgb([0.45, 0.47, 0.5]).width(0.6).line(ax, ay, vx, vy);
+              p.rgb([0.45, 0.47, 0.5], false).circle(vx, vy, 1.5, "f");
+            }
+            p.rgb([1, 1, 1], false).rgb(c).width(1.1).rrect(x02, y02, w, h2, 4.5, "B");
+            p.rgb([0.08, 0.08, 0.08], false).text(et.bx, et.by - ETQ.taille * 0.35, ETQ.taille, n.nom, { align: "center", bold: true });
           });
         }
         const etiquettes = [];
+        const empriseVolume = (n) => {
+          const [a, b, h] = dimsDe(n), z0 = n.type === "chambre" ? -8 * unite : 0, q = [];
+          [-1, 1].forEach((i) => [-1, 1].forEach((j) => [z0, z0 + h].forEach((z2) => q.push(P(n.x + i * a / 2, n.y + j * b / 2, z2)))));
+          return { x0: Math.min(...q.map((v) => v[0])), x1: Math.max(...q.map((v) => v[0])), y0: Math.min(...q.map((v) => v[1])), y1: Math.max(...q.map((v) => v[1])) };
+        };
         data.noeuds.forEach((n) => {
-          const [, , h0] = dimsDe(n), z1 = (n.type === "chambre" ? -8 * unite : 0) + h0;
-          const [tx0, ty0] = P(n.x, n.y, z1 + 14), w = Math.max(n.nom.length * 5.4, (n.sous || "").length * 3.9) + 12, h = n.sous ? 22 : 14;
-          const rect = (tx, ty) => ({ x0: tx - w / 2 - 3, x1: tx + w / 2 + 3, y0: ty - h + 7, y1: ty + 13 });
-          let best = null;
-          for (const [dx, dy] of [[0, 0], [0, 1], [0, 2], [1, 0], [-1, 0], [1, 1], [-1, 1], [0, -2]]) {
-            const tx = tx0 + dx * (w / 2 + 10), ty = ty0 + dy * (h + 6), c = chevauche(rect(tx, ty));
-            if (!best || c < best.c) best = { c, tx, ty };
-            if (c === 0) break;
-          }
-          n._etiq = [best.tx, best.ty];
-          occupes.push(rect(best.tx, best.ty));
+          n._emprise = empriseVolume(n);
+          occupes.push(n._emprise);
         });
-        data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
+        data.troncons.forEach((t) => {
+          const q = trace(t);
+          q.slice(1).forEach((b, k) => {
+            const a = q[k];
+            if (SOL) {
+              const [ax, ay] = P(a.x, a.y, 0), [bx, by] = P(b.x, b.y, 0), L = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(L / 8)), r = 4;
+              for (let i = 0; i <= n; i++) {
+                const x = ax + (bx - ax) * i / n, y = ay + (by - ay) * i / n;
+                occupes.push({ x0: x - r, x1: x + r, y0: y - r, y1: y + r });
+              }
+              return;
+            }
+            const c = [];
+            [-1, 1].forEach((sg) => [-HAUT, HAUT].forEach((dz) => [a, b].forEach((E) => {
+              const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / L * LARG, ny = (b.x - a.x) / L * LARG;
+              c.push(P(E.x + sg * nx, E.y + sg * ny, E.z + dz));
+            })));
+            occupes.push({ x0: Math.min(...c.map((v) => v[0])), x1: Math.max(...c.map((v) => v[0])), y0: Math.min(...c.map((v) => v[1])), y1: Math.max(...c.map((v) => v[1])) });
+          });
+        });
+        const ETQ = { taille: 8.5, h: 15, w: (nom) => String(nom).length * 5.3 + 14 };
+        const DIRS = [[0, 1, 0], [1, 1, 2], [-1, 1, 2], [1, 0, 3], [-1, 0, 3], [1, -1, 5], [-1, -1, 5], [0, -1, 6]];
+        function anneauCible() {
+          const [a, b] = dimsDe(CIBLE), m = ANNEAU.marge * Math.max(a, b), mini = ANNEAU.mini / (s * 0.8);
+          return { rx: Math.max(a / 2 + m, mini), ry: Math.max(b / 2 + m, mini) };
+        }
+        if (CIBLE) {
+          const { rx, ry } = anneauCible();
+          for (let i = 0; i < 48; i++) {
+            const t = i / 48 * 2 * Math.PI, [x, y] = P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0);
+            occupes.push({ x0: x - 3, x1: x + 3, y0: y - 3, y1: y + 3 });
+          }
+          [[0, -ry], [rx, 0], [0, ry], [-rx, 0]].forEach(([ex, ey]) => {
+            const [x, y] = P(CIBLE.x + ex, CIBLE.y + ey, 0);
+            occupes.push({ x0: x - 12, x1: x + 12, y0: y - 12, y1: y + 12 });
+          });
+        }
+        const RES = O.reserve ? { x0: O.reserve.x, x1: O.reserve.x + O.reserve.w, y0: O.reserve.y, y1: O.reserve.y + O.reserve.h } : null;
+        if (RES) occupes.push(RES, RES, RES);
+        const ordreEtq = [...data.noeuds].sort((a, b) => (a.type === "chambre" ? 0 : 1) - (b.type === "chambre" ? 0 : 1));
+        const CADRE = { x0: zx + 3, x1: zx + zw - 3, y0: zy + 3, y1: zy + zh - 3 };
+        const horsCadre = (r) => Math.max(0, CADRE.x0 - r.x0) + Math.max(0, r.x1 - CADRE.x1) + Math.max(0, CADRE.y0 - r.y0) + Math.max(0, r.y1 - CADRE.y1);
+        ordreEtq.forEach((n) => {
+          const e = n._emprise, w = ETQ.w(n.nom), h = ETQ.h, cx = (e.x0 + e.x1) / 2, cy = (e.y0 + e.y1) / 2, ew = e.x1 - e.x0, eh = e.y1 - e.y0;
+          const [nx0, ny0] = P(n.x, n.y, 0);
+          if (nx0 < zx || nx0 > zx + zw || ny0 < zy || ny0 > zy + zh) {
+            n._etiq = null;
+            return;
+          }
+          let best = null;
+          for (const d of [3, 12, 24, 40, 62]) {
+            for (const [dx, dy, pen] of DIRS) {
+              const bx2 = cx + dx * (ew / 2 + w / 2 + d), by2 = cy + dy * (eh / 2 + h / 2 + d);
+              const r = { x0: bx2 - w / 2 - 2, x1: bx2 + w / 2 + 2, y0: by2 - h / 2 - 2, y1: by2 + h / 2 + 2 };
+              const score = chevauche(r) * 40 + horsCadre(r) * 400 + d * 1.2 + pen * 4;
+              if (!best || score < best.score) best = { score, bx: bx2, by: by2, r, d };
+            }
+            if (best && best.score < 70) break;
+          }
+          const bx = Math.min(CADRE.x1 - w / 2, Math.max(CADRE.x0 + w / 2, best.bx)), by = Math.min(CADRE.y1 - h / 2, Math.max(CADRE.y0 + h / 2, best.by));
+          if (bx !== best.bx || by !== best.by) best = { ...best, bx, by, d: Math.max(best.d, 12), r: { x0: bx - w / 2 - 2, x1: bx + w / 2 + 2, y0: by - h / 2 - 2, y1: by + h / 2 + 2 } };
+          n._etiq = best;
+          occupes.push(best.r);
+        });
+        if (O.etiquettesTroncons) data.troncons.forEach((t) => placerEtiquetteTroncon(t, trace(t)));
+        const nLabels0 = p.labels.length;
+        const DECOUPE = CIBLE || TR;
+        if (DECOUPE) p.ops.push("q", `${zx.toFixed(2)} ${zy.toFixed(2)} ${zw.toFixed(2)} ${zh.toFixed(2)} re W n`);
+        if (SOL) {
+          const T = O.trait;
+          const largeur = (t) => T.selonFourreaux ? Math.max(1.4, Math.min(7, 1.2 + 0.9 * Math.sqrt(t.nf || 1))) : T.epaisseur;
+          const tous = data.troncons.map((t) => ({ t, pts: trace(t).map((q) => P(q.x, q.y, 0)) }));
+          const dessiner = (pts2, w, rgb) => {
+            for (let k = 1; k < pts2.length; k++) p.rgb(rgb).width(w).line(pts2[k - 1][0], pts2[k - 1][1], pts2[k][0], pts2[k][1]);
+          };
+          if (T.liser\u00E9) tous.forEach(({ t, pts: pts2 }) => dessiner(pts2, largeur(t) + 2.4, [1, 1, 1]));
+          tous.forEach(({ t, pts: pts2 }) => {
+            const coul = t === TR ? [0.85, 0.11, 0.11] : T.couleur, w = t === TR ? largeur(t) + 1.6 : largeur(t);
+            dessiner(pts2, w, coul);
+            pts2.slice(1, -1).forEach(([x, y]) => p.rgb(coul, false).circle(x, y, w / 2, "f"));
+          });
+          p.width(0.6);
+        }
         const elements = [
-          ...data.troncons.flatMap((t) => tranchee(t)),
+          ...SOL ? [] : data.troncons.flatMap((t) => tranchee(t)),
           ...data.noeuds.map((n) => {
-            let cle = n.x + n.y;
+            let cle = profondeur(n.x, n.y);
             if (n.type !== "chambre") data.troncons.forEach((t) => {
               const ici = t.a.x === n.x && t.a.y === n.y || t.b.x === n.x && t.b.y === n.y;
-              if (ici) cle = Math.max(cle, (t.a.x + t.a.y + t.b.x + t.b.y) / 2 + 0.01);
+              if (ici) cle = Math.max(cle, profondeur((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2) + 0.01);
             });
             return { cle, dessiner: () => volume(n) };
           })
         ].sort((u, v) => u.cle - v.cle);
+        let anneau = null;
+        if (CIBLE) {
+          const { rx, ry } = anneauCible();
+          anneau = { rx, ry };
+          const poly = Array.from({ length: 64 }, (_, i) => {
+            const t = i / 64 * 2 * Math.PI;
+            return P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0);
+          });
+          p.rgb([0.85, 0.11, 0.11]).width(1.8).poly(poly, "S").width(0.6);
+        }
         elements.forEach((e) => e.dessiner());
         etiquettesTroncons.forEach((f2) => f2());
         etiquettes.forEach((f2) => f2());
+        if (DECOUPE && !CIBLE) {
+          p.ops.push("Q");
+          const garder = p.labels.slice(nLabels0).filter((l) => l.x >= zx - 1 && l.x <= zx + zw + 1 && l.y >= zy - 1 && l.y <= zy + zh + 1);
+          p.labels.length = nLabels0;
+          p.labels.push(...garder);
+        }
+        if (CIBLE) {
+          const { rx, ry } = anneau;
+          [[1, 0, -ry], [2, rx, 0], [3, 0, ry], [4, -rx, 0]].forEach(([k, ex, ey]) => {
+            const [qx, qy] = P(CIBLE.x + ex, CIBLE.y + ey, 0);
+            p.rgb([0.1, 0.11, 0.12], false).rgb([1, 1, 1]).width(1.2).circle(qx, qy, 10.8, "B");
+            p.rgb([1, 1, 1], false).text(qx, qy - 4.6, 13.2, String(k), { align: "center", bold: true });
+          });
+          p.ops.push("Q");
+          const garder = p.labels.slice(nLabels0).filter((l) => l.x >= zx - 1 && l.x <= zx + zw + 1 && l.y >= zy - 1 && l.y <= zy + zh + 1);
+          p.labels.length = nLabels0;
+          p.labels.push(...garder);
+        }
+        if (RES) {
+          const dedans = (l) => l.x >= RES.x0 && l.x <= RES.x1 && l.y >= RES.y0 && l.y <= RES.y1;
+          const garder = p.labels.slice(nLabels0).filter((l) => !dedans(l));
+          p.labels.length = nLabels0;
+          p.labels.push(...garder);
+        }
+        let repere = null;
+        if (REPERE) {
+          const [a, b] = dimsDe(REPERE), mini = 9 / (s * 0.8), rx = Math.max(a * 0.9, mini), ry = Math.max(b * 0.9, mini);
+          const poly = Array.from({ length: 48 }, (_, i) => {
+            const t = i / 48 * 2 * Math.PI;
+            return P(REPERE.x + rx * Math.cos(t), REPERE.y + ry * Math.sin(t), 0);
+          });
+          p.rgb([0.85, 0.11, 0.11]).width(1.6).poly(poly, "S").width(0.6);
+          const xs = poly.map((q) => q[0]), ys = poly.map((q) => q[1]);
+          repere = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+        }
+        return { noeuds: data.noeuds.map((n) => P(n.x, n.y, 0)), repere };
       }
       function couperEnLargeur(data, Wu) {
         const pris = [];
@@ -79807,7 +80338,9 @@ var require_vue3d = __commonJS({
         }
         return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH };
       }
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const ICONE_NODIAL_PNG = "data:image/png;base64,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";
+      const MENTION_NODIAL = "R\xE9alis\xE9 avec nodial";
+      const api = { ISO_DEFAUT, TEINTES_FOURREAU, Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, dessinerCartouche, valeursCartouche, ICONE_NODIAL_PNG, MENTION_NODIAL, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, NORMALE_FACE, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -79818,18 +80351,19 @@ var require_vue3d = __commonJS({
 var require_pdf = __commonJS({
   "mcp/src/pdf.js"(exports2, module2) {
     "use strict";
+    var { ICONE_NODIAL_PNG, MENTION_NODIAL } = require_vue3d();
     var { Page, fit, drawCoupe, draw3D, drawChambre3D, dessinerEtudeChambre, drawSynoptique2D, drawSynoptiqueIso, PAGE_W, PAGE_H, MARGE } = require_vue3d();
     function pageMasque(m, i, total, opts) {
       const p = new Page();
       const L = Number(opts.longueur3dMm) > 0 ? Number(opts.longueur3dMm) : 1500;
       p.text(MARGE, PAGE_H - MARGE - 4, 16, m.nom, { bold: true });
-      p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `TONTONKAD \u2014 masque ${i + 1}/${total}`, { align: "right" });
+      p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `nodial \u2014 masque ${i + 1}/${total}`, { align: "right" });
       p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
       const zoneY = 215, zoneH = PAGE_H - MARGE - 40 - zoneY;
       p.text(MARGE, zoneY + zoneH + 10, 9, "Coupe", { bold: true });
       drawCoupe(p, m, MARGE + 50, zoneY, 300, zoneH - 10);
       p.text(440, zoneY + zoneH + 10, 9, `Vue 3D (tron\xE7on de ${L / 1e3} m, perspective cavali\xE8re)`, { bold: true });
-      draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, L);
+      draw3D(p, m, 440, zoneY, PAGE_W - MARGE - 440, zoneH - 10, L, { teinte: opts.teinteFourreaux });
       let y = 185;
       p.width(0.5).line(MARGE, y + 12, PAGE_W - MARGE, y + 12);
       p.text(MARGE, y, 9, "Fourreaux", { bold: true });
@@ -79873,7 +80407,7 @@ var require_pdf = __commonJS({
       const p = new Page();
       const ch = m.chambre;
       p.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} \u2014 chambre de tirage ${ch.ref}`, { bold: true });
-      p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `TONTONKAD \u2014 masque ${i + 1}/${total}`, { align: "right" });
+      p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `nodial \u2014 masque ${i + 1}/${total}`, { align: "right" });
       p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
       drawChambre3D(p, m, MARGE + 20, 120, 520, PAGE_H - MARGE - 60 - 120);
       const inf = ch.infos || {};
@@ -79896,12 +80430,12 @@ var require_pdf = __commonJS({
       p.rgb([0.4, 0.4, 0.4], false);
       y -= 22;
       const notes2 = ch.infos ? [
-        "Largeur, longueur, hauteur utile : catalogue TONTONKAD.",
+        "Largeur, longueur, hauteur utile : catalogue nodial.",
         `Hauteur totale${inf.paroi ? ", parois " + inf.paroi + " mm" : ""}${inf.tampons ? ", " + inf.tampons + " tampon(s)" : ""} :`,
         "indicatif, sources publiques (pas une fiche fabricant).",
         "Hauteur utile en tirets bleus.",
         ...inf.aVerifier ? [`\xC0 v\xE9rifier : ${inf.aVerifier}.`] : []
-      ] : ["Cotes int\xE9rieures du catalogue TONTONKAD.", "Parois, cadre et tampon non repr\xE9sent\xE9s."];
+      ] : ["Cotes int\xE9rieures du catalogue nodial.", "Parois, cadre et tampon non repr\xE9sent\xE9s."];
       for (const l of notes2) {
         p.text(x, y, 7, l.slice(0, 70));
         y -= 10;
@@ -79958,6 +80492,70 @@ var require_pdf = __commonJS({
       });
       return [p1, p2, p3].map((p) => p.toString());
     }
+    function imageVersPdf(octets) {
+      const b = Buffer.isBuffer(octets) ? octets : Buffer.from(String(octets).replace(/^data:[^,]+,/, ""), "base64");
+      if (b[0] === 255 && b[1] === 216) {
+        let i2 = 2, w2 = 0, h2 = 0, comp = 3;
+        while (i2 < b.length) {
+          if (b[i2] !== 255) {
+            i2++;
+            continue;
+          }
+          const m = b[i2 + 1], len = b.readUInt16BE(i2 + 2);
+          if (m >= 192 && m <= 207 && ![196, 200, 204].includes(m)) {
+            h2 = b.readUInt16BE(i2 + 5);
+            w2 = b.readUInt16BE(i2 + 7);
+            comp = b[i2 + 9];
+            break;
+          }
+          i2 += 2 + len;
+        }
+        return { dict: `/Type /XObject /Subtype /Image /Width ${w2} /Height ${h2} /ColorSpace /${comp === 1 ? "DeviceGray" : comp === 4 ? "DeviceCMYK" : "DeviceRGB"} /BitsPerComponent 8 /Filter /DCTDecode`, data: b };
+      }
+      if (b.readUInt32BE(0) !== 2303741511) throw new Error("Logo : seuls les PNG et JPEG sont accept\xE9s");
+      const zlib = require("zlib");
+      let i = 8, w = 0, h = 0, prof = 8, type = 2;
+      const idat = [];
+      while (i < b.length) {
+        const len = b.readUInt32BE(i), t = b.toString("latin1", i + 4, i + 8), d = b.subarray(i + 8, i + 8 + len);
+        if (t === "IHDR") {
+          w = d.readUInt32BE(0);
+          h = d.readUInt32BE(4);
+          prof = d[8];
+          type = d[9];
+          if (d[12]) throw new Error("Logo PNG entrelac\xE9 non pris en charge : r\xE9enregistrez-le sans entrelacement");
+        } else if (t === "IDAT") idat.push(d);
+        else if (t === "IEND") break;
+        i += 12 + len;
+      }
+      if (prof !== 8 || ![0, 2, 4, 6].includes(type)) throw new Error("Logo PNG : 8 bits gris ou RVB attendus");
+      const nc = { 0: 1, 2: 3, 4: 2, 6: 4 }[type], bpp = nc, ligne = w * bpp, brut = zlib.inflateSync(Buffer.concat(idat));
+      const px = Buffer.alloc(h * ligne);
+      for (let y = 0; y < h; y++) {
+        const f = brut[y * (ligne + 1)], src = y * (ligne + 1) + 1, dst = y * ligne;
+        for (let x = 0; x < ligne; x++) {
+          const a = x >= bpp ? px[dst + x - bpp] : 0, up = y ? px[dst - ligne + x] : 0, c = y && x >= bpp ? px[dst - ligne + x - bpp] : 0, v = brut[src + x];
+          let r = v;
+          if (f === 1) r = v + a;
+          else if (f === 2) r = v + up;
+          else if (f === 3) r = v + (a + up >> 1);
+          else if (f === 4) {
+            const pp = a + up - c, pa = Math.abs(pp - a), pb = Math.abs(pp - up), pc = Math.abs(pp - c);
+            r = v + (pa <= pb && pa <= pc ? a : pb <= pc ? up : c);
+          }
+          px[dst + x] = r & 255;
+        }
+      }
+      const coul = type === 0 || type === 4 ? 1 : 3, alpha = type === 4 || type === 6;
+      const rgb = Buffer.alloc(w * h * coul), al = alpha ? Buffer.alloc(w * h) : null;
+      for (let k = 0; k < w * h; k++) {
+        for (let c = 0; c < coul; c++) rgb[k * coul + c] = px[k * nc + c];
+        if (al) al[k] = px[k * nc + nc - 1];
+      }
+      const res = { dict: `/Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /${coul === 1 ? "DeviceGray" : "DeviceRGB"} /BitsPerComponent 8 /Filter /FlateDecode`, data: zlib.deflateSync(rgb) };
+      if (al) res.smask = { dict: `/Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode`, data: zlib.deflateSync(al) };
+      return res;
+    }
     function masquesToPdf2(masques, opts = {}) {
       const ok2 = masques.filter((m) => m && m.ok);
       if (!ok2.length) throw new Error("Aucun masque \xE0 mettre en page");
@@ -79970,46 +80568,66 @@ var require_pdf = __commonJS({
       const font1 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
       const font2 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
       const kids = [];
-      const addPage = (text) => {
-        const content = Buffer.from(text, "latin1");
-        const cid = add(`<< /Length ${content.length} >>
+      const flux = (dict, data) => add(Buffer.concat([Buffer.from(`<< ${dict} /Length ${data.length} >>
 stream
-${content.toString("latin1")}
-endstream`);
-        kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /ExtGState << /GS1 << /ca 0.12 /CA 0.12 >> >> >> /Contents ${cid} 0 R >>`));
+`, "latin1"), data, Buffer.from("\nendstream", "latin1")]));
+      const addPage = (pg) => {
+        const o = typeof pg === "string" ? { contenu: pg } : pg;
+        const W = o.largeur || PAGE_W;
+        const pied = new Page({ ombre: false });
+        pied.rgb([0.55, 0.57, 0.61], false).text(W - 17, 10.2, 6.5, MENTION_NODIAL, { align: "right" });
+        const largTexte = MENTION_NODIAL.length * 6.5 * 0.5;
+        let texte = o.contenu + "\n" + pied.toString(), xo = "";
+        const images = [...o.images || [], { octets: ICONE_NODIAL_PNG, x: W - 17 - largTexte - 12, y: 8.5, w: 9, h: 9 }];
+        images.forEach((im, k) => {
+          try {
+            const img = imageVersPdf(im.octets);
+            const sm = img.smask ? flux(img.smask.dict, img.smask.data) : null;
+            const id = flux(img.dict + (sm ? ` /SMask ${sm} 0 R` : ""), img.data);
+            xo += ` /Im${k} ${id} 0 R`;
+            texte += `
+q ${im.w.toFixed(2)} 0 0 ${im.h.toFixed(2)} ${im.x.toFixed(2)} ${im.y.toFixed(2)} cm /Im${k} Do Q`;
+          } catch (e) {
+          }
+        });
+        const content = Buffer.from(texte, "latin1");
+        const cid = flux("", content);
+        kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${o.largeur || PAGE_W} ${o.hauteur || PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /ExtGState << /GS1 << /ca 0.12 /CA 0.12 >> >>${xo ? ` /XObject <<${xo} >>` : ""} >> /Contents ${cid} 0 R >>`));
       };
       for (const t of opts.pagesAvant || []) addPage(t);
       ok2.forEach((m, i) => {
         addPage(pageMasque(m, i, ok2.length, opts));
         if (m.chambre && m.chambre.face && opts.chambre !== false) addPage(pageChambre(m, i, ok2.length));
       });
-      for (const e of opts.etudesChambres || []) addPage(pageChambreDessus(e));
+      if (opts.pagesChambres) opts.pagesChambres.forEach(addPage);
+      else for (const e of opts.etudesChambres || []) addPage(pageChambreDessus(e));
       objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
       objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
-      let out = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+      const morceaux = [Buffer.from("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n", "latin1")];
+      let taille = morceaux[0].length;
       const offsets = [];
       objs.forEach((o, i) => {
-        offsets.push(Buffer.byteLength(out, "latin1"));
-        out += `${i + 1} 0 obj
-${o}
-endobj
-`;
+        offsets.push(taille);
+        const corps = Buffer.isBuffer(o) ? o : Buffer.from(String(o), "latin1");
+        const b = Buffer.concat([Buffer.from(`${i + 1} 0 obj
+`, "latin1"), corps, Buffer.from("\nendobj\n", "latin1")]);
+        morceaux.push(b);
+        taille += b.length;
       });
-      const xref = Buffer.byteLength(out, "latin1");
-      out += `xref
+      const fin = `xref
 0 ${objs.length + 1}
 0000000000 65535 f 
 ` + offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n 
-`).join("");
-      out += `trailer
+`).join("") + `trailer
 << /Size ${objs.length + 1} /Root ${catalog} 0 R >>
 startxref
-${xref}
+${taille}
 %%EOF
 `;
-      return Buffer.from(out, "latin1");
+      morceaux.push(Buffer.from(fin, "latin1"));
+      return Buffer.concat(morceaux);
     }
-    module2.exports = { masquesToPdf: masquesToPdf2, pagesReseau: pagesReseau2 };
+    module2.exports = { masquesToPdf: masquesToPdf2, pagesReseau: pagesReseau2, imageVersPdf };
   }
 });
 
@@ -80458,6 +81076,27 @@ var require_reseau = __commonJS({
         const reserve = coupe.fourreaux.some((f) => f.id != null) ? coupe.fourreaux.filter((f) => f.id != null && !occupes.has(f.id)).length : 0;
         return { phi: [...nb].sort((a, b) => b[0] - a[0]), liaisons, total: coupe.fourreaux.length, reserve };
       }
+      function faceDirection(dx, dy) {
+        if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "pignonB" : "pignonA";
+        return dy < 0 ? "longPanB" : "longPanA";
+      }
+      function alignerFaces(r, dis) {
+        let n = 0;
+        r.troncons.forEach((t) => {
+          const A = dis.noeuds[t.a.noeud], B = dis.noeuds[t.b.noeud];
+          if (!A || !B) return;
+          [["a", A, B], ["b", B, A]].forEach(([bout, ici, la]) => {
+            const nd = noeud(r, t[bout].noeud);
+            if (!nd || nd.type !== "chambre") return;
+            const f = faceDirection(la.x - ici.x, la.y - ici.y);
+            if (t[bout].face !== f) {
+              t[bout].face = f;
+              n += 1;
+            }
+          });
+        });
+        return n;
+      }
       function dispositionAncree(r, opts) {
         const E = opts.ecart == null ? 0.5 : opts.ecart, G = opts.marge == null ? 40 : opts.marge;
         const tN = (id) => opts.tailleNoeud(noeud(r, id)), tE = (t) => opts.tailleEtiquette(t);
@@ -80688,6 +81327,8 @@ var require_reseau = __commonJS({
         surFace,
         surFaceTous,
         facesLibres,
+        alignerFaces,
+        faceDirection,
         faceVers,
         verifierCoffret,
         depuisAncienneChambre,
@@ -81122,6 +81763,7 @@ var CompatChambres = require_compat_chambres();
 var { infosChambre, chambreMaconnee } = require_chambres_infos2();
 var Reseau = require_reseau();
 var { dessinMasque, dessinChambre, versMultiCAD, versDxf } = require_cad();
+var Vue3D = require_vue3d();
 var cat = loadCatalogues();
 var notes = /* @__PURE__ */ new Map();
 function getNote(chemin) {
@@ -81193,14 +81835,14 @@ var placementSchema = z.record(z.string(), z.object({
   rotation: z.number().optional().describe("Degr\xE9s, sens trigonom\xE9trique"),
   echelle: z.number().optional()
 })).optional().describe("Placement de chaque dessin sur le plan, par nom de dessin (\xAB Coupe <masque> \xBB, \xAB Chambre <nom> \xBB) : point de base en unit\xE9s du plan (mm), rotation en degr\xE9s. Sans placement, le dessin est \xE0 l'origine.");
-var INSTRUCTIONS = `TONTONKAD produit les masques de liaisons \xE9lectriques (coupes de tranch\xE9e ou de conduit) \xE0 partir des notes de calcul Caneco.
+var INSTRUCTIONS = `nodial produit les masques de liaisons \xE9lectriques (coupes de tranch\xE9e ou de conduit) \xE0 partir des notes de calcul Caneco.
 Avant toute g\xE9n\xE9ration, r\xE9unis dans le chat : la ou les notes de calcul (NDC), les tron\xE7ons voulus, le rendu souhait\xE9 (AutoCAD, ZWCAD, MultiCAD sur le plan DWG, Revit, PDF avec vue 3D), le plan si les masques doivent y \xEAtre pos\xE9s, et la zone (chauss\xE9e, trottoir\u2026).
 Appelle preparer_etude avec ce que tu sais ; s'il manque quelque chose, pose TOUTES ses questions \xE0 l'utilisateur en un seul message, puis rappelle-le avec les r\xE9ponses. Ne devine jamais un fichier ou une liaison.
 Si plusieurs masques arrivent dans une m\xEAme chambre de tirage, demande quelle face re\xE7oit quel masque (pignon A \xE0 gauche, pignon B \xE0 droite, long-pan A en bas, long-pan B en haut, vu de dessus) et passe-les dans le param\xE8tre chambres de generer_masques : la chambre est choisie pour recevoir toutes les faces et les travers\xE9es sont d\xE9duites. Demande aussi si la chambre est pr\xE9fabriqu\xE9e ou MA\xC7ONN\xC9E ; si ma\xE7onn\xE9e, demande l'\xE9paisseur des parois, le tampon (ouverture et classe) et la zone (param\xE8tre maconnee), sinon les valeurs par d\xE9faut sont prises et doivent \xEAtre signal\xE9es comme \xE0 valider.
 Pour un R\xC9SEAU (plusieurs chambres, coffrets, sorties reli\xE9s par des tron\xE7ons), utilise etudier_reseau : un appel donne les coupes de chaque tron\xE7on, l'\xE9tude de chaque chambre, le contr\xF4le des coffrets, la continuit\xE9 des liaisons et le m\xE9tr\xE9.
 Dessin sur un plan DWG avec le MCP multiCAD (AutoCAD, ZWCAD, GstarCAD, BricsCAD) : passe cad=true. Demande \xE0 l'utilisateur le point d'insertion (x, y en mm) et l'orientation de chaque chambre et de chaque coupe (ou lis-les sur le plan si multiCAD te le permet), et passe-les dans placements. Puis, c\xF4t\xE9 multiCAD : manage_layers avec le texte \xAB calques \xBB de la r\xE9ponse, puis draw_entities avec les \xAB commandes \xBB de chaque bloc (une commande par ligne ; d\xE9coupe en paquets si c'est long). Si un calque est ignor\xE9, regroupe ensuite par manage_entities set_layer. Sans multiCAD, propose le DXF (sortieDxf) \xE0 ins\xE9rer \xE0 la main.
 Quand preparer_etude r\xE9pond pret=true : montre les liaisons retenues par tron\xE7on, fais-les valider, puis appelle generer_masques (ou etudier_reseau). Relaie toujours les avertissements et les contr\xF4les de conformit\xE9, en rappelant que les r\xE8gles normatives sont \xE0 valider.`;
-var server = new McpServer({ name: "tontonkad", version: "0.3.0" }, { instructions: INSTRUCTIONS });
+var server = new McpServer({ name: "nodial", version: "0.4.0" }, { instructions: INSTRUCTIONS });
 server.registerTool("preparer_etude", {
   title: "Pr\xE9parer une \xE9tude de masques",
   description: "\xC0 appeler EN PREMIER. V\xE9rifie ce que l'utilisateur a fourni (notes de calcul, plans, tron\xE7ons, rendus, zone) et renvoie la liste des questions \xE0 lui poser pour ce qui manque, ainsi que les liaisons trouv\xE9es pour chaque tron\xE7on. Rappeler apr\xE8s chaque r\xE9ponse jusqu'\xE0 pret=true.",
@@ -81230,7 +81872,7 @@ server.registerPrompt("etude_masques", {
   description: "Lance une \xE9tude : Claude demande les notes de calcul, les plans, les tron\xE7ons et le rendu souhait\xE9, puis g\xE9n\xE8re les masques.",
   argsSchema: { demande: z.string().optional().describe("Ce que tu veux, en une phrase (facultatif)") }
 }, ({ demande }) => ({
-  messages: [{ role: "user", content: { type: "text", text: `Je veux pr\xE9parer des masques de liaisons avec TONTONKAD.${demande ? `
+  messages: [{ role: "user", content: { type: "text", text: `Je veux pr\xE9parer des masques de liaisons avec nodial.${demande ? `
 Ma demande : ${demande}` : ""}
 
 M\xE8ne l'\xE9tude ainsi :
@@ -81304,13 +81946,14 @@ server.registerTool("generer_masques", {
     })).optional().describe("Chambres de tirage \xE0 \xE9tudier (plusieurs faces, travers\xE9es) \u2014 ajoute une vue de dessus au PDF"),
     sortieDxf: z.string().optional().describe("Chemin du fichier .dxf \xE0 \xE9crire (jamais un plan existant : un nouveau fichier)"),
     sortiePdf: z.string().optional().describe("Chemin du fichier .pdf \xE0 \xE9crire : une page par masque, coupe + vue 3D + conformit\xE9"),
+    teinteFourreaux: z.enum(["rouge", "vert"]).optional().describe("Couleur des fourreaux dans la vue 3D du PDF : rouge (d\xE9faut) ou vert"),
     longueur3dMm: z.number().optional().describe("Longueur du tron\xE7on montr\xE9 dans la vue 3D du PDF (d\xE9faut 1500 mm)"),
     unite: z.enum(["mm", "m"]).optional().describe("Unit\xE9 du DXF (d\xE9faut mm)"),
     origine: z.object({ x: z.number(), y: z.number() }).optional().describe("Point d'insertion du premier masque dans le DXF, dans son unit\xE9"),
     cad: z.boolean().optional().describe("Renvoie aussi les commandes de dessin pour le MCP multiCAD (calques + draw_entities), coupes et vues de dessus des chambres"),
     placements: placementSchema
   }
-}, async ({ noteCalcul, masques, chambres, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine, cad, placements }) => {
+}, async ({ noteCalcul, masques, chambres, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine, cad, placements, teinteFourreaux }) => {
   try {
     const all = noteCalcul ? getNote(noteCalcul) : null;
     const out = masques.map((m) => construireMasque(all, m, options));
@@ -81327,7 +81970,7 @@ server.registerTool("generer_masques", {
       return e;
     });
     const dxf = sortieDxf ? ecrireNeuf(sortieDxf, "dxf", masquesToDxf(out, { unite, origine }), "latin1") : null;
-    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, "pdf", masquesToPdf(out, { longueur3dMm, etudesChambres: etudes })) : null;
+    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, "pdf", masquesToPdf(out, { longueur3dMm, etudesChambres: etudes, teinteFourreaux })) : null;
     const caoMulti = cad ? versMultiCAD(dessinsCao(out, etudes), placements || {}) : void 0;
     return ok({ dxf, pdf, masques: out, chambres: etudes.map(({ _masques, ...e }) => e), ...caoMulti ? { multicad: caoMulti } : {} });
   } catch (e) {
@@ -81384,20 +82027,27 @@ server.registerTool("etudier_reseau", {
       de: z.string().describe("Nom de l'\xE9l\xE9ment de d\xE9part"),
       vers: z.string().describe("Nom de l'\xE9l\xE9ment d'arriv\xE9e"),
       longueurM: z.number().optional().describe("Longueur du tron\xE7on en m\xE8tres (m\xE9tr\xE9)"),
-      faceDe: FACE_ENUM.optional().describe("Face de la chambre de d\xE9part (vue de dessus : pignon A gauche, pignon B droite, long-pan A bas, long-pan B haut)"),
-      faceVers: FACE_ENUM.optional().describe("Face de la chambre d'arriv\xE9e"),
+      faceDe: FACE_ENUM.optional().describe("Indicatif : les c\xF4t\xE9s suivent le synoptique (nord = c\xF4t\xE9 1 = long-pan B en haut, 2 = pignon B \xE0 droite, 3 = long-pan A en bas, 4 = pignon A \xE0 gauche ; vers la droite on sort par 2 et on arrive par 4, vers le bas on sort par 3 et on arrive par 1), comme dans l'application"),
+      faceVers: FACE_ENUM.optional().describe("Indicatif, voir faceDe"),
       liaisons: z.array(critereSchema).optional().describe("Liaisons de la note qui passent dans ce tron\xE7on"),
       reserves: z.array(z.object({ type: z.string(), code: z.string(), qty: z.number().int().min(1), nom: z.string().optional() })).optional(),
       options: optionsSchema
     })).min(1),
     options: optionsSchema.describe("Options communes \xE0 toutes les coupes"),
     titre: z.string().optional().describe("Titre du dossier (PDF)"),
+    cartouche: z.object({
+      champs: z.array(z.object({ libelle: z.string(), valeur: z.string(), large: z.boolean().optional() })).optional().describe("Champs du cartouche des pages chambre, dans l'ordre (large = pleine largeur). Valeurs automatiques : {projet} {chambre} {modele} {interieur} {tampons} {date} {indice} {format} {folio}. Par d\xE9faut : Projet, Objet, Chambre, Int\xE9rieur, Tampons, Phase, N\xB0 plan, Indice, Date, Dessin\xE9, V\xE9rifi\xE9, \xC9chelle, Format, Folio"),
+      logoMOA: z.string().optional().describe("Chemin d'une image PNG ou JPEG (carr\xE9e de pr\xE9f\xE9rence) : logo du ma\xEEtre d'ouvrage, en haut \xE0 gauche du cartouche"),
+      logoMOE: z.string().optional().describe("Chemin d'une image PNG ou JPEG : logo du ma\xEEtre d'\u0153uvre, en haut \xE0 droite"),
+      indice: z.string().optional().describe("Indice du plan (d\xE9faut A)")
+    }).optional().describe("Cartouche des pages chambre (PDF), comme dans l'application"),
     sortiePdf: z.string().optional().describe("Nouveau fichier .pdf : synoptique, isom\xE9trique, m\xE9tr\xE9, puis coupes et chambres"),
+    teinteFourreaux: z.enum(["rouge", "vert"]).optional().describe("Couleur des fourreaux dans la vue 3D du PDF : rouge (d\xE9faut) ou vert"),
     sortieDxf: z.string().optional().describe("Nouveau fichier .dxf : coupes et vues de dessus des chambres (c\xF4te \xE0 c\xF4te, ou aux placements donn\xE9s)"),
     cad: z.boolean().optional().describe("Renvoie les commandes de dessin pour le MCP multiCAD"),
     placements: placementSchema
   }
-}, async ({ noteCalcul, elements, troncons, options, titre, sortiePdf, sortieDxf, cad, placements }) => {
+}, async ({ noteCalcul, elements, troncons, options, titre, cartouche, sortiePdf, sortieDxf, cad, placements, teinteFourreaux }) => {
   try {
     const noms = /* @__PURE__ */ new Set();
     for (const e of elements) {
@@ -81411,11 +82061,24 @@ server.registerTool("etudier_reseau", {
     const tr = troncons.map((t) => ({ t, rt: Reseau.relier(r, id[t.de], id[t.vers], { longueurM: t.longueurM, faceA: t.faceDe, faceB: t.faceVers }) }));
     const masques = tr.map(({ t }) => construireMasque(all, { nom: `${t.de} \u2192 ${t.vers}`, liaisons: t.liaisons || [], reserves: t.reserves || [], options: t.options }, options));
     const mDe = new Map(tr.map(({ rt }, i) => [rt.id, masques[i]]));
+    const tailleNoeud = (n) => ({ w: Math.max(n.type === "chambre" ? 120 : 140, n.nom.length * 9.5 + (n.type === "sortie" ? 34 : 24)), h: n.type === "chambre" ? 62 : 48 });
+    const coupeDe = (m) => m && m.ok ? { fourreaux: m.fourreaux.map((f) => ({ id: f.id, od: f.od })), cables: (m.cables || []).map((c) => ({ liaison: c.liaison, code: c.code, parent: c.fourreau })) } : null;
+    const contenus = new Map(tr.map(({ rt }, i) => [rt.id, { ...Reseau.contenuEtiquette(coupeDe(masques[i])), L: rt.longueurM }]));
+    const dis = Reseau.dispositionAncree(r, { tailleNoeud, tailleEtiquette: (t) => Vue3D.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio: null });
+    Reseau.alignerFaces(r, dis);
+    const synData = {
+      largeur: dis.largeur,
+      hauteur: dis.hauteur,
+      noeuds: r.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, ...dis.noeuds[n.id], ...tailleNoeud(n) })),
+      troncons: r.troncons.map((t) => ({ a: dis.noeuds[t.a.noeud], b: dis.noeuds[t.b.noeud], e: dis.etiquettes[t.id] && { ...dis.etiquettes[t.id], ...contenus.get(t.id) } }))
+    };
+    const bandes = Vue3D.decouperBandes(synData, "a0");
+    const situation = { noeuds: synData.noeuds, troncons: synData.troncons, coupes: bandes.coupes, ys: bandes.ys };
     const etudes = elements.filter((e) => e.type === "chambre").map((e) => {
       const faces = {};
       Reseau.tronconsDe(r, id[e.nom]).forEach((v) => {
         const m = mDe.get(v.troncon.id);
-        if (m && m.ok && m.forme !== "circ") faces[v.face] = { ...m, sens: v.troncon.a.noeud === id[e.nom] && v.troncon.a.face === v.face ? "depart" : "arrivee" };
+        if (m && m.ok && m.forme !== "circ") faces[v.face] = { ...m, longueurM: v.troncon.longueurM || null, sens: v.troncon.a.noeud === id[e.nom] && v.troncon.a.face === v.face ? "depart" : "arrivee" };
       });
       return etudierUneChambre(e, faces, masques);
     });
@@ -81456,6 +82119,8 @@ server.registerTool("etudier_reseau", {
           couleur: n.couleur,
           x: n.x,
           y: n.y,
+          dims: et && et.ok ? { L: et.L, l: et.l, H: et.H } : null,
+          // isométrique : chambre à ses proportions réelles
           sous: n.type === "chambre" ? et && et.ok ? et.ref : "\xE0 \xE9tudier" : n.type === "coffret" ? n.coffret.genre : ""
         };
       }),
@@ -81464,12 +82129,23 @@ server.registerTool("etudier_reseau", {
         return {
           a: { x: A.x, y: A.y, face: rt.a.face, type: A.type },
           b: { x: B.x, y: B.y, face: rt.b.face, type: B.type },
-          label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : "? m"]
+          label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : "? m"],
+          nf: masques[i] && masques[i].ok ? masques[i].fourreaux.length : 0
         };
       })
     };
-    const titreDossier = titre || "R\xE9seau TONTONKAD";
-    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, "pdf", masquesToPdf(masques, { etudesChambres: etudes, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
+    const titreDossier = titre || "R\xE9seau nodial";
+    const lireLogo = (chemin) => {
+      if (!chemin) return null;
+      const abs = path.resolve(chemin);
+      if (!fs.existsSync(abs)) throw new Error(`Logo introuvable : ${abs}`);
+      return { src: fs.readFileSync(abs) };
+    };
+    const cart = { champs: cartouche && cartouche.champs, logoMOA: lireLogo(cartouche && cartouche.logoMOA), logoMOE: lireLogo(cartouche && cartouche.logoMOE) };
+    const [A3W, A3H] = Vue3D.FORMATS_PAGE.a3;
+    const optsPage = { projet: titreDossier, date: (/* @__PURE__ */ new Date()).toLocaleDateString("fr-FR"), indice: cartouche && cartouche.indice || "A", situation, iso: synoptique, cartouche: cart };
+    const pagesChambres = etudes.filter((e) => e.ok).flatMap((e) => Vue3D.pagesChambreA3(e, e._masques, optsPage, () => new Vue3D.Page({ ombre: false }))).map((pg) => ({ contenu: pg.toString(), largeur: A3W, hauteur: A3H, images: (pg.images || []).map((im) => ({ octets: im.src, x: im.x, y: im.y, w: im.w, h: im.h })) }));
+    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, "pdf", masquesToPdf(masques, { teinteFourreaux, pagesChambres, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
     const dessins = cad || sortieDxf ? dessinsCao(masques, etudes) : [];
     const dxf = sortieDxf ? ecrireNeuf(sortieDxf, "dxf", versDxf(dessins, placements || {}), "latin1") : null;
     return ok({

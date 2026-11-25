@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// Serveur MCP TONTONKAD (stdio) — génère les masques de liaisons à partir
+// Serveur MCP nodial (stdio) — génère les masques de liaisons à partir
 // d'une note de calcul Caneco, avec les moteurs de l'application.
 // Les géométries rendues (mm, Y vers le haut) sont faites pour être dessinées
 // par un autre MCP de CAO (ex. MultiCAD) ; l'export DXF sert de repli.
@@ -22,6 +22,7 @@ const CompatChambres = require('../../src/renderer/compat-chambres.js');
 const { infosChambre, chambreMaconnee } = require('./chambres-infos.js');
 const Reseau = require('../../src/renderer/reseau.js');
 const { dessinMasque, dessinChambre, versMultiCAD, versDxf } = require('./cad.js');
+const Vue3D = require('../../src/renderer/vue3d.js');
 
 const cat = loadCatalogues();
 const notes = new Map(); // chemin absolu → { mtime, liaisons }
@@ -97,7 +98,7 @@ const placementSchema = z.record(z.string(), z.object({
   x: z.number(), y: z.number(), rotation: z.number().optional().describe('Degrés, sens trigonométrique'), echelle: z.number().optional(),
 })).optional().describe('Placement de chaque dessin sur le plan, par nom de dessin (« Coupe <masque> », « Chambre <nom> ») : point de base en unités du plan (mm), rotation en degrés. Sans placement, le dessin est à l\'origine.');
 
-const INSTRUCTIONS = `TONTONKAD produit les masques de liaisons électriques (coupes de tranchée ou de conduit) à partir des notes de calcul Caneco.
+const INSTRUCTIONS = `nodial produit les masques de liaisons électriques (coupes de tranchée ou de conduit) à partir des notes de calcul Caneco.
 Avant toute génération, réunis dans le chat : la ou les notes de calcul (NDC), les tronçons voulus, le rendu souhaité (AutoCAD, ZWCAD, MultiCAD sur le plan DWG, Revit, PDF avec vue 3D), le plan si les masques doivent y être posés, et la zone (chaussée, trottoir…).
 Appelle preparer_etude avec ce que tu sais ; s'il manque quelque chose, pose TOUTES ses questions à l'utilisateur en un seul message, puis rappelle-le avec les réponses. Ne devine jamais un fichier ou une liaison.
 Si plusieurs masques arrivent dans une même chambre de tirage, demande quelle face reçoit quel masque (pignon A à gauche, pignon B à droite, long-pan A en bas, long-pan B en haut, vu de dessus) et passe-les dans le paramètre chambres de generer_masques : la chambre est choisie pour recevoir toutes les faces et les traversées sont déduites. Demande aussi si la chambre est préfabriquée ou MAÇONNÉE ; si maçonnée, demande l'épaisseur des parois, le tampon (ouverture et classe) et la zone (paramètre maconnee), sinon les valeurs par défaut sont prises et doivent être signalées comme à valider.
@@ -105,7 +106,7 @@ Pour un RÉSEAU (plusieurs chambres, coffrets, sorties reliés par des tronçons
 Dessin sur un plan DWG avec le MCP multiCAD (AutoCAD, ZWCAD, GstarCAD, BricsCAD) : passe cad=true. Demande à l'utilisateur le point d'insertion (x, y en mm) et l'orientation de chaque chambre et de chaque coupe (ou lis-les sur le plan si multiCAD te le permet), et passe-les dans placements. Puis, côté multiCAD : manage_layers avec le texte « calques » de la réponse, puis draw_entities avec les « commandes » de chaque bloc (une commande par ligne ; découpe en paquets si c'est long). Si un calque est ignoré, regroupe ensuite par manage_entities set_layer. Sans multiCAD, propose le DXF (sortieDxf) à insérer à la main.
 Quand preparer_etude répond pret=true : montre les liaisons retenues par tronçon, fais-les valider, puis appelle generer_masques (ou etudier_reseau). Relaie toujours les avertissements et les contrôles de conformité, en rappelant que les règles normatives sont à valider.`;
 
-const server = new McpServer({ name: 'tontonkad', version: '0.3.0' }, { instructions: INSTRUCTIONS });
+const server = new McpServer({ name: 'nodial', version: '0.4.0' }, { instructions: INSTRUCTIONS });
 
 server.registerTool('preparer_etude', {
   title: 'Préparer une étude de masques',
@@ -131,7 +132,7 @@ server.registerPrompt('etude_masques', {
   argsSchema: { demande: z.string().optional().describe('Ce que tu veux, en une phrase (facultatif)') },
 }, ({ demande }) => ({
   messages: [{ role: 'user', content: { type: 'text', text:
-`Je veux préparer des masques de liaisons avec TONTONKAD.${demande ? `\nMa demande : ${demande}` : ''}
+`Je veux préparer des masques de liaisons avec nodial.${demande ? `\nMa demande : ${demande}` : ''}
 
 Mène l'étude ainsi :
 1. Appelle preparer_etude avec ce que tu sais déjà de ma demande.
@@ -206,13 +207,14 @@ server.registerTool('generer_masques', {
     })).optional().describe('Chambres de tirage à étudier (plusieurs faces, traversées) — ajoute une vue de dessus au PDF'),
     sortieDxf: z.string().optional().describe('Chemin du fichier .dxf à écrire (jamais un plan existant : un nouveau fichier)'),
     sortiePdf: z.string().optional().describe('Chemin du fichier .pdf à écrire : une page par masque, coupe + vue 3D + conformité'),
+    teinteFourreaux: z.enum(['rouge', 'vert']).optional().describe('Couleur des fourreaux dans la vue 3D du PDF : rouge (défaut) ou vert'),
     longueur3dMm: z.number().optional().describe('Longueur du tronçon montré dans la vue 3D du PDF (défaut 1500 mm)'),
     unite: z.enum(['mm', 'm']).optional().describe('Unité du DXF (défaut mm)'),
     origine: z.object({ x: z.number(), y: z.number() }).optional().describe('Point d\'insertion du premier masque dans le DXF, dans son unité'),
     cad: z.boolean().optional().describe('Renvoie aussi les commandes de dessin pour le MCP multiCAD (calques + draw_entities), coupes et vues de dessus des chambres'),
     placements: placementSchema,
   },
-}, async ({ noteCalcul, masques, chambres, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine, cad, placements }) => {
+}, async ({ noteCalcul, masques, chambres, options, sortieDxf, sortiePdf, longueur3dMm, unite, origine, cad, placements, teinteFourreaux }) => {
   try {
     const all = noteCalcul ? getNote(noteCalcul) : null;
     const out = masques.map((m) => construireMasque(all, m, options));
@@ -229,7 +231,7 @@ server.registerTool('generer_masques', {
       return e;
     });
     const dxf = sortieDxf ? ecrireNeuf(sortieDxf, 'dxf', masquesToDxf(out, { unite, origine }), 'latin1') : null;
-    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(out, { longueur3dMm, etudesChambres: etudes })) : null;
+    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(out, { longueur3dMm, etudesChambres: etudes, teinteFourreaux })) : null;
     const caoMulti = cad ? versMultiCAD(dessinsCao(out, etudes), placements || {}) : undefined;
     return ok({ dxf, pdf, masques: out, chambres: etudes.map(({ _masques, ...e }) => e), ...(caoMulti ? { multicad: caoMulti } : {}) });
   } catch (e) { return fail(String(e.message || e)); }
@@ -280,20 +282,28 @@ server.registerTool('etudier_reseau', {
       de: z.string().describe('Nom de l\'élément de départ'),
       vers: z.string().describe('Nom de l\'élément d\'arrivée'),
       longueurM: z.number().optional().describe('Longueur du tronçon en mètres (métré)'),
-      faceDe: FACE_ENUM.optional().describe('Face de la chambre de départ (vue de dessus : pignon A gauche, pignon B droite, long-pan A bas, long-pan B haut)'),
-      faceVers: FACE_ENUM.optional().describe('Face de la chambre d\'arrivée'),
+      faceDe: FACE_ENUM.optional().describe('Indicatif : les côtés suivent le synoptique (nord = côté 1 = long-pan B en haut, 2 = pignon B à droite, 3 = long-pan A en bas, 4 = pignon A à gauche ; vers la droite on sort par 2 et on arrive par 4, vers le bas on sort par 3 et on arrive par 1), comme dans l\'application'),
+      faceVers: FACE_ENUM.optional().describe('Indicatif, voir faceDe'),
       liaisons: z.array(critereSchema).optional().describe('Liaisons de la note qui passent dans ce tronçon'),
       reserves: z.array(z.object({ type: z.string(), code: z.string(), qty: z.number().int().min(1), nom: z.string().optional() })).optional(),
       options: optionsSchema,
     })).min(1),
     options: optionsSchema.describe('Options communes à toutes les coupes'),
     titre: z.string().optional().describe('Titre du dossier (PDF)'),
+    cartouche: z.object({
+      champs: z.array(z.object({ libelle: z.string(), valeur: z.string(), large: z.boolean().optional() })).optional()
+        .describe('Champs du cartouche des pages chambre, dans l\'ordre (large = pleine largeur). Valeurs automatiques : {projet} {chambre} {modele} {interieur} {tampons} {date} {indice} {format} {folio}. Par défaut : Projet, Objet, Chambre, Intérieur, Tampons, Phase, N° plan, Indice, Date, Dessiné, Vérifié, Échelle, Format, Folio'),
+      logoMOA: z.string().optional().describe('Chemin d\'une image PNG ou JPEG (carrée de préférence) : logo du maître d\'ouvrage, en haut à gauche du cartouche'),
+      logoMOE: z.string().optional().describe('Chemin d\'une image PNG ou JPEG : logo du maître d\'œuvre, en haut à droite'),
+      indice: z.string().optional().describe('Indice du plan (défaut A)'),
+    }).optional().describe('Cartouche des pages chambre (PDF), comme dans l\'application'),
     sortiePdf: z.string().optional().describe('Nouveau fichier .pdf : synoptique, isométrique, métré, puis coupes et chambres'),
+    teinteFourreaux: z.enum(['rouge', 'vert']).optional().describe('Couleur des fourreaux dans la vue 3D du PDF : rouge (défaut) ou vert'),
     sortieDxf: z.string().optional().describe('Nouveau fichier .dxf : coupes et vues de dessus des chambres (côte à côte, ou aux placements donnés)'),
     cad: z.boolean().optional().describe('Renvoie les commandes de dessin pour le MCP multiCAD'),
     placements: placementSchema,
   },
-}, async ({ noteCalcul, elements, troncons, options, titre, sortiePdf, sortieDxf, cad, placements }) => {
+}, async ({ noteCalcul, elements, troncons, options, titre, cartouche, sortiePdf, sortieDxf, cad, placements, teinteFourreaux }) => {
   try {
     const noms = new Set();
     for (const e of elements) { if (noms.has(e.nom)) throw new Error(`Élément en double : ${e.nom}`); noms.add(e.nom); }
@@ -309,12 +319,27 @@ server.registerTool('etudier_reseau', {
     const masques = tr.map(({ t }) => construireMasque(all, { nom: `${t.de} → ${t.vers}`, liaisons: t.liaisons || [], reserves: t.reserves || [], options: t.options }, options));
     const mDe = new Map(tr.map(({ rt }, i) => [rt.id, masques[i]]));
 
+    // 2 bis. synoptique en ligne (même disposition que l'application) ; les côtés
+    // des chambres suivent le synoptique : nord = côté 1, vers la droite 2 → 4, vers le bas 3 → 1
+    const tailleNoeud = (n) => ({ w: Math.max(n.type === 'chambre' ? 120 : 140, n.nom.length * 9.5 + (n.type === 'sortie' ? 34 : 24)), h: n.type === 'chambre' ? 62 : 48 });
+    const coupeDe = (m) => (m && m.ok ? { fourreaux: m.fourreaux.map((f) => ({ id: f.id, od: f.od })), cables: (m.cables || []).map((c) => ({ liaison: c.liaison, code: c.code, parent: c.fourreau })) } : null);
+    const contenus = new Map(tr.map(({ rt }, i) => [rt.id, { ...Reseau.contenuEtiquette(coupeDe(masques[i])), L: rt.longueurM }]));
+    const dis = Reseau.dispositionAncree(r, { tailleNoeud, tailleEtiquette: (t) => Vue3D.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio: null });
+    Reseau.alignerFaces(r, dis);
+    const synData = {
+      largeur: dis.largeur, hauteur: dis.hauteur,
+      noeuds: r.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, ...dis.noeuds[n.id], ...tailleNoeud(n) })),
+      troncons: r.troncons.map((t) => ({ a: dis.noeuds[t.a.noeud], b: dis.noeuds[t.b.noeud], e: dis.etiquettes[t.id] && { ...dis.etiquettes[t.id], ...contenus.get(t.id) } })),
+    };
+    const bandes = Vue3D.decouperBandes(synData, 'a0');
+    const situation = { noeuds: synData.noeuds, troncons: synData.troncons, coupes: bandes.coupes, ys: bandes.ys };
+
     // 3. chambres : un masque par face, vu dans le sens du tronçon
     const etudes = elements.filter((e) => e.type === 'chambre').map((e) => {
       const faces = {};
       Reseau.tronconsDe(r, id[e.nom]).forEach((v) => {
         const m = mDe.get(v.troncon.id);
-        if (m && m.ok && m.forme !== 'circ') faces[v.face] = { ...m, sens: v.troncon.a.noeud === id[e.nom] && v.troncon.a.face === v.face ? 'depart' : 'arrivee' };
+        if (m && m.ok && m.forme !== 'circ') faces[v.face] = { ...m, longueurM: v.troncon.longueurM || null, sens: v.troncon.a.noeud === id[e.nom] && v.troncon.a.face === v.face ? 'depart' : 'arrivee' };
       });
       return etudierUneChambre(e, faces, masques);
     });
@@ -343,16 +368,24 @@ server.registerTool('etudier_reseau', {
       noeuds: r.noeuds.map((n) => {
         const et = etudes.find((x) => x.nom === n.nom);
         return { nom: n.nom, type: n.type, couleur: n.couleur, x: n.x, y: n.y,
+          dims: et && et.ok ? { L: et.L, l: et.l, H: et.H } : null, // isométrique : chambre à ses proportions réelles
           sous: n.type === 'chambre' ? (et && et.ok ? et.ref : 'à étudier') : n.type === 'coffret' ? n.coffret.genre : '' };
       }),
       troncons: tr.map(({ rt }, i) => {
         const A = Reseau.noeud(r, rt.a.noeud), B = Reseau.noeud(r, rt.b.noeud);
         return { a: { x: A.x, y: A.y, face: rt.a.face, type: A.type }, b: { x: B.x, y: B.y, face: rt.b.face, type: B.type },
-          label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : '? m'] };
+          label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : '? m'], nf: masques[i] && masques[i].ok ? masques[i].fourreaux.length : 0 };
       }),
     };
-    const titreDossier = titre || 'Réseau TONTONKAD';
-    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(masques, { etudesChambres: etudes, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
+    const titreDossier = titre || 'Réseau nodial';
+    // pages chambre A3 : même dessin que l'application (situation, masques, contenu, cartouche, folios)
+    const lireLogo = (chemin) => { if (!chemin) return null; const abs = path.resolve(chemin); if (!fs.existsSync(abs)) throw new Error(`Logo introuvable : ${abs}`); return { src: fs.readFileSync(abs) }; };
+    const cart = { champs: cartouche && cartouche.champs, logoMOA: lireLogo(cartouche && cartouche.logoMOA), logoMOE: lireLogo(cartouche && cartouche.logoMOE) };
+    const [A3W, A3H] = Vue3D.FORMATS_PAGE.a3;
+    const optsPage = { projet: titreDossier, date: new Date().toLocaleDateString('fr-FR'), indice: (cartouche && cartouche.indice) || 'A', situation, iso: synoptique, cartouche: cart };
+    const pagesChambres = etudes.filter((e) => e.ok).flatMap((e) => Vue3D.pagesChambreA3(e, e._masques, optsPage, () => new Vue3D.Page({ ombre: false })))
+      .map((pg) => ({ contenu: pg.toString(), largeur: A3W, hauteur: A3H, images: (pg.images || []).map((im) => ({ octets: im.src, x: im.x, y: im.y, w: im.w, h: im.h })) }));
+    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(masques, { teinteFourreaux, pagesChambres, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
     const dessins = (cad || sortieDxf) ? dessinsCao(masques, etudes) : [];
     const dxf = sortieDxf ? ecrireNeuf(sortieDxf, 'dxf', versDxf(dessins, placements || {}), 'latin1') : null;
 

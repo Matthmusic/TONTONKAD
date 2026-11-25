@@ -1,4 +1,4 @@
-// Integration Electron pour TONTONKAD
+// Intégration Electron pour nodial
 // Ce fichier gère la communication avec le process principal Electron
 
 (function() {
@@ -52,7 +52,7 @@
     const baseName = currentProjectPath
       ? currentProjectPath.split(/[\\/]/).pop()
       : 'Nouveau projet';
-    document.title = `${baseName}${projectModified ? ' *' : ''} - TONTONKAD`;
+    document.title = `${baseName}${projectModified ? ' *' : ''} — nodial`;
   }
 
   // Override des fonctions de sauvegarde/chargement du LocalStorage
@@ -223,6 +223,15 @@
   // Stocker les infos de mise à jour
   let updateInfo = null;
 
+  // nodial : les réglages de TONTONKAD ont été repris au premier lancement
+  if (window.electronAPI.onRepriseTontonkad) {
+    window.electronAPI.onRepriseTontonkad(() => {
+      if (typeof window.showToast === 'function') {
+        window.showToast('Vos réglages et catalogues TONTONKAD ont été repris dans nodial.', 'success', 7000);
+      }
+    });
+  }
+
   // Listener pour l'événement update-available depuis le main process
   window.electronAPI.onUpdateAvailable((info) => {
     console.log('Mise à jour disponible:', info);
@@ -245,12 +254,10 @@
 
       // Styles pour le conteneur modal
       Object.assign(modalContent.style, {
-        background: isDark ?
-          'linear-gradient(135deg, rgba(26, 26, 46, 0.98), rgba(20, 20, 36, 0.96))' :
-          'linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 249, 250, 0.96))',
-        border: '1px solid rgba(255, 145, 77, 0.3)',
+        background: isDark ? '#22262C' : '#FFFFFF',
+        border: '1px solid rgba(255, 101, 5, 0.3)',
         borderRadius: '24px',
-        boxShadow: '0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 145, 77, 0.15)',
+        boxShadow: '0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 101, 5, 0.15)',
         backdropFilter: 'blur(20px)',
         width: '90%',
         maxWidth: '540px',
@@ -264,14 +271,14 @@
       if (header) {
         Object.assign(header.style, {
           padding: '24px 24px 20px',
-          borderBottom: '1px solid rgba(255, 145, 77, 0.15)',
+          borderBottom: '1px solid rgba(255, 101, 5, 0.15)',
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
           gap: '16px',
           background: isDark ?
-            'linear-gradient(135deg, rgba(255, 145, 77, 0.08), rgba(255, 117, 31, 0.05))' :
-            'linear-gradient(135deg, rgba(255, 145, 77, 0.06), rgba(255, 117, 31, 0.03))'
+            'rgba(255, 101, 5, 0.08)' :
+            'rgba(255, 101, 5, 0.06)'
         });
       }
 
@@ -282,12 +289,12 @@
           width: '56px',
           height: '56px',
           borderRadius: '16px',
-          background: 'linear-gradient(135deg, #ff914d, #ff751f)',
+          background: '#FF6505',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '28px',
-          boxShadow: '0 12px 28px rgba(255, 145, 77, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+          boxShadow: '0 12px 28px rgba(255, 101, 5, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
           flexShrink: '0',
           color: '#ffffff'
         });
@@ -315,8 +322,8 @@
       if (versionCard) {
         Object.assign(versionCard.style, {
           padding: '16px 20px',
-          background: 'rgba(255, 145, 77, 0.1)',
-          border: '1px solid rgba(255, 145, 77, 0.25)',
+          background: 'rgba(255, 101, 5, 0.1)',
+          border: '1px solid rgba(255, 101, 5, 0.25)',
           borderRadius: '16px',
           display: 'flex',
           alignItems: 'center',
@@ -330,7 +337,7 @@
         Object.assign(versionNum.style, {
           fontSize: '24px',
           fontWeight: '800',
-          color: '#ff914d',
+          color: '#FF6505',
           letterSpacing: '-0.5px'
         });
       }
@@ -342,7 +349,7 @@
         Object.assign(descBox.style, {
           padding: '16px 20px',
           background: isDark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.03)',
-          border: '1px solid rgba(255, 145, 77, 0.25)',
+          border: '1px solid rgba(255, 101, 5, 0.25)',
           borderRadius: '12px'
         });
       }
@@ -352,7 +359,7 @@
       if (actions) {
         Object.assign(actions.style, {
           padding: '20px 24px',
-          borderTop: '1px solid rgba(255, 145, 77, 0.15)',
+          borderTop: '1px solid rgba(255, 101, 5, 0.15)',
           background: isDark ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)',
           display: 'flex',
           gap: '12px',
@@ -482,7 +489,7 @@
       const progressPercent = modalContent.querySelector('.update-progress-percent');
       if (progressPercent) {
         Object.assign(progressPercent.style, {
-          color: '#ff914d',
+          color: '#FF6505',
           fontWeight: '700'
         });
       }
@@ -505,10 +512,10 @@
       if (progressFill) {
         Object.assign(progressFill.style, {
           height: '100%',
-          background: 'linear-gradient(90deg, #ff914d, #ff751f)',
+          background: '#FF6505',
           borderRadius: '12px',
           transition: 'width 0.3s ease',
-          boxShadow: '0 0 12px rgba(255, 145, 77, 0.6)',
+          boxShadow: '0 0 12px rgba(255, 101, 5, 0.6)',
           position: 'relative'
         });
       }
@@ -518,7 +525,7 @@
       btnPrimary.forEach(btn => {
         Object.assign(btn.style, {
           padding: '12px 24px',
-          background: 'linear-gradient(135deg, #ff914d, #ff751f)',
+          background: '#FF6505',
           color: '#fff',
           border: 'none',
           borderRadius: '12px',
@@ -529,7 +536,7 @@
           alignItems: 'center',
           gap: '8px',
           transition: 'all 0.3s ease',
-          boxShadow: '0 6px 20px rgba(255, 145, 77, 0.3)'
+          boxShadow: '0 6px 20px rgba(255, 101, 5, 0.3)'
         });
       });
 

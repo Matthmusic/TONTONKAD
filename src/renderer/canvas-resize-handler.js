@@ -59,9 +59,9 @@
 
       const grad = ctx.createLinearGradient(x, y, x + HANDLE_SIZE, y + HANDLE_SIZE);
       grad.addColorStop(0, '#ffe1cc');
-      grad.addColorStop(1, '#ff914d');
+      grad.addColorStop(1, '#FF6505');
 
-      ctx.shadowColor = 'rgba(255, 145, 77, 0.55)';
+      ctx.shadowColor = 'rgba(255, 101, 5, 0.55)';
       ctx.shadowBlur = 10;
       ctx.shadowOffsetY = 2;
       ctx.fillStyle = grad;
