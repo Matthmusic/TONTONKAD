@@ -967,7 +967,7 @@ function pagesChambreA3(e, masques, opts, nouvellePage) {
     const pages = [], o = { ...opts, folio };
     const p0 = nouvellePage(); dessinerPageChambreA3(p0, e, masques, o); pages.push(p0);
     let reste = p0.lignesRestantes || [];
-    while (reste.length && pages.length < 50) { const ps = nouvellePage(); reste = dessinerPageContenuA3(ps, e, reste, { ...o, folio: folio && { ...folio, i: pages.length + 1 } }); pages.push(ps); }
+    while (reste.length && pages.length < 50) { const ps = nouvellePage(); reste = dessinerPageContenuA3(ps, e, reste, { ...o, masques, folio: folio && { ...folio, i: pages.length + 1 } }); pages.push(ps); }
     return pages;
   };
   const n = essai(null).length;
@@ -989,6 +989,24 @@ function dessinerPageContenuA3(p, e, lignes, opts = {}) {
   const zc = { x: M + 8.5 * CW + G / 2, y: M + G / 2, w: 3.5 * CW - G, h: 3.3 * CH - G };
   p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(zc.x, zc.y, zc.w, zc.h, 'B');
   dessinerCartouche(p, { x: zc.x + 5, y: zc.y + 5, w: zc.w - 10, h: zc.h - 10 }, opts.cartouche || {}, valeursCartouche(e, opts));
+  // Place libre au-dessus du cartouche : les masques des côtés dont des lignes sont
+  // sur CETTE page, pour lire le tableau sans revenir à la page principale.
+  const vues = lignes.slice(0, lignes.length - reste.length);
+  const cotes = [...new Set(vues.map((l) => l.cote).filter((c) => c >= 1 && c <= 4))].sort();
+  const masques = opts.masques || {};
+  const aDessiner = cotes.filter((c) => masques[FACE_DU_COTE[c]]);
+  if (aDessiner.length && e && e.ok) {
+    const zl = { x: zc.x, y: zc.y + zc.h + G, w: zc.w, h: M + gh - G / 2 - (zc.y + zc.h + G) };
+    const hCase = (zl.h - G * (aDessiner.length - 1)) / aDessiner.length;
+    aDessiner.forEach((c, i) => {
+      const mq = masques[FACE_DU_COTE[c]], z = { x: zl.x, y: zl.y + zl.h - (i + 1) * hCase - i * G, w: zl.w, h: hCase };
+      const L = mq.longueurM ? ` · ${String(mq.longueurM).replace('.', ',')} m` : '';
+      p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(z.x, z.y, z.w, z.h, 'B');
+      p.rgb(TEINTE_COTE[c], false).rect(z.x + 0.35, z.y + z.h - 15, z.w - 0.7, 14.65, 'f');
+      p.rgb([0.1, 0.1, 0.1], false).text(z.x + 6, z.y + z.h - 11, 8.5, couper(`${e.nom || 'C'}.${c} · ${mq.nom}${L}`, 8.5, z.w - 12), { bold: true });
+      drawMasqueFace(p, mq, c, e, { x: z.x + 4, y: z.y + 4, w: z.w - 8, h: z.h - 23 });
+    });
+  }
   return reste;
 }
 // Cartouche : logo MOA en haut à gauche, logo MOE en haut à droite (carrés),
@@ -1093,7 +1111,7 @@ function drawSynoptique2D(p, data, zx, zy, zw, zh) {
 //   trait      : { couleur [r,g,b], epaisseur (pt), selonFourreaux, liseré }
 //   cible      : nom d'une chambre → vue centrée, cercle rouge et côtés 1 à 4
 //   troncon    : [nomA, nomB] → tronçon en rouge, vue centrée dessus (page de coupe)
-const ISO_DEFAUT = { projection: 'iso', liaisons: 'sol', etiquettesTroncons: false, trait: { couleur: [0.086, 0.098, 0.114], epaisseur: 3.2, selonFourreaux: false, liseré: true } };
+const ISO_DEFAUT = { projection: 'iso', liaisons: 'sol', etiquettesTroncons: false, trait: { couleur: [0.086, 0.098, 0.114], epaisseur: 3.2, selonFourreaux: true, liseré: true } }; // variante C retenue (atelier)
 function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est pas modifié (copie)
   if (!data.noeuds.length) return;
   const { echelleMax = 1.8 } = opts;
@@ -1366,8 +1384,14 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
   // préférence. Trait de rappel quand elle est décollée de son volume.
   const ETQ = { taille: 8.5, h: 15, w: (nom) => String(nom).length * 5.3 + 14 };
   const DIRS = [[0, 1, 0], [1, 1, 2], [-1, 1, 2], [1, 0, 3], [-1, 0, 3], [1, -1, 5], [-1, -1, 5], [0, -1, 6]]; // [dx, dy (haut), pénalité]
+  // Cercle rouge autour de la chambre ciblée : marge autour du volume, et au moins
+  // ~28 pt de rayon à l'écran pour que les pastilles 1 à 4 ne se tassent pas (K1C).
+  function anneauCible() {
+    const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), mini = 28 / (s * 0.8);
+    return { rx: Math.max(a / 2 + m, mini), ry: Math.max(b / 2 + m, mini) };
+  }
   if (CIBLE) { // cercle rouge et pastilles des côtés : réservés avant les étiquettes
-    const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), rx = a / 2 + m, ry = b / 2 + m;
+    const { rx, ry } = anneauCible();
     for (let i = 0; i < 48; i++) { const t = (i / 48) * 2 * Math.PI, [x, y] = P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0); occupes.push({ x0: x - 3, x1: x + 3, y0: y - 3, y1: y + 3 }); }
     [[0, -ry], [rx, 0], [0, ry], [-rx, 0]].forEach(([ex, ey]) => { const [x, y] = P(CIBLE.x + ex, CIBLE.y + ey, 0); occupes.push({ x0: x - 7, x1: x + 7, y0: y - 7, y1: y + 7 }); });
   }
@@ -1419,7 +1443,7 @@ function drawSynoptiqueIso(p, data, zx, zy, zw, zh, opts = {}) { // data n'est p
   // cercle rouge au sol autour de la chambre ciblée (dessiné avant les volumes : posé au sol)
   let anneau = null;
   if (CIBLE) {
-    const [a, b] = dimsDe(CIBLE), m = 0.45 * Math.max(a, b), rx = a / 2 + m, ry = b / 2 + m;
+    const { rx, ry } = anneauCible();
     anneau = { rx, ry };
     const poly = Array.from({ length: 64 }, (_, i) => { const t = (i / 64) * 2 * Math.PI; return P(CIBLE.x + rx * Math.cos(t), CIBLE.y + ry * Math.sin(t), 0); });
     p.rgb([0.85, 0.11, 0.11]).width(1.8).poly(poly, 'S').width(0.6);
