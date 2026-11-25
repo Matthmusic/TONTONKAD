@@ -6334,3 +6334,23 @@ button.layout-preview-card { font: inherit; color: var(--text-primary); text-ali
 .pdf-reseau-fichiers { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--text-primary); }
 .pdf-reseau-fichiers li::marker { color: var(--primary-orange); font-weight: 700; }
 .pdf-reseau-vide { color: var(--warning-color, #ed8936); }
+
+/* Cartouche personnalisable (export PDF réseau) */
+.pdf-cartouche { border: 1px solid var(--glass-border); border-radius: 10px; padding: 8px 12px; background: var(--bg-card); }
+.pdf-cartouche summary { cursor: pointer; padding: 2px 0; }
+.pdf-cartouche[open] summary { margin-bottom: 10px; }
+.pdf-cartouche-logos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.pdf-logo { display: flex; gap: 10px; align-items: center; }
+.pdf-logo-apercu { flex: 0 0 64px; height: 64px; border: 1px dashed var(--glass-border); border-radius: 6px; display: grid; place-items: center; font-size: 11px; color: var(--text-muted); background: #fff center / contain no-repeat; }
+.pdf-logo-apercu.plein { border-style: solid; color: transparent; }
+.pdf-logo-actions { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.pdf-mini-btn { display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 7px; border: 1px solid var(--glass-border); background: var(--input-bg, transparent); color: var(--text-primary); cursor: pointer; }
+.pdf-mini-btn:hover { border-color: var(--primary-orange); }
+.pdf-mini-btn:focus-within, .pdf-mini-btn:focus-visible { outline: 2px solid var(--primary-orange); outline-offset: 2px; }
+.pdf-cartouche-champs { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pdf-cartouche-champs th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 2px 4px; }
+.pdf-cartouche-champs td { padding: 2px 4px; }
+.pdf-cartouche-champs input[type=text] { width: 100%; font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--glass-border); border-radius: 6px; background: var(--input-bg, transparent); color: var(--text-primary); }
+.pdf-cartouche-champs td:nth-child(3) { text-align: center; }
+.pdf-cartouche-champs .pdf-mini-btn { padding: 2px 6px; }
+.pdf-cartouche-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

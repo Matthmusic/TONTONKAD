@@ -78597,8 +78597,8 @@ var require_vue3d = __commonJS({
       const K = 0.5522847498;
       const PHASE_RGB = { L1: [0.55, 0.3, 0.1], L2: [0.1, 0.1, 0.1], L3: [0.5, 0.5, 0.5], N: [0.1, 0.3, 0.8], PE: [0.1, 0.6, 0.2], PEN: [0.1, 0.3, 0.8] };
       const GRILLAGE_RGB = { rouge: [0.85, 0.1, 0.1], vert: [0.1, 0.6, 0.2], bleu: [0.1, 0.3, 0.8], jaune: [0.9, 0.75, 0], marron: [0.5, 0.3, 0.1] };
-      const WINANSI = { "\u2014": "\x97", "\u2013": "\x96", "\u2026": "\x85", "\u2022": "\x95", "\u2019": "\x92", "\u20AC": "\x80" };
-      const pdfStr = (s) => "(" + String(s).replace(/\u2192/g, "->").replace(/\u2265/g, ">=").replace(/[\u2014\u2013\u2026\u2022\u2019\u20AC]/g, (c) => WINANSI[c]).replace(/[^\x20-\x7E\x80-\x97\u00A0-\u00FF]/g, "?").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)") + ")";
+      const WINANSI = { "\u2014": "\x97", "\u2013": "\x96", "\u2026": "\x85", "\u2022": "\x95", "\u2019": "\x92", "\u20AC": "\x80", "\u0153": "\x9C", "\u0152": "\x8C", "\u2018": "\x91", "\u201C": "\x93", "\u201D": "\x94" };
+      const pdfStr = (s) => "(" + String(s).replace(/\u2192/g, "->").replace(/\u2265/g, ">=").replace(/[\u2014\u2013\u2026\u2022\u2019\u20AC\u0153\u0152\u2018\u201C\u201D]/g, (c) => WINANSI[c]).replace(/[^\x20-\x7E\x80-\x9F\u00A0-\u00FF]/g, "?").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)") + ")";
       const f = (v) => (Math.round(v * 100) / 100).toString();
       class Page {
         // emitText=false : les textes ne sont pas écrits dans le flux (polices
@@ -79043,7 +79043,7 @@ var require_vue3d = __commonJS({
       }
       function dessinerEtudeChambre(p, e, masques) {
         p.text(MARGE, PAGE_H - MARGE - 4, 16, `${e.nom || "Chambre"} \u2014 ${e.ok ? e.ref : "aucune chambre"} \u2014 vue de dessus`, { bold: true });
-        p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, "TONTONKAD \u2014 \xE9tude de chambre", { align: "right" });
+        p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, "nodial \u2014 \xE9tude de chambre", { align: "right" });
         p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
         const x = 560;
         let y = PAGE_H - MARGE - 40;
@@ -79321,111 +79321,349 @@ var require_vue3d = __commonJS({
       }
       const FORMATS_PAGE = { a4: [842, 595], a3: [1191, 842], a2: [1684, 1191], a1: [2384, 1684], a0: [3370, 2384] };
       const MISE_EN_PAGE_CHAMBRE = [
-        { type: "vuedessus", x: 0, y: 0, w: 5, h: 5 },
-        { type: "masque", cote: 1, x: 5, y: 0, w: 3.5, h: 3 },
-        { type: "masque", cote: 2, x: 8.5, y: 0, w: 3.5, h: 3 },
-        { type: "masque", cote: 3, x: 5, y: 3, w: 3.5, h: 3 },
-        { type: "masque", cote: 4, x: 8.5, y: 3, w: 3.5, h: 3 },
-        { type: "fourreaux", x: 0, y: 5, w: 5, h: 3 },
-        { type: "cables", x: 5, y: 6, w: 4, h: 2 },
-        { type: "cartouche", x: 9, y: 6, w: 3, h: 2 }
+        { type: "situation", x: 0, y: 0, w: 5, h: 4.7 },
+        { type: "masque", cote: 1, x: 5, y: 0, w: 3.5, h: 2.35 },
+        { type: "masque", cote: 2, x: 8.5, y: 0, w: 3.5, h: 2.35 },
+        { type: "masque", cote: 3, x: 5, y: 2.35, w: 3.5, h: 2.35 },
+        { type: "masque", cote: 4, x: 8.5, y: 2.35, w: 3.5, h: 2.35 },
+        { type: "contenu", x: 0, y: 4.7, w: 8.5, h: 3.3 },
+        { type: "cartouche", x: 8.5, y: 4.7, w: 3.5, h: 3.3 }
       ];
       const FACE_DU_COTE = { 1: "longPanB", 2: "pignonB", 3: "longPanA", 4: "pignonA" };
+      const TEINTE_COTE = { 1: [0.984, 0.89, 0.882], 2: [0.886, 0.953, 0.898], 3: [0.882, 0.922, 0.98], 4: [0.984, 0.937, 0.835] };
+      const TEINTE_LIGNE = { 1: [0.992, 0.945, 0.94], 2: [0.94, 0.976, 0.949], 3: [0.94, 0.961, 0.992], 4: [0.992, 0.969, 0.918] };
       const couper = (t, taille, largeur) => {
         t = String(t);
         const n = Math.max(3, Math.floor(largeur / (taille * 0.5)));
         return t.length > n ? t.slice(0, n - 1) + "\u2026" : t;
       };
+      function cssRgb(c) {
+        const s0 = String(c || "").trim();
+        let m = /^#([0-9a-f]{6})$/i.exec(s0);
+        if (m) {
+          const n = parseInt(m[1], 16);
+          return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+        }
+        m = /^rgba?\(\s*([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)/i.exec(s0);
+        if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+        m = /^hsla?\(\s*([\d.]+)(?:deg)?[ ,]+([\d.]+)%[ ,]+([\d.]+)%/i.exec(s0);
+        if (m) {
+          const h = +m[1] / 360, sa = +m[2] / 100, l = +m[3] / 100, q = l < 0.5 ? l * (1 + sa) : l + sa - l * sa, pp = 2 * l - q;
+          const f2 = (t) => {
+            t = (t + 1) % 1;
+            return t < 1 / 6 ? pp + (q - pp) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp;
+          };
+          return [f2(h + 1 / 3), f2(h), f2(h - 1 / 3)];
+        }
+        return null;
+      }
+      function phaseDeCouleur(rgb) {
+        if (!rgb) return null;
+        const [r, g, b] = rgb, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+        if (mx - mn < 0.08) return l < 0.35 ? "L2" : "L3";
+        if (r > g && g > b && r - b > 0.15) return "L1";
+        if (g >= r && g > b) return "PE";
+        if (b > r && b > g) return "N";
+        return null;
+      }
+      function sectionsParPhases(m) {
+        return [...m].sort((a, b) => a[0].startsWith("PE") - b[0].startsWith("PE") || b[1] - a[1]).map(([k, q]) => {
+          if (k.startsWith("PE")) return q === 1 ? k : `${q}\xD7${k.slice(3)} PE`;
+          if (q >= 3 && q % 3 === 0) return q === 3 ? `3\xD7${k}` : `3\xD7${q / 3}\xD7${k}`;
+          if (q > 3 && q % 3 === 1) return `${q === 4 ? "3" : `3\xD7${(q - 1) / 3}`}\xD7${k} + 1\xD7${k}`;
+          return `${q}\xD7${k}`;
+        }).join(" + ");
+      }
+      const CARTOUCHE_DEFAUT = [
+        { libelle: "Projet", valeur: "{projet}", large: true },
+        { libelle: "Objet", valeur: "\xC9tude de chambre {chambre}", large: true },
+        { libelle: "Chambre", valeur: "{modele}", large: true },
+        { libelle: "Int\xE9rieur", valeur: "{interieur}" },
+        { libelle: "Tampons", valeur: "{tampons}" },
+        { libelle: "Phase", valeur: "" },
+        { libelle: "N\xB0 plan", valeur: "" },
+        { libelle: "Indice", valeur: "{indice}" },
+        { libelle: "Date", valeur: "{date}" },
+        { libelle: "Dessin\xE9", valeur: "" },
+        { libelle: "V\xE9rifi\xE9", valeur: "" },
+        { libelle: "\xC9chelle", valeur: "sans" },
+        { libelle: "Format", valeur: "{format}" },
+        { libelle: "Folio", valeur: "{folio}" }
+      ];
+      function remplirCartouche(champs, valeurs) {
+        return (Array.isArray(champs) && champs.length ? champs : CARTOUCHE_DEFAUT).map((c) => ({
+          libelle: String(c.libelle || ""),
+          large: !!c.large,
+          valeur: String(c.valeur == null ? "" : c.valeur).replace(/\{(\w+)\}/g, (t, k) => valeurs[k] != null ? String(valeurs[k]) : t)
+        }));
+      }
+      function drawSituation(p, sit, nomChambre, z2) {
+        if (!sit || !sit.noeuds || !sit.noeuds.length || !sit.coupes) return;
+        const bandes = sit.coupes.slice(0, -1).map((c0, b) => ({ c0, c1: sit.coupes[b + 1], y0: sit.ys[b][0], y1: sit.ys[b][1] }));
+        const gap = 120, H = bandes.reduce((a, b) => a + (b.y1 - b.y0), 0) + gap * (bandes.length - 1), W = Math.max(...bandes.map((b) => b.c1 - b.c0)) + 160;
+        const s = Math.min((z2.w - 8) / W, (z2.h - 8) / H), ox = z2.x + (z2.w - W * s) / 2 + 80 * s;
+        let yHaut = z2.y + z2.h - (z2.h - H * s) / 2;
+        bandes.forEach((b, i) => {
+          const hb = (b.y1 - b.y0) * s, yb = yHaut - hb;
+          const X = (x) => ox + (x - b.c0) * s, Y = (y) => yb + (b.y1 - y) * s;
+          const n0 = p.labels.length;
+          p.clip([[ox, yb], [ox + (b.c1 - b.c0) * s, yb], [ox + (b.c1 - b.c0) * s, yHaut], [ox, yHaut]], () => {
+            p.rgb([0.36, 0.39, 0.45]).width(Math.max(0.4, 4 * s));
+            sit.troncons.forEach((t) => {
+              if (!t.a || !t.b) return;
+              p.line(X(t.a.x), Y(t.a.y), X(t.b.x), Y(t.a.y)).line(X(t.b.x), Y(t.a.y), X(t.b.x), Y(t.b.y));
+            });
+            sit.troncons.forEach((t) => {
+              const e = t.e;
+              if (!e) return;
+              p.rgb([1, 1, 1], false).rgb([0.8, 0.82, 0.86]).width(Math.max(0.2, 2 * s)).rect(X(e.x - e.w / 2), Y(e.y + e.h / 2), e.w * s, e.h * s, "B");
+            });
+            sit.noeuds.forEach((n2) => {
+              p.rgb([1, 1, 1], false).rgb(cssRgb(n2.couleur) || [0.36, 0.42, 0.44]).width(Math.max(0.4, 4 * s)).rect(X(n2.x - n2.w / 2), Y(n2.y + n2.h / 2), n2.w * s, n2.h * s, "B");
+              const f2 = Math.min(7, 30 * s);
+              if (f2 >= 2.2) p.rgb([0.1, 0.1, 0.1], false).text(X(n2.x), Y(n2.y) - f2 * 0.35, f2, n2.nom, { align: "center", bold: true });
+            });
+          });
+          const xd = ox + (b.c1 - b.c0) * s;
+          const garder = p.labels.slice(n0).filter((l) => l.y >= yb - 1 && l.y <= yHaut + 1 && l.x >= ox - 1 && l.x <= xd + 1);
+          p.labels.length = n0;
+          p.labels.push(...garder);
+          if (i < bandes.length - 1) p.rgb([0.48, 0.51, 0.56], false).text(ox + (b.c1 - b.c0) * s + 3, yb + hb / 2 - 3, 9, "\u2026", { bold: true });
+          if (i > 0) p.rgb([0.48, 0.51, 0.56], false).text(ox - 9, yb + hb / 2 - 3, 9, "\u2026", { bold: true });
+          const n = sit.noeuds.find((x) => x.nom === nomChambre);
+          if (n && n.x >= b.c0 && n.x <= b.c1) {
+            const cx = X(n.x), cy = Y(n.y), rx = Math.max(10, n.w * s * 0.95), ry = Math.max(9, n.h * s * 1.6), k = 0.5523;
+            p.rgb([0.85, 0.11, 0.11]).width(1.6);
+            p.ops.push(`${(cx + rx).toFixed(2)} ${cy.toFixed(2)} m ${(cx + rx).toFixed(2)} ${(cy + ry * k).toFixed(2)} ${(cx + rx * k).toFixed(2)} ${(cy + ry).toFixed(2)} ${cx.toFixed(2)} ${(cy + ry).toFixed(2)} c ${(cx - rx * k).toFixed(2)} ${(cy + ry).toFixed(2)} ${(cx - rx).toFixed(2)} ${(cy + ry * k).toFixed(2)} ${(cx - rx).toFixed(2)} ${cy.toFixed(2)} c ${(cx - rx).toFixed(2)} ${(cy - ry * k).toFixed(2)} ${(cx - rx * k).toFixed(2)} ${(cy - ry).toFixed(2)} ${cx.toFixed(2)} ${(cy - ry).toFixed(2)} c ${(cx + rx * k).toFixed(2)} ${(cy - ry).toFixed(2)} ${(cx + rx).toFixed(2)} ${(cy - ry * k).toFixed(2)} ${(cx + rx).toFixed(2)} ${cy.toFixed(2)} c S`);
+            [[1, 0, ry], [2, rx, 0], [3, 0, -ry], [4, -rx, 0]].forEach(([k2, ex, ey]) => {
+              p.rgb([0.1, 0.11, 0.12], false).rgb([1, 1, 1]).width(0.8).circle(cx + ex, cy + ey, 4.6, "B");
+              p.rgb([1, 1, 1], false).text(cx + ex, cy + ey - 2, 5.6, String(k2), { align: "center", bold: true });
+            });
+            p.rgb([0.85, 0.11, 0.11], false).text(cx + rx + 7, cy + ry - 2, 8, n.nom, { bold: true });
+          }
+          yHaut = yb - gap * s;
+        });
+      }
+      function drawMasqueFace(p, mq, cote, e, z2) {
+        const FW = cote % 2 ? e.L : e.l, FH = e.H, ep = Math.max(80, (e.infos && e.infos.paroi || 150) * 0.5);
+        const s = Math.min(z2.w / (FW + 2 * ep), (z2.h - 22) / (FH + 2 * ep)), ox = z2.x + (z2.w - (FW + 2 * ep) * s) / 2 + ep * s, oy = z2.y + 12 + (z2.h - 22 - (FH + 2 * ep) * s) / 2 + ep * s;
+        p.rgb([0.79, 0.77, 0.72], false).rgb([0.44, 0.42, 0.38]).width(0.6).rect(ox - ep * s, oy - ep * s, (FW + 2 * ep) * s, (FH + 2 * ep) * s, "B");
+        p.rgb([1, 1, 1], false).rect(ox, oy, FW * s, FH * s, "B");
+        p.rgb([0.29, 0.33, 0.41], false).text(ox + FW * s / 2, oy + (FH + ep) * s + 2.5, 6, `${cote % 2 ? "Long-pan" : "Pignon"} \xB7 ${FW} \xD7 ${FH} mm int\xE9rieur`, { align: "center", bold: true });
+        const nx = (FW - mq.largeur) / 2, nyHaut = Math.min(FH, Math.max(mq.hauteur, FH - 250)), ny = nyHaut - mq.hauteur;
+        const X = (x) => ox + (nx + x) * s, Y = (y) => oy + (ny + y) * s;
+        p.rgb([0.69, 0.19, 0.16], false);
+        if (nx > 40) p.text(ox + nx * s / 2, Y(mq.hauteur / 2) - 2, 5.5, String(Math.round(nx)), { align: "center" });
+        if (FH - nyHaut > 40) p.text(X(mq.largeur / 2), oy + (nyHaut + (FH - nyHaut) / 2) * s - 2, 5.5, String(Math.round(FH - nyHaut)), { align: "center" });
+        p.rgb([0.984, 0.965, 0.933], false).rgb([0.23, 0.25, 0.28]).width(0.6).rect(X(0), Y(0), mq.largeur * s, mq.hauteur * s, "B");
+        const ordre = [];
+        (mq.cables || []).forEach((c) => {
+          const l = String(c.liaison || "").replace(/\s*-\s*PE$/i, "");
+          if (l && !ordre.includes(l)) ordre.push(l);
+        });
+        const coulF = (f2) => cssRgb(f2.couleur) || COUL_LIAISON[Math.max(0, ordre.indexOf(String((f2.liaisons || [])[0] || "").replace(/\s*-\s*PE$/i, ""))) % COUL_LIAISON.length];
+        const fs2 = Math.max(4.5, Math.min(8, Math.max(mq.largeur, mq.hauteur) * s / 22));
+        mq.fourreaux.forEach((f2) => {
+          const c = coulF(f2), ro = f2.od / 2 * s, ri = (f2.di || f2.od * 0.8) / 2 * s;
+          p.rgb(nuance(c, 1.82), false).rgb(c).width(Math.max(0.5, 1.1 * s * 10)).circle(X(f2.x), Y(f2.y), ro, "B");
+          p.rgb([1, 1, 1], false).width(Math.max(0.3, 0.6 * s * 10)).circle(X(f2.x), Y(f2.y), ri, "B");
+          p.rgb([0.1, 0.11, 0.12], false).text(X(f2.x), Y(f2.y) + ro + 1.2, fs2, String(f2.id).replace(/^F/, ""), { align: "center", bold: true });
+        });
+        (mq.cables || []).forEach((c) => {
+          const rgb = cssRgb(c.couleur), ph = c.phase || phaseDeCouleur(rgb), col = rgb || PHASE_RGB[ph] || [0.5, 0.5, 0.5], r = c.od / 2 * s;
+          p.rgb(col, false).rgb([0.04, 0.06, 0.08]).width(0.3).circle(X(c.x), Y(c.y), r, "B");
+          if (ph && r >= 2.6) p.rgb([1, 1, 1], false).text(X(c.x), Y(c.y) - r * 0.32, Math.min(r * 0.9, 5), ph, { align: "center", bold: true });
+        });
+        const nb = /* @__PURE__ */ new Map();
+        mq.fourreaux.forEach((f2) => {
+          const d = Math.round(f2.od);
+          nb.set(d, (nb.get(d) || 0) + 1);
+        });
+        p.rgb([0.29, 0.33, 0.41], false).text(z2.x + 2, z2.y + 2, 6.5, couper([...nb].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q}\xD7\xD8${d}`).join(" \xB7 "), 6.5, z2.w * 0.62));
+        p.rgb([0.69, 0.19, 0.16], false).text(z2.x + z2.w - 2, z2.y + 2, 6.5, `nappe ${Math.round(mq.largeur)} \xD7 ${Math.round(mq.hauteur)} mm`, { align: "right", bold: true });
+      }
+      function lignesContenuChambre(e, masques) {
+        const lignes = [];
+        for (let c = 1; c <= 4; c++) {
+          const mq = (masques || {})[FACE_DU_COTE[c]];
+          if (!mq) continue;
+          const parL = /* @__PURE__ */ new Map(), od = new Map(mq.fourreaux.map((f2) => [f2.id, Math.round(f2.od)]));
+          (mq.cables || []).forEach((cb) => {
+            const nom = String(cb.liaison || "").trim();
+            if (!nom) return;
+            const base = nom.replace(/\s*-\s*PE$/i, ""), pe = base !== nom || cb.phase === "PE" || cb.fonction === "PE";
+            if (!parL.has(base)) parL.set(base, { f: /* @__PURE__ */ new Set(), cab: /* @__PURE__ */ new Map() });
+            const g = parL.get(base);
+            if (cb.fourreau) g.f.add(cb.fourreau);
+            const k = (pe ? "PE " : "") + (cb.code || `\xD8${cb.od}`);
+            g.cab.set(k, (g.cab.get(k) || 0) + 1);
+          });
+          [...parL].sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true })).forEach(([nom, g]) => {
+            const ids = [...g.f].sort((a, b) => Number(String(a).slice(1)) - Number(String(b).slice(1)));
+            const parOd = /* @__PURE__ */ new Map();
+            ids.forEach((id) => {
+              const d = od.get(id);
+              if (d) parOd.set(d, (parOd.get(d) || 0) + 1);
+            });
+            lignes.push({ cote: c, cells: [`${e.nom}.${c}`, nomCourt(nom), ids.join(", "), [...parOd].sort((a, b) => b[0] - a[0]).map(([d, q]) => `${q}\xD7\xD8${d}`).join(" "), sectionsParPhases(g.cab)] });
+          });
+        }
+        return lignes;
+      }
       function dessinerPageChambreA3(p, e, masques, opts = {}) {
         const [PW, PH] = FORMATS_PAGE.a3, M = 28, ENT = 34;
         const gx = M, gy = M, gw = PW - 2 * M, gh = PH - 2 * M - ENT, CW = gw / 12, CH = gh / 8, G = 5;
         const zone = (b) => ({ x: gx + b.x * CW + G / 2, y: gy + (8 - b.y - b.h) * CH + G / 2, w: b.w * CW - G, h: b.h * CH - G });
-        const masquesM = masques || {};
-        p.rgb([0.1, 0.1, 0.1], false).text(M, PH - M - 16, 18, `${e.nom || "Chambre"} \u2014 ${e.ok ? e.ref : "aucune chambre"}`, { bold: true });
-        p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 16, 9, `${opts.projet || ""} \xB7 TONTONKAD \u2014 \xE9tude de chambre`, { align: "right" });
-        p.rgb([0.66, 0.27, 0.04]).width(1.2).line(M, PH - M - 24, PW - M, PH - M - 24);
-        const cadre = (z2, titre) => {
-          p.rgb([0.995, 0.995, 0.99], false).rgb([0.78, 0.8, 0.84]).width(0.7).rect(z2.x, z2.y, z2.w, z2.h, "B");
-          if (titre) {
-            p.rgb([0.93, 0.94, 0.96], false).rect(z2.x, z2.y + z2.h - 15, z2.w, 15, "f");
-            p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 6, z2.y + z2.h - 11, 8.5, couper(titre, 8.5, z2.w - 12), { bold: true });
-          }
+        const masquesM = masques || {}, etudeOk = e && e.ok;
+        if (!p.images) p.images = [];
+        enteteChambre(p, `${e.nom || "Chambre"} \u2014 ${etudeOk ? e.ref : "aucune chambre"}`, opts);
+        const cadre = (z2, titre, teinte) => {
+          p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(z2.x, z2.y, z2.w, z2.h, "B");
+          if (!titre) return { ...z2 };
+          p.rgb(teinte || [0.93, 0.945, 0.965], false).rect(z2.x + 0.35, z2.y + z2.h - 15, z2.w - 0.7, 14.65, "f");
+          p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 6, z2.y + z2.h - 11, 8.5, couper(titre, 8.5, z2.w - 12), { bold: true });
+          return { x: z2.x + 4, y: z2.y + 4, w: z2.w - 8, h: z2.h - 23 };
         };
-        const etudeOk = e && e.ok;
         for (const b of MISE_EN_PAGE_CHAMBRE) {
           const z2 = zone(b);
-          if (b.type === "vuedessus") {
-            cadre(z2, "Vue de dessus");
-            if (etudeOk) drawChambreDessus(p, e, masquesM, z2.x + 4, z2.y + 4, z2.w - 8, z2.h - 24);
+          if (b.type === "situation") {
+            const zi = cadre(z2, "Situation dans le r\xE9seau");
+            drawSituation(p, opts.situation, e.nom, zi);
           } else if (b.type === "masque") {
-            const k = FACE_DU_COTE[b.cote], mq = masquesM[k];
+            const mq = masquesM[FACE_DU_COTE[b.cote]];
             const L = mq && mq.longueurM ? ` \xB7 ${String(mq.longueurM).replace(".", ",")} m` : "";
-            cadre(z2, `${e.nom || "C"}.${b.cote} \xB7 ${mq ? mq.nom + L : "c\xF4t\xE9 libre"}`);
-            if (mq) {
-              drawCoupe(p, mq, z2.x + 40, z2.y + 34, z2.w - 80, z2.h - 64);
-              const nb = /* @__PURE__ */ new Map();
-              mq.fourreaux.forEach((f2) => {
-                const d = Math.round(f2.od);
-                nb.set(d, (nb.get(d) || 0) + 1);
-              });
-              p.rgb([0.25, 0.25, 0.25], false).text(z2.x + 6, z2.y + 6, 7, couper([...nb].sort((a, c) => c[0] - a[0]).map(([d, q]) => `${q} \xD7 \xD8${d}`).join("   ") + `   \xB7   nappe ${Math.round(mq.largeur)} \xD7 ${Math.round(mq.hauteur)} mm`, 7, z2.w - 12));
-            }
-          } else if (b.type === "fourreaux") {
-            cadre(z2, "Contenu des fourreaux, par c\xF4t\xE9 et par liaison");
-            const lignes = [];
-            for (let c = 1; c <= 4; c++) {
-              const mq = masquesM[FACE_DU_COTE[c]];
-              if (!mq) continue;
-              const parLiaison = /* @__PURE__ */ new Map();
-              mq.fourreaux.forEach((f2) => {
-                const nom = String(f2.liaisons && f2.liaisons[0] || f2.libelle || "r\xE9serve").replace(/\s*-\s*PE$/i, "");
-                if (!parLiaison.has(nom)) parLiaison.set(nom, { f: /* @__PURE__ */ new Map(), c: /* @__PURE__ */ new Map() });
-                const g = parLiaison.get(nom), d = Math.round(f2.od);
-                g.f.set(d, (g.f.get(d) || 0) + 1);
-                (mq.cables || []).filter((x) => x.fourreau === f2.id).forEach((x) => {
-                  const k2 = x.code || `\xD8${x.od}`;
-                  g.c.set(k2, (g.c.get(k2) || 0) + 1);
-                });
-              });
-              [...parLiaison].sort((a, c2) => a[0].localeCompare(c2[0], "fr", { numeric: true })).forEach(([nom, g]) => lignes.push([
-                `${e.nom}.${c}`,
-                nomCourt(nom),
-                [...g.f].sort((a, c2) => c2[0] - a[0]).map(([d, q]) => `${q}\xD7\xD8${d}`).join(" "),
-                [...g.c].map(([k2, q]) => `${q}\xD7${k2}`).join(" + ") || "\u2014"
-              ]));
-            }
-            tableauPdf(p, z2, ["Masque", "Liaison", "Fourreaux", "C\xE2bles"], [0.11, 0.42, 0.17, 0.3], lignes);
-          } else if (b.type === "cables") {
-            cadre(z2, "Travers\xE9es de la chambre (faisceaux)");
-            const LIB = { longPanB: 1, pignonB: 2, longPanA: 3, pignonA: 4 };
-            const lignes = [];
-            regrouperFaisceaux(e).forEach((fx, i) => [...new Set(fx.liaisons.map((x) => String(x).replace(/\s*-\s*PE$/i, "")))].forEach((l, j) => lignes.push([j ? "" : `${i + 1}`, j ? "" : `${e.nom}.${LIB[fx.cles[0]]} \u2192 ${e.nom}.${LIB[fx.cles[1]]}`, nomCourt(l)])));
-            const arr = /* @__PURE__ */ new Map();
-            (e.arrets || []).forEach((a) => {
-              if (!arr.has(a.cle)) arr.set(a.cle, []);
-              arr.get(a.cle).push(a.liaison);
-            });
-            arr.forEach((noms, k) => [...new Set(noms.map((x) => String(x).replace(/\s*-\s*PE$/i, "")))].forEach((l, j) => lignes.push([j ? "" : "\u25A0", j ? "" : `s'arr\xEAte en ${e.nom}.${LIB[k]}`, nomCourt(l)])));
-            tableauPdf(p, z2, ["N\xB0", "C\xF4t\xE9s", "Liaison"], [0.08, 0.3, 0.62], lignes);
+            const zi = cadre(z2, `${e.nom || "C"}.${b.cote} \xB7 ${mq ? mq.nom + L : "c\xF4t\xE9 libre"}`, TEINTE_COTE[b.cote]);
+            if (mq && etudeOk) drawMasqueFace(p, mq, b.cote, e, zi);
+          } else if (b.type === "contenu") {
+            const zi = cadre(z2, "Contenu des fourreaux, par c\xF4t\xE9 et par liaison");
+            p.lignesRestantes = tableauQuadrille(p, zi, ENTETES_CONTENU, PARTS_CONTENU, lignesContenuChambre(e, masquesM), "suite sur la page suivante");
           } else if (b.type === "cartouche") {
-            cadre(z2, "Cartouche");
-            const L2 = [
-              ["Projet", opts.projet || "\u2014"],
-              ["Chambre", `${e.nom || "\u2014"} \xB7 ${etudeOk ? e.ref : "\u2014"}`],
-              ["Int\xE9rieur", etudeOk ? `${e.L} \xD7 ${e.l} \xD7 ${e.H} mm` : "\u2014"],
-              ...etudeOk && e.infos && e.infos.tampon && e.infos.tampons ? [["Tampons", `${e.infos.tampons} \xD7 ${e.infos.tampon.L}\xD7${e.infos.tampon.l} ${e.infos.tampon.classe} (\xE0 valider)`]] : [],
-              ["Date", opts.date || ""],
-              ["Indice", opts.indice || "A"],
-              ["\xC9tabli par", "CEA \u2014 TONTONKAD"]
-            ];
-            L2.forEach(([k, v], i) => {
-              const y = z2.y + z2.h - 30 - i * 13;
-              p.rgb([0.4, 0.4, 0.4], false).text(z2.x + 8, y, 7.5, k);
-              p.rgb([0.1, 0.1, 0.1], false).text(z2.x + 70, y, 8, couper(v, 8, z2.w - 78), { bold: true });
-            });
+            cadre(z2, null);
+            dessinerCartouche(p, { x: z2.x + 5, y: z2.y + 5, w: z2.w - 10, h: z2.h - 10 }, opts.cartouche || {}, valeursCartouche(e, opts));
           }
         }
         return p;
+      }
+      function valeursCartouche(e, opts) {
+        const ok2 = e && e.ok;
+        return {
+          projet: opts.projet || "",
+          chambre: e.nom || "",
+          modele: ok2 ? e.ref : "\u2014",
+          date: opts.date || "",
+          indice: opts.indice || "A",
+          format: "A3",
+          interieur: ok2 ? `${e.L} \xD7 ${e.l} \xD7 ${e.H} mm` : "\u2014",
+          tampons: ok2 && e.infos && e.infos.tampon && e.infos.tampons ? `${e.infos.tampons} \xD7 ${e.infos.tampon.L}\xD7${e.infos.tampon.l} ${e.infos.tampon.classe}` : "\u2014",
+          folio: opts.folio ? `${opts.folio.i} / ${opts.folio.n}` : "1 / 1"
+        };
+      }
+      function enteteChambre(p, titre, opts) {
+        const [PW, PH] = FORMATS_PAGE.a3, M = 28;
+        p.rgb([0.1, 0.1, 0.1], false).text(M, PH - M - 16, 18, titre, { bold: true });
+        const folio = opts.folio && opts.folio.n > 1 ? `Folio ${opts.folio.i} / ${opts.folio.n}  \xB7  ` : "";
+        p.rgb([0.35, 0.35, 0.35], false).text(PW - M, PH - M - 16, 9, `${folio}${opts.projet || ""} \xB7 nodial \u2014 \xE9tude de chambre`, { align: "right" });
+        p.rgb([0.72, 0.3, 0.07]).width(1.2).line(M, PH - M - 24, PW - M, PH - M - 24);
+      }
+      function pagesChambreA3(e, masques, opts, nouvellePage) {
+        const essai = (folio) => {
+          const pages = [], o = { ...opts, folio };
+          const p0 = nouvellePage();
+          dessinerPageChambreA3(p0, e, masques, o);
+          pages.push(p0);
+          let reste = p0.lignesRestantes || [];
+          while (reste.length && pages.length < 50) {
+            const ps = nouvellePage();
+            reste = dessinerPageContenuA3(ps, e, reste, { ...o, folio: folio && { ...folio, i: pages.length + 1 } });
+            pages.push(ps);
+          }
+          return pages;
+        };
+        const n = essai(null).length;
+        return n > 1 ? essai({ i: 1, n }) : essai(null);
+      }
+      const ENTETES_CONTENU = ["Masque", "Liaison", "N\xB0 fourreaux", "Fourreaux", "C\xE2bles"], PARTS_CONTENU = [0.08, 0.26, 0.17, 0.2, 0.29];
+      function dessinerPageContenuA3(p, e, lignes, opts = {}) {
+        const [PW, PH] = FORMATS_PAGE.a3, M = 28, ENT = 34, gw = PW - 2 * M, gh = PH - 2 * M - ENT, CW = gw / 12, CH = gh / 8, G = 5;
+        if (!p.images) p.images = [];
+        enteteChambre(p, `${e.nom || "Chambre"} \u2014 contenu des fourreaux (suite)`, opts);
+        const zt = { x: M + G / 2, y: M + G / 2, w: 8.5 * CW - G, h: gh - G };
+        p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(zt.x, zt.y, zt.w, zt.h, "B");
+        p.rgb([0.93, 0.945, 0.965], false).rect(zt.x + 0.35, zt.y + zt.h - 15, zt.w - 0.7, 14.65, "f");
+        p.rgb([0.1, 0.1, 0.1], false).text(zt.x + 6, zt.y + zt.h - 11, 8.5, "Contenu des fourreaux, par c\xF4t\xE9 et par liaison (suite)", { bold: true });
+        const reste = tableauQuadrille(p, { x: zt.x + 4, y: zt.y + 4, w: zt.w - 8, h: zt.h - 23 }, ENTETES_CONTENU, PARTS_CONTENU, lignes, "suite sur la page suivante");
+        const zc = { x: M + 8.5 * CW + G / 2, y: M + G / 2, w: 3.5 * CW - G, h: 3.3 * CH - G };
+        p.rgb([1, 1, 1], false).rgb([0.79, 0.81, 0.84]).width(0.7).rect(zc.x, zc.y, zc.w, zc.h, "B");
+        dessinerCartouche(p, { x: zc.x + 5, y: zc.y + 5, w: zc.w - 10, h: zc.h - 10 }, opts.cartouche || {}, valeursCartouche(e, opts));
+        return reste;
+      }
+      function dessinerCartouche(p, z2, cart, valeurs) {
+        const cote = Math.min(58, z2.h * 0.3), yLogo = z2.y + z2.h - cote;
+        [["MOA", cart.logoMOA, z2.x], ["MOE", cart.logoMOE, z2.x + z2.w - cote]].forEach(([nom, logo, x]) => {
+          if (logo && logo.src) {
+            if (!p.images) p.images = [];
+            p.images.push({ src: logo.src, format: logo.format, x, y: yLogo, w: cote, h: cote });
+          } else {
+            p.rgb([0.6, 0.64, 0.69]).width(0.6).dash(true).rect(x, yLogo, cote, cote, "S").dash(false);
+            p.rgb([0.48, 0.51, 0.56], false).text(x + cote / 2, yLogo + cote / 2 - 3, 7.5, `Logo ${nom}`, { align: "center", bold: true });
+          }
+        });
+        p.rgb([0.48, 0.51, 0.56], false).text(z2.x + z2.w / 2, yLogo + cote / 2 - 3, 6.5, "Ma\xEEtre d\u2019ouvrage \xB7 Ma\xEEtre d\u2019\u0153uvre", { align: "center" });
+        const champs = remplirCartouche(cart.champs, valeurs);
+        const rangees = [];
+        let cur = [];
+        champs.forEach((c) => {
+          if (c.large) {
+            if (cur.length) {
+              rangees.push(cur);
+              cur = [];
+            }
+            rangees.push([c]);
+          } else {
+            cur.push(c);
+            if (cur.length === 2) {
+              rangees.push(cur);
+              cur = [];
+            }
+          }
+        });
+        if (cur.length) rangees.push(cur);
+        const haut = yLogo - 6, lh = Math.min(24, (haut - z2.y) / Math.max(1, rangees.length)), fl = Math.min(8.5, lh * 0.5);
+        rangees.forEach((r, i) => {
+          const y = haut - (i + 1) * lh, n = r.length, wc = z2.w / n;
+          r.forEach((c, k) => {
+            const x = z2.x + k * wc, wl = Math.min(wc * 0.42, 62);
+            p.rgb([0.965, 0.97, 0.976], false).rgb([0.81, 0.83, 0.86]).width(0.5).rect(x, y, wl, lh, "B");
+            p.rgb([1, 1, 1], false).rect(x + wl, y, wc - wl, lh, "B");
+            p.rgb([0.29, 0.33, 0.41], false).text(x + 3, y + lh / 2 - fl * 0.35, fl, couper(c.libelle, fl, wl - 5));
+            p.rgb([0.1, 0.1, 0.1], false).text(x + wl + 3, y + lh / 2 - fl * 0.35, fl, couper(c.valeur, fl, wc - wl - 5), { bold: true });
+          });
+        });
+      }
+      function tableauQuadrille(p, z2, entetes, parts, lignes, renvoi) {
+        const f2 = 6.8, lh = 9.4, x0 = z2.x, w = z2.w, xs = [];
+        let acc = x0;
+        parts.forEach((q) => {
+          xs.push(acc);
+          acc += q * w;
+        });
+        xs.push(x0 + w);
+        let y = z2.y + z2.h - lh;
+        const max = Math.max(1, Math.floor((z2.h - lh) / lh));
+        const vis = lignes.length > max ? lignes.slice(0, max - 1) : lignes, reste = lignes.slice(vis.length);
+        p.rgb([0.953, 0.961, 0.973], false).rect(x0, y, w, lh, "f");
+        entetes.forEach((t, i) => p.rgb([0.18, 0.2, 0.25], false).text(xs[i] + 3, y + 3, f2, t, { bold: true }));
+        vis.forEach((l) => {
+          y -= lh;
+          p.rgb(TEINTE_LIGNE[l.cote] || [1, 1, 1], false).rect(x0, y, w, lh, "f");
+          l.cells.forEach((c, i) => p.rgb(i === 0 ? [0.1, 0.1, 0.1] : i === 2 ? [0.72, 0.3, 0.07] : i === 4 ? [0.42, 0.25, 0.08] : [0.18, 0.2, 0.25], false).text(xs[i] + 3, y + 3, f2, couper(c, f2, parts[i] * w - 6), { bold: i === 0 || i === 2 }));
+        });
+        p.rgb([0.81, 0.83, 0.86]).width(0.5);
+        const yb = y;
+        for (let k = 0; k <= vis.length + 1; k++) p.line(x0, yb + k * lh, x0 + w, yb + k * lh);
+        xs.forEach((x) => p.line(x, yb, x, z2.y + z2.h));
+        if (reste.length) p.rgb([0.55, 0.2, 0.1], false).text(x0 + 3, yb - 8, f2, `\u2026 ${reste.length} ligne${reste.length > 1 ? "s" : ""} de plus : ${renvoi || "voir les tableaux d\xE9taill\xE9s du rapport"}`);
+        return reste;
       }
       function tableauPdf(p, z2, entetes, parts, lignes) {
         const f2 = 6.6, lh = 8.6, x0 = z2.x + 4, w = z2.w - 8;
@@ -79807,7 +80045,7 @@ var require_vue3d = __commonJS({
         }
         return { pages, echelle: s, texte: SYN.police * s, format: fmt, PH };
       }
-      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, MISE_EN_PAGE_CHAMBRE, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
+      const api = { Page, MAT, fit, drawCoupe, draw3D, drawChambre3D, drawChambreDessus, dessinerEtudeChambre, rejouerSurCanvas, drawSynoptique2D, drawSynoptiqueIso, drawSynoptiqueAncre, synoptiqueEnFolios, decouperFolios, formatOptimalSynoptique, synoptiqueEnBandes, decouperBandes, formatOptimalBandes, mesureEtiquetteSyn, FORMATS_PAGE, dessinerPageChambreA3, dessinerPageContenuA3, pagesChambreA3, MISE_EN_PAGE_CHAMBRE, CARTOUCHE_DEFAUT, remplirCartouche, sectionsParPhases, cssRgb, coupeEnMiroir, COUL_LIAISON, PAGE_W, PAGE_H, MARGE, PHASE_RGB, GRILLAGE_RGB };
       if (typeof module2 !== "undefined" && module2.exports) module2.exports = api;
       else root.Vue3D = api;
     })(typeof window !== "undefined" ? window : globalThis);
@@ -79823,7 +80061,7 @@ var require_pdf = __commonJS({
       const p = new Page();
       const L = Number(opts.longueur3dMm) > 0 ? Number(opts.longueur3dMm) : 1500;
       p.text(MARGE, PAGE_H - MARGE - 4, 16, m.nom, { bold: true });
-      p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `TONTONKAD \u2014 masque ${i + 1}/${total}`, { align: "right" });
+      p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `nodial \u2014 masque ${i + 1}/${total}`, { align: "right" });
       p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
       const zoneY = 215, zoneH = PAGE_H - MARGE - 40 - zoneY;
       p.text(MARGE, zoneY + zoneH + 10, 9, "Coupe", { bold: true });
@@ -79873,7 +80111,7 @@ var require_pdf = __commonJS({
       const p = new Page();
       const ch = m.chambre;
       p.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} \u2014 chambre de tirage ${ch.ref}`, { bold: true });
-      p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `TONTONKAD \u2014 masque ${i + 1}/${total}`, { align: "right" });
+      p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `nodial \u2014 masque ${i + 1}/${total}`, { align: "right" });
       p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
       drawChambre3D(p, m, MARGE + 20, 120, 520, PAGE_H - MARGE - 60 - 120);
       const inf = ch.infos || {};
@@ -79896,12 +80134,12 @@ var require_pdf = __commonJS({
       p.rgb([0.4, 0.4, 0.4], false);
       y -= 22;
       const notes2 = ch.infos ? [
-        "Largeur, longueur, hauteur utile : catalogue TONTONKAD.",
+        "Largeur, longueur, hauteur utile : catalogue nodial.",
         `Hauteur totale${inf.paroi ? ", parois " + inf.paroi + " mm" : ""}${inf.tampons ? ", " + inf.tampons + " tampon(s)" : ""} :`,
         "indicatif, sources publiques (pas une fiche fabricant).",
         "Hauteur utile en tirets bleus.",
         ...inf.aVerifier ? [`\xC0 v\xE9rifier : ${inf.aVerifier}.`] : []
-      ] : ["Cotes int\xE9rieures du catalogue TONTONKAD.", "Parois, cadre et tampon non repr\xE9sent\xE9s."];
+      ] : ["Cotes int\xE9rieures du catalogue nodial.", "Parois, cadre et tampon non repr\xE9sent\xE9s."];
       for (const l of notes2) {
         p.text(x, y, 7, l.slice(0, 70));
         y -= 10;
@@ -79958,6 +80196,70 @@ var require_pdf = __commonJS({
       });
       return [p1, p2, p3].map((p) => p.toString());
     }
+    function imageVersPdf(octets) {
+      const b = Buffer.isBuffer(octets) ? octets : Buffer.from(String(octets).replace(/^data:[^,]+,/, ""), "base64");
+      if (b[0] === 255 && b[1] === 216) {
+        let i2 = 2, w2 = 0, h2 = 0, comp = 3;
+        while (i2 < b.length) {
+          if (b[i2] !== 255) {
+            i2++;
+            continue;
+          }
+          const m = b[i2 + 1], len = b.readUInt16BE(i2 + 2);
+          if (m >= 192 && m <= 207 && ![196, 200, 204].includes(m)) {
+            h2 = b.readUInt16BE(i2 + 5);
+            w2 = b.readUInt16BE(i2 + 7);
+            comp = b[i2 + 9];
+            break;
+          }
+          i2 += 2 + len;
+        }
+        return { dict: `/Type /XObject /Subtype /Image /Width ${w2} /Height ${h2} /ColorSpace /${comp === 1 ? "DeviceGray" : comp === 4 ? "DeviceCMYK" : "DeviceRGB"} /BitsPerComponent 8 /Filter /DCTDecode`, data: b };
+      }
+      if (b.readUInt32BE(0) !== 2303741511) throw new Error("Logo : seuls les PNG et JPEG sont accept\xE9s");
+      const zlib = require("zlib");
+      let i = 8, w = 0, h = 0, prof = 8, type = 2;
+      const idat = [];
+      while (i < b.length) {
+        const len = b.readUInt32BE(i), t = b.toString("latin1", i + 4, i + 8), d = b.subarray(i + 8, i + 8 + len);
+        if (t === "IHDR") {
+          w = d.readUInt32BE(0);
+          h = d.readUInt32BE(4);
+          prof = d[8];
+          type = d[9];
+          if (d[12]) throw new Error("Logo PNG entrelac\xE9 non pris en charge : r\xE9enregistrez-le sans entrelacement");
+        } else if (t === "IDAT") idat.push(d);
+        else if (t === "IEND") break;
+        i += 12 + len;
+      }
+      if (prof !== 8 || ![0, 2, 4, 6].includes(type)) throw new Error("Logo PNG : 8 bits gris ou RVB attendus");
+      const nc = { 0: 1, 2: 3, 4: 2, 6: 4 }[type], bpp = nc, ligne = w * bpp, brut = zlib.inflateSync(Buffer.concat(idat));
+      const px = Buffer.alloc(h * ligne);
+      for (let y = 0; y < h; y++) {
+        const f = brut[y * (ligne + 1)], src = y * (ligne + 1) + 1, dst = y * ligne;
+        for (let x = 0; x < ligne; x++) {
+          const a = x >= bpp ? px[dst + x - bpp] : 0, up = y ? px[dst - ligne + x] : 0, c = y && x >= bpp ? px[dst - ligne + x - bpp] : 0, v = brut[src + x];
+          let r = v;
+          if (f === 1) r = v + a;
+          else if (f === 2) r = v + up;
+          else if (f === 3) r = v + (a + up >> 1);
+          else if (f === 4) {
+            const pp = a + up - c, pa = Math.abs(pp - a), pb = Math.abs(pp - up), pc = Math.abs(pp - c);
+            r = v + (pa <= pb && pa <= pc ? a : pb <= pc ? up : c);
+          }
+          px[dst + x] = r & 255;
+        }
+      }
+      const coul = type === 0 || type === 4 ? 1 : 3, alpha = type === 4 || type === 6;
+      const rgb = Buffer.alloc(w * h * coul), al = alpha ? Buffer.alloc(w * h) : null;
+      for (let k = 0; k < w * h; k++) {
+        for (let c = 0; c < coul; c++) rgb[k * coul + c] = px[k * nc + c];
+        if (al) al[k] = px[k * nc + nc - 1];
+      }
+      const res = { dict: `/Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /${coul === 1 ? "DeviceGray" : "DeviceRGB"} /BitsPerComponent 8 /Filter /FlateDecode`, data: zlib.deflateSync(rgb) };
+      if (al) res.smask = { dict: `/Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode`, data: zlib.deflateSync(al) };
+      return res;
+    }
     function masquesToPdf2(masques, opts = {}) {
       const ok2 = masques.filter((m) => m && m.ok);
       if (!ok2.length) throw new Error("Aucun masque \xE0 mettre en page");
@@ -79970,46 +80272,61 @@ var require_pdf = __commonJS({
       const font1 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
       const font2 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
       const kids = [];
-      const addPage = (text) => {
-        const content = Buffer.from(text, "latin1");
-        const cid = add(`<< /Length ${content.length} >>
+      const flux = (dict, data) => add(Buffer.concat([Buffer.from(`<< ${dict} /Length ${data.length} >>
 stream
-${content.toString("latin1")}
-endstream`);
-        kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /ExtGState << /GS1 << /ca 0.12 /CA 0.12 >> >> >> /Contents ${cid} 0 R >>`));
+`, "latin1"), data, Buffer.from("\nendstream", "latin1")]));
+      const addPage = (pg) => {
+        const o = typeof pg === "string" ? { contenu: pg } : pg;
+        let texte = o.contenu, xo = "";
+        (o.images || []).forEach((im, k) => {
+          try {
+            const img = imageVersPdf(im.octets);
+            const sm = img.smask ? flux(img.smask.dict, img.smask.data) : null;
+            const id = flux(img.dict + (sm ? ` /SMask ${sm} 0 R` : ""), img.data);
+            xo += ` /Im${k} ${id} 0 R`;
+            texte += `
+q ${im.w.toFixed(2)} 0 0 ${im.h.toFixed(2)} ${im.x.toFixed(2)} ${im.y.toFixed(2)} cm /Im${k} Do Q`;
+          } catch (e) {
+          }
+        });
+        const content = Buffer.from(texte, "latin1");
+        const cid = flux("", content);
+        kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${o.largeur || PAGE_W} ${o.hauteur || PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /ExtGState << /GS1 << /ca 0.12 /CA 0.12 >> >>${xo ? ` /XObject <<${xo} >>` : ""} >> /Contents ${cid} 0 R >>`));
       };
       for (const t of opts.pagesAvant || []) addPage(t);
       ok2.forEach((m, i) => {
         addPage(pageMasque(m, i, ok2.length, opts));
         if (m.chambre && m.chambre.face && opts.chambre !== false) addPage(pageChambre(m, i, ok2.length));
       });
-      for (const e of opts.etudesChambres || []) addPage(pageChambreDessus(e));
+      if (opts.pagesChambres) opts.pagesChambres.forEach(addPage);
+      else for (const e of opts.etudesChambres || []) addPage(pageChambreDessus(e));
       objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
       objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
-      let out = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+      const morceaux = [Buffer.from("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n", "latin1")];
+      let taille = morceaux[0].length;
       const offsets = [];
       objs.forEach((o, i) => {
-        offsets.push(Buffer.byteLength(out, "latin1"));
-        out += `${i + 1} 0 obj
-${o}
-endobj
-`;
+        offsets.push(taille);
+        const corps = Buffer.isBuffer(o) ? o : Buffer.from(String(o), "latin1");
+        const b = Buffer.concat([Buffer.from(`${i + 1} 0 obj
+`, "latin1"), corps, Buffer.from("\nendobj\n", "latin1")]);
+        morceaux.push(b);
+        taille += b.length;
       });
-      const xref = Buffer.byteLength(out, "latin1");
-      out += `xref
+      const fin = `xref
 0 ${objs.length + 1}
 0000000000 65535 f 
 ` + offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n 
-`).join("");
-      out += `trailer
+`).join("") + `trailer
 << /Size ${objs.length + 1} /Root ${catalog} 0 R >>
 startxref
-${xref}
+${taille}
 %%EOF
 `;
-      return Buffer.from(out, "latin1");
+      morceaux.push(Buffer.from(fin, "latin1"));
+      return Buffer.concat(morceaux);
     }
-    module2.exports = { masquesToPdf: masquesToPdf2, pagesReseau: pagesReseau2 };
+    module2.exports = { masquesToPdf: masquesToPdf2, pagesReseau: pagesReseau2, imageVersPdf };
   }
 });
 
@@ -81145,6 +81462,7 @@ var CompatChambres = require_compat_chambres();
 var { infosChambre, chambreMaconnee } = require_chambres_infos2();
 var Reseau = require_reseau();
 var { dessinMasque, dessinChambre, versMultiCAD, versDxf } = require_cad();
+var Vue3D = require_vue3d();
 var cat = loadCatalogues();
 var notes = /* @__PURE__ */ new Map();
 function getNote(chemin) {
@@ -81407,20 +81725,26 @@ server.registerTool("etudier_reseau", {
       de: z.string().describe("Nom de l'\xE9l\xE9ment de d\xE9part"),
       vers: z.string().describe("Nom de l'\xE9l\xE9ment d'arriv\xE9e"),
       longueurM: z.number().optional().describe("Longueur du tron\xE7on en m\xE8tres (m\xE9tr\xE9)"),
-      faceDe: FACE_ENUM.optional().describe("Face de la chambre de d\xE9part (vue de dessus : pignon A gauche, pignon B droite, long-pan A bas, long-pan B haut)"),
-      faceVers: FACE_ENUM.optional().describe("Face de la chambre d'arriv\xE9e"),
+      faceDe: FACE_ENUM.optional().describe("Indicatif : les c\xF4t\xE9s suivent le synoptique (nord = c\xF4t\xE9 1 = long-pan B en haut, 2 = pignon B \xE0 droite, 3 = long-pan A en bas, 4 = pignon A \xE0 gauche ; vers la droite on sort par 2 et on arrive par 4, vers le bas on sort par 3 et on arrive par 1), comme dans l'application"),
+      faceVers: FACE_ENUM.optional().describe("Indicatif, voir faceDe"),
       liaisons: z.array(critereSchema).optional().describe("Liaisons de la note qui passent dans ce tron\xE7on"),
       reserves: z.array(z.object({ type: z.string(), code: z.string(), qty: z.number().int().min(1), nom: z.string().optional() })).optional(),
       options: optionsSchema
     })).min(1),
     options: optionsSchema.describe("Options communes \xE0 toutes les coupes"),
     titre: z.string().optional().describe("Titre du dossier (PDF)"),
+    cartouche: z.object({
+      champs: z.array(z.object({ libelle: z.string(), valeur: z.string(), large: z.boolean().optional() })).optional().describe("Champs du cartouche des pages chambre, dans l'ordre (large = pleine largeur). Valeurs automatiques : {projet} {chambre} {modele} {interieur} {tampons} {date} {indice} {format} {folio}. Par d\xE9faut : Projet, Objet, Chambre, Int\xE9rieur, Tampons, Phase, N\xB0 plan, Indice, Date, Dessin\xE9, V\xE9rifi\xE9, \xC9chelle, Format, Folio"),
+      logoMOA: z.string().optional().describe("Chemin d'une image PNG ou JPEG (carr\xE9e de pr\xE9f\xE9rence) : logo du ma\xEEtre d'ouvrage, en haut \xE0 gauche du cartouche"),
+      logoMOE: z.string().optional().describe("Chemin d'une image PNG ou JPEG : logo du ma\xEEtre d'\u0153uvre, en haut \xE0 droite"),
+      indice: z.string().optional().describe("Indice du plan (d\xE9faut A)")
+    }).optional().describe("Cartouche des pages chambre (PDF), comme dans l'application"),
     sortiePdf: z.string().optional().describe("Nouveau fichier .pdf : synoptique, isom\xE9trique, m\xE9tr\xE9, puis coupes et chambres"),
     sortieDxf: z.string().optional().describe("Nouveau fichier .dxf : coupes et vues de dessus des chambres (c\xF4te \xE0 c\xF4te, ou aux placements donn\xE9s)"),
     cad: z.boolean().optional().describe("Renvoie les commandes de dessin pour le MCP multiCAD"),
     placements: placementSchema
   }
-}, async ({ noteCalcul, elements, troncons, options, titre, sortiePdf, sortieDxf, cad, placements }) => {
+}, async ({ noteCalcul, elements, troncons, options, titre, cartouche, sortiePdf, sortieDxf, cad, placements }) => {
   try {
     const noms = /* @__PURE__ */ new Set();
     for (const e of elements) {
@@ -81434,11 +81758,24 @@ server.registerTool("etudier_reseau", {
     const tr = troncons.map((t) => ({ t, rt: Reseau.relier(r, id[t.de], id[t.vers], { longueurM: t.longueurM, faceA: t.faceDe, faceB: t.faceVers }) }));
     const masques = tr.map(({ t }) => construireMasque(all, { nom: `${t.de} \u2192 ${t.vers}`, liaisons: t.liaisons || [], reserves: t.reserves || [], options: t.options }, options));
     const mDe = new Map(tr.map(({ rt }, i) => [rt.id, masques[i]]));
+    const tailleNoeud = (n) => ({ w: Math.max(n.type === "chambre" ? 120 : 140, n.nom.length * 9.5 + (n.type === "sortie" ? 34 : 24)), h: n.type === "chambre" ? 62 : 48 });
+    const coupeDe = (m) => m && m.ok ? { fourreaux: m.fourreaux.map((f) => ({ id: f.id, od: f.od })), cables: (m.cables || []).map((c) => ({ liaison: c.liaison, code: c.code, parent: c.fourreau })) } : null;
+    const contenus = new Map(tr.map(({ rt }, i) => [rt.id, { ...Reseau.contenuEtiquette(coupeDe(masques[i])), L: rt.longueurM }]));
+    const dis = Reseau.dispositionAncree(r, { tailleNoeud, tailleEtiquette: (t) => Vue3D.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio: null });
+    Reseau.alignerFaces(r, dis);
+    const synData = {
+      largeur: dis.largeur,
+      hauteur: dis.hauteur,
+      noeuds: r.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, ...dis.noeuds[n.id], ...tailleNoeud(n) })),
+      troncons: r.troncons.map((t) => ({ a: dis.noeuds[t.a.noeud], b: dis.noeuds[t.b.noeud], e: dis.etiquettes[t.id] && { ...dis.etiquettes[t.id], ...contenus.get(t.id) } }))
+    };
+    const bandes = Vue3D.decouperBandes(synData, "a0");
+    const situation = { noeuds: synData.noeuds, troncons: synData.troncons, coupes: bandes.coupes, ys: bandes.ys };
     const etudes = elements.filter((e) => e.type === "chambre").map((e) => {
       const faces = {};
       Reseau.tronconsDe(r, id[e.nom]).forEach((v) => {
         const m = mDe.get(v.troncon.id);
-        if (m && m.ok && m.forme !== "circ") faces[v.face] = { ...m, sens: v.troncon.a.noeud === id[e.nom] && v.troncon.a.face === v.face ? "depart" : "arrivee" };
+        if (m && m.ok && m.forme !== "circ") faces[v.face] = { ...m, longueurM: v.troncon.longueurM || null, sens: v.troncon.a.noeud === id[e.nom] && v.troncon.a.face === v.face ? "depart" : "arrivee" };
       });
       return etudierUneChambre(e, faces, masques);
     });
@@ -81491,8 +81828,18 @@ server.registerTool("etudier_reseau", {
         };
       })
     };
-    const titreDossier = titre || "R\xE9seau TONTONKAD";
-    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, "pdf", masquesToPdf(masques, { etudesChambres: etudes, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
+    const titreDossier = titre || "R\xE9seau nodial";
+    const lireLogo = (chemin) => {
+      if (!chemin) return null;
+      const abs = path.resolve(chemin);
+      if (!fs.existsSync(abs)) throw new Error(`Logo introuvable : ${abs}`);
+      return { src: fs.readFileSync(abs) };
+    };
+    const cart = { champs: cartouche && cartouche.champs, logoMOA: lireLogo(cartouche && cartouche.logoMOA), logoMOE: lireLogo(cartouche && cartouche.logoMOE) };
+    const [A3W, A3H] = Vue3D.FORMATS_PAGE.a3;
+    const optsPage = { projet: titreDossier, date: (/* @__PURE__ */ new Date()).toLocaleDateString("fr-FR"), indice: cartouche && cartouche.indice || "A", situation, cartouche: cart };
+    const pagesChambres = etudes.filter((e) => e.ok).flatMap((e) => Vue3D.pagesChambreA3(e, e._masques, optsPage, () => new Vue3D.Page({ ombre: false }))).map((pg) => ({ contenu: pg.toString(), largeur: A3W, hauteur: A3H, images: (pg.images || []).map((im) => ({ octets: im.src, x: im.x, y: im.y, w: im.w, h: im.h })) }));
+    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, "pdf", masquesToPdf(masques, { pagesChambres, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
     const dessins = cad || sortieDxf ? dessinsCao(masques, etudes) : [];
     const dxf = sortieDxf ? ecrireNeuf(sortieDxf, "dxf", versDxf(dessins, placements || {}), "latin1") : null;
     return ok({

@@ -7284,6 +7284,7 @@
     if (feuille) feuille.hidden = actif;
     if (resume) resume.hidden = !actif;
     if (!actif) { const go = document.getElementById('confirmPdfExport'); if (go) go.disabled = false; return; }
+    editeurCartouche();
     // Aperçu réseau : liste des fichiers qui seront produits (selon les cases)
     const listeFichiers = () => {
       const ol = document.getElementById('pdfReseauFichiers'); if (!ol) return;
@@ -7322,6 +7323,65 @@
     const mep = document.getElementById('pdfMiseEnPageSyn');
     if (mep && !mep._ttk) { mep._ttk = true; mep.addEventListener('change', () => { majOptionsPdfReseau(); dessinerSynoptique(false); }); }
     maj();
+  }
+  // Éditeur du cartouche (fenêtre d'export, mode réseau) : modifie reseau.cartouche.
+  function editeurCartouche() {
+    if (!reseau) return;
+    const box = document.getElementById('pdfCartouche'); if (!box) return;
+    const c = reseau.cartouche || (reseau.cartouche = cartoucheProjet());
+    const corps = document.getElementById('pdfCartoucheChamps');
+    const rendreChamps = () => {
+      corps.textContent = '';
+      c.champs.forEach((ch, i) => {
+        const tr = document.createElement('tr');
+        const lib = document.createElement('input'); lib.type = 'text'; lib.value = ch.libelle; lib.setAttribute('aria-label', `Libellé du champ ${i + 1}`);
+        lib.addEventListener('input', () => { ch.libelle = lib.value; });
+        const val = document.createElement('input'); val.type = 'text'; val.value = ch.valeur; val.setAttribute('aria-label', `Valeur du champ ${lib.value || i + 1}`);
+        val.addEventListener('input', () => { ch.valeur = val.value; });
+        const lg = document.createElement('input'); lg.type = 'checkbox'; lg.checked = !!ch.large; lg.setAttribute('aria-label', 'Pleine largeur');
+        lg.addEventListener('change', () => { ch.large = lg.checked; });
+        const act = document.createElement('td');
+        [['↑', 'Monter', -1], ['↓', 'Descendre', 1]].forEach(([t, l, d]) => { const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'pdf-mini-btn'; b2.textContent = t; b2.setAttribute('aria-label', l); b2.disabled = !c.champs[i + d];
+          b2.addEventListener('click', () => { [c.champs[i], c.champs[i + d]] = [c.champs[i + d], c.champs[i]]; rendreChamps(); }); act.appendChild(b2); });
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'pdf-mini-btn'; del.textContent = '×'; del.setAttribute('aria-label', 'Supprimer le champ');
+        del.addEventListener('click', () => { c.champs.splice(i, 1); rendreChamps(); }); act.appendChild(del);
+        [lib, val, lg].forEach((x) => { const td = document.createElement('td'); td.appendChild(x); tr.appendChild(td); });
+        tr.appendChild(act); corps.appendChild(tr);
+      });
+    };
+    const rendreLogos = () => box.querySelectorAll('.pdf-logo').forEach((z) => {
+      const k = z.dataset.logo, ap = z.querySelector('.pdf-logo-apercu'), lg = c[k];
+      ap.classList.toggle('plein', !!(lg && lg.src)); ap.style.backgroundImage = lg && lg.src ? `url("${lg.src}")` : '';
+    });
+    if (!box._ttk) {
+      box._ttk = true;
+      box.querySelectorAll('.pdf-logo').forEach((z) => {
+        const k = z.dataset.logo;
+        z.querySelector('input[type=file]').addEventListener('change', (ev) => {
+          const f = ev.target.files && ev.target.files[0]; if (!f) return;
+          const lecteur = new FileReader();
+          lecteur.onload = () => { // réduit à 400 px au plus (taille du PDF et du projet)
+            const img = new Image();
+            img.onload = () => {
+              const k2 = Math.min(1, 400 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+              cv.width = Math.max(1, Math.round(img.width * k2)); cv.height = Math.max(1, Math.round(img.height * k2));
+              cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+              (reseau.cartouche || c)[k] = { src: cv.toDataURL('image/png'), format: 'PNG' }; rendreLogos();
+            };
+            img.src = lecteur.result;
+          };
+          lecteur.readAsDataURL(f); ev.target.value = '';
+        });
+        z.querySelector('[data-retirer]').addEventListener('click', () => { (reseau.cartouche || c)[k] = null; rendreLogos(); });
+      });
+      document.getElementById('pdfCartoucheAjout').addEventListener('click', () => { reseau.cartouche.champs.push({ libelle: 'Nouveau champ', valeur: '' }); editeurCartouche(); });
+      document.getElementById('pdfCartoucheRaz').addEventListener('click', () => { reseau.cartouche.champs = window.Vue3D.CARTOUCHE_DEFAUT.map((x) => ({ ...x })); editeurCartouche(); });
+      document.getElementById('pdfCartoucheDefaut').addEventListener('click', () => {
+        try { localStorage.setItem('ttk-cartouche-defaut', JSON.stringify(reseau.cartouche)); showToast('Cartouche mémorisé : il servira pour les nouveaux projets de ce poste', 'success'); }
+        catch (e) { showToast('Impossible de mémoriser le cartouche (logos trop lourds ?)', 'error'); }
+      });
+    }
+    rendreChamps(); rendreLogos();
   }
   // Découpage du synoptique tel que l'export le fera (mise en page + format
   // choisis dans la fenêtre PDF) : sert aux pointillés de l'app et au conseil.
@@ -8816,12 +8876,12 @@
       ids.set(f.id, id);
       const noms = [...new Set((st.cables || []).filter(c => c.parent === f.id && c.liaison).map(c => c.liaison))];
       return { id, type: f.type || '', code: String(f.code || ''), od: f.od, di: f.idm > 0 ? f.idm : f.od * 0.8,
-        x: f.x / MM_TO_PX, y: H - f.y / MM_TO_PX, libelle: f.label || '',
+        x: f.x / MM_TO_PX, y: H - f.y / MM_TO_PX, libelle: f.label || '', couleur: f.customColor || f.color || null,
         liaisons: noms.length ? noms : (f.label ? [f.label] : []) };
     });
     const cb = (st.cables || []).filter(c => ids.has(c.parent) && c.od > 0).map(c => ({
       fourreau: ids.get(c.parent), od: c.od, x: c.x / MM_TO_PX, y: H - c.y / MM_TO_PX, phase: getCablePhaseLabel(c) || null,
-      code: c.code || '', fam: c.fam || '', liaison: c.liaison || '',
+      code: c.code || '', fam: c.fam || '', liaison: c.liaison || '', couleur: c.customColor || c.color || null,
     }));
     let chambre = null;
     if (avecChambre && !isCirc && window.ChambresInfos && window.CompatChambres) {
@@ -8858,6 +8918,13 @@
       } else pdf.text(txt, l.x * k, (HP - l.y) * k, { align: l.align });
     }
     pdf.setTextColor(0, 0, 0);
+    // images (logos du cartouche) : coin bas-gauche en points, repère PDF
+    (page.images || []).forEach((im) => {
+      try {
+        const fmt = im.format || (/^data:image\/jpe?g/i.test(String(im.src)) ? 'JPEG' : 'PNG');
+        pdf.addImage(im.src, fmt, im.x * echelle * k, (HP - (im.y + im.h) * echelle) * k, im.w * echelle * k, im.h * echelle * k);
+      } catch (e) { console.warn('[PDF] logo illisible', e); }
+    });
   }
 
 
@@ -9052,6 +9119,15 @@
     });
     return pages;
   }
+  // Cartouche des pages chambre : propre au projet (enregistré avec lui), sinon
+  // le cartouche par défaut mémorisé sur le poste, sinon celui de TONTONKAD.
+  function cartoucheDefautPoste() {
+    try { const c = JSON.parse(localStorage.getItem('ttk-cartouche-defaut') || 'null'); return c && Array.isArray(c.champs) ? c : null; } catch (e) { return null; }
+  }
+  function cartoucheProjet() {
+    const c = (reseau && reseau.cartouche) || cartoucheDefautPoste() || {};
+    return { champs: c.champs && c.champs.length ? c.champs : window.Vue3D.CARTOUCHE_DEFAUT.map((x) => ({ ...x })), logoMOA: c.logoMOA || null, logoMOE: c.logoMOE || null };
+  }
   async function exporterDossierReseau(formData, JsPDF) {
     const V = window.Vue3D, base = `${(formData.projectName || 'projet').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}`;
     const groupes = formData.groupes || {}, fichiers = [];
@@ -9074,11 +9150,14 @@
     const etudes = etudesChambresReseau();
     if (groupes.chambres !== false && etudes.length) {
       const pdf = new JsPDF('landscape', 'mm', 'a3');
-      etudes.forEach((et, i) => {
-        const pc = new V.Page({ emitText: false, ombre: false });
-        V.dessinerPageChambreA3(pc, et.etude, et.masques, { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR') });
-        writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: i > 0 });
-      });
+      // situation : le synoptique en bandes (comme la sortie A0)
+      const synS = synoptiqueAncre(1.414), bandesS = V.decouperBandes(synS, 'a0');
+      const situation = { noeuds: synS.noeuds, troncons: synS.troncons, coupes: bandesS.coupes, ys: bandesS.ys };
+      const opts = { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR'), situation, cartouche: cartoucheProjet() };
+      let premiere = true;
+      const ecrire = (pc) => { writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: !premiere }); premiere = false; };
+      // une chambre = sa page, puis des pages de suite si le tableau déborde (même cartouche, folios numérotés)
+      etudes.forEach((et) => V.pagesChambreA3(et.etude, et.masques, opts, () => new V.Page({ emitText: false, ombre: false })).forEach(ecrire));
       fichiers.push([pdf, `${base}_chambres_A3.pdf`]);
     }
     // 3. une page par tronçon : coupe + vue 3D, au format choisi (A3 par défaut)
@@ -9163,9 +9242,9 @@
   async function exportToPDF() {
     // Pour compatibilité avec l'ancienne modal HTML
     const formData = {
-      projectName: document.getElementById('pdfProjectName')?.value || 'Projet TontonKAD',
+      projectName: document.getElementById('pdfProjectName')?.value || 'Projet nodial',
       viewName: document.getElementById('pdfViewName')?.value || 'Vue principale',
-      author: document.getElementById('pdfAuthor')?.value || 'TontonKAD',
+      author: document.getElementById('pdfAuthor')?.value || 'nodial',
       client: document.getElementById('pdfClient')?.value || '',
       description: document.getElementById('pdfDescription')?.value || '',
       includeStats: document.getElementById('pdfIncludeStats')?.checked || true,
@@ -9521,7 +9600,7 @@
         pdf.setFont('helvetica', 'italic');
         pdf.setTextColor(100, 100, 100);
         const dateStr = new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        pdf.text(`Généré par TontonKAD le ${dateStr}`, col1X, statsLineY);
+        pdf.text(`Généré par nodial le ${dateStr}`, col1X, statsLineY);
         pdf.setTextColor(0, 0, 0);
 
         // === TABLEAUX (paysage) : fourreaux puis câbles === //

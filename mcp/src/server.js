@@ -22,6 +22,7 @@ const CompatChambres = require('../../src/renderer/compat-chambres.js');
 const { infosChambre, chambreMaconnee } = require('./chambres-infos.js');
 const Reseau = require('../../src/renderer/reseau.js');
 const { dessinMasque, dessinChambre, versMultiCAD, versDxf } = require('./cad.js');
+const Vue3D = require('../../src/renderer/vue3d.js');
 
 const cat = loadCatalogues();
 const notes = new Map(); // chemin absolu → { mtime, liaisons }
@@ -280,20 +281,27 @@ server.registerTool('etudier_reseau', {
       de: z.string().describe('Nom de l\'élément de départ'),
       vers: z.string().describe('Nom de l\'élément d\'arrivée'),
       longueurM: z.number().optional().describe('Longueur du tronçon en mètres (métré)'),
-      faceDe: FACE_ENUM.optional().describe('Face de la chambre de départ (vue de dessus : pignon A gauche, pignon B droite, long-pan A bas, long-pan B haut)'),
-      faceVers: FACE_ENUM.optional().describe('Face de la chambre d\'arrivée'),
+      faceDe: FACE_ENUM.optional().describe('Indicatif : les côtés suivent le synoptique (nord = côté 1 = long-pan B en haut, 2 = pignon B à droite, 3 = long-pan A en bas, 4 = pignon A à gauche ; vers la droite on sort par 2 et on arrive par 4, vers le bas on sort par 3 et on arrive par 1), comme dans l\'application'),
+      faceVers: FACE_ENUM.optional().describe('Indicatif, voir faceDe'),
       liaisons: z.array(critereSchema).optional().describe('Liaisons de la note qui passent dans ce tronçon'),
       reserves: z.array(z.object({ type: z.string(), code: z.string(), qty: z.number().int().min(1), nom: z.string().optional() })).optional(),
       options: optionsSchema,
     })).min(1),
     options: optionsSchema.describe('Options communes à toutes les coupes'),
     titre: z.string().optional().describe('Titre du dossier (PDF)'),
+    cartouche: z.object({
+      champs: z.array(z.object({ libelle: z.string(), valeur: z.string(), large: z.boolean().optional() })).optional()
+        .describe('Champs du cartouche des pages chambre, dans l\'ordre (large = pleine largeur). Valeurs automatiques : {projet} {chambre} {modele} {interieur} {tampons} {date} {indice} {format} {folio}. Par défaut : Projet, Objet, Chambre, Intérieur, Tampons, Phase, N° plan, Indice, Date, Dessiné, Vérifié, Échelle, Format, Folio'),
+      logoMOA: z.string().optional().describe('Chemin d\'une image PNG ou JPEG (carrée de préférence) : logo du maître d\'ouvrage, en haut à gauche du cartouche'),
+      logoMOE: z.string().optional().describe('Chemin d\'une image PNG ou JPEG : logo du maître d\'œuvre, en haut à droite'),
+      indice: z.string().optional().describe('Indice du plan (défaut A)'),
+    }).optional().describe('Cartouche des pages chambre (PDF), comme dans l\'application'),
     sortiePdf: z.string().optional().describe('Nouveau fichier .pdf : synoptique, isométrique, métré, puis coupes et chambres'),
     sortieDxf: z.string().optional().describe('Nouveau fichier .dxf : coupes et vues de dessus des chambres (côte à côte, ou aux placements donnés)'),
     cad: z.boolean().optional().describe('Renvoie les commandes de dessin pour le MCP multiCAD'),
     placements: placementSchema,
   },
-}, async ({ noteCalcul, elements, troncons, options, titre, sortiePdf, sortieDxf, cad, placements }) => {
+}, async ({ noteCalcul, elements, troncons, options, titre, cartouche, sortiePdf, sortieDxf, cad, placements }) => {
   try {
     const noms = new Set();
     for (const e of elements) { if (noms.has(e.nom)) throw new Error(`Élément en double : ${e.nom}`); noms.add(e.nom); }
@@ -309,12 +317,27 @@ server.registerTool('etudier_reseau', {
     const masques = tr.map(({ t }) => construireMasque(all, { nom: `${t.de} → ${t.vers}`, liaisons: t.liaisons || [], reserves: t.reserves || [], options: t.options }, options));
     const mDe = new Map(tr.map(({ rt }, i) => [rt.id, masques[i]]));
 
+    // 2 bis. synoptique en ligne (même disposition que l'application) ; les côtés
+    // des chambres suivent le synoptique : nord = côté 1, vers la droite 2 → 4, vers le bas 3 → 1
+    const tailleNoeud = (n) => ({ w: Math.max(n.type === 'chambre' ? 120 : 140, n.nom.length * 9.5 + (n.type === 'sortie' ? 34 : 24)), h: n.type === 'chambre' ? 62 : 48 });
+    const coupeDe = (m) => (m && m.ok ? { fourreaux: m.fourreaux.map((f) => ({ id: f.id, od: f.od })), cables: (m.cables || []).map((c) => ({ liaison: c.liaison, code: c.code, parent: c.fourreau })) } : null);
+    const contenus = new Map(tr.map(({ rt }, i) => [rt.id, { ...Reseau.contenuEtiquette(coupeDe(masques[i])), L: rt.longueurM }]));
+    const dis = Reseau.dispositionAncree(r, { tailleNoeud, tailleEtiquette: (t) => Vue3D.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio: null });
+    Reseau.alignerFaces(r, dis);
+    const synData = {
+      largeur: dis.largeur, hauteur: dis.hauteur,
+      noeuds: r.noeuds.map((n) => ({ nom: n.nom, type: n.type, couleur: n.couleur, ...dis.noeuds[n.id], ...tailleNoeud(n) })),
+      troncons: r.troncons.map((t) => ({ a: dis.noeuds[t.a.noeud], b: dis.noeuds[t.b.noeud], e: dis.etiquettes[t.id] && { ...dis.etiquettes[t.id], ...contenus.get(t.id) } })),
+    };
+    const bandes = Vue3D.decouperBandes(synData, 'a0');
+    const situation = { noeuds: synData.noeuds, troncons: synData.troncons, coupes: bandes.coupes, ys: bandes.ys };
+
     // 3. chambres : un masque par face, vu dans le sens du tronçon
     const etudes = elements.filter((e) => e.type === 'chambre').map((e) => {
       const faces = {};
       Reseau.tronconsDe(r, id[e.nom]).forEach((v) => {
         const m = mDe.get(v.troncon.id);
-        if (m && m.ok && m.forme !== 'circ') faces[v.face] = { ...m, sens: v.troncon.a.noeud === id[e.nom] && v.troncon.a.face === v.face ? 'depart' : 'arrivee' };
+        if (m && m.ok && m.forme !== 'circ') faces[v.face] = { ...m, longueurM: v.troncon.longueurM || null, sens: v.troncon.a.noeud === id[e.nom] && v.troncon.a.face === v.face ? 'depart' : 'arrivee' };
       });
       return etudierUneChambre(e, faces, masques);
     });
@@ -351,8 +374,15 @@ server.registerTool('etudier_reseau', {
           label: [...lignes(masques[i]), rt.longueurM ? `${rt.longueurM} m` : '? m'] };
       }),
     };
-    const titreDossier = titre || 'Réseau TONTONKAD';
-    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(masques, { etudesChambres: etudes, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
+    const titreDossier = titre || 'Réseau nodial';
+    // pages chambre A3 : même dessin que l'application (situation, masques, contenu, cartouche, folios)
+    const lireLogo = (chemin) => { if (!chemin) return null; const abs = path.resolve(chemin); if (!fs.existsSync(abs)) throw new Error(`Logo introuvable : ${abs}`); return { src: fs.readFileSync(abs) }; };
+    const cart = { champs: cartouche && cartouche.champs, logoMOA: lireLogo(cartouche && cartouche.logoMOA), logoMOE: lireLogo(cartouche && cartouche.logoMOE) };
+    const [A3W, A3H] = Vue3D.FORMATS_PAGE.a3;
+    const optsPage = { projet: titreDossier, date: new Date().toLocaleDateString('fr-FR'), indice: (cartouche && cartouche.indice) || 'A', situation, cartouche: cart };
+    const pagesChambres = etudes.filter((e) => e.ok).flatMap((e) => Vue3D.pagesChambreA3(e, e._masques, optsPage, () => new Vue3D.Page({ ombre: false })))
+      .map((pg) => ({ contenu: pg.toString(), largeur: A3W, hauteur: A3H, images: (pg.images || []).map((im) => ({ octets: im.src, x: im.x, y: im.y, w: im.w, h: im.h })) }));
+    const pdf = sortiePdf ? ecrireNeuf(sortiePdf, 'pdf', masquesToPdf(masques, { pagesChambres, pagesAvant: pagesReseau({ titre: titreDossier, data: synoptique, metre, continuite }) })) : null;
     const dessins = (cad || sortieDxf) ? dessinsCao(masques, etudes) : [];
     const dxf = sortieDxf ? ecrireNeuf(sortieDxf, 'dxf', versDxf(dessins, placements || {}), 'latin1') : null;
 

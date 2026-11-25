@@ -119,3 +119,26 @@ describe('couleurs de liaison stables d\'une chambre à l\'autre', () => {
     expect(c2.get('C')).toEqual(c1.get('C'));
   });
 });
+
+describe('page chambre révisée', () => {
+  test('câbles écrits par phases : 12×1x240 → 3×4×1x240, 13×1x300 → 3×4×1x300 + 1×1x300', () => {
+    expect(V.sectionsParPhases(new Map([['1x240', 12], ['1x95', 1], ['PE 1x95', 1]]))).toBe('3×4×1x240 + 1×1x95 + PE 1x95');
+    expect(V.sectionsParPhases(new Map([['1x300', 13]]))).toBe('3×4×1x300 + 1×1x300');
+    expect(V.sectionsParPhases(new Map([['1x150', 3]]))).toBe('3×1x150');
+  });
+  test('cartouche : champs personnalisés et valeurs automatiques', () => {
+    const c = V.remplirCartouche([{ libelle: 'Affaire', valeur: '{projet} / {chambre}', large: true }, { libelle: 'Folio', valeur: '{folio}' }], { projet: 'MA04', chambre: 'C8', folio: '1 / 2' });
+    expect(c).toEqual([{ libelle: 'Affaire', valeur: 'MA04 / C8', large: true }, { libelle: 'Folio', valeur: '1 / 2', large: false }]);
+    expect(V.remplirCartouche(null, {}).map((x) => x.libelle)).toContain('Folio'); // cartouche par défaut
+  });
+  test('tableau trop long : pages de suite avec le même cartouche et des folios', () => {
+    const cables = [], fourreaux = [];
+    for (let i = 0; i < 60; i++) { fourreaux.push({ id: `F${i + 1}`, x: 50 + (i % 10) * 60, y: 40 + Math.floor(i / 10) * 60, od: 50, di: 40, liaisons: [`L${i}`] }); cables.push({ fourreau: `F${i + 1}`, liaison: `L${i}`, code: '1x16', od: 10, x: 50 + (i % 10) * 60, y: 30 + Math.floor(i / 10) * 60 }); }
+    const mq = { nom: 'C1 → C2', largeur: 650, hauteur: 400, fourreaux, cables };
+    const e = { ok: true, nom: 'C1', ref: 'Maçonnée', L: 1300, l: 1000, H: 900, infos: { paroi: 200 } };
+    const pages = V.pagesChambreA3(e, { pignonB: mq }, { projet: 'P', cartouche: { champs: [{ libelle: 'Folio', valeur: '{folio}' }] } }, () => new V.Page());
+    expect(pages.length).toBeGreaterThan(1);
+    expect(pages[1].toString()).toMatch(/contenu des fourreaux \\\(suite\\\)/); // parenthèses échappées dans le flux PDF
+    expect(pages[pages.length - 1].toString()).toMatch(new RegExp(`\\(${pages.length} / ${pages.length}\\)`));
+  });
+});

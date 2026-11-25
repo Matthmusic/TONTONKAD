@@ -1268,6 +1268,20 @@
                   </select>
                   <span id="pdfFormatConseil" class="pdf-checkbox-subtitle"></span>
                 </label>
+                <details class="pdf-cartouche" id="pdfCartouche">
+                  <summary class="pdf-checkbox-title">Cartouche des pages chambre</summary>
+                  <div class="pdf-cartouche-logos">
+                    <div class="pdf-logo" data-logo="logoMOA"><div class="pdf-logo-apercu" aria-hidden="true">Logo MOA</div><div class="pdf-logo-actions"><span>Maître d'ouvrage (en haut à gauche)</span><label class="pdf-mini-btn">Choisir une image…<input type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="pdf-mini-btn" data-retirer>Retirer</button></div></div>
+                    <div class="pdf-logo" data-logo="logoMOE"><div class="pdf-logo-apercu" aria-hidden="true">Logo MOE</div><div class="pdf-logo-actions"><span>Maître d'œuvre (en haut à droite)</span><label class="pdf-mini-btn">Choisir une image…<input type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="pdf-mini-btn" data-retirer>Retirer</button></div></div>
+                  </div>
+                  <table class="pdf-cartouche-champs"><thead><tr><th scope="col">Libellé</th><th scope="col">Valeur</th><th scope="col" title="Pleine largeur">Large</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody id="pdfCartoucheChamps"></tbody></table>
+                  <p class="pdf-checkbox-subtitle">Valeurs remplies automatiquement : {projet} {chambre} {modele} {interieur} {tampons} {date} {indice} {format} {folio}. Le cartouche est enregistré avec le projet.</p>
+                  <div class="pdf-cartouche-actions">
+                    <button type="button" class="pdf-mini-btn" id="pdfCartoucheAjout">+ Ajouter un champ</button>
+                    <button type="button" class="pdf-mini-btn" id="pdfCartoucheDefaut">Mémoriser comme cartouche par défaut</button>
+                    <button type="button" class="pdf-mini-btn" id="pdfCartoucheRaz">Rétablir le cartouche TONTONKAD</button>
+                  </div>
+                </details>
                 <label class="pdf-select-label" for="pdfFormatCoupes">
                   <span class="pdf-checkbox-title">Format des coupes par tronçon</span>
                   <select id="pdfFormatCoupes" class="pdf-select">

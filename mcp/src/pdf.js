@@ -11,7 +11,7 @@ function pageMasque(m, i, total, opts) {
   const L = Number(opts.longueur3dMm) > 0 ? Number(opts.longueur3dMm) : 1500;
   // cartouche haut
   p.text(MARGE, PAGE_H - MARGE - 4, 16, m.nom, { bold: true });
-  p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `TONTONKAD — masque ${i + 1}/${total}`, { align: 'right' });
+  p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `nodial — masque ${i + 1}/${total}`, { align: 'right' });
   p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
 
   const zoneY = 215, zoneH = PAGE_H - MARGE - 40 - zoneY;
@@ -61,7 +61,7 @@ function pageChambre(m, i, total) {
   const p = new Page();
   const ch = m.chambre;
   p.text(MARGE, PAGE_H - MARGE - 4, 16, `${m.nom} — chambre de tirage ${ch.ref}`, { bold: true });
-  p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `TONTONKAD — masque ${i + 1}/${total}`, { align: 'right' });
+  p.text(PAGE_W - MARGE, PAGE_H - MARGE - 4, 8, `nodial — masque ${i + 1}/${total}`, { align: 'right' });
   p.rgb([0, 0, 0]).width(0.8).line(MARGE, PAGE_H - MARGE - 12, PAGE_W - MARGE, PAGE_H - MARGE - 12);
 
   drawChambre3D(p, m, MARGE + 20, 120, 520, PAGE_H - MARGE - 60 - 120);
@@ -82,12 +82,12 @@ function pageChambre(m, i, total) {
   p.rgb([0.4, 0.4, 0.4], false);
   y -= 22;
   const notes = ch.infos ? [
-    'Largeur, longueur, hauteur utile : catalogue TONTONKAD.',
+    'Largeur, longueur, hauteur utile : catalogue nodial.',
     `Hauteur totale${inf.paroi ? ', parois ' + inf.paroi + ' mm' : ''}${inf.tampons ? ', ' + inf.tampons + ' tampon(s)' : ''} :`,
     'indicatif, sources publiques (pas une fiche fabricant).',
     'Hauteur utile en tirets bleus.',
     ...(inf.aVerifier ? [`À vérifier : ${inf.aVerifier}.`] : []),
-  ] : ['Cotes intérieures du catalogue TONTONKAD.', 'Parois, cadre et tampon non représentés.'];
+  ] : ['Cotes intérieures du catalogue nodial.', 'Parois, cadre et tampon non représentés.'];
   for (const l of notes) { p.text(x, y, 7, l.slice(0, 70)); y -= 10; }
   p.rgb([0, 0, 0], false);
   return p.toString();
@@ -128,6 +128,43 @@ function pagesReseau({ titre, data, metre, continuite }) {
   return [p1, p2, p3].map((p) => p.toString());
 }
 
+// Image (logo) → objets PDF. PNG (gris, RVB, avec ou sans transparence) ou JPEG.
+// Retourne { dict, data, smask? } : dict sans /Length, data = octets du flux.
+function imageVersPdf(octets) {
+  const b = Buffer.isBuffer(octets) ? octets : Buffer.from(String(octets).replace(/^data:[^,]+,/, ''), 'base64');
+  if (b[0] === 0xff && b[1] === 0xd8) { // JPEG : flux recopié tel quel (DCTDecode)
+    let i = 2, w = 0, h = 0, comp = 3;
+    while (i < b.length) { if (b[i] !== 0xff) { i++; continue; } const m = b[i + 1], len = b.readUInt16BE(i + 2);
+      if (m >= 0xc0 && m <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(m)) { h = b.readUInt16BE(i + 5); w = b.readUInt16BE(i + 7); comp = b[i + 9]; break; } i += 2 + len; }
+    return { dict: `/Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /${comp === 1 ? 'DeviceGray' : comp === 4 ? 'DeviceCMYK' : 'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode`, data: b };
+  }
+  if (b.readUInt32BE(0) !== 0x89504e47) throw new Error('Logo : seuls les PNG et JPEG sont acceptés');
+  const zlib = require('zlib');
+  let i = 8, w = 0, h = 0, prof = 8, type = 2; const idat = [];
+  while (i < b.length) { const len = b.readUInt32BE(i), t = b.toString('latin1', i + 4, i + 8), d = b.subarray(i + 8, i + 8 + len);
+    if (t === 'IHDR') { w = d.readUInt32BE(0); h = d.readUInt32BE(4); prof = d[8]; type = d[9]; if (d[12]) throw new Error('Logo PNG entrelacé non pris en charge : réenregistrez-le sans entrelacement'); }
+    else if (t === 'IDAT') idat.push(d); else if (t === 'IEND') break; i += 12 + len; }
+  if (prof !== 8 || ![0, 2, 4, 6].includes(type)) throw new Error('Logo PNG : 8 bits gris ou RVB attendus');
+  const nc = { 0: 1, 2: 3, 4: 2, 6: 4 }[type], bpp = nc, ligne = w * bpp, brut = zlib.inflateSync(Buffer.concat(idat));
+  const px = Buffer.alloc(h * ligne); // défiltrage PNG (None, Sub, Up, Average, Paeth)
+  for (let y = 0; y < h; y++) {
+    const f = brut[y * (ligne + 1)], src = y * (ligne + 1) + 1, dst = y * ligne;
+    for (let x = 0; x < ligne; x++) {
+      const a = x >= bpp ? px[dst + x - bpp] : 0, up = y ? px[dst - ligne + x] : 0, c = y && x >= bpp ? px[dst - ligne + x - bpp] : 0, v = brut[src + x];
+      let r = v;
+      if (f === 1) r = v + a; else if (f === 2) r = v + up; else if (f === 3) r = v + ((a + up) >> 1);
+      else if (f === 4) { const pp = a + up - c, pa = Math.abs(pp - a), pb = Math.abs(pp - up), pc = Math.abs(pp - c); r = v + (pa <= pb && pa <= pc ? a : pb <= pc ? up : c); }
+      px[dst + x] = r & 255;
+    }
+  }
+  const coul = type === 0 || type === 4 ? 1 : 3, alpha = type === 4 || type === 6;
+  const rgb = Buffer.alloc(w * h * coul), al = alpha ? Buffer.alloc(w * h) : null;
+  for (let k = 0; k < w * h; k++) { for (let c = 0; c < coul; c++) rgb[k * coul + c] = px[k * nc + c]; if (al) al[k] = px[k * nc + nc - 1]; }
+  const res = { dict: `/Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /${coul === 1 ? 'DeviceGray' : 'DeviceRGB'} /BitsPerComponent 8 /Filter /FlateDecode`, data: zlib.deflateSync(rgb) };
+  if (al) res.smask = { dict: `/Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode`, data: zlib.deflateSync(al) };
+  return res;
+}
+
 /** @returns {Buffer} un PDF, une page par masque réussi */
 function masquesToPdf(masques, opts = {}) {
   const ok = masques.filter((m) => m && m.ok);
@@ -138,27 +175,48 @@ function masquesToPdf(masques, opts = {}) {
   const font1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   const font2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
   const kids = [];
-  const addPage = (text) => {
-    const content = Buffer.from(text, 'latin1');
-    const cid = add(`<< /Length ${content.length} >>\nstream\n${content.toString('latin1')}\nendstream`);
-    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /ExtGState << /GS1 << /ca 0.12 /CA 0.12 >> >> >> /Contents ${cid} 0 R >>`));
+  const flux = (dict, data) => add(Buffer.concat([Buffer.from(`<< ${dict} /Length ${data.length} >>\nstream\n`, 'latin1'), data, Buffer.from('\nendstream', 'latin1')]));
+  // page : texte du flux (A4 paysage), ou { contenu, largeur, hauteur, images: [{ octets, x, y, w, h }] }
+  const addPage = (pg) => {
+    const o = typeof pg === 'string' ? { contenu: pg } : pg;
+    let texte = o.contenu, xo = '';
+    (o.images || []).forEach((im, k) => {
+      try {
+        const img = imageVersPdf(im.octets);
+        const sm = img.smask ? flux(img.smask.dict, img.smask.data) : null;
+        const id = flux(img.dict + (sm ? ` /SMask ${sm} 0 R` : ''), img.data);
+        xo += ` /Im${k} ${id} 0 R`;
+        texte += `\nq ${im.w.toFixed(2)} 0 0 ${im.h.toFixed(2)} ${im.x.toFixed(2)} ${im.y.toFixed(2)} cm /Im${k} Do Q`;
+      } catch (e) { /* logo illisible : emplacement laissé vide */ }
+    });
+    const content = Buffer.from(texte, 'latin1');
+    const cid = flux('', content);
+    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${o.largeur || PAGE_W} ${o.hauteur || PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /ExtGState << /GS1 << /ca 0.12 /CA 0.12 >> >>${xo ? ` /XObject <<${xo} >>` : ''} >> /Contents ${cid} 0 R >>`));
   };
   for (const t of opts.pagesAvant || []) addPage(t);
   ok.forEach((m, i) => {
     addPage(pageMasque(m, i, ok.length, opts));
     if (m.chambre && m.chambre.face && opts.chambre !== false) addPage(pageChambre(m, i, ok.length));
   });
-  for (const e of opts.etudesChambres || []) addPage(pageChambreDessus(e));
+  // pages chambre A3 (même dessin que l'application) ou, à défaut, vue de dessus A4
+  if (opts.pagesChambres) opts.pagesChambres.forEach(addPage);
+  else for (const e of opts.etudesChambres || []) addPage(pageChambreDessus(e));
   objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
   objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;
 
-  let out = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
+  const morceaux = [Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n', 'latin1')];
+  let taille = morceaux[0].length;
   const offsets = [];
-  objs.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
-  const xref = Buffer.byteLength(out, 'latin1');
-  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
-  out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return Buffer.from(out, 'latin1');
+  objs.forEach((o, i) => {
+    offsets.push(taille);
+    const corps = Buffer.isBuffer(o) ? o : Buffer.from(String(o), 'latin1');
+    const b = Buffer.concat([Buffer.from(`${i + 1} 0 obj\n`, 'latin1'), corps, Buffer.from('\nendobj\n', 'latin1')]);
+    morceaux.push(b); taille += b.length;
+  });
+  const fin = `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')
+    + `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${taille}\n%%EOF\n`;
+  morceaux.push(Buffer.from(fin, 'latin1'));
+  return Buffer.concat(morceaux);
 }
 
-module.exports = { masquesToPdf, pagesReseau };
+module.exports = { masquesToPdf, pagesReseau, imageVersPdf };
