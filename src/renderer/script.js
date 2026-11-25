@@ -8379,11 +8379,25 @@
     const V = window.Vue3D, ratio = null;
     if (!rapide || !synBase || synBase.ratio !== ratio) {
       const contenus = new Map(reseau.troncons.map((t) => [t.id, contenuTroncon(t)]));
-      const dis = R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
-      // nord = côté 1 partout : les côtés des chambres suivent le synoptique
-      // (vers la droite 2 → 4, vers le bas 3 → 1) ; l'étude des chambres en découle
-      const realignes = R().alignerFaces(reseau, dis);
-      if (realignes && typeof showToast === 'function') showToast(`${realignes} côté${realignes > 1 ? 's' : ''} de chambre réaligné${realignes > 1 ? 's' : ''} sur le synoptique (côté 1 au nord) : vérifiez les chambres`, 'info', 6000);
+      const disposer = () => R().dispositionAncree(reseau, { tailleNoeud, tailleEtiquette: (t) => V.mesureEtiquetteSyn(contenus.get(t.id)), ecart: 0.5, ratio });
+      let dis = disposer();
+      // nord = côté 1 partout : les côtés des chambres suivent le synoptique TEL QU'IL EST
+      // AFFICHÉ, déplacements à la main compris (un poste glissé de dessous à dessus de
+      // sa chambre passe du côté 3 au côté 1) ; l'étude des chambres et l'isométrique en découlent
+      const ou = (d) => Object.fromEntries(reseau.noeuds.map((n) => { const q = d.noeuds[n.id] || { x: n.x || 0, y: n.y || 0 }, k = n.decal || {}; return [n.id, { x: q.x + (k.dx || 0), y: q.y + (k.dy || 0) }]; }));
+      const affiche = ou(dis);
+      const realignes = R().alignerFaces(reseau, { noeuds: affiche });
+      if (realignes) {
+        // la disposition automatique dépend des côtés : on la refait, puis chaque élément
+        // garde la place où il est affiché (son décalage est recalculé), rien ne saute
+        dis = disposer();
+        reseau.noeuds.forEach((n) => {
+          const q = dis.noeuds[n.id]; if (!q) return;
+          const dx = Math.round(affiche[n.id].x - q.x), dy = Math.round(affiche[n.id].y - q.y);
+          if (dx || dy) n.decal = { dx, dy }; else delete n.decal;
+        });
+        if (typeof showToast === 'function') showToast(`${realignes} côté${realignes > 1 ? 's' : ''} de chambre réaligné${realignes > 1 ? 's' : ''} sur le synoptique (côté 1 au nord) : vérifiez les chambres`, 'info', 6000);
+      }
       synBase = { ratio, dis, contenus, sous: new Map(reseau.noeuds.map((n) => [n.id, sousNoeud(n)])) };
     }
     const { dis, contenus, sous } = synBase;
