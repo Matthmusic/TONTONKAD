@@ -7296,8 +7296,10 @@
       const fmtC = ((document.getElementById('pdfFormatCoupes') || {}).value || 'a3').toUpperCase();
       const items = [
         coche('pdfGrpSyn') && `Synoptique — ${resumeDecoupage(dS)} + métré et continuité`,
-        coche('pdfGrpChambres') && nCh && `Chambres — ${nCh} page${nCh > 1 ? 's' : ''} A3`,
-        coche('pdfGrpCoupes') && nCo && `Coupes — ${nCo} tronçon${nCo > 1 ? 's' : ''} en ${fmtC}`,
+        ...(coche('pdfGrpChambres') && coche('pdfGrpCoupes') && nCh
+          ? [`Chambres et coupes — chaque chambre (A3) suivie des coupes de ses côtés .1 à .4${nCo ? ` (${fmtC})` : ''}`]
+          : [coche('pdfGrpChambres') && nCh && `Chambres — ${nCh} page${nCh > 1 ? 's' : ''} A3`,
+            coche('pdfGrpCoupes') && nCo && `Coupes — ${nCo} tronçon${nCo > 1 ? 's' : ''} en ${fmtC}`]),
         coche('pdfGrpTableaux') && 'Tableaux fourreaux et câbles — A4 paysage',
       ].filter(Boolean);
       ol.innerHTML = '';
@@ -9242,33 +9244,54 @@
       pagesMetreContinuite(formData.projectName).forEach((pg) => writeVue3DPage(pdf, pg));
       fichiers.push([pdf, `${base}_synoptique_${fmtSyn}.pdf`]);
     }
-    // 2. une page A3 par chambre
+    // 2-3. chambres et coupes. Les deux cochées : UN seul PDF, chaque chambre (page A3
+    // et pages de suite) suivie des coupes de ses côtés non vides, dans l'ordre .1 à .4 ;
+    // les tronçons qui ne touchent aucune chambre étudiée viennent à la fin.
     const etudes = etudesChambresReseau();
-    if (groupes.chambres !== false && etudes.length) {
-      const pdf = new JsPDF('landscape', 'mm', 'a3');
-      // situation : le synoptique en bandes (comme la sortie A0)
+    const fmtC = formData.formatCoupes || 'a3', echC = V.FORMATS_PAGE[fmtC][0] / V.PAGE_W;
+    const pageCoupe = (t, prefixe) => {
+      const st = etatTroncon(t); if (!st || !st.fourreaux.length) return null;
+      const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false); if (!m) return null;
+      const L = t.longueurM ? ` · ${String(t.longueurM).replace('.', ',')} m` : '';
+      return pageCoupeTroncon(m, `${prefixe || ''}Coupe ${R().nomTroncon(reseau, t)}${L}`);
+    };
+    const optsChambres = () => {
       const synS = synoptiqueAncre(1.414), bandesS = V.decouperBandes(synS, 'a0');
       const situation = { noeuds: synS.noeuds, troncons: synS.troncons, coupes: bandesS.coupes, ys: bandesS.ys };
-      const opts = { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR'), situation, iso: donneesSynoptique(), cartouche: cartoucheCourant(),
+      return { projet: formData.projectName, date: new Date().toLocaleDateString('fr-FR'), situation, iso: donneesSynoptique(), cartouche: cartoucheCourant(),
         client: formData.client, auteur: document.getElementById('pdfAuthor')?.value || '', phase: formData.phase, indice: formData.indice || 'A', plan: formData.plan };
+    };
+    const pagesDeChambre = (et, opts) => V.pagesChambreA3(et.etude, et.masques, opts, () => new V.Page({ emitText: false, ombre: false }));
+    if (groupes.chambres !== false && groupes.coupes !== false && etudes.length) {
+      const pdf = new JsPDF('landscape', 'mm', 'a3'), opts = optsChambres(), vus = new Set();
       let premiere = true;
-      const ecrire = (pc) => { writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: !premiere }); premiere = false; };
-      // une chambre = sa page, puis des pages de suite si le tableau déborde (même cartouche, folios numérotés)
-      etudes.forEach((et) => V.pagesChambreA3(et.etude, et.masques, opts, () => new V.Page({ emitText: false, ombre: false })).forEach(ecrire));
-      fichiers.push([pdf, `${base}_chambres_A3.pdf`]);
-    }
-    // 3. une page par tronçon : coupe + vue 3D, au format choisi (A3 par défaut)
-    if (groupes.coupes !== false) {
-      const fmt = formData.formatCoupes || 'a3', ech = V.FORMATS_PAGE[fmt][0] / V.PAGE_W;
-      const pdf = new JsPDF('landscape', 'mm', fmt); let n = 0;
-      reseau.troncons.forEach((t) => {
-        const st = etatTroncon(t); if (!st || !st.fourreaux.length) return;
-        const m = buildMasqueFromState(st, R().nomTroncon(reseau, t), false); if (!m) return;
-        const L = t.longueurM ? ` · ${String(t.longueurM).replace('.', ',')} m` : '';
-        writeVue3DPage(pdf, pageCoupeTroncon(m, `Coupe ${R().nomTroncon(reseau, t)}${L}`), fmt, V.FORMATS_PAGE[fmt][1], { nouvelle: n > 0, echelle: ech });
-        n += 1;
+      const ecrireA3 = (pc) => { writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: !premiere }); premiere = false; };
+      const ecrireCoupe = (pc) => { writeVue3DPage(pdf, pc, fmtC, V.FORMATS_PAGE[fmtC][1], { nouvelle: !premiere, echelle: echC }); premiere = false; };
+      const COTES = [[1, 'longPanB'], [2, 'pignonB'], [3, 'longPanA'], [4, 'pignonA']];
+      reseau.noeuds.filter((n) => n.type === 'chambre').forEach((nd) => {
+        const et = etudeChambre(nd); if (!et || !et.etude.ok) return;
+        pagesDeChambre(et, opts).forEach(ecrireA3);
+        COTES.forEach(([c, face]) => R().surFaceTous(reseau, nd.id, face).forEach((v) => {
+          const pc = pageCoupe(v.troncon, `${nd.nom}.${c} — `); if (!pc) return;
+          ecrireCoupe(pc); vus.add(v.troncon.id);
+        }));
       });
-      if (n) fichiers.push([pdf, `${base}_coupes_${fmt.toUpperCase()}.pdf`]);
+      reseau.troncons.filter((t) => !vus.has(t.id)).forEach((t) => { const pc = pageCoupe(t); if (pc) ecrireCoupe(pc); });
+      fichiers.push([pdf, `${base}_chambres_et_coupes.pdf`]);
+    } else {
+      // une seule des deux parties cochée : son PDF à part, comme avant
+      if (groupes.chambres !== false && etudes.length) {
+        const pdf = new JsPDF('landscape', 'mm', 'a3'), opts = optsChambres();
+        let premiere = true;
+        const ecrire = (pc) => { writeVue3DPage(pdf, pc, 'a3', V.FORMATS_PAGE.a3[1], { nouvelle: !premiere }); premiere = false; };
+        etudes.forEach((et) => pagesDeChambre(et, opts).forEach(ecrire));
+        fichiers.push([pdf, `${base}_chambres_A3.pdf`]);
+      }
+      if (groupes.coupes !== false) {
+        const pdf = new JsPDF('landscape', 'mm', fmtC); let n = 0;
+        reseau.troncons.forEach((t) => { const pc = pageCoupe(t); if (!pc) return; writeVue3DPage(pdf, pc, fmtC, V.FORMATS_PAGE[fmtC][1], { nouvelle: n > 0, echelle: echC }); n += 1; });
+        if (n) fichiers.push([pdf, `${base}_coupes_${fmtC.toUpperCase()}.pdf`]);
+      }
     }
     // 4. tableaux de tous les tronçons
     if (groupes.tableaux !== false) {
